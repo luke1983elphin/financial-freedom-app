@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Financial Freedom Simulator</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand-block">
+          <p class="eyebrow">Financial planning illustration</p>
+          <h1>Financial Freedom Simulator</h1>
+        </div>
+        <div class="toolbar" aria-label="App actions">
+          <span id="saveStatus" class="save-status" aria-live="polite">Saved locally</span>
+          <button type="button" id="demoButton" class="tool-button">Demo</button>
+          <button type="button" id="printButton" class="tool-button">Print</button>
+          <button type="button" id="resetButton" class="tool-button danger">Reset</button>
+        </div>
+      </header>
+
+      <div class="layout">
+        <nav class="step-nav" aria-label="Sections">
+          <button type="button" class="nav-item active" data-target="about">About you</button>
+          <button type="button" class="nav-item" data-target="assets">Assets</button>
+          <button type="button" class="nav-item" data-target="debts">Debt</button>
+          <button type="button" class="nav-item" data-target="income">Income</button>
+          <button type="button" class="nav-item" data-target="expenses">Spending</button>
+          <button type="button" class="nav-item" data-target="opportunities">Opportunities</button>
+          <button type="button" class="nav-item" data-target="results">Results</button>
+        </nav>
+
+        <main class="work-pane">
+          <section id="about" class="section active" data-section>
+            <div class="section-heading">
+              <p class="eyebrow">Personal settings</p>
+              <h2>About you</h2>
+            </div>
+            <div class="field-grid">
+              <label class="field">
+                <span>Current age</span>
+                <input type="number" min="0" step="1" data-model="assumptions.currentAge">
+              </label>
+              <label class="field">
+                <span>Target freedom age</span>
+                <input type="number" min="0" step="1" data-model="assumptions.targetFreedomAge">
+              </label>
+              <label class="field">
+                <span>Annual income wanted from investments</span>
+                <input type="number" min="0" step="1000" data-model="assumptions.passiveIncomeTarget">
+              </label>
+              <label class="field">
+                <span>Safe withdrawal rate (%)</span>
+                <input type="number" min="0" max="20" step="0.1" data-model="assumptions.withdrawalRatePct">
+              </label>
+              <label class="field">
+                <span>Expected investment return (%)</span>
+                <input type="number" min="-50" max="50" step="0.1" data-model="assumptions.investmentReturnPct">
+              </label>
+            </div>
+          </section>
+
+          <section id="assets" class="section" data-section>
+            <div class="section-heading inline-heading">
+              <div>
+                <p class="eyebrow">What you own</p>
+                <h2>Assets</h2>
+              </div>
+              <button type="button" class="action-button" data-add="asset">+ Add asset</button>
+            </div>
+            <div id="assetList" class="repeat-list"></div>
+          </section>
+
+          <section id="debts" class="section" data-section>
+            <div class="section-heading inline-heading">
+              <div>
+                <p class="eyebrow">What you owe</p>
+                <h2>Debt</h2>
+              </div>
+              <button type="button" class="action-button" data-add="debt">+ Add debt</button>
+            </div>
+            <div id="debtList" class="repeat-list"></div>
+          </section>
+
+          <section id="income" class="section" data-section>
+            <div class="section-heading inline-heading">
+              <div>
+                <p class="eyebrow">Money coming in</p>
+                <h2>Income</h2>
+              </div>
+              <button type="button" class="action-button" data-add="income">+ Add income</button>
+            </div>
+            <div id="incomeList" class="repeat-list"></div>
+          </section>
+
+          <section id="expenses" class="section" data-section>
+            <div class="section-heading inline-heading">
+              <div>
+                <p class="eyebrow">Money going out</p>
+                <h2>Spending</h2>
+              </div>
+              <button type="button" class="action-button" data-add="expense">+ Add expense</button>
+            </div>
+            <div id="expenseList" class="repeat-list"></div>
+          </section>
+
+          <section id="opportunities" class="section" data-section>
+            <div class="section-heading">
+              <p class="eyebrow">Weekly improvements</p>
+              <h2>Opportunities</h2>
+            </div>
+            <div class="field-grid">
+              <label class="field">
+                <span>Planned extra investing</span>
+                <input type="number" min="0" step="10" data-model="opportunities.plannedWeeklyInvestment">
+              </label>
+              <label class="field">
+                <span>Pay rise after tax</span>
+                <input type="number" min="0" step="10" data-model="opportunities.payRiseAfterTax">
+              </label>
+              <label class="field">
+                <span>Side income</span>
+                <input type="number" min="0" step="10" data-model="opportunities.sideHustleIncome">
+              </label>
+              <label class="field">
+                <span>Loan refinance saving</span>
+                <input type="number" min="0" step="10" data-model="opportunities.refinanceSaving">
+              </label>
+              <label class="field">
+                <span>Other weekly improvement</span>
+                <input type="number" min="0" step="10" data-model="opportunities.otherWeekly">
+              </label>
+            </div>
+          </section>
+
+          <section id="results" class="section" data-section>
+            <div class="section-heading">
+              <p class="eyebrow">Live summary</p>
+              <h2>Results</h2>
+            </div>
+            <div class="result-grid">
+              <div class="metric large">
+                <span>Estimated freedom age</span>
+                <strong data-output="estimatedFreedomAge">Beyond 30 years</strong>
+              </div>
+              <div class="metric">
+                <span>Financial freedom target</span>
+                <strong data-output="financialFreedomTarget">$0</strong>
+              </div>
+              <div class="metric">
+                <span>Suggested weekly investment</span>
+                <strong data-output="suggestedWeeklyInvestment">$0</strong>
+              </div>
+              <div class="metric">
+                <span>Projected passive income</span>
+                <strong data-output="projectedPassiveIncome30Years">$0</strong>
+              </div>
+            </div>
+            <div class="chart-panel">
+              <div class="chart-heading">
+                <h3>Investment projection</h3>
+                <span data-output="projectionNote">30 year view</span>
+              </div>
+              <svg id="projectionChart" class="projection-chart" viewBox="0 0 720 280" role="img" aria-label="Investment projection chart"></svg>
+            </div>
+            <div class="tables-grid">
+              <div>
+                <h3>Opportunity impact</h3>
+                <div id="opportunityTable" class="table-like"></div>
+              </div>
+              <div>
+                <h3>Debt snapshot</h3>
+                <div id="debtTable" class="table-like"></div>
+              </div>
+            </div>
+          </section>
+        </main>
+
+        <aside class="live-panel" aria-label="Live financial summary">
+          <div class="live-heading">
+            <p class="eyebrow">Now</p>
+            <h2 data-output="currentNetWorth">$0</h2>
+            <span>current net worth</span>
+          </div>
+          <div class="meter" aria-hidden="true">
+            <span id="freedomMeter"></span>
+          </div>
+          <div class="live-metrics">
+            <div>
+              <span>Total assets</span>
+              <strong data-output="totalAssets">$0</strong>
+            </div>
+            <div>
+              <span>Total debt</span>
+              <strong data-output="totalLiabilities">$0</strong>
+            </div>
+            <div>
+              <span>Weekly income</span>
+              <strong data-output="weeklyIncome">$0</strong>
+            </div>
+            <div>
+              <span>Weekly spending</span>
+              <strong data-output="weeklyExpenses">$0</strong>
+            </div>
+            <div>
+              <span>Debt repayments</span>
+              <strong data-output="weeklyDebtRepayments">$0</strong>
+            </div>
+            <div>
+              <span>Base weekly surplus</span>
+              <strong data-output="baseWeeklySurplus">$0</strong>
+            </div>
+          </div>
+          <div class="milestone-list">
+            <div>
+              <span>5 years</span>
+              <strong data-output="projection5">$0</strong>
+            </div>
+            <div>
+              <span>10 years</span>
+              <strong data-output="projection10">$0</strong>
+            </div>
+            <div>
+              <span>20 years</span>
+              <strong data-output="projection20">$0</strong>
+            </div>
+            <div>
+              <span>30 years</span>
+              <strong data-output="projection30">$0</strong>
+            </div>
+          </div>
+          <p class="fine-print">Illustration only. This is not personal financial advice.</p>
+        </aside>
+      </div>
+    </div>
+
+    <script src="calculator.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
