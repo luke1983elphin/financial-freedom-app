@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Financial Freedom Simulator V2</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Version 2 modelling engine</p>
+          <h1>Financial Freedom Simulator</h1>
+          <p class="lede" id="householdSummary">Fictional sample household</p>
+        </div>
+        <div class="toolbar">
+          <button type="button" id="printButton" class="tool-button">Print</button>
+          <a class="tool-button link-button" href="v2-data.js" download>Data</a>
+        </div>
+      </header>
+
+      <main class="dashboard">
+        <section class="hero-panel">
+          <div class="score-block">
+            <span>Financial Freedom Score</span>
+            <strong id="financialFreedomScore">0%</strong>
+            <div class="meter"><span id="scoreMeter"></span></div>
+          </div>
+          <div class="hero-copy">
+            <p class="eyebrow">Dashboard</p>
+            <h2 id="headlineMetric">Education and modelling only</h2>
+            <p id="headlineDetail"></p>
+          </div>
+        </section>
+
+        <section class="metric-grid" id="metricGrid" aria-label="Dashboard metrics"></section>
+
+        <section class="section-grid">
+          <article class="panel span-8">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Growth path</p>
+                <h2>Net worth projection</h2>
+              </div>
+              <span id="netWorthChartNote"></span>
+            </div>
+            <svg id="netWorthChart" class="chart" viewBox="0 0 760 300" role="img" aria-label="Net worth growth chart"></svg>
+          </article>
+
+          <article class="panel span-4">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Next dollar</p>
+                <h2>Decision engine</h2>
+              </div>
+            </div>
+            <div id="decisionList" class="rank-list"></div>
+          </article>
+        </section>
+
+        <section class="section-grid">
+          <article class="panel span-6">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Loan and offset</p>
+                <h2>Mortgage engine</h2>
+              </div>
+            </div>
+            <div id="loanSummary" class="summary-list"></div>
+            <svg id="loanChart" class="chart small-chart" viewBox="0 0 760 240" role="img" aria-label="Loan balance reduction chart"></svg>
+          </article>
+
+          <article class="panel span-6">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Cashflow</p>
+                <h2>Annual household flow</h2>
+              </div>
+            </div>
+            <div id="cashflowTable" class="table-like"></div>
+          </article>
+        </section>
+
+        <section class="section-grid">
+          <article class="panel span-6">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Investing</p>
+                <h2>Non-super projection</h2>
+              </div>
+            </div>
+            <div id="investmentCards" class="mini-grid"></div>
+            <svg id="investmentChart" class="chart small-chart" viewBox="0 0 760 240" role="img" aria-label="Investment balance growth chart"></svg>
+          </article>
+
+          <article class="panel span-6">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Super</p>
+                <h2>Retirement account projection</h2>
+              </div>
+            </div>
+            <div id="superCards" class="mini-grid"></div>
+            <div id="superSummary" class="callout"></div>
+          </article>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Milestones</p>
+              <h2>Retirement targets</h2>
+            </div>
+          </div>
+          <div id="milestones" class="milestone-grid"></div>
+        </section>
+
+        <section class="section-grid">
+          <article class="panel span-7">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Retirement sustainability</p>
+                <h2>Capital models to age 90</h2>
+              </div>
+            </div>
+            <svg id="retirementChart" class="chart" viewBox="0 0 760 300" role="img" aria-label="Retirement sustainability chart"></svg>
+          </article>
+
+          <article class="panel span-5">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Model outputs</p>
+                <h2>Sustainability summary</h2>
+              </div>
+            </div>
+            <div id="retirementTable" class="table-like"></div>
+          </article>
+        </section>
+
+        <section class="section-grid">
+          <article class="panel span-6">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Sample inputs</p>
+                <h2>Fictional household data</h2>
+              </div>
+            </div>
+            <div id="sampleInputs" class="summary-list compact"></div>
+          </article>
+
+          <article class="panel span-6">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Formula notes</p>
+                <h2>Transparent calculations</h2>
+              </div>
+            </div>
+            <ul class="formula-list">
+              <li>Loan interest = max(opening balance - offset, 0) x annual rate / 12.</li>
+              <li>Principal repaid = repayment - interest charged.</li>
+              <li>Wealth creation = investing + employer super + extra super + mortgage principal reduction.</li>
+              <li>FI capital target = annual spending divided by safe withdrawal rate.</li>
+            </ul>
+          </article>
+        </section>
+
+        <p id="disclaimer" class="disclaimer"></p>
+      </main>
+    </div>
+
+    <script src="v2-data.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
