@@ -3,173 +3,286 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Financial Freedom Simulator V2</title>
+    <title>Financial Freedom Simulator Professional</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              navy: "#0f2742",
+              ink: "#172033",
+              mist: "#f5f8fb",
+              line: "#e2e8f0",
+              success: "#0f9f6e",
+              caution: "#d99121",
+              danger: "#dc4c3e"
+            },
+            boxShadow: {
+              soft: "0 18px 50px rgba(15, 39, 66, 0.08)"
+            }
+          }
+        }
+      };
+    </script>
     <link rel="stylesheet" href="styles.css">
   </head>
-  <body>
-    <div class="app-shell">
-      <header class="topbar">
-        <div>
-          <p class="eyebrow">Version 2 modelling engine</p>
-          <h1>Financial Freedom Simulator</h1>
-          <p class="lede" id="householdSummary">Fictional sample household</p>
-        </div>
-        <div class="toolbar">
-          <button type="button" id="printButton" class="tool-button">Print</button>
-          <a class="tool-button link-button" href="v2-data.js" download>Data</a>
+  <body class="bg-white text-ink antialiased">
+    <div class="min-h-screen">
+      <header class="sticky top-0 z-30 border-b border-line bg-white/90 backdrop-blur">
+        <div class="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p class="brand-kicker text-xs font-bold uppercase text-success">Financial Freedom Simulator Professional</p>
+            <h1 class="text-xl font-bold text-navy">See exactly when work becomes optional.</h1>
+          </div>
+          <div class="toolbar-actions flex flex-wrap gap-2">
+            <button class="btn btn-primary" type="button" id="demoButton">Load Demo</button>
+            <button class="btn" type="button" id="enterDataButton">Enter My Data</button>
+            <button class="btn" type="button" id="newPlanButton">New Plan</button>
+            <button class="btn" type="button" id="saveScenarioButton">Save Scenario</button>
+            <button class="btn" type="button" id="loadScenarioButton">Load Scenario</button>
+            <button class="btn" type="button" id="duplicateButton">Duplicate</button>
+            <button class="btn" type="button" id="compareButton">Compare</button>
+            <button class="btn" type="button" id="exportButton">Print / Export</button>
+          </div>
         </div>
       </header>
 
-      <main class="dashboard">
-        <section class="hero-panel">
-          <div class="score-block">
-            <span>Financial Freedom Score</span>
-            <strong id="financialFreedomScore">0%</strong>
-            <div class="meter"><span id="scoreMeter"></span></div>
-          </div>
-          <div class="hero-copy">
-            <p class="eyebrow">Dashboard</p>
-            <h2 id="headlineMetric">Education and modelling only</h2>
-            <p id="headlineDetail"></p>
-          </div>
-        </section>
-
-        <section class="metric-grid" id="metricGrid" aria-label="Dashboard metrics"></section>
-
-        <section class="section-grid">
-          <article class="panel span-8">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">Growth path</p>
-                <h2>Net worth projection</h2>
-              </div>
-              <span id="netWorthChartNote"></span>
-            </div>
-            <svg id="netWorthChart" class="chart" viewBox="0 0 760 300" role="img" aria-label="Net worth growth chart"></svg>
-          </article>
-
-          <article class="panel span-4">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">Next dollar</p>
-                <h2>Decision engine</h2>
+      <main>
+        <section id="homeView" class="homepage mx-auto max-w-7xl px-4 py-8 lg:py-14">
+          <div class="home-hero">
+            <div class="hero-copy">
+              <p class="brand-kicker text-sm font-bold uppercase text-success">Financial Freedom Simulator Professional</p>
+              <h2 class="mt-4 max-w-4xl text-4xl font-black text-navy sm:text-6xl">See when work becomes optional</h2>
+              <p class="mt-5 max-w-2xl text-lg leading-8 text-slate-600">Turn income, expenses, loans, super and investments into a clear financial freedom timeline.</p>
+              <div class="mt-8 flex flex-wrap gap-3">
+                <button class="btn btn-primary btn-large" type="button" id="heroDemoButton">Try Demo</button>
+                <button class="btn btn-large" type="button" id="heroStartButton">Start My Plan</button>
               </div>
             </div>
-            <div id="decisionList" class="rank-list"></div>
-          </article>
-        </section>
 
-        <section class="section-grid">
-          <article class="panel span-6">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">Loan and offset</p>
-                <h2>Mortgage engine</h2>
-              </div>
-            </div>
-            <div id="loanSummary" class="summary-list"></div>
-            <svg id="loanChart" class="chart small-chart" viewBox="0 0 760 240" role="img" aria-label="Loan balance reduction chart"></svg>
-          </article>
-
-          <article class="panel span-6">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">Cashflow</p>
-                <h2>Annual household flow</h2>
-              </div>
-            </div>
-            <div id="cashflowTable" class="table-like"></div>
-          </article>
-        </section>
-
-        <section class="section-grid">
-          <article class="panel span-6">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">Investing</p>
-                <h2>Non-super projection</h2>
-              </div>
-            </div>
-            <div id="investmentCards" class="mini-grid"></div>
-            <svg id="investmentChart" class="chart small-chart" viewBox="0 0 760 240" role="img" aria-label="Investment balance growth chart"></svg>
-          </article>
-
-          <article class="panel span-6">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">Super</p>
-                <h2>Retirement account projection</h2>
-              </div>
-            </div>
-            <div id="superCards" class="mini-grid"></div>
-            <div id="superSummary" class="callout"></div>
-          </article>
-        </section>
-
-        <section class="panel">
-          <div class="panel-heading">
-            <div>
-              <p class="eyebrow">Milestones</p>
-              <h2>Retirement targets</h2>
+            <div class="hero-card-grid" aria-label="Dashboard preview">
+              <article class="preview-card">
+                <span>Financial Freedom Score</span>
+                <strong id="previewScore">0%</strong>
+              </article>
+              <article class="preview-card">
+                <span>Work Optional Age</span>
+                <strong id="previewWorkOptional">-</strong>
+              </article>
+              <article class="preview-card">
+                <span>Net Worth</span>
+                <strong id="previewNetWorth">$0</strong>
+              </article>
+              <article class="preview-card">
+                <span>Wealth Creation Rate</span>
+                <strong id="previewWealthRate">$0</strong>
+              </article>
             </div>
           </div>
-          <div id="milestones" class="milestone-grid"></div>
+
+          <div class="steps-grid mt-12 grid gap-4 md:grid-cols-3">
+            <article class="step-card">
+              <span>1</span>
+              <h3>Enter your position</h3>
+              <p>Add household income, spending, assets, loans, super and goals.</p>
+            </article>
+            <article class="step-card">
+              <span>2</span>
+              <h3>Test decisions</h3>
+              <p>Compare extra super, ETF investing, offset and mortgage options.</p>
+            </article>
+            <article class="step-card">
+              <span>3</span>
+              <h3>See your freedom date</h3>
+              <p>Track work optional, semi-retirement and full retirement milestones.</p>
+            </article>
+          </div>
         </section>
 
-        <section class="section-grid">
-          <article class="panel span-7">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">Retirement sustainability</p>
-                <h2>Capital models to age 90</h2>
+        <section id="appWorkspace" class="hidden border-t border-line bg-mist">
+          <div class="mx-auto grid max-w-7xl gap-6 px-4 py-6 lg:grid-cols-[250px_1fr]">
+            <nav class="workspace-nav rounded-3xl border border-line bg-white p-3 shadow-soft lg:sticky lg:top-24 lg:h-fit">
+              <p class="nav-title">Plan workspace</p>
+              <div class="grid gap-1" id="sideNav">
+                <button class="nav-button active" type="button" data-view="dashboard">Dashboard</button>
+                <button class="nav-button" type="button" data-view="cashflow">Cashflow</button>
+                <button class="nav-button" type="button" data-view="assets">Assets & Liabilities</button>
+                <button class="nav-button" type="button" data-view="loans">Loans & Offset</button>
+                <button class="nav-button" type="button" data-view="investments">Investments</button>
+                <button class="nav-button" type="button" data-view="super">Super</button>
+                <button class="nav-button" type="button" data-view="goals">Goals</button>
+                <button class="nav-button" type="button" data-view="forecast">Forecast</button>
+                <button class="nav-button" type="button" data-view="decision">Decision Engine</button>
+                <button class="nav-button" type="button" data-view="scenarios">Scenarios</button>
+                <button class="nav-button" type="button" data-view="reports">Reports</button>
               </div>
-            </div>
-            <svg id="retirementChart" class="chart" viewBox="0 0 760 300" role="img" aria-label="Retirement sustainability chart"></svg>
-          </article>
+            </nav>
 
-          <article class="panel span-5">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">Model outputs</p>
-                <h2>Sustainability summary</h2>
-              </div>
+            <div class="grid gap-6">
+              <section class="view-section" data-view-panel="dashboard">
+                <div class="premium-hero dashboard-hero">
+                  <div>
+                    <p class="brand-kicker text-sm font-bold uppercase text-success">Dashboard</p>
+                    <h2 id="dashboardTitle" class="mt-2 text-3xl font-black text-navy sm:text-4xl">Start a plan or load the demo.</h2>
+                    <p id="dashboardSubtitle" class="mt-3 text-slate-600">Your financial freedom timeline will update as you enter data.</p>
+                  </div>
+                  <div class="score-ring">
+                    <span>Score</span>
+                    <strong id="heroScore">0%</strong>
+                  </div>
+                </div>
+
+                <div class="dashboard-card-grid dashboard-card-grid-primary mt-6" id="topMetricGrid"></div>
+                <div class="dashboard-card-grid dashboard-card-grid-secondary mt-4" id="secondMetricGrid"></div>
+
+                <div class="dashboard-chart-grid mt-6 grid gap-4 xl:grid-cols-2">
+                  <article class="card">
+                    <div class="card-heading">
+                      <h3>Net worth over time</h3>
+                      <span id="netWorthNote"></span>
+                    </div>
+                    <svg id="netWorthChart" class="chart" viewBox="0 0 760 300" role="img" aria-label="Net worth over time"></svg>
+                  </article>
+                  <article class="card">
+                    <div class="card-heading">
+                      <h3>Retirement sustainability</h3>
+                      <span>Age 60 to 90</span>
+                    </div>
+                    <svg id="retirementChart" class="chart" viewBox="0 0 760 300" role="img" aria-label="Retirement sustainability"></svg>
+                  </article>
+                </div>
+              </section>
+
+              <section class="view-section hidden" data-view-panel="cashflow">
+                <div class="section-heading">
+                  <h2>Cashflow</h2>
+                  <p>Convert income, spending, mortgage repayments and investing into annual and weekly values.</p>
+                </div>
+                <div class="grid gap-6 xl:grid-cols-[1fr_1.1fr]">
+                  <div class="card"><div id="incomeExpenseForm" class="input-grid"></div></div>
+                  <div class="card"><div id="cashflowTable" class="table-list"></div></div>
+                </div>
+              </section>
+
+              <section class="view-section hidden" data-view-panel="assets">
+                <div class="section-heading">
+                  <h2>Assets & Liabilities</h2>
+                  <p>Enter what the household owns and owes.</p>
+                </div>
+                <div class="grid gap-6 xl:grid-cols-2">
+                  <div class="card"><h3 class="mb-4 text-lg font-bold text-navy">Assets</h3><div id="assetsForm" class="input-grid"></div></div>
+                  <div class="card"><h3 class="mb-4 text-lg font-bold text-navy">Other liabilities</h3><div id="liabilitiesForm" class="input-grid"></div></div>
+                </div>
+              </section>
+
+              <section class="view-section hidden" data-view-panel="loans">
+                <div class="section-heading">
+                  <h2>Loans & Offset</h2>
+                  <p>Model monthly loan amortisation and offset interest benefits.</p>
+                </div>
+                <div class="grid gap-6 xl:grid-cols-[1fr_1.15fr]">
+                  <div class="card"><div id="loanForm" class="input-grid"></div></div>
+                  <div class="card">
+                    <div id="loanSummary" class="summary-grid"></div>
+                    <svg id="loanChart" class="chart mt-4" viewBox="0 0 760 260" role="img" aria-label="Loan balance reducing"></svg>
+                  </div>
+                </div>
+              </section>
+
+              <section class="view-section hidden" data-view-panel="investments">
+                <div class="section-heading">
+                  <h2>Investments</h2>
+                  <p>Project non-super investments and passive income.</p>
+                </div>
+                <div class="grid gap-6 xl:grid-cols-[1fr_1.1fr]">
+                  <div class="card"><div id="investingForm" class="input-grid"></div></div>
+                  <div class="card">
+                    <div id="investmentCards" class="mini-grid"></div>
+                    <svg id="investmentChart" class="chart mt-4" viewBox="0 0 760 260" role="img" aria-label="Investment growth"></svg>
+                  </div>
+                </div>
+              </section>
+
+              <section class="view-section hidden" data-view-panel="super">
+                <div class="section-heading">
+                  <h2>Super</h2>
+                  <p>Track employer super, extra contributions and retirement balances.</p>
+                </div>
+                <div class="grid gap-6 xl:grid-cols-[1fr_1.1fr]">
+                  <div class="card"><div id="superForm" class="input-grid"></div></div>
+                  <div class="card"><div id="superCards" class="mini-grid"></div><div id="superSummary" class="mt-4 rounded-2xl bg-blue-50 p-4"></div></div>
+                </div>
+              </section>
+
+              <section class="view-section hidden" data-view-panel="goals">
+                <div class="section-heading">
+                  <h2>Goals</h2>
+                  <p>Set personal details, target ages and target lifestyle spending.</p>
+                </div>
+                <div class="card"><div id="personalForm" class="input-grid"></div></div>
+                <div id="milestones" class="mt-6 grid gap-4 lg:grid-cols-3"></div>
+              </section>
+
+              <section class="view-section hidden" data-view-panel="forecast">
+                <div class="section-heading">
+                  <h2>Forecast</h2>
+                  <p>See the long-term projections produced by the current plan.</p>
+                </div>
+                <div class="grid gap-4 xl:grid-cols-3" id="forecastCards"></div>
+              </section>
+
+              <section class="view-section hidden" data-view-panel="decision">
+                <div class="section-heading">
+                  <h2>Decision Engine</h2>
+                  <p>Compare where the next dollar may have the strongest modelled impact.</p>
+                </div>
+                <div id="decisionList" class="grid gap-4 lg:grid-cols-2"></div>
+              </section>
+
+              <section class="view-section hidden" data-view-panel="scenarios">
+                <div class="section-heading">
+                  <h2>Scenarios</h2>
+                  <p>Save, load, duplicate and delete plans in this browser.</p>
+                </div>
+                <div class="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+                  <div class="card">
+                    <label class="field-label" for="scenarioName">Scenario name</label>
+                    <input class="field-input" id="scenarioName" type="text" placeholder="e.g. Base case">
+                    <label class="field-label mt-4" for="scenarioNotes">Notes</label>
+                    <textarea class="field-input min-h-28" id="scenarioNotes" placeholder="Optional notes"></textarea>
+                    <button class="btn btn-primary mt-4 w-full justify-center" type="button" id="saveScenarioPanelButton">Save Scenario</button>
+                  </div>
+                  <div class="card">
+                    <div class="mb-4 flex items-center justify-between gap-3">
+                      <h3 class="text-lg font-bold text-navy">Saved scenarios</h3>
+                      <span id="scenarioCount" class="text-sm text-slate-500">0 saved</span>
+                    </div>
+                    <div id="scenarioList" class="grid gap-3"></div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="view-section hidden" data-view-panel="reports">
+                <div class="section-heading">
+                  <h2>Reports</h2>
+                  <p>Print or export the dashboard view for discussion. This is not financial advice.</p>
+                </div>
+                <div class="card">
+                  <button class="btn btn-primary" type="button" id="reportPrintButton">Print / Export</button>
+                  <p class="mt-4 text-sm text-slate-500" id="reportSummary"></p>
+                </div>
+              </section>
+
+              <p class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-800" id="disclaimer"></p>
             </div>
-            <div id="retirementTable" class="table-like"></div>
-          </article>
+          </div>
         </section>
-
-        <section class="section-grid">
-          <article class="panel span-6">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">Sample inputs</p>
-                <h2>Fictional household data</h2>
-              </div>
-            </div>
-            <div id="sampleInputs" class="summary-list compact"></div>
-          </article>
-
-          <article class="panel span-6">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">Formula notes</p>
-                <h2>Transparent calculations</h2>
-              </div>
-            </div>
-            <ul class="formula-list">
-              <li>Loan interest = max(opening balance - offset, 0) x annual rate / 12.</li>
-              <li>Principal repaid = repayment - interest charged.</li>
-              <li>Wealth creation = investing + employer super + extra super + mortgage principal reduction.</li>
-              <li>FI capital target = annual spending divided by safe withdrawal rate.</li>
-            </ul>
-          </article>
-        </section>
-
-        <p id="disclaimer" class="disclaimer"></p>
       </main>
     </div>
 
     <script src="v2-data.js"></script>
+    <script src="calculator.js"></script>
     <script src="app.js"></script>
   </body>
 </html>
