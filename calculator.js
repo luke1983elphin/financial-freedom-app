@@ -29,6 +29,7 @@
     if (frequency === "weekly") return value * 52;
     if (frequency === "fortnightly") return value * 26;
     if (frequency === "monthly") return value * 12;
+    if (frequency === "quarterly") return value * 4;
     return value;
   }
 
@@ -64,22 +65,37 @@
         otherDebts: 0,
       },
       income: {
+        person1IncomeName: "",
         person1Income: 0,
         person1Frequency: "fortnightly",
+        person2IncomeName: "",
         person2Income: 0,
         person2Frequency: "fortnightly",
-        bonusIncome: 0,
+        otherIncomeName: "",
+        otherIncome: 0,
+        otherIncomeFrequency: "annually",
       },
       expenses: {
+        livingName: "",
         livingCosts: 0,
         livingFrequency: "monthly",
         mortgageRepayments: 0,
+        foodName: "",
         food: 0,
         foodFrequency: "weekly",
+        utilitiesName: "",
         utilities: 0,
+        utilitiesFrequency: "annually",
+        insuranceName: "",
         insurance: 0,
+        insuranceFrequency: "annually",
+        schoolChildrenName: "",
         schoolChildren: 0,
+        schoolChildrenFrequency: "annually",
+        ratesPropertyCostsName: "",
         ratesPropertyCosts: 0,
+        ratesPropertyCostsFrequency: "annually",
+        otherExpensesName: "",
         otherExpenses: 0,
         otherFrequency: "monthly",
       },
@@ -92,11 +108,37 @@
         inflationPct: 0,
         safeWithdrawalRatePct: 0,
       },
+      downsizing: {
+        enabled: false,
+        currentResidenceValue: 0,
+        futurePropertyValue: 0,
+        sellingCosts: 0,
+        buyingCosts: 0,
+        releasedForInvestment: 0,
+      },
     };
   }
 
   function clonePlan(plan) {
-    return JSON.parse(JSON.stringify(plan || emptyPlan()));
+    const base = emptyPlan();
+    const source = JSON.parse(JSON.stringify(plan || {}));
+    const merged = {
+      ...base,
+      ...source,
+      personal: { ...base.personal, ...(source.personal || {}) },
+      assets: { ...base.assets, ...(source.assets || {}) },
+      liabilities: { ...base.liabilities, ...(source.liabilities || {}) },
+      income: { ...base.income, ...(source.income || {}) },
+      expenses: { ...base.expenses, ...(source.expenses || {}) },
+      investing: { ...base.investing, ...(source.investing || {}) },
+      downsizing: { ...base.downsizing, ...(source.downsizing || {}) },
+    };
+    if (source.income && source.income.bonusIncome && !source.income.otherIncome) {
+      merged.income.otherIncome = source.income.bonusIncome;
+      merged.income.otherIncomeFrequency = "annually";
+      merged.income.otherIncomeName = source.income.otherIncomeName || "Other Income";
+    }
+    return merged;
   }
 
   function calculateOffsetBenefit({ principal, annualInterestRate, offsetBalance }) {
@@ -249,6 +291,20 @@
     return rows.find((row) => row.age >= age) || rows.at(-1) || { closingBalance: 0, passiveIncome: 0, age };
   }
 
+  function downsizingInvestmentBoost(plan) {
+    const strategy = plan.downsizing || {};
+    if (!strategy.enabled) return 0;
+    const manualRelease = nonNegative(strategy.releasedForInvestment);
+    if (manualRelease > 0) return manualRelease;
+    return roundCurrency(Math.max(
+      0,
+      nonNegative(strategy.currentResidenceValue)
+        - nonNegative(strategy.futurePropertyValue)
+        - nonNegative(strategy.sellingCosts)
+        - nonNegative(strategy.buyingCosts),
+    ));
+  }
+
   function simulateRetirement({ label, startingAge, startingBalance, expectedReturn, inflation, firstYearDraw }) {
     let balance = roundCurrency(nonNegative(startingBalance));
     const balances = { 60: roundCurrency(balance), 70: 0, 80: 0, 90: 0 };
@@ -306,6 +362,7 @@
     const plan = clonePlan(planInput);
     const loan = calculateLoanSummary(plan);
     const currentAge = nonNegative(plan.personal.person1Age);
+    const downsizingBoost = downsizingInvestmentBoost(plan);
     const totalAssets = roundCurrency(
       nonNegative(plan.assets.homeValue)
       + nonNegative(plan.assets.otherPropertyValue)
@@ -325,20 +382,21 @@
       + nonNegative(plan.assets.sharesEtfs)
       + nonNegative(plan.assets.crypto)
       + nonNegative(plan.assets.superPerson1)
-      + nonNegative(plan.assets.superPerson2),
+      + nonNegative(plan.assets.superPerson2)
+      + downsizingBoost,
     );
     const annualNetIncome = roundCurrency(
       annualize(plan.income.person1Income, plan.income.person1Frequency)
       + annualize(plan.income.person2Income, plan.income.person2Frequency)
-      + nonNegative(plan.income.bonusIncome),
+      + annualize(plan.income.otherIncome, plan.income.otherIncomeFrequency),
     );
     const annualExpenses = roundCurrency(
       annualize(plan.expenses.livingCosts, plan.expenses.livingFrequency)
       + annualize(plan.expenses.food, plan.expenses.foodFrequency)
-      + nonNegative(plan.expenses.utilities)
-      + nonNegative(plan.expenses.insurance)
-      + nonNegative(plan.expenses.schoolChildren)
-      + nonNegative(plan.expenses.ratesPropertyCosts)
+      + annualize(plan.expenses.utilities, plan.expenses.utilitiesFrequency)
+      + annualize(plan.expenses.insurance, plan.expenses.insuranceFrequency)
+      + annualize(plan.expenses.schoolChildren, plan.expenses.schoolChildrenFrequency)
+      + annualize(plan.expenses.ratesPropertyCosts, plan.expenses.ratesPropertyCostsFrequency)
       + annualize(plan.expenses.otherExpenses, plan.expenses.otherFrequency),
     );
     const annualMortgageRepayments = roundCurrency(nonNegative(plan.liabilities.monthlyRepayment || plan.expenses.mortgageRepayments) * MONTHS_PER_YEAR);
@@ -361,7 +419,7 @@
       return monthIndex + 1 > loan.payoffMonth ? nonNegative(plan.liabilities.monthlyRepayment || plan.expenses.mortgageRepayments) : 0;
     });
     const investmentProjection = projectBalance({
-      startingBalance: nonNegative(plan.assets.cash) + nonNegative(plan.assets.sharesEtfs) + nonNegative(plan.assets.crypto),
+      startingBalance: nonNegative(plan.assets.cash) + nonNegative(plan.assets.sharesEtfs) + nonNegative(plan.assets.crypto) + downsizingBoost,
       annualContribution: plan.investing.annualInvestingTarget,
       expectedReturn: expectedInvestmentReturn,
       years: 30,
@@ -429,7 +487,10 @@
     const financialFreedomScore = targetCapital > 0 ? Math.min(100, roundRatio(financialIndependenceAssets / targetCapital * 100)) : 0;
     const netWorthProjection = investmentProjection.map((row, index) => {
       const year = index + 1;
-      const homeValue = (nonNegative(plan.assets.homeValue) + nonNegative(plan.assets.otherPropertyValue)) * Math.pow(1 + 0.03, year);
+      const residenceValue = plan.downsizing?.enabled && nonNegative(plan.downsizing.futurePropertyValue) > 0
+        ? nonNegative(plan.downsizing.futurePropertyValue)
+        : nonNegative(plan.assets.homeValue);
+      const homeValue = (residenceValue + nonNegative(plan.assets.otherPropertyValue)) * Math.pow(1 + 0.03, year);
       const loanBalance = balanceAtMonth(loan.schedule, loan.finalBalance, year * MONTHS_PER_YEAR);
       const closingBalance = roundCurrency(homeValue + nonNegative(plan.assets.vehiclesPersonalAssets) + nonNegative(plan.assets.offsetBalance) + row.closingBalance + superProjection[index].closingBalance - loanBalance - nonNegative(plan.liabilities.hecsHelpDebt) - nonNegative(plan.liabilities.otherDebts));
       return { year, age: currentAge + year, closingBalance };
@@ -458,6 +519,7 @@
       retirementSustainability,
       totalRetirementAssets,
       targetCapital,
+      downsizingInvestmentBoost: downsizingBoost,
       decisionOptions: rankDecisionOptions({
         mortgageRate: annualRate(plan.liabilities.homeLoanInterestRatePct),
         expectedInvestmentReturn,

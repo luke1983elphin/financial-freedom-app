@@ -7,11 +7,43 @@
     ["weekly", "Weekly"],
     ["fortnightly", "Fortnightly"],
     ["monthly", "Monthly"],
+    ["quarterly", "Quarterly"],
     ["annually", "Annually"],
   ];
+  const wizardSteps = [
+    {
+      title: "About You",
+      instruction: "Start with the household names and ages so the plan has the right personal context.",
+    },
+    {
+      title: "Income",
+      instruction: "Add each income source with its own name, amount and frequency.",
+    },
+    {
+      title: "Assets",
+      instruction: "Enter what the household owns today, including cash, investments, super and property.",
+    },
+    {
+      title: "Liabilities / Loans",
+      instruction: "Add the home loan, offset balance and other debts so repayments and interest can be modelled.",
+    },
+    {
+      title: "Expenses",
+      instruction: "Enter each spending item with its own amount and frequency.",
+    },
+    {
+      title: "Goals",
+      instruction: "Set target spending, assumptions and optional downsizing details.",
+    },
+    {
+      title: "Results / Dashboard",
+      instruction: "Review your Financial Freedom Progress and the next milestone.",
+    },
+  ];
 
-  let plan = loadDraft() || CALC.emptyPlan();
+  let plan = CALC.clonePlan(loadDraft() || CALC.emptyPlan());
   let activeView = "dashboard";
+  let activeWizardStep = 0;
   let hasOpenedWorkspace = Boolean(loadDraft());
 
   const currency = new Intl.NumberFormat("en-AU", {
@@ -37,6 +69,62 @@
 
   function percentScore(value) {
     return `${Math.round(Number(value) || 0)}%`;
+  }
+
+  function plainPercent(value) {
+    return `${Math.round(Number(value) || 0)}%`;
+  }
+
+  const freedomStages = [
+    {
+      min: 0,
+      nextAt: 25,
+      name: "Starting Out",
+      explanation: "You are setting the foundation: building savings, reducing pressure and getting the plan organised.",
+    },
+    {
+      min: 25,
+      nextAt: 50,
+      name: "Building Wealth",
+      explanation: "Your investments are beginning to carry part of your annual lifestyle costs.",
+    },
+    {
+      min: 50,
+      nextAt: 75,
+      name: "Momentum",
+      explanation: "Your investments now fund a meaningful share of your annual lifestyle.",
+    },
+    {
+      min: 75,
+      nextAt: 100,
+      name: "Semi-Retirement",
+      explanation: "Your investments cover a large portion of lifestyle costs, but employment income is still partly needed.",
+    },
+    {
+      min: 100,
+      nextAt: 150,
+      name: "Work Optional",
+      explanation: "Your investments are projected to cover your lifestyle costs. Work is now optional based on the assumptions used.",
+    },
+    {
+      min: 150,
+      nextAt: null,
+      name: "Financial Freedom",
+      explanation: "Your investments provide a strong surplus above lifestyle costs based on the assumptions used.",
+    },
+  ];
+
+  function freedomPercent(result) {
+    if (!result.targetCapital) return 0;
+    return (Number(result.financialIndependenceAssets) || 0) / result.targetCapital * 100;
+  }
+
+  function currentFreedomStage(percent) {
+    return [...freedomStages].reverse().find((stage) => percent >= stage.min) || freedomStages[0];
+  }
+
+  function safeWithdrawalRate() {
+    return (Number(plan.investing.safeWithdrawalRatePct) || 0) / 100;
   }
 
   function escapeHtml(value) {
@@ -88,8 +176,16 @@
   }
 
   function isBlankPlan(currentPlan) {
-    const flat = JSON.stringify(currentPlan);
-    return !/[1-9A-Za-z]/.test(flat.replace(/weekly|fortnightly|monthly|annually/g, ""));
+    const ignoredText = new Set(["weekly", "fortnightly", "monthly", "quarterly", "annually"]);
+    function hasValue(value) {
+      if (Array.isArray(value)) return value.some(hasValue);
+      if (value && typeof value === "object") return Object.values(value).some(hasValue);
+      if (typeof value === "string") return value.trim() !== "" && !ignoredText.has(value);
+      if (typeof value === "number") return value !== 0;
+      if (typeof value === "boolean") return value;
+      return false;
+    }
+    return !hasValue(currentPlan);
   }
 
   function showWorkspace(view = "dashboard") {
@@ -107,6 +203,7 @@
     document.querySelectorAll(".nav-button").forEach((button) => {
       button.classList.toggle("active", button.dataset.view === view);
     });
+    if (view === "setup") renderWizardStep();
   }
 
   function optionsHtml(selected) {
@@ -116,34 +213,65 @@
   function field(config) {
     const value = getPath(plan, config.path);
     const id = config.path.replaceAll(".", "-");
-    const input = config.type === "select"
-      ? `<select class="field-input" id="${id}" data-path="${config.path}" data-type="text">${optionsHtml(value)}</select>`
-      : `<input class="field-input" id="${id}" data-path="${config.path}" data-type="${config.kind || "number"}" type="${config.kind === "text" ? "text" : "number"}" step="${config.step || "1"}" value="${escapeHtml(value || "")}" placeholder="${escapeHtml(config.placeholder || "")}">`;
+    let input = "";
+    if (config.type === "select") {
+      input = `<select class="field-input" id="${id}" data-path="${config.path}" data-type="text">${optionsHtml(value)}</select>`;
+    } else if (config.type === "checkbox") {
+      input = `<input class="toggle-input" id="${id}" data-path="${config.path}" data-type="boolean" type="checkbox"${value ? " checked" : ""}>`;
+    } else {
+      input = `<input class="field-input" id="${id}" data-path="${config.path}" data-type="${config.kind || "number"}" type="${config.kind === "text" ? "text" : "number"}" step="${config.step || "1"}" value="${escapeHtml(value || "")}" placeholder="${escapeHtml(config.placeholder || "")}">`;
+    }
 
     return `
-      <label>
+      <label class="${config.type === "checkbox" ? "toggle-field" : ""}">
         <span class="field-label">${escapeHtml(config.label)}</span>
         ${input}
+        ${config.help ? `<small class="field-help">${escapeHtml(config.help)}</small>` : ""}
       </label>
     `;
   }
 
   function renderForm(containerId, fields) {
-    document.getElementById(containerId).innerHTML = fields.map(field).join("");
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = fields.map(field).join("");
+  }
+
+  function renderGroupedForm(containerId, groups) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = groups.map((group) => `
+      <article class="form-item-card">
+        <div class="card-subheading">
+          <h3>${escapeHtml(group.title)}</h3>
+          ${group.description ? `<p>${escapeHtml(group.description)}</p>` : ""}
+        </div>
+        <div class="input-grid mt-4">${group.fields.map(field).join("")}</div>
+      </article>
+    `).join("");
   }
 
   function renderForms() {
-    renderForm("personalForm", [
+    const aboutFields = [
       { label: "Person 1 name", path: "personal.person1Name", kind: "text" },
       { label: "Person 2 name", path: "personal.person2Name", kind: "text" },
       { label: "Person 1 age", path: "personal.person1Age" },
       { label: "Person 2 age", path: "personal.person2Age" },
+    ];
+    const goalFields = [
       { label: "Work optional target age", path: "personal.workOptionalAge" },
       { label: "Semi-retirement target age", path: "personal.semiRetirementAge" },
       { label: "Full retirement target age", path: "personal.fullRetirementAge" },
       { label: "Target annual spending", path: "personal.targetAnnualSpending", step: "1000" },
-    ]);
-    renderForm("assetsForm", [
+      { label: "Annual investing target", path: "investing.annualInvestingTarget", step: "1000" },
+      { label: "Employer super contributions", path: "investing.employerSuperContributions", step: "1000" },
+      { label: "Extra super contributions", path: "investing.extraSuperContributions", step: "1000" },
+      { label: "Expected investment return (%)", path: "investing.expectedInvestmentReturnPct", step: "0.1" },
+      { label: "Expected super return (%)", path: "investing.expectedSuperReturnPct", step: "0.1" },
+      { label: "Inflation (%)", path: "investing.inflationPct", step: "0.1" },
+      { label: "Safe withdrawal rate (%)", path: "investing.safeWithdrawalRatePct", step: "0.1" },
+    ];
+    const assetFields = [
       { label: "Home value", path: "assets.homeValue", step: "1000" },
       { label: "Other property value", path: "assets.otherPropertyValue", step: "1000" },
       { label: "Offset balance", path: "assets.offsetBalance", step: "1000" },
@@ -153,36 +281,120 @@
       { label: "Super person 1", path: "assets.superPerson1", step: "1000" },
       { label: "Super person 2", path: "assets.superPerson2", step: "1000" },
       { label: "Vehicles / personal assets", path: "assets.vehiclesPersonalAssets", step: "100" },
-    ]);
-    renderForm("liabilitiesForm", [
+    ];
+    const liabilityFields = [
       { label: "HECS / HELP debt", path: "liabilities.hecsHelpDebt", step: "100" },
       { label: "Other debts", path: "liabilities.otherDebts", step: "100" },
-    ]);
-    renderForm("loanForm", [
+    ];
+    const loanFields = [
       { label: "Home loan balance", path: "liabilities.homeLoanBalance", step: "1000" },
       { label: "Home loan interest rate (%)", path: "liabilities.homeLoanInterestRatePct", step: "0.1" },
       { label: "Monthly repayment", path: "liabilities.monthlyRepayment", step: "100" },
       { label: "Remaining loan term (years)", path: "liabilities.remainingLoanTermYears", step: "1" },
       { label: "Offset balance", path: "assets.offsetBalance", step: "1000" },
       { label: "Mortgage repayments in cashflow", path: "expenses.mortgageRepayments", step: "100" },
-    ]);
-    renderForm("incomeExpenseForm", [
-      { label: "Person 1 income", path: "income.person1Income", step: "100" },
-      { label: "Person 1 income frequency", path: "income.person1Frequency", type: "select" },
-      { label: "Person 2 income", path: "income.person2Income", step: "100" },
-      { label: "Person 2 income frequency", path: "income.person2Frequency", type: "select" },
-      { label: "Bonus income", path: "income.bonusIncome", step: "100" },
-      { label: "Living costs", path: "expenses.livingCosts", step: "100" },
-      { label: "Living cost frequency", path: "expenses.livingFrequency", type: "select" },
-      { label: "Food", path: "expenses.food", step: "10" },
-      { label: "Food frequency", path: "expenses.foodFrequency", type: "select" },
-      { label: "Utilities", path: "expenses.utilities", step: "100" },
-      { label: "Insurance", path: "expenses.insurance", step: "100" },
-      { label: "School / children", path: "expenses.schoolChildren", step: "100" },
-      { label: "Rates / property costs", path: "expenses.ratesPropertyCosts", step: "100" },
-      { label: "Other expenses", path: "expenses.otherExpenses", step: "100" },
-      { label: "Other expense frequency", path: "expenses.otherFrequency", type: "select" },
-    ]);
+    ];
+    const incomeGroups = [
+      {
+        title: "Person 1 income",
+        description: "Salary, wages or regular take-home income.",
+        fields: [
+          { label: "Income name", path: "income.person1IncomeName", kind: "text", placeholder: "e.g. Person 1 salary" },
+          { label: "Amount", path: "income.person1Income", step: "100" },
+          { label: "Frequency", path: "income.person1Frequency", type: "select" },
+        ],
+      },
+      {
+        title: "Person 2 income",
+        description: "Add the second regular income if relevant.",
+        fields: [
+          { label: "Income name", path: "income.person2IncomeName", kind: "text", placeholder: "e.g. Person 2 salary" },
+          { label: "Amount", path: "income.person2Income", step: "100" },
+          { label: "Frequency", path: "income.person2Frequency", type: "select" },
+        ],
+      },
+      {
+        title: "Other Income",
+        description: "Use this for bonuses, side income, dividends, rent, interest or other payments.",
+        fields: [
+          { label: "Income name", path: "income.otherIncomeName", kind: "text", placeholder: "e.g. Side income or dividends" },
+          { label: "Amount", path: "income.otherIncome", step: "100" },
+          { label: "Frequency", path: "income.otherIncomeFrequency", type: "select" },
+        ],
+      },
+    ];
+    const expenseGroups = [
+      {
+        title: "Living costs",
+        fields: [
+          { label: "Expense name", path: "expenses.livingName", kind: "text", placeholder: "Living costs" },
+          { label: "Amount", path: "expenses.livingCosts", step: "100" },
+          { label: "Frequency", path: "expenses.livingFrequency", type: "select" },
+        ],
+      },
+      {
+        title: "Food",
+        fields: [
+          { label: "Expense name", path: "expenses.foodName", kind: "text", placeholder: "Food" },
+          { label: "Amount", path: "expenses.food", step: "10" },
+          { label: "Frequency", path: "expenses.foodFrequency", type: "select" },
+        ],
+      },
+      {
+        title: "Utilities",
+        fields: [
+          { label: "Expense name", path: "expenses.utilitiesName", kind: "text", placeholder: "Utilities" },
+          { label: "Amount", path: "expenses.utilities", step: "100" },
+          { label: "Frequency", path: "expenses.utilitiesFrequency", type: "select" },
+        ],
+      },
+      {
+        title: "Insurance",
+        fields: [
+          { label: "Expense name", path: "expenses.insuranceName", kind: "text", placeholder: "Insurance" },
+          { label: "Amount", path: "expenses.insurance", step: "100" },
+          { label: "Frequency", path: "expenses.insuranceFrequency", type: "select" },
+        ],
+      },
+      {
+        title: "School / children",
+        fields: [
+          { label: "Expense name", path: "expenses.schoolChildrenName", kind: "text", placeholder: "School / children" },
+          { label: "Amount", path: "expenses.schoolChildren", step: "100" },
+          { label: "Frequency", path: "expenses.schoolChildrenFrequency", type: "select" },
+        ],
+      },
+      {
+        title: "Rates / property costs",
+        fields: [
+          { label: "Expense name", path: "expenses.ratesPropertyCostsName", kind: "text", placeholder: "Rates / property costs" },
+          { label: "Amount", path: "expenses.ratesPropertyCosts", step: "100" },
+          { label: "Frequency", path: "expenses.ratesPropertyCostsFrequency", type: "select" },
+        ],
+      },
+      {
+        title: "Other expenses",
+        fields: [
+          { label: "Expense name", path: "expenses.otherExpensesName", kind: "text", placeholder: "Other expenses" },
+          { label: "Amount", path: "expenses.otherExpenses", step: "100" },
+          { label: "Frequency", path: "expenses.otherFrequency", type: "select" },
+        ],
+      },
+    ];
+    const downsizingFields = [
+      { label: "Use downsizing strategy", path: "downsizing.enabled", type: "checkbox", help: "Off by default. Turn on only when you want the released equity included as investable money." },
+      { label: "Current principal residence value", path: "downsizing.currentResidenceValue", step: "1000" },
+      { label: "Estimated future downsized property value", path: "downsizing.futurePropertyValue", step: "1000" },
+      { label: "Estimated selling costs", path: "downsizing.sellingCosts", step: "1000" },
+      { label: "Estimated buying costs / stamp duty", path: "downsizing.buyingCosts", step: "1000" },
+      { label: "Amount released for investment", path: "downsizing.releasedForInvestment", step: "1000" },
+    ];
+
+    renderForm("personalForm", [...aboutFields, ...goalFields]);
+    renderForm("assetsForm", assetFields);
+    renderForm("liabilitiesForm", liabilityFields);
+    renderForm("loanForm", loanFields);
+    renderGroupedForm("incomeExpenseForm", [...incomeGroups, ...expenseGroups]);
     renderForm("investingForm", [
       { label: "Annual investing target", path: "investing.annualInvestingTarget", step: "1000" },
       { label: "Expected investment return (%)", path: "investing.expectedInvestmentReturnPct", step: "0.1" },
@@ -196,6 +408,14 @@
       { label: "Extra super contributions", path: "investing.extraSuperContributions", step: "1000" },
       { label: "Expected super return (%)", path: "investing.expectedSuperReturnPct", step: "0.1" },
     ]);
+    renderForm("wizardAboutForm", aboutFields);
+    renderGroupedForm("wizardIncomeForm", incomeGroups);
+    renderForm("wizardAssetsForm", assetFields);
+    renderForm("wizardLoansForm", [...loanFields, ...liabilityFields]);
+    renderGroupedForm("wizardExpensesForm", expenseGroups);
+    renderForm("wizardGoalsForm", goalFields);
+    renderForm("wizardDownsizingForm", downsizingFields);
+    renderForm("downsizingForm", downsizingFields);
   }
 
   function metricCard(label, value, tone = "") {
@@ -247,32 +467,127 @@
   }
 
   function updatePreview(result) {
-    document.getElementById("previewScore").textContent = percentScore(result.financialFreedomScore);
-    document.getElementById("previewWorkOptional").textContent = plan.personal.workOptionalAge ? `Age ${plan.personal.workOptionalAge}` : "-";
+    const percent = freedomPercent(result);
+    document.getElementById("previewScore").textContent = plainPercent(percent);
+    document.getElementById("previewStage").textContent = currentFreedomStage(percent).name;
     document.getElementById("previewNetWorth").textContent = money(result.currentNetWorth);
     document.getElementById("previewWealthRate").textContent = money(result.wealthCreationRate);
   }
 
+  function lifestyleTarget(result) {
+    return Number(plan.personal.targetAnnualSpending) || result.annualExpenses || 0;
+  }
+
+  function annualPassiveIncome(result) {
+    return Math.round((Number(result.financialIndependenceAssets) || 0) * safeWithdrawalRate());
+  }
+
+  function nextMilestone(result, percent) {
+    if (!result.targetCapital) {
+      return {
+        amount: "Set your target spending",
+        text: "Add your annual lifestyle target to calculate the next Financial Freedom stage.",
+      };
+    }
+    const next = freedomStages.find((stage) => stage.min > percent);
+    if (!next) {
+      return {
+        amount: "Financial Freedom",
+        text: "Your investments are modelling a strong surplus above annual lifestyle costs.",
+      };
+    }
+    const requiredAssets = result.targetCapital * (next.min / 100);
+    const gap = Math.max(0, requiredAssets - result.financialIndependenceAssets);
+    const passiveGap = Math.round(gap * safeWithdrawalRate());
+    return {
+      amount: `${money(gap)} more invested`,
+      text: `${money(gap)} more invested to reach ${next.name}. Increase passive income by ${money(passiveGap)} per year.`,
+    };
+  }
+
+  function renderWizardResults(result) {
+    const percent = freedomPercent(result);
+    const stage = currentFreedomStage(percent);
+    const passive = annualPassiveIncome(result);
+    const target = lifestyleTarget(result);
+    const milestone = nextMilestone(result, percent);
+    const container = document.getElementById("wizardResultsSummary");
+    if (!container) return;
+    container.innerHTML = `
+      <article class="freedom-stage-card">
+        <span class="metric-label">Financial Freedom Percentage</span>
+        <strong>${plainPercent(percent)}</strong>
+        <p>${escapeHtml(stage.explanation)}</p>
+        <div class="progress-track progress-track-large" aria-hidden="true"><span style="width:${Math.min(100, Math.max(0, percent))}%"></span></div>
+      </article>
+      <div class="dashboard-card-grid mt-4">
+        ${metricCard("Current stage", stage.name)}
+        ${metricCard("Annual passive income", money(passive))}
+        ${metricCard("Annual lifestyle target", money(target))}
+        ${metricCard("Next milestone", milestone.amount)}
+      </div>
+      <button class="btn btn-primary mt-4 w-full justify-center" type="button" data-view="dashboard">View Dashboard</button>
+    `;
+  }
+
+  function renderWizardStep() {
+    const step = wizardSteps[activeWizardStep];
+    const percent = Math.round(((activeWizardStep + 1) / wizardSteps.length) * 100);
+    document.getElementById("wizardStepLabel").textContent = `Step ${activeWizardStep + 1} of ${wizardSteps.length}`;
+    document.getElementById("wizardStepTitle").textContent = step.title;
+    document.getElementById("wizardHeading").textContent = step.title;
+    document.getElementById("wizardInstruction").textContent = step.instruction;
+    document.getElementById("wizardPercent").textContent = `${percent}% Complete`;
+    document.getElementById("wizardProgressBar").style.width = `${percent}%`;
+    document.querySelectorAll("[data-wizard-panel]").forEach((panel) => {
+      panel.classList.toggle("hidden", Number(panel.dataset.wizardPanel) !== activeWizardStep);
+    });
+    document.getElementById("wizardPrevButton").disabled = activeWizardStep === 0;
+    document.getElementById("wizardNextButton").textContent = activeWizardStep === wizardSteps.length - 1 ? "View Dashboard" : "Next";
+  }
+
   function renderDashboard(result) {
     const names = [plan.personal.person1Name, plan.personal.person2Name].filter(Boolean).join(" and ");
-    document.getElementById("dashboardTitle").textContent = names ? `${names}'s freedom timeline` : "Start a plan or load the demo.";
+    const percent = freedomPercent(result);
+    const stage = currentFreedomStage(percent);
+    const passiveIncome = annualPassiveIncome(result);
+    const target = lifestyleTarget(result);
+    const surplus = passiveIncome - target;
+    const milestone = nextMilestone(result, percent);
+    const progressWidth = Math.min(100, Math.max(0, percent));
+
+    document.getElementById("dashboardTitle").textContent = names ? `${names}'s Financial Freedom Progress` : "Start a plan or load the demo.";
     document.getElementById("dashboardSubtitle").textContent = isBlankPlan(plan)
       ? "Enter your own details or try the fictional demo to see the dashboard come alive."
-      : "See exactly when work becomes optional based on the current scenario.";
-    document.getElementById("heroScore").textContent = percentScore(result.financialFreedomScore);
-    document.querySelector(".score-ring").style.borderColor = result.financialFreedomScore >= 80 ? "#bdebd7" : result.financialFreedomScore >= 50 ? "#f3d08c" : "#dbe4ee";
+      : "See how much of your annual lifestyle is currently funded by investable assets.";
+    document.getElementById("heroScore").textContent = plainPercent(percent);
+    document.querySelector(".score-ring").style.borderColor = percent >= 100 ? "#bdebd7" : percent >= 75 ? "#f3d08c" : "#dbe4ee";
+    document.getElementById("freedomStageLabel").textContent = stage.name;
+    document.getElementById("freedomStageText").textContent = stage.explanation;
+    document.getElementById("freedomProgressBar").style.width = `${progressWidth}%`;
+    document.getElementById("freedomPassiveText").textContent = percent >= 100
+      ? "Your investments are projected to cover your lifestyle costs. Work is now optional based on the assumptions used."
+      : `Your investments currently fund ${plainPercent(percent)} of your annual lifestyle. You are in the ${stage.name} stage.`;
+    document.getElementById("nextMilestoneAmount").textContent = milestone.amount;
+    document.getElementById("nextMilestoneText").textContent = milestone.text;
 
-    document.getElementById("topMetricGrid").innerHTML = [
-      metricCard("Financial Freedom Score", percentScore(result.financialFreedomScore)),
-      metricCard("Work Optional Age", plan.personal.workOptionalAge ? `Age ${plan.personal.workOptionalAge}` : "-"),
-      metricCard("Semi-Retirement Age", plan.personal.semiRetirementAge ? `Age ${plan.personal.semiRetirementAge}` : "-"),
-      metricCard("Full Retirement Age", plan.personal.fullRetirementAge ? `Age ${plan.personal.fullRetirementAge}` : "-"),
-    ].join("");
+    const boostCard = document.getElementById("downsizingBoostCard");
+    if (result.downsizingInvestmentBoost > 0) {
+      boostCard.classList.remove("hidden");
+      document.getElementById("downsizingBoostValue").textContent = money(result.downsizingInvestmentBoost);
+      document.getElementById("downsizingBoostText").textContent = `By downsizing your home, you could release ${money(result.downsizingInvestmentBoost)} to invest toward financial freedom.`;
+    } else {
+      boostCard.classList.add("hidden");
+    }
+
     document.getElementById("secondMetricGrid").innerHTML = [
       metricCard("Current Net Worth", money(result.currentNetWorth)),
       metricCard("Financial Independence Assets", money(result.financialIndependenceAssets)),
       metricCard("Effective Mortgage", money(result.effectiveMortgageBalance)),
       metricCard("Wealth Creation Rate", money(result.wealthCreationRate)),
+      metricCard("Annual Passive Income", money(passiveIncome)),
+      metricCard("Annual Living Expenses", money(target)),
+      metricCard("Annual Investment Surplus / Shortfall", money(surplus), surplus >= 0 ? "status-green" : "status-amber"),
     ].join("");
     document.getElementById("netWorthNote").textContent = result.netWorthProjection.at(-1) ? `Age ${result.netWorthProjection.at(-1).age}: ${money(result.netWorthProjection.at(-1).closingBalance)}` : "";
     lineChart("netWorthChart", [{
@@ -333,7 +648,7 @@
     lineChart("investmentChart", [{
       label: "Investment balance",
       color: "#0f9f6e",
-      points: [{ x: 0, y: plan.assets.cash + plan.assets.sharesEtfs + plan.assets.crypto }, ...result.investmentProjection.map((row) => ({ x: row.year, y: row.closingBalance }))],
+      points: [{ x: 0, y: plan.assets.cash + plan.assets.sharesEtfs + plan.assets.crypto + (result.downsizingInvestmentBoost || 0) }, ...result.investmentProjection.map((row) => ({ x: row.year, y: row.closingBalance }))],
     }], { height: 260, xMarks: [0, 10, 20, 30], xLabel: (mark) => `${mark}y` });
   }
 
@@ -393,7 +708,7 @@
   }
 
   function renderReports(result) {
-    document.getElementById("reportSummary").textContent = `Current score ${percentScore(result.financialFreedomScore)}, net worth ${money(result.currentNetWorth)}, wealth creation rate ${money(result.wealthCreationRate)}.`;
+    document.getElementById("reportSummary").textContent = `Current Financial Freedom Percentage ${plainPercent(freedomPercent(result))}, net worth ${money(result.currentNetWorth)}, wealth creation rate ${money(result.wealthCreationRate)}.`;
   }
 
   function renderScenarios() {
@@ -413,7 +728,7 @@
               <h3 class="font-black text-navy">${escapeHtml(scenario.name)}</h3>
               <p>${escapeHtml(scenario.notes || "No notes")}</p>
               <p>Saved ${new Date(scenario.savedAt).toLocaleString()}</p>
-              <p class="mt-2 font-bold text-slate-600">Score ${percentScore(scenarioResult.financialFreedomScore)} · Net worth ${money(scenarioResult.currentNetWorth)}</p>
+              <p class="mt-2 font-bold text-slate-600">Freedom ${plainPercent(freedomPercent(scenarioResult))} · Net worth ${money(scenarioResult.currentNetWorth)}</p>
             </div>
             <div class="flex gap-2">
               <button class="btn" type="button" data-load-scenario="${scenario.id}">Load</button>
@@ -427,7 +742,11 @@
 
   function syncInputs(path, value) {
     document.querySelectorAll(`[data-path="${path}"]`).forEach((input) => {
-      if (input.value !== String(value ?? "")) input.value = value ?? "";
+      if (input.type === "checkbox") {
+        input.checked = Boolean(value);
+      } else if (input.value !== String(value ?? "")) {
+        input.value = value ?? "";
+      }
     });
   }
 
@@ -444,6 +763,8 @@
     renderDecision(result);
     renderScenarios();
     renderReports(result);
+    renderWizardResults(result);
+    renderWizardStep();
     document.getElementById("disclaimer").textContent = DATA.disclaimer;
     if (hasOpenedWorkspace) document.getElementById("appWorkspace").classList.remove("hidden");
   }
@@ -462,8 +783,9 @@
 
   function startMyPlan() {
     if (!plan) plan = CALC.emptyPlan();
+    activeWizardStep = 0;
     renderAll();
-    showWorkspace("goals");
+    showWorkspace("setup");
   }
 
   function resetPlan() {
@@ -472,8 +794,9 @@
     localStorage.removeItem(DRAFT_KEY);
     document.getElementById("scenarioName").value = "";
     document.getElementById("scenarioNotes").value = "";
+    activeWizardStep = 0;
     renderAll();
-    showWorkspace("dashboard");
+    showWorkspace("setup");
   }
 
   function saveScenario() {
@@ -513,7 +836,7 @@
     document.addEventListener("input", (event) => {
       const target = event.target;
       if (!target.dataset.path) return;
-      const value = target.dataset.type === "text" ? target.value : Number(target.value);
+      const value = target.dataset.type === "boolean" ? target.checked : target.dataset.type === "text" ? target.value : Number(target.value);
       setPath(plan, target.dataset.path, value);
       syncInputs(target.dataset.path, value);
       if (target.dataset.path === "liabilities.monthlyRepayment") {
@@ -524,6 +847,7 @@
         setPath(plan, "liabilities.monthlyRepayment", value);
         syncInputs("liabilities.monthlyRepayment", value);
       }
+      document.getElementById("wizardSaveStatus").textContent = "Saved on this device.";
       saveDraft();
       renderOutputs();
     });
@@ -560,7 +884,21 @@
     document.getElementById("saveScenarioPanelButton").addEventListener("click", saveScenario);
     document.getElementById("loadScenarioButton").addEventListener("click", () => showWorkspace("scenarios"));
     document.getElementById("duplicateButton").addEventListener("click", duplicateScenario);
-    document.getElementById("compareButton").addEventListener("click", () => showWorkspace("scenarios"));
+    document.getElementById("wizardPrevButton").addEventListener("click", () => {
+      activeWizardStep = Math.max(0, activeWizardStep - 1);
+      saveDraft();
+      renderOutputs();
+    });
+    document.getElementById("wizardNextButton").addEventListener("click", () => {
+      saveDraft();
+      if (activeWizardStep >= wizardSteps.length - 1) {
+        showWorkspace("dashboard");
+        return;
+      }
+      activeWizardStep = Math.min(wizardSteps.length - 1, activeWizardStep + 1);
+      renderOutputs();
+      document.querySelector('[data-view-panel="setup"]').scrollIntoView({ behavior: "smooth", block: "start" });
+    });
     document.getElementById("exportButton").addEventListener("click", () => window.print());
     document.getElementById("reportPrintButton").addEventListener("click", () => window.print());
   }

@@ -42,7 +42,6 @@
             <button class="btn" type="button" id="saveScenarioButton">Save Scenario</button>
             <button class="btn" type="button" id="loadScenarioButton">Load Scenario</button>
             <button class="btn" type="button" id="duplicateButton">Duplicate</button>
-            <button class="btn" type="button" id="compareButton">Compare</button>
             <button class="btn" type="button" id="exportButton">Print / Export</button>
           </div>
         </div>
@@ -67,8 +66,8 @@
                 <strong id="previewScore">0%</strong>
               </article>
               <article class="preview-card">
-                <span>Work Optional Age</span>
-                <strong id="previewWorkOptional">-</strong>
+                <span>Current Stage</span>
+                <strong id="previewStage">Starting Out</strong>
               </article>
               <article class="preview-card">
                 <span>Net Worth</span>
@@ -105,6 +104,7 @@
             <nav class="workspace-nav rounded-3xl border border-line bg-white p-3 shadow-soft lg:sticky lg:top-24 lg:h-fit">
               <p class="nav-title">Plan workspace</p>
               <div class="grid gap-1" id="sideNav">
+                <button class="nav-button" type="button" data-view="setup">Setup Wizard</button>
                 <button class="nav-button active" type="button" data-view="dashboard">Dashboard</button>
                 <button class="nav-button" type="button" data-view="cashflow">Cashflow</button>
                 <button class="nav-button" type="button" data-view="assets">Assets & Liabilities</button>
@@ -120,21 +120,98 @@
             </nav>
 
             <div class="grid gap-6">
+              <section class="view-section hidden" data-view-panel="setup">
+                <div class="wizard-shell">
+                  <div class="wizard-progress">
+                    <div>
+                      <span id="wizardStepLabel">Step 1 of 7</span>
+                      <strong id="wizardStepTitle">About You</strong>
+                    </div>
+                    <span id="wizardPercent">14% Complete</span>
+                  </div>
+                  <div class="progress-track" aria-hidden="true"><span id="wizardProgressBar"></span></div>
+
+                  <div class="wizard-card">
+                    <div class="section-heading">
+                      <h2 id="wizardHeading">About You</h2>
+                      <p id="wizardInstruction">Start with the household names, ages and basic context for the plan.</p>
+                    </div>
+
+                    <div class="wizard-panel" data-wizard-panel="0">
+                      <div id="wizardAboutForm" class="input-grid"></div>
+                    </div>
+                    <div class="wizard-panel hidden" data-wizard-panel="1">
+                      <div id="wizardIncomeForm" class="stacked-form"></div>
+                    </div>
+                    <div class="wizard-panel hidden" data-wizard-panel="2">
+                      <div id="wizardAssetsForm" class="input-grid"></div>
+                    </div>
+                    <div class="wizard-panel hidden" data-wizard-panel="3">
+                      <div id="wizardLoansForm" class="input-grid"></div>
+                    </div>
+                    <div class="wizard-panel hidden" data-wizard-panel="4">
+                      <div id="wizardExpensesForm" class="stacked-form"></div>
+                    </div>
+                    <div class="wizard-panel hidden" data-wizard-panel="5">
+                      <div id="wizardGoalsForm" class="input-grid"></div>
+                      <div class="mt-5">
+                        <div class="card-subheading">
+                          <h3>Downsizing Strategy</h3>
+                          <p>Optional: model releasing home equity and investing the surplus toward financial freedom.</p>
+                        </div>
+                        <div id="wizardDownsizingForm" class="input-grid mt-4"></div>
+                      </div>
+                    </div>
+                    <div class="wizard-panel hidden" data-wizard-panel="6">
+                      <div id="wizardResultsSummary" class="wizard-results"></div>
+                    </div>
+                  </div>
+
+                  <div class="wizard-actions">
+                    <button class="btn" type="button" id="wizardPrevButton">Previous</button>
+                    <span id="wizardSaveStatus">Saved on this device as you type.</span>
+                    <button class="btn btn-primary" type="button" id="wizardNextButton">Next</button>
+                  </div>
+                </div>
+              </section>
+
               <section class="view-section" data-view-panel="dashboard">
                 <div class="premium-hero dashboard-hero">
                   <div>
-                    <p class="brand-kicker text-sm font-bold uppercase text-success">Dashboard</p>
+                    <p class="brand-kicker text-sm font-bold uppercase text-success">Financial Freedom Progress</p>
                     <h2 id="dashboardTitle" class="mt-2 text-3xl font-black text-navy sm:text-4xl">Start a plan or load the demo.</h2>
-                    <p id="dashboardSubtitle" class="mt-3 text-slate-600">Your financial freedom timeline will update as you enter data.</p>
+                    <p id="dashboardSubtitle" class="mt-3 text-slate-600">Your progress dashboard will update as you enter data.</p>
                   </div>
                   <div class="score-ring">
-                    <span>Score</span>
+                    <span>Freedom</span>
                     <strong id="heroScore">0%</strong>
                   </div>
                 </div>
 
-                <div class="dashboard-card-grid dashboard-card-grid-primary mt-6" id="topMetricGrid"></div>
-                <div class="dashboard-card-grid dashboard-card-grid-secondary mt-4" id="secondMetricGrid"></div>
+                <div class="freedom-progress-section mt-6">
+                  <article class="freedom-stage-card">
+                    <div>
+                      <span class="metric-label">Current Financial Freedom Stage</span>
+                      <strong id="freedomStageLabel">Starting Out</strong>
+                    </div>
+                    <p id="freedomStageText">Enter your plan to see your current financial freedom stage.</p>
+                    <div class="progress-track progress-track-large" aria-hidden="true"><span id="freedomProgressBar"></span></div>
+                    <p id="freedomPassiveText" class="progress-caption">Your investments currently fund 0% of your annual lifestyle.</p>
+                  </article>
+                  <article class="next-milestone-card">
+                    <span class="metric-label">Next Milestone</span>
+                    <strong id="nextMilestoneAmount">Set your target spending</strong>
+                    <p id="nextMilestoneText">Add your annual lifestyle target to calculate the next stage.</p>
+                  </article>
+                </div>
+
+                <article class="downsizing-boost-card mt-4 hidden" id="downsizingBoostCard">
+                  <span class="metric-label">Downsizing Investment Boost</span>
+                  <strong id="downsizingBoostValue">$0</strong>
+                  <p id="downsizingBoostText">By downsizing your home, you could release money to invest toward financial freedom.</p>
+                </article>
+
+                <div class="dashboard-card-grid dashboard-card-grid-secondary mt-6" id="secondMetricGrid"></div>
 
                 <div class="dashboard-chart-grid mt-6 grid gap-4 xl:grid-cols-2">
                   <article class="card">
@@ -157,7 +234,7 @@
               <section class="view-section hidden" data-view-panel="cashflow">
                 <div class="section-heading">
                   <h2>Cashflow</h2>
-                  <p>Convert income, spending, mortgage repayments and investing into annual and weekly values.</p>
+                  <p>Convert income, other income, spending, mortgage repayments and investing into annual and weekly values.</p>
                 </div>
                 <div class="grid gap-6 xl:grid-cols-[1fr_1.1fr]">
                   <div class="card"><div id="incomeExpenseForm" class="input-grid"></div></div>
@@ -221,6 +298,13 @@
                   <p>Set personal details, target ages and target lifestyle spending.</p>
                 </div>
                 <div class="card"><div id="personalForm" class="input-grid"></div></div>
+                <div class="card mt-6">
+                  <div class="card-subheading">
+                    <h3>Downsizing Strategy</h3>
+                    <p>Optional: release equity from the principal residence and model it as investable money.</p>
+                  </div>
+                  <div id="downsizingForm" class="input-grid mt-4"></div>
+                </div>
                 <div id="milestones" class="mt-6 grid gap-4 lg:grid-cols-3"></div>
               </section>
 
