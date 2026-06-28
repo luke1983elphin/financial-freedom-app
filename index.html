@@ -131,40 +131,48 @@
                   </div>
                   <div class="progress-track" aria-hidden="true"><span id="wizardProgressBar"></span></div>
 
-                  <div class="wizard-card">
-                    <div class="section-heading">
-                      <h2 id="wizardHeading">About You</h2>
-                      <p id="wizardInstruction">Start with the household names, ages and basic context for the plan.</p>
-                    </div>
+                  <div class="wizard-content-grid">
+                    <div class="wizard-card">
+                      <div class="section-heading">
+                        <h2 id="wizardHeading">About You</h2>
+                        <p id="wizardInstruction">Start with the household names, ages and basic context for the plan.</p>
+                      </div>
 
-                    <div class="wizard-panel" data-wizard-panel="0">
-                      <div id="wizardAboutForm" class="input-grid"></div>
-                    </div>
-                    <div class="wizard-panel hidden" data-wizard-panel="1">
-                      <div id="wizardIncomeForm" class="stacked-form"></div>
-                    </div>
-                    <div class="wizard-panel hidden" data-wizard-panel="2">
-                      <div id="wizardAssetsForm" class="input-grid"></div>
-                    </div>
-                    <div class="wizard-panel hidden" data-wizard-panel="3">
-                      <div id="wizardLoansForm" class="input-grid"></div>
-                    </div>
-                    <div class="wizard-panel hidden" data-wizard-panel="4">
-                      <div id="wizardExpensesForm" class="stacked-form"></div>
-                    </div>
-                    <div class="wizard-panel hidden" data-wizard-panel="5">
-                      <div id="wizardGoalsForm" class="input-grid"></div>
-                      <div class="mt-5">
-                        <div class="card-subheading">
-                          <h3>Downsizing Strategy</h3>
-                          <p>Optional: model releasing home equity and investing the surplus toward financial freedom.</p>
+                      <div class="wizard-panel" data-wizard-panel="0">
+                        <div id="wizardAboutForm" class="input-grid"></div>
+                      </div>
+                      <div class="wizard-panel hidden" data-wizard-panel="1">
+                        <div id="wizardIncomeForm" class="setup-list"></div>
+                      </div>
+                      <div class="wizard-panel hidden" data-wizard-panel="2">
+                        <div id="wizardAssetsForm" class="setup-list"></div>
+                      </div>
+                      <div class="wizard-panel hidden" data-wizard-panel="3">
+                        <div id="wizardLoansForm" class="setup-list"></div>
+                      </div>
+                      <div class="wizard-panel hidden" data-wizard-panel="4">
+                        <div id="wizardExpensesForm" class="setup-list"></div>
+                      </div>
+                      <div class="wizard-panel hidden" data-wizard-panel="5">
+                        <div id="wizardGoalsForm" class="input-grid"></div>
+                        <div class="mt-6">
+                          <div class="card-subheading">
+                            <h3>Downsizing Strategy</h3>
+                            <p>Optional: model releasing home equity and investing the surplus toward financial freedom.</p>
+                          </div>
+                          <div id="wizardDownsizingForm" class="input-grid mt-4"></div>
                         </div>
-                        <div id="wizardDownsizingForm" class="input-grid mt-4"></div>
+                      </div>
+                      <div class="wizard-panel hidden" data-wizard-panel="6">
+                        <div id="wizardResultsSummary" class="wizard-results"></div>
                       </div>
                     </div>
-                    <div class="wizard-panel hidden" data-wizard-panel="6">
-                      <div id="wizardResultsSummary" class="wizard-results"></div>
-                    </div>
+
+                    <aside class="setup-summary-card">
+                      <span class="metric-label">Live Summary</span>
+                      <div id="setupSummary" class="setup-summary-list"></div>
+                      <p id="superTaxNote" class="tax-note">Super contribution tax treatment to be reviewed in a future version.</p>
+                    </aside>
                   </div>
 
                   <div class="wizard-actions">
@@ -213,6 +221,34 @@
 
                 <div class="dashboard-card-grid dashboard-card-grid-secondary mt-6" id="secondMetricGrid"></div>
 
+                <article class="card mt-6">
+                  <div class="card-heading">
+                    <div>
+                      <h3>Quick Scenario Test</h3>
+                      <span>Simple income and expense movement only. This does not save a separate scenario.</span>
+                    </div>
+                  </div>
+                  <div class="comparison-grid">
+                    <label>
+                      <span class="field-label">Increase income by amount per year</span>
+                      <input class="field-input" type="number" step="1000" data-comparison="increaseIncome" value="0">
+                    </label>
+                    <label>
+                      <span class="field-label">Reduce income by amount per year</span>
+                      <input class="field-input" type="number" step="1000" data-comparison="reduceIncome" value="0">
+                    </label>
+                    <label>
+                      <span class="field-label">Increase expenses by amount per year</span>
+                      <input class="field-input" type="number" step="1000" data-comparison="increaseExpenses" value="0">
+                    </label>
+                    <label>
+                      <span class="field-label">Reduce expenses by amount per year</span>
+                      <input class="field-input" type="number" step="1000" data-comparison="reduceExpenses" value="0">
+                    </label>
+                  </div>
+                  <div id="comparisonSummary" class="summary-grid mt-4"></div>
+                </article>
+
                 <div class="dashboard-chart-grid mt-6 grid gap-4 xl:grid-cols-2">
                   <article class="card">
                     <div class="card-heading">
@@ -237,7 +273,7 @@
                   <p>Convert income, other income, spending, mortgage repayments and investing into annual and weekly values.</p>
                 </div>
                 <div class="grid gap-6 xl:grid-cols-[1fr_1.1fr]">
-                  <div class="card"><div id="incomeExpenseForm" class="input-grid"></div></div>
+                  <div class="card"><div id="incomeExpenseForm" class="setup-list"></div></div>
                   <div class="card"><div id="cashflowTable" class="table-list"></div></div>
                 </div>
               </section>
@@ -248,8 +284,8 @@
                   <p>Enter what the household owns and owes.</p>
                 </div>
                 <div class="grid gap-6 xl:grid-cols-2">
-                  <div class="card"><h3 class="mb-4 text-lg font-bold text-navy">Assets</h3><div id="assetsForm" class="input-grid"></div></div>
-                  <div class="card"><h3 class="mb-4 text-lg font-bold text-navy">Other liabilities</h3><div id="liabilitiesForm" class="input-grid"></div></div>
+                  <div class="card"><h3 class="mb-4 text-lg font-bold text-navy">Assets</h3><div id="assetsForm" class="setup-list"></div></div>
+                  <div class="card"><h3 class="mb-4 text-lg font-bold text-navy">Other liabilities</h3><div id="liabilitiesForm" class="setup-list"></div></div>
                 </div>
               </section>
 
@@ -259,7 +295,7 @@
                   <p>Model monthly loan amortisation and offset interest benefits.</p>
                 </div>
                 <div class="grid gap-6 xl:grid-cols-[1fr_1.15fr]">
-                  <div class="card"><div id="loanForm" class="input-grid"></div></div>
+                  <div class="card"><div id="loanForm" class="setup-list"></div></div>
                   <div class="card">
                     <div id="loanSummary" class="summary-grid"></div>
                     <svg id="loanChart" class="chart mt-4" viewBox="0 0 760 260" role="img" aria-label="Loan balance reducing"></svg>

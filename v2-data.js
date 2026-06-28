@@ -41,6 +41,11 @@ window.FFS_DATA = {
       otherIncome: 5000,
       otherIncomeFrequency: "annually",
     },
+    incomeItems: [
+      { id: "income-james", name: "James net income", amount: 2400, frequency: "fortnightly" },
+      { id: "income-sarah", name: "Sarah net income", amount: 2300, frequency: "fortnightly" },
+      { id: "income-other", name: "Other Income", amount: 5000, frequency: "annually" },
+    ],
     expenses: {
       livingName: "Living costs",
       livingCosts: 4000,
@@ -65,6 +70,23 @@ window.FFS_DATA = {
       otherExpenses: 0,
       otherFrequency: "monthly",
     },
+    expenseItems: [
+      { id: "expense-living", name: "Living costs", category: "living", amount: 4000, frequency: "monthly" },
+      { id: "expense-food", name: "Food", category: "food", amount: 300, frequency: "weekly" },
+      { id: "expense-utilities", name: "Utilities", category: "utilities", amount: 4000, frequency: "annually" },
+      { id: "expense-insurance", name: "Insurance", category: "insurance", amount: 2500, frequency: "annually" },
+      { id: "expense-school", name: "School / kids", category: "schoolChildren", amount: 3000, frequency: "annually" },
+      { id: "expense-rates", name: "Rates / property costs", category: "ratesPropertyCosts", amount: 4000, frequency: "annually" },
+    ],
+    assetItems: [
+      { id: "asset-home", name: "Home", category: "home", value: 900000 },
+      { id: "asset-offset", name: "Offset account", category: "offset", value: 90000 },
+      { id: "asset-shares", name: "Shares / ETFs", category: "shares", value: 70000 },
+      { id: "asset-crypto", name: "Crypto", category: "crypto", value: 10000 },
+      { id: "asset-super-1", name: "Super person 1", category: "super", value: 130000 },
+      { id: "asset-super-2", name: "Super person 2", category: "super", value: 110000 },
+      { id: "asset-vehicles", name: "Vehicles / personal assets", category: "vehicle", value: 30000 },
+    ],
     investing: {
       annualInvestingTarget: 30000,
       employerSuperContributions: 22000,
@@ -73,6 +95,15 @@ window.FFS_DATA = {
       expectedSuperReturnPct: 8,
       inflationPct: 2.5,
       safeWithdrawalRatePct: 4,
+    },
+    liabilityItems: [
+      { id: "liability-home-loan", name: "Home loan", type: "homeLoan", balance: 550000, interestRatePct: 6.1, repayment: 3400, repaymentFrequency: "monthly", termYears: 30 },
+    ],
+    comparison: {
+      increaseIncome: 0,
+      reduceIncome: 0,
+      increaseExpenses: 0,
+      reduceExpenses: 0,
     },
     downsizing: {
       enabled: false,

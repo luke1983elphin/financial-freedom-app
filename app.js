@@ -1,8 +1,8 @@
 (function bootFinancialFreedomApp() {
   const DATA = window.FFS_DATA;
   const CALC = window.FFSCalculator;
-  const DRAFT_KEY = "ffs-current-plan-v3";
-  const SCENARIO_KEY = "ffs-scenarios-v3";
+  const DRAFT_KEY = "ffs-current-plan-v3-mobile-dashboard-ux-test";
+  const SCENARIO_KEY = "ffs-scenarios-v3-mobile-dashboard-ux-test";
   const frequencies = [
     ["weekly", "Weekly"],
     ["fortnightly", "Fortnightly"],
@@ -40,6 +40,36 @@
       instruction: "Review your Financial Freedom Progress and the next milestone.",
     },
   ];
+  const assetCategoryOptions = [
+    ["home", "Home"],
+    ["otherProperty", "Other property"],
+    ["offset", "Offset account"],
+    ["cash", "Cash"],
+    ["shares", "Shares / ETFs"],
+    ["crypto", "Crypto"],
+    ["super", "Super"],
+    ["vehicle", "Vehicles / personal assets"],
+  ];
+  const liabilityTypeOptions = [
+    ["homeLoan", "Home loan"],
+    ["hecsHelp", "HECS / HELP"],
+    ["otherDebt", "Other debt"],
+  ];
+  const expenseCategoryOptions = [
+    ["living", "Living costs"],
+    ["food", "Food"],
+    ["utilities", "Utilities"],
+    ["insurance", "Insurance"],
+    ["schoolChildren", "School / children"],
+    ["ratesPropertyCosts", "Rates / property costs"],
+    ["other", "Other expenses"],
+  ];
+  const comparisonDefaults = {
+    increaseIncome: 0,
+    reduceIncome: 0,
+    increaseExpenses: 0,
+    reduceExpenses: 0,
+  };
 
   let plan = CALC.clonePlan(loadDraft() || CALC.emptyPlan());
   let activeView = "dashboard";
@@ -125,6 +155,138 @@
 
   function safeWithdrawalRate() {
     return (Number(plan.investing.safeWithdrawalRatePct) || 0) / 100;
+  }
+
+  function makeId(prefix) {
+    return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  }
+
+  function annualValue(amount, frequency) {
+    return CALC.annualize(Number(amount) || 0, frequency || "annually");
+  }
+
+  function optionList(options, selected) {
+    return options.map(([value, label]) => `<option value="${value}"${selected === value ? " selected" : ""}>${label}</option>`).join("");
+  }
+
+  function ensureCollectionData() {
+    if (!Array.isArray(plan.incomeItems)) {
+      plan.incomeItems = [
+        { id: "income-person-1", name: plan.income.person1IncomeName || "Person 1 income", amount: plan.income.person1Income || 0, frequency: plan.income.person1Frequency || "fortnightly" },
+        { id: "income-person-2", name: plan.income.person2IncomeName || "Person 2 income", amount: plan.income.person2Income || 0, frequency: plan.income.person2Frequency || "fortnightly" },
+        { id: "income-other", name: plan.income.otherIncomeName || "Other Income", amount: plan.income.otherIncome || 0, frequency: plan.income.otherIncomeFrequency || "annually" },
+      ];
+    }
+    if (!Array.isArray(plan.assetItems)) {
+      plan.assetItems = [
+        { id: "asset-home", name: "Home", category: "home", value: plan.assets.homeValue || 0 },
+        { id: "asset-other-property", name: "Other property", category: "otherProperty", value: plan.assets.otherPropertyValue || 0 },
+        { id: "asset-offset", name: "Offset account", category: "offset", value: plan.assets.offsetBalance || 0 },
+        { id: "asset-cash", name: "Cash", category: "cash", value: plan.assets.cash || 0 },
+        { id: "asset-shares", name: "Shares / ETFs", category: "shares", value: plan.assets.sharesEtfs || 0 },
+        { id: "asset-crypto", name: "Crypto", category: "crypto", value: plan.assets.crypto || 0 },
+        { id: "asset-super-1", name: "Super person 1", category: "super", value: plan.assets.superPerson1 || 0 },
+        { id: "asset-super-2", name: "Super person 2", category: "super", value: plan.assets.superPerson2 || 0 },
+        { id: "asset-vehicles", name: "Vehicles / personal assets", category: "vehicle", value: plan.assets.vehiclesPersonalAssets || 0 },
+      ];
+    }
+    if (!Array.isArray(plan.liabilityItems)) {
+      plan.liabilityItems = [
+        {
+          id: "liability-home-loan",
+          name: "Home loan",
+          type: "homeLoan",
+          balance: plan.liabilities.homeLoanBalance || 0,
+          interestRatePct: plan.liabilities.homeLoanInterestRatePct || 0,
+          repayment: plan.liabilities.monthlyRepayment || plan.expenses.mortgageRepayments || 0,
+          repaymentFrequency: "monthly",
+          termYears: plan.liabilities.remainingLoanTermYears || 0,
+        },
+        { id: "liability-hecs", name: "HECS / HELP", type: "hecsHelp", balance: plan.liabilities.hecsHelpDebt || 0, interestRatePct: 0, repayment: 0, repaymentFrequency: "monthly", termYears: 0 },
+        { id: "liability-other", name: "Other debts", type: "otherDebt", balance: plan.liabilities.otherDebts || 0, interestRatePct: 0, repayment: 0, repaymentFrequency: "monthly", termYears: 0 },
+      ];
+    }
+    if (!Array.isArray(plan.expenseItems)) {
+      plan.expenseItems = [
+        { id: "expense-living", name: plan.expenses.livingName || "Living costs", category: "living", amount: plan.expenses.livingCosts || 0, frequency: plan.expenses.livingFrequency || "monthly" },
+        { id: "expense-food", name: plan.expenses.foodName || "Food", category: "food", amount: plan.expenses.food || 0, frequency: plan.expenses.foodFrequency || "weekly" },
+        { id: "expense-utilities", name: plan.expenses.utilitiesName || "Utilities", category: "utilities", amount: plan.expenses.utilities || 0, frequency: plan.expenses.utilitiesFrequency || "annually" },
+        { id: "expense-insurance", name: plan.expenses.insuranceName || "Insurance", category: "insurance", amount: plan.expenses.insurance || 0, frequency: plan.expenses.insuranceFrequency || "annually" },
+        { id: "expense-school", name: plan.expenses.schoolChildrenName || "School / children", category: "schoolChildren", amount: plan.expenses.schoolChildren || 0, frequency: plan.expenses.schoolChildrenFrequency || "annually" },
+        { id: "expense-rates", name: plan.expenses.ratesPropertyCostsName || "Rates / property costs", category: "ratesPropertyCosts", amount: plan.expenses.ratesPropertyCosts || 0, frequency: plan.expenses.ratesPropertyCostsFrequency || "annually" },
+        { id: "expense-other", name: plan.expenses.otherExpensesName || "Other expenses", category: "other", amount: plan.expenses.otherExpenses || 0, frequency: plan.expenses.otherFrequency || "monthly" },
+      ];
+    }
+    plan.comparison = { ...comparisonDefaults, ...(plan.comparison || {}) };
+  }
+
+  function sumBy(items, category, amountKey = "value") {
+    return items
+      .filter((item) => item.category === category || item.type === category)
+      .reduce((total, item) => total + (Number(item[amountKey]) || 0), 0);
+  }
+
+  function syncCollectionsToLegacy() {
+    ensureCollectionData();
+    const incomes = plan.incomeItems;
+    const firstIncome = incomes[0] || {};
+    const secondIncome = incomes[1] || {};
+    const otherAnnualIncome = incomes.slice(2).reduce((total, item) => total + annualValue(item.amount, item.frequency), 0);
+
+    plan.income.person1IncomeName = firstIncome.name || "";
+    plan.income.person1Income = Number(firstIncome.amount) || 0;
+    plan.income.person1Frequency = firstIncome.frequency || "annually";
+    plan.income.person2IncomeName = secondIncome.name || "";
+    plan.income.person2Income = Number(secondIncome.amount) || 0;
+    plan.income.person2Frequency = secondIncome.frequency || "annually";
+    plan.income.otherIncomeName = "Other Income";
+    plan.income.otherIncome = otherAnnualIncome;
+    plan.income.otherIncomeFrequency = "annually";
+
+    const assets = plan.assetItems;
+    const superTotal = sumBy(assets, "super");
+    plan.assets.homeValue = sumBy(assets, "home");
+    plan.assets.otherPropertyValue = sumBy(assets, "otherProperty");
+    plan.assets.offsetBalance = sumBy(assets, "offset");
+    plan.assets.cash = sumBy(assets, "cash");
+    plan.assets.sharesEtfs = sumBy(assets, "shares");
+    plan.assets.crypto = sumBy(assets, "crypto");
+    plan.assets.superPerson1 = superTotal;
+    plan.assets.superPerson2 = 0;
+    plan.assets.vehiclesPersonalAssets = sumBy(assets, "vehicle");
+
+    const liabilities = plan.liabilityItems;
+    const homeLoans = liabilities.filter((item) => item.type === "homeLoan");
+    const homeLoanBalance = homeLoans.reduce((total, item) => total + (Number(item.balance) || 0), 0);
+    const homeLoanRepaymentAnnual = homeLoans.reduce((total, item) => total + annualValue(item.repayment, item.repaymentFrequency || "monthly"), 0);
+    const weightedRate = homeLoanBalance > 0
+      ? homeLoans.reduce((total, item) => total + ((Number(item.balance) || 0) * (Number(item.interestRatePct) || 0)), 0) / homeLoanBalance
+      : 0;
+    plan.liabilities.homeLoanBalance = homeLoanBalance;
+    plan.liabilities.homeLoanInterestRatePct = weightedRate;
+    plan.liabilities.monthlyRepayment = homeLoanRepaymentAnnual / 12;
+    plan.liabilities.remainingLoanTermYears = homeLoans.reduce((max, item) => Math.max(max, Number(item.termYears) || 0), 0);
+    plan.liabilities.hecsHelpDebt = liabilities.filter((item) => item.type === "hecsHelp").reduce((total, item) => total + (Number(item.balance) || 0), 0);
+    plan.liabilities.otherDebts = liabilities.filter((item) => item.type === "otherDebt").reduce((total, item) => total + (Number(item.balance) || 0), 0);
+    plan.expenses.mortgageRepayments = plan.liabilities.monthlyRepayment;
+
+    const expenseAnnual = (category) => plan.expenseItems
+      .filter((item) => item.category === category)
+      .reduce((total, item) => total + annualValue(item.amount, item.frequency), 0);
+    plan.expenses.livingCosts = expenseAnnual("living");
+    plan.expenses.livingFrequency = "annually";
+    plan.expenses.food = expenseAnnual("food");
+    plan.expenses.foodFrequency = "annually";
+    plan.expenses.utilities = expenseAnnual("utilities");
+    plan.expenses.utilitiesFrequency = "annually";
+    plan.expenses.insurance = expenseAnnual("insurance");
+    plan.expenses.insuranceFrequency = "annually";
+    plan.expenses.schoolChildren = expenseAnnual("schoolChildren");
+    plan.expenses.schoolChildrenFrequency = "annually";
+    plan.expenses.ratesPropertyCosts = expenseAnnual("ratesPropertyCosts");
+    plan.expenses.ratesPropertyCostsFrequency = "annually";
+    plan.expenses.otherExpenses = expenseAnnual("other");
+    plan.expenses.otherFrequency = "annually";
   }
 
   function escapeHtml(value) {
@@ -251,7 +413,197 @@
     `).join("");
   }
 
+  function dynamicInput(collection, item, key, label, options = {}) {
+    const value = item[key] ?? "";
+    const common = `data-collection="${collection}" data-id="${item.id}" data-key="${key}"`;
+    if (options.type === "select") {
+      return `
+        <label>
+          <span class="field-label">${escapeHtml(label)}</span>
+          <select class="field-input" ${common} data-type="text">${optionList(options.options, value)}</select>
+        </label>
+      `;
+    }
+    const inputType = options.kind === "text" ? "text" : "number";
+    return `
+      <label>
+        <span class="field-label">${escapeHtml(label)}</span>
+        <input class="field-input" ${common} data-type="${options.kind || "number"}" type="${inputType}" step="${options.step || "1"}" value="${escapeHtml(value)}" placeholder="${escapeHtml(options.placeholder || "")}">
+      </label>
+    `;
+  }
+
+  function collectionShell({ title, description, addLabel, collection, body }) {
+    return `
+      <section class="collection-section">
+        <div class="collection-heading">
+          <div>
+            <h3>${escapeHtml(title)}</h3>
+            <p>${escapeHtml(description)}</p>
+          </div>
+          <button class="btn btn-primary add-button" type="button" data-add-collection="${collection}">${escapeHtml(addLabel)}</button>
+        </div>
+        <div class="collection-list">${body}</div>
+      </section>
+    `;
+  }
+
+  function removeButton(collection, id) {
+    return `<button class="btn remove-button" type="button" data-remove-collection="${collection}" data-id="${id}">Remove</button>`;
+  }
+
+  function incomeCard(item, index) {
+    return `
+      <article class="form-item-card dynamic-item-card">
+        <div class="item-card-title">
+          <div>
+            <span>Income ${index + 1}</span>
+            <h4>${escapeHtml(item.name || "Income")}</h4>
+          </div>
+          ${removeButton("incomeItems", item.id)}
+        </div>
+        <div class="input-grid mt-4">
+          ${dynamicInput("incomeItems", item, "name", "Income name", { kind: "text", placeholder: "e.g. Salary, rent, dividends" })}
+          ${dynamicInput("incomeItems", item, "amount", "Amount", { step: "100" })}
+          ${dynamicInput("incomeItems", item, "frequency", "Frequency", { type: "select", options: frequencies })}
+        </div>
+      </article>
+    `;
+  }
+
+  function assetCard(item, index) {
+    return `
+      <article class="form-item-card dynamic-item-card">
+        <div class="item-card-title">
+          <div>
+            <span>Asset ${index + 1}</span>
+            <h4>${escapeHtml(item.name || "Asset")}</h4>
+          </div>
+          ${removeButton("assetItems", item.id)}
+        </div>
+        <div class="input-grid mt-4">
+          ${dynamicInput("assetItems", item, "name", "Asset name", { kind: "text", placeholder: "e.g. Offset account" })}
+          ${dynamicInput("assetItems", item, "category", "Asset type", { type: "select", options: assetCategoryOptions })}
+          ${dynamicInput("assetItems", item, "value", "Asset value", { step: "1000" })}
+        </div>
+      </article>
+    `;
+  }
+
+  function liabilityCard(item, index) {
+    return `
+      <article class="form-item-card dynamic-item-card">
+        <div class="item-card-title">
+          <div>
+            <span>Liability ${index + 1}</span>
+            <h4>${escapeHtml(item.name || "Liability")}</h4>
+          </div>
+          ${removeButton("liabilityItems", item.id)}
+        </div>
+        <div class="input-grid mt-4">
+          ${dynamicInput("liabilityItems", item, "name", "Liability name", { kind: "text", placeholder: "e.g. Home loan" })}
+          ${dynamicInput("liabilityItems", item, "type", "Liability type", { type: "select", options: liabilityTypeOptions })}
+          ${dynamicInput("liabilityItems", item, "balance", "Balance", { step: "1000" })}
+          ${dynamicInput("liabilityItems", item, "interestRatePct", "Interest rate (%)", { step: "0.1" })}
+          ${dynamicInput("liabilityItems", item, "repayment", "Repayment amount", { step: "100" })}
+          ${dynamicInput("liabilityItems", item, "repaymentFrequency", "Repayment frequency", { type: "select", options: frequencies })}
+          ${dynamicInput("liabilityItems", item, "termYears", "Remaining term (years)", { step: "1" })}
+        </div>
+      </article>
+    `;
+  }
+
+  function expenseCard(item, index) {
+    return `
+      <article class="form-item-card dynamic-item-card">
+        <div class="item-card-title">
+          <div>
+            <span>Expense ${index + 1}</span>
+            <h4>${escapeHtml(item.name || "Expense")}</h4>
+          </div>
+          ${removeButton("expenseItems", item.id)}
+        </div>
+        <div class="input-grid mt-4">
+          ${dynamicInput("expenseItems", item, "name", "Expense name", { kind: "text", placeholder: "e.g. Groceries" })}
+          ${dynamicInput("expenseItems", item, "category", "Category", { type: "select", options: expenseCategoryOptions })}
+          ${dynamicInput("expenseItems", item, "amount", "Amount", { step: "100" })}
+          ${dynamicInput("expenseItems", item, "frequency", "Frequency", { type: "select", options: frequencies })}
+        </div>
+      </article>
+    `;
+  }
+
+  function renderIncomeCollection(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = collectionShell({
+      title: "Income",
+      description: "Add each income source separately so the frequency is clear.",
+      addLabel: "Add income",
+      collection: "incomeItems",
+      body: plan.incomeItems.map(incomeCard).join(""),
+    });
+  }
+
+  function renderAssetCollection(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = collectionShell({
+      title: "Assets",
+      description: "List each asset and choose the category that best describes it.",
+      addLabel: "Add asset",
+      collection: "assetItems",
+      body: plan.assetItems.map(assetCard).join(""),
+    });
+  }
+
+  function renderLiabilityCollection(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = collectionShell({
+      title: "Liabilities / Loans",
+      description: "Add each loan or liability. Repayment details are most useful for home loans.",
+      addLabel: "Add liability",
+      collection: "liabilityItems",
+      body: plan.liabilityItems.map(liabilityCard).join(""),
+    });
+  }
+
+  function renderExpenseCollection(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = collectionShell({
+      title: "Expenses",
+      description: "Add each recurring expense with its own category and frequency.",
+      addLabel: "Add expense",
+      collection: "expenseItems",
+      body: plan.expenseItems.map(expenseCard).join(""),
+    });
+  }
+
+  function renderCashflowInputs(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = `
+      ${collectionShell({
+        title: "Income",
+        description: "Income items can include salary, Other Income, dividends, rent, interest or side payments.",
+        addLabel: "Add income",
+        collection: "incomeItems",
+        body: plan.incomeItems.map(incomeCard).join(""),
+      })}
+      ${collectionShell({
+        title: "Expenses",
+        description: "Expense items stack cleanly on mobile and each one keeps its own frequency.",
+        addLabel: "Add expense",
+        collection: "expenseItems",
+        body: plan.expenseItems.map(expenseCard).join(""),
+      })}
+    `;
+  }
+
   function renderForms() {
+    ensureCollectionData();
     const aboutFields = [
       { label: "Person 1 name", path: "personal.person1Name", kind: "text" },
       { label: "Person 2 name", path: "personal.person2Name", kind: "text" },
@@ -271,116 +623,6 @@
       { label: "Inflation (%)", path: "investing.inflationPct", step: "0.1" },
       { label: "Safe withdrawal rate (%)", path: "investing.safeWithdrawalRatePct", step: "0.1" },
     ];
-    const assetFields = [
-      { label: "Home value", path: "assets.homeValue", step: "1000" },
-      { label: "Other property value", path: "assets.otherPropertyValue", step: "1000" },
-      { label: "Offset balance", path: "assets.offsetBalance", step: "1000" },
-      { label: "Cash", path: "assets.cash", step: "100" },
-      { label: "Shares / ETFs", path: "assets.sharesEtfs", step: "100" },
-      { label: "Crypto", path: "assets.crypto", step: "100" },
-      { label: "Super person 1", path: "assets.superPerson1", step: "1000" },
-      { label: "Super person 2", path: "assets.superPerson2", step: "1000" },
-      { label: "Vehicles / personal assets", path: "assets.vehiclesPersonalAssets", step: "100" },
-    ];
-    const liabilityFields = [
-      { label: "HECS / HELP debt", path: "liabilities.hecsHelpDebt", step: "100" },
-      { label: "Other debts", path: "liabilities.otherDebts", step: "100" },
-    ];
-    const loanFields = [
-      { label: "Home loan balance", path: "liabilities.homeLoanBalance", step: "1000" },
-      { label: "Home loan interest rate (%)", path: "liabilities.homeLoanInterestRatePct", step: "0.1" },
-      { label: "Monthly repayment", path: "liabilities.monthlyRepayment", step: "100" },
-      { label: "Remaining loan term (years)", path: "liabilities.remainingLoanTermYears", step: "1" },
-      { label: "Offset balance", path: "assets.offsetBalance", step: "1000" },
-      { label: "Mortgage repayments in cashflow", path: "expenses.mortgageRepayments", step: "100" },
-    ];
-    const incomeGroups = [
-      {
-        title: "Person 1 income",
-        description: "Salary, wages or regular take-home income.",
-        fields: [
-          { label: "Income name", path: "income.person1IncomeName", kind: "text", placeholder: "e.g. Person 1 salary" },
-          { label: "Amount", path: "income.person1Income", step: "100" },
-          { label: "Frequency", path: "income.person1Frequency", type: "select" },
-        ],
-      },
-      {
-        title: "Person 2 income",
-        description: "Add the second regular income if relevant.",
-        fields: [
-          { label: "Income name", path: "income.person2IncomeName", kind: "text", placeholder: "e.g. Person 2 salary" },
-          { label: "Amount", path: "income.person2Income", step: "100" },
-          { label: "Frequency", path: "income.person2Frequency", type: "select" },
-        ],
-      },
-      {
-        title: "Other Income",
-        description: "Use this for bonuses, side income, dividends, rent, interest or other payments.",
-        fields: [
-          { label: "Income name", path: "income.otherIncomeName", kind: "text", placeholder: "e.g. Side income or dividends" },
-          { label: "Amount", path: "income.otherIncome", step: "100" },
-          { label: "Frequency", path: "income.otherIncomeFrequency", type: "select" },
-        ],
-      },
-    ];
-    const expenseGroups = [
-      {
-        title: "Living costs",
-        fields: [
-          { label: "Expense name", path: "expenses.livingName", kind: "text", placeholder: "Living costs" },
-          { label: "Amount", path: "expenses.livingCosts", step: "100" },
-          { label: "Frequency", path: "expenses.livingFrequency", type: "select" },
-        ],
-      },
-      {
-        title: "Food",
-        fields: [
-          { label: "Expense name", path: "expenses.foodName", kind: "text", placeholder: "Food" },
-          { label: "Amount", path: "expenses.food", step: "10" },
-          { label: "Frequency", path: "expenses.foodFrequency", type: "select" },
-        ],
-      },
-      {
-        title: "Utilities",
-        fields: [
-          { label: "Expense name", path: "expenses.utilitiesName", kind: "text", placeholder: "Utilities" },
-          { label: "Amount", path: "expenses.utilities", step: "100" },
-          { label: "Frequency", path: "expenses.utilitiesFrequency", type: "select" },
-        ],
-      },
-      {
-        title: "Insurance",
-        fields: [
-          { label: "Expense name", path: "expenses.insuranceName", kind: "text", placeholder: "Insurance" },
-          { label: "Amount", path: "expenses.insurance", step: "100" },
-          { label: "Frequency", path: "expenses.insuranceFrequency", type: "select" },
-        ],
-      },
-      {
-        title: "School / children",
-        fields: [
-          { label: "Expense name", path: "expenses.schoolChildrenName", kind: "text", placeholder: "School / children" },
-          { label: "Amount", path: "expenses.schoolChildren", step: "100" },
-          { label: "Frequency", path: "expenses.schoolChildrenFrequency", type: "select" },
-        ],
-      },
-      {
-        title: "Rates / property costs",
-        fields: [
-          { label: "Expense name", path: "expenses.ratesPropertyCostsName", kind: "text", placeholder: "Rates / property costs" },
-          { label: "Amount", path: "expenses.ratesPropertyCosts", step: "100" },
-          { label: "Frequency", path: "expenses.ratesPropertyCostsFrequency", type: "select" },
-        ],
-      },
-      {
-        title: "Other expenses",
-        fields: [
-          { label: "Expense name", path: "expenses.otherExpensesName", kind: "text", placeholder: "Other expenses" },
-          { label: "Amount", path: "expenses.otherExpenses", step: "100" },
-          { label: "Frequency", path: "expenses.otherFrequency", type: "select" },
-        ],
-      },
-    ];
     const downsizingFields = [
       { label: "Use downsizing strategy", path: "downsizing.enabled", type: "checkbox", help: "Off by default. Turn on only when you want the released equity included as investable money." },
       { label: "Current principal residence value", path: "downsizing.currentResidenceValue", step: "1000" },
@@ -391,10 +633,10 @@
     ];
 
     renderForm("personalForm", [...aboutFields, ...goalFields]);
-    renderForm("assetsForm", assetFields);
-    renderForm("liabilitiesForm", liabilityFields);
-    renderForm("loanForm", loanFields);
-    renderGroupedForm("incomeExpenseForm", [...incomeGroups, ...expenseGroups]);
+    renderAssetCollection("assetsForm");
+    renderLiabilityCollection("liabilitiesForm");
+    renderLiabilityCollection("loanForm");
+    renderCashflowInputs("incomeExpenseForm");
     renderForm("investingForm", [
       { label: "Annual investing target", path: "investing.annualInvestingTarget", step: "1000" },
       { label: "Expected investment return (%)", path: "investing.expectedInvestmentReturnPct", step: "0.1" },
@@ -409,10 +651,10 @@
       { label: "Expected super return (%)", path: "investing.expectedSuperReturnPct", step: "0.1" },
     ]);
     renderForm("wizardAboutForm", aboutFields);
-    renderGroupedForm("wizardIncomeForm", incomeGroups);
-    renderForm("wizardAssetsForm", assetFields);
-    renderForm("wizardLoansForm", [...loanFields, ...liabilityFields]);
-    renderGroupedForm("wizardExpensesForm", expenseGroups);
+    renderIncomeCollection("wizardIncomeForm");
+    renderAssetCollection("wizardAssetsForm");
+    renderLiabilityCollection("wizardLoansForm");
+    renderExpenseCollection("wizardExpensesForm");
     renderForm("wizardGoalsForm", goalFields);
     renderForm("wizardDownsizingForm", downsizingFields);
     renderForm("downsizingForm", downsizingFields);
@@ -658,10 +900,12 @@
       return `<div class="mini-card"><span>Age ${age}</span><strong>${money(row?.closingBalance || 0)}</strong><small>${money(row?.passiveIncome || 0)} pa at withdrawal rate</small></div>`;
     }).join("");
     const taxBenefit = plan.investing.extraSuperContributions * Math.max(0, 0.345 - 0.15);
+    // TODO: Review concessional super contribution tax treatment in a future version.
     document.getElementById("superSummary").innerHTML = `
       <span class="text-sm font-bold text-slate-500">Extra concessional tax benefit estimate</span>
       <strong class="mt-1 block text-2xl font-black text-navy">${money(taxBenefit)}</strong>
       <p class="mt-2 text-sm text-slate-600">Total retirement assets at full retirement: ${money(result.totalRetirementAssets)}</p>
+      <p class="tax-note mt-3">Super contribution tax treatment to be reviewed in a future version.</p>
     `;
   }
 
@@ -711,6 +955,51 @@
     document.getElementById("reportSummary").textContent = `Current Financial Freedom Percentage ${plainPercent(freedomPercent(result))}, net worth ${money(result.currentNetWorth)}, wealth creation rate ${money(result.wealthCreationRate)}.`;
   }
 
+  function renderSetupSummary(result) {
+    const container = document.getElementById("setupSummary");
+    if (!container) return;
+    const percent = freedomPercent(result);
+    const stage = currentFreedomStage(percent);
+    container.innerHTML = [
+      ["Freedom progress", plainPercent(percent)],
+      ["Current stage", stage.name],
+      ["Annual net income", money(result.annualNetIncome)],
+      ["Annual living expenses", money(lifestyleTarget(result))],
+      ["Cash surplus after investing", money(result.cashSurplusAfterInvesting)],
+    ].map(([label, value]) => `
+      <div class="setup-summary-row">
+        <span>${escapeHtml(label)}</span>
+        <strong>${escapeHtml(value)}</strong>
+      </div>
+    `).join("");
+  }
+
+  function renderComparison(result) {
+    const summary = document.getElementById("comparisonSummary");
+    if (!summary) return;
+    const current = Number(result.cashSurplusAfterInvesting) || 0;
+    const comparison = { ...comparisonDefaults, ...(plan.comparison || {}) };
+    document.querySelectorAll("[data-comparison]").forEach((input) => {
+      const value = comparison[input.dataset.comparison] ?? 0;
+      if (input.value !== String(value)) input.value = value;
+    });
+    const delta = (Number(comparison.increaseIncome) || 0)
+      - (Number(comparison.reduceIncome) || 0)
+      - (Number(comparison.increaseExpenses) || 0)
+      + (Number(comparison.reduceExpenses) || 0);
+    const revised = current + delta;
+    const currentPercent = freedomPercent(result);
+    const estimatedPercent = result.targetCapital > 0
+      ? currentPercent + (delta / result.targetCapital * 100)
+      : currentPercent;
+    summary.innerHTML = [
+      summaryTile("Current annual surplus / shortfall", money(current), current >= 0 ? "status-green" : "status-amber"),
+      summaryTile("Revised annual surplus / shortfall", money(revised), revised >= 0 ? "status-green" : "status-amber"),
+      summaryTile("Extra investment capacity created or lost", money(delta), delta >= 0 ? "status-green" : "status-amber"),
+      summaryTile("Estimated FI percentage impact", `${plainPercent(Math.max(0, estimatedPercent))} vs ${plainPercent(currentPercent)}`),
+    ].join("");
+  }
+
   function renderScenarios() {
     const scenarios = loadScenarios();
     document.getElementById("scenarioCount").textContent = `${scenarios.length} saved`;
@@ -750,7 +1039,38 @@
     });
   }
 
+  function syncCollectionInputs(collection, id, key, value) {
+    document.querySelectorAll(`[data-collection="${collection}"][data-id="${id}"][data-key="${key}"]`).forEach((input) => {
+      if (input.value !== String(value ?? "")) input.value = value ?? "";
+    });
+  }
+
+  function addCollectionItem(collection) {
+    ensureCollectionData();
+    const defaults = {
+      incomeItems: { id: makeId("income"), name: "Other Income", amount: 0, frequency: "annually" },
+      assetItems: { id: makeId("asset"), name: "New asset", category: "cash", value: 0 },
+      liabilityItems: { id: makeId("liability"), name: "New liability", type: "otherDebt", balance: 0, interestRatePct: 0, repayment: 0, repaymentFrequency: "monthly", termYears: 0 },
+      expenseItems: { id: makeId("expense"), name: "New expense", category: "other", amount: 0, frequency: "monthly" },
+    };
+    if (!defaults[collection]) return;
+    plan[collection].push(defaults[collection]);
+    syncCollectionsToLegacy();
+    saveDraft();
+    renderAll();
+  }
+
+  function removeCollectionItem(collection, id) {
+    ensureCollectionData();
+    if (!Array.isArray(plan[collection])) return;
+    plan[collection] = plan[collection].filter((item) => item.id !== id);
+    syncCollectionsToLegacy();
+    saveDraft();
+    renderAll();
+  }
+
   function renderOutputs() {
+    syncCollectionsToLegacy();
     const result = CALC.calculatePlan(plan);
     updatePreview(result);
     renderDashboard(result);
@@ -765,6 +1085,8 @@
     renderReports(result);
     renderWizardResults(result);
     renderWizardStep();
+    renderSetupSummary(result);
+    renderComparison(result);
     document.getElementById("disclaimer").textContent = DATA.disclaimer;
     if (hasOpenedWorkspace) document.getElementById("appWorkspace").classList.remove("hidden");
   }
@@ -835,6 +1157,26 @@
   function bindEvents() {
     document.addEventListener("input", (event) => {
       const target = event.target;
+      if (target.dataset.collection) {
+        ensureCollectionData();
+        const item = plan[target.dataset.collection]?.find((entry) => entry.id === target.dataset.id);
+        if (!item) return;
+        const value = target.dataset.type === "text" ? target.value : Number(target.value);
+        item[target.dataset.key] = value;
+        syncCollectionInputs(target.dataset.collection, target.dataset.id, target.dataset.key, value);
+        syncCollectionsToLegacy();
+        document.getElementById("wizardSaveStatus").textContent = "Saved on this device.";
+        saveDraft();
+        renderOutputs();
+        return;
+      }
+      if (target.dataset.comparison) {
+        ensureCollectionData();
+        plan.comparison[target.dataset.comparison] = Number(target.value) || 0;
+        saveDraft();
+        renderOutputs();
+        return;
+      }
       if (!target.dataset.path) return;
       const value = target.dataset.type === "boolean" ? target.checked : target.dataset.type === "text" ? target.value : Number(target.value);
       setPath(plan, target.dataset.path, value);
@@ -853,6 +1195,18 @@
     });
 
     document.addEventListener("click", (event) => {
+      const addButton = event.target.closest("[data-add-collection]");
+      if (addButton) {
+        addCollectionItem(addButton.dataset.addCollection);
+        return;
+      }
+
+      const removeButton = event.target.closest("[data-remove-collection]");
+      if (removeButton) {
+        removeCollectionItem(removeButton.dataset.removeCollection, removeButton.dataset.id);
+        return;
+      }
+
       const nav = event.target.closest("[data-view]");
       if (nav) setView(nav.dataset.view);
 
