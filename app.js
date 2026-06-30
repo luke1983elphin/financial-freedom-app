@@ -127,14 +127,14 @@
     {
       min: 75,
       nextAt: 100,
-      name: "Semi-Retirement",
-      explanation: "Your investments cover a large portion of lifestyle costs, but employment income is still partly needed.",
+      name: "High Progress",
+      explanation: "Your accessible investments cover a large portion of lifestyle costs, with a clear next milestone in sight.",
     },
     {
       min: 100,
       nextAt: 150,
-      name: "Work Optional",
-      explanation: "Your investments are projected to cover your lifestyle costs. Work is now optional based on the assumptions used.",
+      name: "Financial Independence",
+      explanation: "Your accessible investments are modelling enough passive income to cover annual lifestyle costs under the assumptions used.",
     },
     {
       min: 150,
@@ -611,9 +611,9 @@
       { label: "Person 2 age", path: "personal.person2Age" },
     ];
     const goalFields = [
-      { label: "Work optional target age", path: "personal.workOptionalAge" },
-      { label: "Semi-retirement target age", path: "personal.semiRetirementAge" },
-      { label: "Full retirement target age", path: "personal.fullRetirementAge" },
+      { label: "Momentum target age", path: "personal.workOptionalAge" },
+      { label: "High-progress target age", path: "personal.semiRetirementAge" },
+      { label: "Long-term FI target age", path: "personal.fullRetirementAge" },
       { label: "Target annual spending", path: "personal.targetAnnualSpending", step: "1000" },
       { label: "Annual investing target", path: "investing.annualInvestingTarget", step: "1000" },
       { label: "Employer super contributions", path: "investing.employerSuperContributions", step: "1000" },
@@ -735,7 +735,7 @@
     if (!next) {
       return {
         amount: "Financial Freedom",
-        text: "Your investments are modelling a strong surplus above annual lifestyle costs.",
+        text: "Your accessible investment assets are modelling a strong surplus above annual lifestyle costs.",
       };
     }
     const requiredAssets = result.targetCapital * (next.min / 100);
@@ -801,15 +801,15 @@
     document.getElementById("dashboardTitle").textContent = names ? `${names}'s Financial Freedom Progress` : "Start a plan or load the demo.";
     document.getElementById("dashboardSubtitle").textContent = isBlankPlan(plan)
       ? "Enter your own details or try the fictional demo to see the dashboard come alive."
-      : "See how much of your annual lifestyle is currently funded by investable assets.";
+      : "See how much of your annual lifestyle is currently funded by accessible investable assets.";
     document.getElementById("heroScore").textContent = plainPercent(percent);
     document.querySelector(".score-ring").style.borderColor = percent >= 100 ? "#bdebd7" : percent >= 75 ? "#f3d08c" : "#dbe4ee";
     document.getElementById("freedomStageLabel").textContent = stage.name;
     document.getElementById("freedomStageText").textContent = stage.explanation;
     document.getElementById("freedomProgressBar").style.width = `${progressWidth}%`;
     document.getElementById("freedomPassiveText").textContent = percent >= 100
-      ? "Your investments are projected to cover your lifestyle costs. Work is now optional based on the assumptions used."
-      : `Your investments currently fund ${plainPercent(percent)} of your annual lifestyle. You are in the ${stage.name} stage.`;
+      ? "Your accessible investments are projected to cover your lifestyle costs under the assumptions used."
+      : `Your accessible investments currently fund ${plainPercent(percent)} of your annual lifestyle. You are in the ${stage.name} stage.`;
     document.getElementById("nextMilestoneAmount").textContent = milestone.amount;
     document.getElementById("nextMilestoneText").textContent = milestone.text;
 
@@ -824,9 +824,9 @@
 
     document.getElementById("secondMetricGrid").innerHTML = [
       metricCard("Current Net Worth", money(result.currentNetWorth)),
-      metricCard("Financial Independence Assets", money(result.financialIndependenceAssets)),
+      metricCard("Accessible Investment Assets", money(result.accessibleInvestmentAssets)),
+      metricCard("Superannuation Balance", money(result.superannuationBalance), "status-green"),
       metricCard("Effective Mortgage", money(result.effectiveMortgageBalance)),
-      metricCard("Wealth Creation Rate", money(result.wealthCreationRate)),
       metricCard("Annual Passive Income", money(passiveIncome)),
       metricCard("Annual Living Expenses", money(target)),
       metricCard("Annual Investment Surplus / Shortfall", money(surplus), surplus >= 0 ? "status-green" : "status-amber"),
@@ -900,12 +900,11 @@
       return `<div class="mini-card"><span>Age ${age}</span><strong>${money(row?.closingBalance || 0)}</strong><small>${money(row?.passiveIncome || 0)} pa at withdrawal rate</small></div>`;
     }).join("");
     const taxBenefit = plan.investing.extraSuperContributions * Math.max(0, 0.345 - 0.15);
-    // TODO: Review concessional super contribution tax treatment in a future version.
     document.getElementById("superSummary").innerHTML = `
       <span class="text-sm font-bold text-slate-500">Extra concessional tax benefit estimate</span>
       <strong class="mt-1 block text-2xl font-black text-navy">${money(taxBenefit)}</strong>
-      <p class="mt-2 text-sm text-slate-600">Total retirement assets at full retirement: ${money(result.totalRetirementAssets)}</p>
-      <p class="tax-note mt-3">Super contribution tax treatment to be reviewed in a future version.</p>
+      <p class="mt-2 text-sm text-slate-600">Super is treated as available from age ${result.superAccessAge}. Age-${result.sustainabilityStartAge}+ sustainability assets: ${money(result.totalRetirementAssets)}</p>
+      <p class="tax-note mt-3">Concessional super contributions are calculated net of 15% contributions tax.</p>
     `;
   }
 
@@ -930,7 +929,7 @@
       ["10 year net worth", result.netWorthProjection[9]?.closingBalance || 0],
       ["20 year net worth", result.netWorthProjection[19]?.closingBalance || 0],
       ["30 year net worth", result.netWorthProjection[29]?.closingBalance || 0],
-      ["Retirement assets", result.totalRetirementAssets],
+      ["Age-60+ sustainability assets", result.totalRetirementAssets],
       ["Target FI capital", result.targetCapital],
     ];
     document.getElementById("forecastCards").innerHTML = cards.map(([label, value]) => metricCard(label, money(value))).join("");
@@ -963,6 +962,8 @@
     container.innerHTML = [
       ["Freedom progress", plainPercent(percent)],
       ["Current stage", stage.name],
+      ["Accessible investments", money(result.accessibleInvestmentAssets)],
+      ["Super from age 60", money(result.superannuationBalance)],
       ["Annual net income", money(result.annualNetIncome)],
       ["Annual living expenses", money(lifestyleTarget(result))],
       ["Cash surplus after investing", money(result.cashSurplusAfterInvesting)],

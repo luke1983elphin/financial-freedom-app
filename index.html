@@ -33,7 +33,7 @@
         <div class="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p class="brand-kicker text-xs font-bold uppercase text-success">Financial Freedom Simulator Professional</p>
-            <h1 class="text-xl font-bold text-navy">See exactly when work becomes optional.</h1>
+            <h1 class="text-xl font-bold text-navy">Track Financial Freedom Progress.</h1>
           </div>
           <div class="toolbar-actions flex flex-wrap gap-2">
             <button class="btn btn-primary" type="button" id="demoButton">Load Demo</button>
@@ -52,8 +52,8 @@
           <div class="home-hero">
             <div class="hero-copy">
               <p class="brand-kicker text-sm font-bold uppercase text-success">Financial Freedom Simulator Professional</p>
-              <h2 class="mt-4 max-w-4xl text-4xl font-black text-navy sm:text-6xl">See when work becomes optional</h2>
-              <p class="mt-5 max-w-2xl text-lg leading-8 text-slate-600">Turn income, expenses, loans, super and investments into a clear financial freedom timeline.</p>
+              <h2 class="mt-4 max-w-4xl text-4xl font-black text-navy sm:text-6xl">See your Financial Freedom Progress</h2>
+              <p class="mt-5 max-w-2xl text-lg leading-8 text-slate-600">Turn income, expenses, loans, super and investments into a clear view of your current stage and next milestone.</p>
               <div class="mt-8 flex flex-wrap gap-3">
                 <button class="btn btn-primary btn-large" type="button" id="heroDemoButton">Try Demo</button>
                 <button class="btn btn-large" type="button" id="heroStartButton">Start My Plan</button>
@@ -93,8 +93,8 @@
             </article>
             <article class="step-card">
               <span>3</span>
-              <h3>See your freedom date</h3>
-              <p>Track work optional, semi-retirement and full retirement milestones.</p>
+              <h3>See your next milestone</h3>
+              <p>Track investment progress, current stage and long-term financial independence.</p>
             </article>
           </div>
         </section>
@@ -171,7 +171,7 @@
                     <aside class="setup-summary-card">
                       <span class="metric-label">Live Summary</span>
                       <div id="setupSummary" class="setup-summary-list"></div>
-                      <p id="superTaxNote" class="tax-note">Super contribution tax treatment to be reviewed in a future version.</p>
+                      <p id="superTaxNote" class="tax-note">Concessional super contributions are calculated net of 15% contributions tax.</p>
                     </aside>
                   </div>
 
@@ -220,6 +220,7 @@
                 </article>
 
                 <div class="dashboard-card-grid dashboard-card-grid-secondary mt-6" id="secondMetricGrid"></div>
+                <p class="tax-note mt-4" id="dashboardAssumptionNote">Accessible investments are counted before age 60. Superannuation is included from age 60 onward. Concessional super contributions are calculated net of 15% contributions tax.</p>
 
                 <article class="card mt-6">
                   <div class="card-heading">
@@ -259,10 +260,10 @@
                   </article>
                   <article class="card">
                     <div class="card-heading">
-                      <h3>Retirement sustainability</h3>
-                      <span>Age 60 to 90</span>
+                      <h3>Super Access &amp; Long-Term Sustainability</h3>
+                      <span>Age 60+</span>
                     </div>
-                    <svg id="retirementChart" class="chart" viewBox="0 0 760 300" role="img" aria-label="Retirement sustainability"></svg>
+                    <svg id="retirementChart" class="chart" viewBox="0 0 760 300" role="img" aria-label="Super access and long-term sustainability"></svg>
                   </article>
                 </div>
               </section>
@@ -320,7 +321,7 @@
               <section class="view-section hidden" data-view-panel="super">
                 <div class="section-heading">
                   <h2>Super</h2>
-                  <p>Track employer super, extra contributions and retirement balances.</p>
+                  <p>Track employer super, extra contributions and balances available from age 60.</p>
                 </div>
                 <div class="grid gap-6 xl:grid-cols-[1fr_1.1fr]">
                   <div class="card"><div id="superForm" class="input-grid"></div></div>
@@ -331,7 +332,7 @@
               <section class="view-section hidden" data-view-panel="goals">
                 <div class="section-heading">
                   <h2>Goals</h2>
-                  <p>Set personal details, target ages and target lifestyle spending.</p>
+                  <p>Set personal details, progress ages and target lifestyle spending.</p>
                 </div>
                 <div class="card"><div id="personalForm" class="input-grid"></div></div>
                 <div class="card mt-6">
