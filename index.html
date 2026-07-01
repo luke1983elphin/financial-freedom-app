@@ -34,10 +34,13 @@
           <div>
             <p class="brand-kicker text-xs font-bold uppercase text-success">Financial Freedom</p>
             <h1 class="text-xl font-bold text-navy">Plan. Test. Build Wealth.</h1>
+            <p class="text-xs font-bold text-slate-500" id="lastSavedLabel">Last Saved: Not saved yet</p>
           </div>
           <div class="toolbar-actions flex flex-wrap gap-2">
-            <button class="btn btn-primary" type="button" id="demoButton">Load Demo</button>
+            <select class="sample-plan-select" id="samplePlanSelect" data-sample-plan-select aria-label="Choose sample plan"></select>
+            <button class="btn btn-primary" type="button" id="demoButton">Load Sample Plan</button>
             <button class="btn" type="button" id="enterDataButton">Enter My Data</button>
+            <button class="btn" type="button" id="manualSaveButton">Save My Plan</button>
             <details class="plan-menu" id="planMenu">
               <summary class="btn plan-menu-trigger">Plan</summary>
               <div class="plan-menu-panel">
@@ -59,9 +62,22 @@
               <p class="brand-kicker text-sm font-bold uppercase text-success">Financial Freedom</p>
               <h2 class="mt-4 max-w-4xl text-4xl font-black text-navy sm:text-6xl">Plan. Test. Build Wealth.</h2>
               <p class="mt-5 max-w-2xl text-lg leading-8 text-slate-600">See how today's decisions shape tomorrow's financial freedom.</p>
+              <p class="mt-3 max-w-2xl text-sm font-semibold leading-6 text-slate-500" id="samplePlanSummary">Explore realistic examples to see how the Financial Freedom Planner works before creating your own plan.</p>
+              <div class="mt-5 flex w-full max-w-xl flex-col gap-3 sm:flex-row">
+                <select class="sample-plan-select flex-1" id="heroSamplePlanSelect" data-sample-plan-select aria-label="Choose sample plan"></select>
+              </div>
               <div class="mt-8 flex flex-wrap gap-3">
-                <button class="btn btn-primary btn-large" type="button" id="heroDemoButton">Try Demo</button>
+                <button class="btn btn-primary btn-large" type="button" id="heroDemoButton">Load Sample Plan</button>
                 <button class="btn btn-large" type="button" id="heroStartButton">Start My Plan</button>
+              </div>
+              <div class="continue-panel hidden mt-6" id="continuePanel">
+                <span class="metric-label">Continue Your Plan</span>
+                <p>Your saved plan is available on this device.</p>
+                <div class="flex flex-wrap gap-2">
+                  <button class="btn btn-primary" type="button" id="continuePlanButton">Continue</button>
+                  <button class="btn" type="button" id="continueNewPlanButton">Start New Plan</button>
+                  <button class="btn" type="button" id="continueSampleButton">Load Sample Plan</button>
+                </div>
               </div>
             </div>
 
@@ -93,7 +109,7 @@
               </article>
               <article class="preview-card preview-card-wide">
                 <span>Highest Priority Recommendation</span>
-                <strong id="previewRecommendation">Load the demo or start a plan.</strong>
+                <strong id="previewRecommendation">Load a sample plan or start your own plan.</strong>
               </article>
             </div>
           </div>
@@ -148,6 +164,7 @@
                     <span id="wizardPercent">14% Complete</span>
                   </div>
                   <div class="progress-track" aria-hidden="true"><span id="wizardProgressBar"></span></div>
+                  <div class="wizard-step-chips" id="wizardStepChips"></div>
 
                   <div class="wizard-content-grid">
                     <div class="wizard-card">
@@ -183,6 +200,14 @@
                         </div>
                       </div>
                       <div class="wizard-panel hidden" data-wizard-panel="6">
+                        <div class="card-subheading">
+                          <h3>Assumptions Review</h3>
+                          <p>Review these editable assumptions before reports or results generate.</p>
+                        </div>
+                        <div id="wizardAssumptionsReview" class="input-grid mt-4"></div>
+                        <div id="wizardHelpReview" class="summary-grid mt-4"></div>
+                      </div>
+                      <div class="wizard-panel hidden" data-wizard-panel="7">
                         <div id="wizardResultsSummary" class="wizard-results"></div>
                       </div>
                     </div>
@@ -206,7 +231,7 @@
                 <div class="premium-hero dashboard-hero">
                   <div>
                     <p class="brand-kicker text-sm font-bold uppercase text-success">Financial Freedom</p>
-                    <h2 id="dashboardTitle" class="mt-2 text-3xl font-black text-navy sm:text-4xl">Start a plan or load the demo.</h2>
+                    <h2 id="dashboardTitle" class="mt-2 text-3xl font-black text-navy sm:text-4xl">Start a plan or load a sample plan.</h2>
                     <p id="dashboardSubtitle" class="mt-3 text-slate-600">Your progress dashboard will update as you enter data.</p>
                   </div>
                   <div class="score-ring">
@@ -243,7 +268,6 @@
                 </article>
 
                 <div class="dashboard-card-grid dashboard-card-grid-secondary mt-6" id="secondMetricGrid"></div>
-                <p class="tax-note mt-4" id="dashboardAssumptionNote">Accessible investments are counted before age 60. Superannuation is included from age 60 onward. Concessional super contributions are calculated net of 15% contributions tax.</p>
 
                 <div class="dashboard-chart-grid mt-6 grid gap-4 xl:grid-cols-2">
                   <article class="card">
@@ -484,6 +508,16 @@
                 <div class="card">
                   <button class="btn btn-primary" type="button" id="reportPrintButton">Print / Export</button>
                   <p class="mt-4 text-sm text-slate-500" id="reportSummary"></p>
+                </div>
+                <div class="card mt-6">
+                  <div class="card-heading">
+                    <div>
+                      <h3>Assumptions Review</h3>
+                      <span>Edit these before printing or exporting reports.</span>
+                    </div>
+                  </div>
+                  <div id="reportAssumptionsForm" class="input-grid"></div>
+                  <div id="reportHelpSummary" class="summary-grid mt-4"></div>
                 </div>
                 <div id="reportScenarioComparison" class="card mt-6"></div>
               </section>

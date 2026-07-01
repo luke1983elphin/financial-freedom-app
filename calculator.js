@@ -13,16 +13,10 @@
     { threshold: 135000, rate: 0.37 },
     { threshold: 190000, rate: 0.45 },
   ];
-  const HELP_REPAYMENT_BANDS = [
-    { threshold: 67000, rate: 0 },
-    { threshold: 75000, rate: 0.01 },
-    { threshold: 85000, rate: 0.02 },
-    { threshold: 95000, rate: 0.03 },
-    { threshold: 110000, rate: 0.04 },
-    { threshold: 125000, rate: 0.05 },
-    { threshold: 145000, rate: 0.06 },
-    { threshold: 165000, rate: 0.08 },
-    { threshold: 190000, rate: 0.10 },
+  const HELP_REPAYMENT_BRACKETS_2026_27 = [
+    { threshold: 67000, baseRepayment: 0, marginalRate: 0.15 },
+    { threshold: 125000, baseRepayment: 8700, marginalRate: 0.17 },
+    { threshold: 179286, totalIncomeRate: 0.10 },
   ];
   const STATUS = { GREEN: "green", AMBER: "amber", RED: "red" };
 
@@ -87,16 +81,50 @@
   function estimateHelpRepayment(repaymentIncome, balance) {
     const income = nonNegative(repaymentIncome);
     const currentBalance = nonNegative(balance);
-    const activeBand = [...HELP_REPAYMENT_BANDS].reverse().find((band) => income >= band.threshold) || HELP_REPAYMENT_BANDS[0];
-    const rate = income < HELP_THRESHOLD ? 0 : activeBand.rate;
-    const annualRepayment = roundCurrency(Math.min(currentBalance, Math.max(0, income - HELP_THRESHOLD) * rate));
+    let calculatedRepayment = 0;
+    let marginalRate = 0;
+
+    if (income >= HELP_REPAYMENT_BRACKETS_2026_27[2].threshold) {
+      calculatedRepayment = income * HELP_REPAYMENT_BRACKETS_2026_27[2].totalIncomeRate;
+      marginalRate = HELP_REPAYMENT_BRACKETS_2026_27[2].totalIncomeRate;
+    } else if (income >= HELP_REPAYMENT_BRACKETS_2026_27[1].threshold) {
+      const band = HELP_REPAYMENT_BRACKETS_2026_27[1];
+      calculatedRepayment = band.baseRepayment + (income - band.threshold) * band.marginalRate;
+      marginalRate = band.marginalRate;
+    } else if (income > HELP_THRESHOLD) {
+      const band = HELP_REPAYMENT_BRACKETS_2026_27[0];
+      calculatedRepayment = band.baseRepayment + (income - band.threshold) * band.marginalRate;
+      marginalRate = band.marginalRate;
+    }
+
+    const annualRepayment = roundCurrency(Math.min(currentBalance, Math.max(0, calculatedRepayment)));
+    const effectiveRate = income > 0 ? roundRatio(annualRepayment / income) : 0;
     return {
       balance: currentBalance,
       repaymentIncome: income,
-      rate,
+      rate: effectiveRate,
+      marginalRate,
       annualRepayment,
       monthlyRepayment: roundCurrency(annualRepayment / MONTHS_PER_YEAR),
-      note: "Estimate only. Actual compulsory HELP repayments depend on official repayment income rules.",
+      estimatedYearsToRepay: annualRepayment > 0 ? roundRatio(currentBalance / annualRepayment) : null,
+      note: "Estimate only. HELP repayments use repayment income, marginal 2026-27 rates and are capped at the current balance.",
+    };
+  }
+
+  function calculateHelpRepaymentIncome({ person1Income, person2Income, otherIncome, extraConcessionalSuper }) {
+    const sharedOtherIncome = nonNegative(otherIncome) / 2;
+    const person1Before = roundCurrency(nonNegative(person1Income) + sharedOtherIncome);
+    const person2Before = roundCurrency(nonNegative(person2Income) + sharedOtherIncome);
+    const split = splitAdditionalContribution(extraConcessionalSuper, person1Before, person2Before);
+    const person1TaxableAfter = roundCurrency(Math.max(0, person1Before - split.person1));
+    const person2TaxableAfter = roundCurrency(Math.max(0, person2Before - split.person2));
+    const person1RepaymentIncome = roundCurrency(person1TaxableAfter + split.person1);
+    const person2RepaymentIncome = roundCurrency(person2TaxableAfter + split.person2);
+    return {
+      person1RepaymentIncome,
+      person2RepaymentIncome,
+      estimatedRepaymentIncome: roundCurrency(Math.max(person1RepaymentIncome, person2RepaymentIncome)),
+      note: "Concessional contributions are added back for this simple HELP repayment-income estimate where applicable.",
     };
   }
 
@@ -107,6 +135,21 @@
     if (frequency === "monthly") return value * 12;
     if (frequency === "quarterly") return value * 4;
     return value;
+  }
+
+  function annualRecurringExpenses(plan) {
+    if (Array.isArray(plan.expenseItems) && plan.expenseItems.length) {
+      return roundCurrency(plan.expenseItems.reduce((total, item) => total + annualize(item.amount, item.frequency), 0));
+    }
+    return roundCurrency(
+      annualize(plan.expenses.livingCosts, plan.expenses.livingFrequency)
+      + annualize(plan.expenses.food, plan.expenses.foodFrequency)
+      + annualize(plan.expenses.utilities, plan.expenses.utilitiesFrequency)
+      + annualize(plan.expenses.insurance, plan.expenses.insuranceFrequency)
+      + annualize(plan.expenses.schoolChildren, plan.expenses.schoolChildrenFrequency)
+      + annualize(plan.expenses.ratesPropertyCosts, plan.expenses.ratesPropertyCostsFrequency)
+      + annualize(plan.expenses.otherExpenses, plan.expenses.otherFrequency),
+    );
   }
 
   function emptyPlan() {
@@ -548,20 +591,15 @@
       otherIncome: otherAnnualIncome,
       extraConcessionalSuper: plan.investing.extraSuperContributions,
     });
-    const helpRepaymentIncome = roundCurrency(Math.max(
-      person1AnnualIncome + otherAnnualIncome / 2,
-      person2AnnualIncome + otherAnnualIncome / 2,
-    ));
-    const helpRepaymentEstimate = estimateHelpRepayment(helpRepaymentIncome, plan.liabilities.hecsHelpDebt);
-    const annualExpenses = roundCurrency(
-      annualize(plan.expenses.livingCosts, plan.expenses.livingFrequency)
-      + annualize(plan.expenses.food, plan.expenses.foodFrequency)
-      + annualize(plan.expenses.utilities, plan.expenses.utilitiesFrequency)
-      + annualize(plan.expenses.insurance, plan.expenses.insuranceFrequency)
-      + annualize(plan.expenses.schoolChildren, plan.expenses.schoolChildrenFrequency)
-      + annualize(plan.expenses.ratesPropertyCosts, plan.expenses.ratesPropertyCostsFrequency)
-      + annualize(plan.expenses.otherExpenses, plan.expenses.otherFrequency),
-    );
+    const helpRepaymentIncome = calculateHelpRepaymentIncome({
+      person1Income: person1AnnualIncome,
+      person2Income: person2AnnualIncome,
+      otherIncome: otherAnnualIncome,
+      extraConcessionalSuper: plan.investing.extraSuperContributions,
+    });
+    const helpRepaymentEstimate = estimateHelpRepayment(helpRepaymentIncome.estimatedRepaymentIncome, plan.liabilities.hecsHelpDebt);
+    const annualLivingExpenses = annualRecurringExpenses(plan);
+    const annualExpenses = annualLivingExpenses;
     const annualMortgageRepayments = roundCurrency(nonNegative(plan.liabilities.monthlyRepayment || plan.expenses.mortgageRepayments) * MONTHS_PER_YEAR);
     const annualCreditCardRepayments = roundCurrency(nonNegative(plan.liabilities.creditCardMonthlyRepayment) * MONTHS_PER_YEAR);
     const annualDebtRepayments = roundCurrency(annualMortgageRepayments + annualCreditCardRepayments);
@@ -713,6 +751,7 @@
       person2AnnualIncome,
       otherAnnualIncome,
       annualExpenses,
+      annualLivingExpenses,
       annualMortgageRepayments,
       annualCreditCardRepayments,
       annualDebtRepayments,
@@ -731,6 +770,7 @@
       superContributionsTaxRate: SUPER_CONTRIBUTIONS_TAX_RATE,
       taxEstimate,
       helpRepaymentEstimate,
+      helpRepaymentIncome,
       financialFreedomScore,
       investmentProjection,
       superProjection,
@@ -756,9 +796,11 @@
     emptyPlan,
     clonePlan,
     annualize,
+    annualRecurringExpenses,
     individualTaxEstimate,
     marginalTaxRate,
     estimateHelpRepayment,
+    calculateHelpRepaymentIncome,
     amortiseLoan,
     calculateOffsetBenefit,
     calculateLoanSummary,
