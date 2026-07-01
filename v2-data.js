@@ -2,7 +2,7 @@ const samplePlans = [
   {
     id: "young-professional",
     name: "Young Professional",
-    description: "Emma, age 29, focused on building wealth while managing HELP debt.",
+    description: "A single-person sample focused on building wealth while managing HELP debt.",
     plan: {
       personal: {
         person1Name: "Emma",
@@ -123,7 +123,7 @@ const samplePlans = [
   {
     id: "family",
     name: "Family",
-    description: "Luke and Sarah, focused on long-term financial independence.",
+    description: "A household sample focused on long-term financial independence.",
     plan: {
       personal: {
         person1Name: "Luke",
@@ -250,7 +250,7 @@ const samplePlans = [
   {
     id: "pre-retirement",
     name: "Pre-Retirement",
-    description: "Michael and Karen, preparing for financial freedom.",
+    description: "A pre-retirement household sample preparing for financial freedom.",
     plan: {
       personal: {
         person1Name: "Michael",

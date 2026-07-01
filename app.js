@@ -382,7 +382,7 @@
         { id: "liability-other", name: "Other debts", type: "otherDebt", balance: plan.liabilities.otherDebts || 0, interestRatePct: 0, repayment: 0, repaymentFrequency: "monthly", termYears: 0 },
       ];
     }
-    if (!plan.liabilityItems.some((item) => item.type === "creditCard")) {
+    if (plan.liabilityItems.length && !plan.liabilityItems.some((item) => item.type === "creditCard") && (Number(plan.liabilities.creditCardBalance) || Number(plan.liabilities.creditCardLimit))) {
       plan.liabilityItems.push({ id: "liability-credit-card", name: "Credit Card", type: "creditCard", balance: plan.liabilities.creditCardBalance || 0, interestRatePct: plan.liabilities.creditCardInterestRatePct || 19.99, repayment: plan.liabilities.creditCardMonthlyRepayment || 0, repaymentFrequency: "monthly", termYears: 0, creditLimit: plan.liabilities.creditCardLimit || 0 });
     }
     if (!Array.isArray(plan.expenseItems)) {
@@ -394,13 +394,9 @@
         { id: "expense-school", name: plan.expenses.schoolChildrenName || "School / children", category: "schoolChildren", amount: plan.expenses.schoolChildren || 0, frequency: plan.expenses.schoolChildrenFrequency || "annually" },
         { id: "expense-rates", name: plan.expenses.ratesPropertyCostsName || "Rates / property costs", category: "ratesPropertyCosts", amount: plan.expenses.ratesPropertyCosts || 0, frequency: plan.expenses.ratesPropertyCostsFrequency || "annually" },
         { id: "expense-other", name: plan.expenses.otherExpensesName || "Other expenses", category: "other", amount: plan.expenses.otherExpenses || 0, frequency: plan.expenses.otherFrequency || "monthly" },
+        ...defaultOtherExpenseItems.map((item) => ({ ...item })),
       ];
     }
-    defaultOtherExpenseItems.forEach((item) => {
-      if (!plan.expenseItems.some((expense) => expense.category === item.category)) {
-        plan.expenseItems.push({ ...item });
-      }
-    });
     if (!Array.isArray(plan.goalItems)) {
       const superBalance = (Number(plan.assets.superPerson1) || 0) + (Number(plan.assets.superPerson2) || 0);
       const debtBalance = (Number(plan.liabilities.homeLoanBalance) || 0) + (Number(plan.liabilities.hecsHelpDebt) || 0) + (Number(plan.liabilities.otherDebts) || 0);
@@ -588,6 +584,17 @@
     if (continuePanel) continuePanel.classList.toggle("hidden", !loadDraft());
   }
 
+  function blankUserPlan() {
+    const blank = CALC.emptyPlan();
+    blank.incomeItems = [];
+    blank.assetItems = [];
+    blank.liabilityItems = [];
+    blank.expenseItems = [];
+    blank.goalItems = [];
+    blank.comparison = { ...comparisonDefaults };
+    return blank;
+  }
+
   function isBlankPlan(currentPlan) {
     const ignoredText = new Set(["weekly", "fortnightly", "monthly", "quarterly", "annually"]);
     function hasValue(value) {
@@ -665,7 +672,9 @@
   }
 
   function dynamicInput(collection, item, key, label, options = {}) {
-    const value = item[key] ?? "";
+    const rawValue = item[key] ?? "";
+    const isBlankNumber = options.kind !== "text" && options.type !== "select" && Number(rawValue) === 0 && rawValue !== "0";
+    const value = isBlankNumber ? "" : rawValue;
     const common = `data-collection="${collection}" data-id="${item.id}" data-key="${key}"`;
     if (options.type === "select") {
       return `
@@ -694,7 +703,7 @@
           </div>
           <button class="btn btn-primary add-button" type="button" data-add-collection="${collection}">${escapeHtml(addLabel)}</button>
         </div>
-        <div class="collection-list">${body}</div>
+        <div class="collection-list">${body || `<p class="empty-collection-note">No items added yet. Use ${escapeHtml(addLabel)} to start this section.</p>`}</div>
       </section>
     `;
   }
@@ -761,7 +770,7 @@
             ${summaryTile("Estimated Annual Repayment", money(help.annualRepayment))}
             ${summaryTile("Estimated Years Until Loan Repaid", help.estimatedYearsToRepay ? `${help.estimatedYearsToRepay.toFixed(1)} years` : "No compulsory repayment estimated")}
           </div>
-          <p class="field-help mt-3">HELP repayments are estimated using the Australian Government's repayment income rules and current repayment rates.</p>
+          <p class="field-help mt-3">Estimate updates from income and current balance.</p>
         </article>
       `;
     }
@@ -937,20 +946,20 @@
       { label: "Person 2 age", path: "personal.person2Age" },
     ];
     const goalFields = [
-      { label: "Building wealth target age", path: "personal.workOptionalAge", help: "Starting assumption only. You can change this any time." },
-      { label: "Financial Independence target age", path: "personal.semiRetirementAge", help: "Starting assumption only. You can change this any time." },
-      { label: "Financial Freedom target age", path: "personal.fullRetirementAge", help: "Starting assumption only. You can change this any time." },
+      { label: "Building wealth target age", path: "personal.workOptionalAge" },
+      { label: "Financial Independence target age", path: "personal.semiRetirementAge" },
+      { label: "Financial Freedom target age", path: "personal.fullRetirementAge" },
       { label: "Target annual spending", path: "personal.targetAnnualSpending", step: "1000" },
       { label: "Annual investing target", path: "investing.annualInvestingTarget", step: "1000" },
       { label: "Employer super contributions", path: "investing.employerSuperContributions", step: "1000" },
       { label: "Extra super contributions", path: "investing.extraSuperContributions", step: "1000" },
     ];
     const assumptionFields = [
-      { label: "Expected investment return (%)", path: "investing.expectedInvestmentReturnPct", step: "0.1", help: "Starting assumption only. You can change this any time." },
-      { label: "Expected super return (%)", path: "investing.expectedSuperReturnPct", step: "0.1", help: "Starting assumption only. You can change this any time." },
-      { label: "Inflation (%)", path: "investing.inflationPct", step: "0.1", help: "Starting assumption only. You can change this any time." },
-      { label: "Wage growth (%)", path: "investing.wageGrowthPct", step: "0.1", help: "Starting assumption only. You can change this any time." },
-      { label: "Safe withdrawal rate (%)", path: "investing.safeWithdrawalRatePct", step: "0.1", help: "Starting assumption only. You can change this any time." },
+      { label: "Expected investment return (%)", path: "investing.expectedInvestmentReturnPct", step: "0.1" },
+      { label: "Expected super return (%)", path: "investing.expectedSuperReturnPct", step: "0.1" },
+      { label: "Inflation (%)", path: "investing.inflationPct", step: "0.1" },
+      { label: "Wage growth (%)", path: "investing.wageGrowthPct", step: "0.1" },
+      { label: "Safe withdrawal rate (%)", path: "investing.safeWithdrawalRatePct", step: "0.1" },
     ];
     const downsizingFields = [
       { label: "Use downsizing strategy", path: "downsizing.enabled", type: "checkbox", help: "Off by default. Turn on only when you want the released equity included as investable money." },
@@ -968,17 +977,17 @@
     renderCashflowInputs("incomeExpenseForm");
     renderForm("investingForm", [
       { label: "Annual investing target", path: "investing.annualInvestingTarget", step: "1000" },
-      { label: "Expected investment return (%)", path: "investing.expectedInvestmentReturnPct", step: "0.1", help: "Starting assumption only. You can change this any time." },
-      { label: "Inflation (%)", path: "investing.inflationPct", step: "0.1", help: "Starting assumption only. You can change this any time." },
-      { label: "Wage growth (%)", path: "investing.wageGrowthPct", step: "0.1", help: "Starting assumption only. You can change this any time." },
-      { label: "Safe withdrawal rate (%)", path: "investing.safeWithdrawalRatePct", step: "0.1", help: "Starting assumption only. You can change this any time." },
+      { label: "Expected investment return (%)", path: "investing.expectedInvestmentReturnPct", step: "0.1" },
+      { label: "Inflation (%)", path: "investing.inflationPct", step: "0.1" },
+      { label: "Wage growth (%)", path: "investing.wageGrowthPct", step: "0.1" },
+      { label: "Safe withdrawal rate (%)", path: "investing.safeWithdrawalRatePct", step: "0.1" },
     ]);
     renderForm("superForm", [
       { label: "Super person 1", path: "assets.superPerson1", step: "1000" },
       { label: "Super person 2", path: "assets.superPerson2", step: "1000" },
       { label: "Employer super contributions", path: "investing.employerSuperContributions", step: "1000" },
       { label: "Extra super contributions", path: "investing.extraSuperContributions", step: "1000" },
-      { label: "Expected super return (%)", path: "investing.expectedSuperReturnPct", step: "0.1", help: "Starting assumption only. You can change this any time." },
+      { label: "Expected super return (%)", path: "investing.expectedSuperReturnPct", step: "0.1" },
     ]);
     renderForm("wizardAboutForm", aboutFields);
     renderIncomeCollection("wizardIncomeForm");
@@ -1176,7 +1185,7 @@
       metricCard("Net Worth", money(result.currentNetWorth), "", "What you own minus what you owe."),
       metricCard("Annual Surplus", money(annualSurplus), annualSurplus >= 0 ? "status-green" : "status-amber", "Estimated money left after recurring costs, debt repayments, tax, HELP and planned investing."),
       metricCard("Investments", money(result.investmentBalance), "", "Projected investment balance includes contributions and earnings over time."),
-      metricCard("Super", money(result.superannuationBalance), "status-green", "Super is tracked separately and treated as available from age 60."),
+      metricCard("Super", money(result.superannuationBalance), "status-green", "Tracked separately from other investments."),
       metricCard("Financial Freedom Score", plainPercent(percent), percent >= 75 ? "status-green" : "", "Progress toward investments supporting your chosen lifestyle."),
     ].join("");
     document.getElementById("secondMetricGrid").innerHTML = [
@@ -1249,7 +1258,7 @@
       summaryTile("Estimated Repayment Income", money(help.repaymentIncome)),
       summaryTile("Estimated Annual HELP Repayment", money(help.annualRepayment)),
       summaryTile("Estimated Years Until Loan Repaid", help.estimatedYearsToRepay ? `${help.estimatedYearsToRepay.toFixed(1)} years` : "No compulsory repayment estimated"),
-    ].join("") + `<p class="tax-note mt-4">HELP repayments are estimated using the Australian Government's repayment income rules and current repayment rates.</p>`;
+    ].join("") + `<p class="tax-note mt-4">HELP estimate uses repayment income and is capped at the current balance.</p>`;
     ["wizardHelpReview", "reportHelpSummary"].forEach((id) => {
       const container = document.getElementById(id);
       if (container) container.innerHTML = tiles;
@@ -1293,7 +1302,6 @@
       <strong>HELP estimate:</strong> ${money(help.annualRepayment)} per year from estimated repayment income of ${money(help.repaymentIncome)}.
       ${help.estimatedYearsToRepay ? `Estimated time to repay: ${help.estimatedYearsToRepay.toFixed(1)} years.` : "No compulsory repayment estimated."}
       ${escapeHtml(help.note)}
-      <br>HELP repayments are estimated using the Australian Government's repayment income rules and current repayment rates.
     `;
     lineChart("loanChart", [{
       label: "Loan balance",
@@ -1333,7 +1341,6 @@
         ${summaryTile("Estimated after-tax cashflow cost", money(extra.afterTaxCashflowCost))}
       </div>
       <p class="mt-2 text-sm text-slate-600">Super is treated as available from age ${result.superAccessAge}. Age-${result.sustainabilityStartAge}+ sustainability assets: ${money(result.totalRetirementAssets)}</p>
-      <p class="tax-note mt-3">Concessional super contributions are calculated net of 15% contributions tax.</p>
     `;
   }
 
@@ -1720,7 +1727,11 @@
   }
 
   function startMyPlan() {
-    if (!plan) plan = CALC.emptyPlan();
+    plan = blankUserPlan();
+    localStorage.removeItem(DRAFT_KEY);
+    localStorage.removeItem(LAST_SAVED_KEY);
+    document.getElementById("scenarioName").value = "";
+    document.getElementById("scenarioNotes").value = "";
     activeWizardStep = 0;
     renderAll();
     showWorkspace("setup");
@@ -1728,7 +1739,7 @@
 
   function resetPlan() {
     if (!window.confirm("Clear the current plan and start again?")) return;
-    plan = CALC.emptyPlan();
+    plan = blankUserPlan();
     localStorage.removeItem(DRAFT_KEY);
     localStorage.removeItem(LAST_SAVED_KEY);
     document.getElementById("scenarioName").value = "";
@@ -1899,6 +1910,11 @@
       event.preventDefault();
       if (homeStep.dataset.homeStep === "setup") activeWizardStep = 0;
       showWorkspace(homeStep.dataset.homeStep);
+    });
+
+    document.addEventListener("focusin", (event) => {
+      if (!event.target.classList?.contains("field-input") || window.innerWidth > 760) return;
+      window.setTimeout(() => event.target.scrollIntoView({ behavior: "smooth", block: "center" }), 120);
     });
 
     document.getElementById("demoButton").addEventListener("click", loadSamplePlan);

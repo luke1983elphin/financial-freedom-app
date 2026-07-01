@@ -26,7 +26,7 @@ main {
 
 .btn {
   display: inline-flex;
-  min-height: 40px;
+  min-height: 42px;
   align-items: center;
   justify-content: center;
   gap: 8px;
@@ -76,7 +76,7 @@ main {
 }
 
 .sample-plan-select {
-  min-height: 40px;
+  min-height: 42px;
   max-width: 220px;
   border: 1px solid #dbe4ee;
   border-radius: 999px;
@@ -274,7 +274,7 @@ main {
   justify-content: space-between;
   gap: 16px;
   border: 1px solid #e2e8f0;
-  border-radius: 22px;
+  border-radius: 20px;
   background: #ffffff;
   padding: 16px;
   box-shadow: 0 14px 34px rgba(15, 39, 66, 0.07);
@@ -314,11 +314,11 @@ main {
 }
 
 .wizard-step-chips {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(136px, 1fr));
   gap: 8px;
-  overflow-x: auto;
-  padding-bottom: 4px;
-  scrollbar-width: thin;
+  overflow: visible;
+  padding-bottom: 0;
 }
 
 .wizard-step-chip {
@@ -326,7 +326,7 @@ main {
   min-height: 42px;
   align-items: center;
   gap: 8px;
-  flex: 0 0 auto;
+  min-width: 0;
   border: 1px solid #e2e8f0;
   border-radius: 999px;
   background: #ffffff;
@@ -364,7 +364,7 @@ main {
 
 .wizard-card {
   border: 1px solid #e2e8f0;
-  border-radius: 24px;
+  border-radius: 20px;
   background: #ffffff;
   padding: clamp(18px, 3vw, 28px);
   box-shadow: 0 14px 34px rgba(15, 39, 66, 0.07);
@@ -376,7 +376,7 @@ main {
   align-items: start;
 }
 
-@media (min-width: 840px) {
+@media (min-width: 760px) {
   .wizard-content-grid {
     grid-template-columns: minmax(0, 1fr) 330px;
   }
@@ -406,7 +406,7 @@ main {
 
 .collection-heading h3 {
   color: #0f2742;
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 950;
 }
 
@@ -423,7 +423,7 @@ main {
 
 .form-item-card {
   border: 1px solid #e2e8f0;
-  border-radius: 20px;
+  border-radius: 18px;
   background: #ffffff;
   padding: 18px;
 }
@@ -469,7 +469,7 @@ main {
   display: grid;
   gap: 14px;
   border: 1px solid #e2e8f0;
-  border-radius: 22px;
+  border-radius: 20px;
   background: #ffffff;
   padding: 20px;
   box-shadow: 0 14px 34px rgba(15, 39, 66, 0.07);
@@ -523,6 +523,7 @@ main {
 
 .comparison-table-wrap {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   border: 1px solid #e2e8f0;
   border-radius: 18px;
 }
@@ -641,7 +642,7 @@ main {
   display: grid;
   gap: 14px;
   border: 1px solid #e2e8f0;
-  border-radius: 22px;
+  border-radius: 20px;
   background: #ffffff;
   padding: 22px;
   box-shadow: 0 14px 34px rgba(15, 39, 66, 0.07);
@@ -715,7 +716,7 @@ main {
 .scenario-row {
   min-width: 0;
   border: 1px solid #e2e8f0;
-  border-radius: 22px;
+  border-radius: 20px;
   background: #ffffff;
   box-shadow: 0 14px 34px rgba(15, 39, 66, 0.07);
 }
@@ -787,7 +788,7 @@ main {
 }
 
 .card {
-  padding: 22px;
+  padding: clamp(18px, 2.2vw, 22px);
 }
 
 .card-heading {
@@ -814,7 +815,7 @@ main {
   position: relative;
   display: grid;
   gap: 8px;
-  min-height: 132px;
+  min-height: 136px;
   overflow: hidden;
   padding: 20px;
   align-content: space-between;
@@ -959,9 +960,45 @@ main {
   min-width: 0;
 }
 
+@media (min-width: 1180px) {
+  #appWorkspace > div {
+    grid-template-columns: 270px minmax(0, 1fr);
+  }
+
+  .dashboard-hero-metrics {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .dashboard-card-grid-secondary {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .dashboard-chart-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-chart-grid .card:first-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 760px) and (max-width: 1179px) {
+  .dashboard-hero-metrics,
+  .dashboard-card-grid-secondary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .input-grid {
   display: grid;
-  gap: 14px;
+  gap: 16px;
+}
+
+.input-grid > label,
+.comparison-grid > label {
+  display: grid;
+  min-width: 0;
+  align-content: start;
 }
 
 @media (min-width: 720px) {
@@ -980,14 +1017,36 @@ main {
 
 .field-input {
   width: 100%;
-  min-height: 54px;
+  min-height: 52px;
   border: 1px solid #dbe4ee;
-  border-radius: 16px;
+  border-radius: 14px;
   background: #ffffff;
   padding: 13px 14px;
   color: #172033;
   font-size: 16px;
+  font-variant-numeric: tabular-nums;
   outline: none;
+}
+
+select.field-input,
+select.sample-plan-select {
+  cursor: pointer;
+}
+
+textarea.field-input {
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.empty-collection-note {
+  border: 1px dashed #cbd5e1;
+  border-radius: 16px;
+  background: #f8fafc;
+  padding: 16px;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.5;
 }
 
 .field-input:focus {
@@ -1140,6 +1199,22 @@ main {
 }
 
 @media (max-width: 760px) {
+  .toolbar-actions {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .toolbar-actions .btn,
+  .toolbar-actions .sample-plan-select,
+  .plan-menu {
+    flex: 1 1 calc(50% - 8px);
+    min-width: min(100%, 160px);
+  }
+
+  .plan-menu summary {
+    width: 100%;
+  }
+
   .freedom-progress-section {
     grid-template-columns: 1fr;
   }
@@ -1178,6 +1253,7 @@ main {
   }
 
   .wizard-step-chip {
+    width: 100%;
     min-height: 46px;
   }
 
@@ -1218,8 +1294,17 @@ main {
     flex: 1 1 auto;
   }
 
+  .wizard-step-chips {
+    grid-template-columns: 1fr;
+  }
+
   .toolbar-actions .btn {
-    flex: 0 0 auto;
+    flex: 1 1 100%;
+  }
+
+  .toolbar-actions .sample-plan-select,
+  .toolbar-actions .plan-menu {
+    flex: 1 1 100%;
   }
 
   .home-hero {
@@ -1279,6 +1364,16 @@ main {
 
   .card-heading {
     display: grid;
+  }
+
+  .comparison-table {
+    min-width: 560px;
+  }
+
+  .comparison-table th,
+  .comparison-table td {
+    padding: 10px;
+    font-size: 12px;
   }
 }
 
