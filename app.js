@@ -2,7 +2,6 @@
   const DATA = window.FFS_DATA;
   const CALC = window.FFSCalculator;
   const DRAFT_KEY = "ffs-current-plan-v3-mobile-dashboard-ux-test";
-  const LAST_SAVED_KEY = "ffs-current-plan-last-saved-v3-mobile-dashboard-ux-test";
   const SCENARIO_KEY = "ffs-scenarios-v3-mobile-dashboard-ux-test";
   const frequencies = [
     ["weekly", "Weekly"],
@@ -34,11 +33,7 @@
     },
     {
       title: "Goals",
-      instruction: "Set target spending and optional downsizing details.",
-    },
-    {
-      title: "Assumptions Review",
-      instruction: "Review the key assumptions before viewing results or reports.",
+      instruction: "Set target spending, assumptions and optional downsizing details.",
     },
     {
       title: "Results / Dashboard",
@@ -112,7 +107,6 @@
   let activeWizardStep = 0;
   let hasOpenedWorkspace = Boolean(loadDraft());
   let activeWhatIfId = whatIfActions[0].id;
-  let selectedSamplePlanId = DATA.samplePlans?.[1]?.id || DATA.samplePlans?.[0]?.id || "";
 
   const currency = new Intl.NumberFormat("en-AU", {
     style: "currency",
@@ -311,7 +305,7 @@
 
   function highestRecommendation(result) {
     const top = result.decisionOptions[0];
-    if (!top) return "Load a sample plan or start a plan to see your next best step.";
+    if (!top) return "Load the demo or start a plan to see your next best step.";
     if (top.label === "Extra super") return "Consider extra super: the model shows a strong estimated tax and long-term wealth benefit.";
     if (top.label === "Offset account") return "Consider offset savings: it may reduce interest while keeping cash accessible.";
     if (top.label === "ETF/share investing") return "Consider investing more: it may improve long-term growth while staying accessible.";
@@ -529,31 +523,6 @@
 
   function saveDraft() {
     localStorage.setItem(DRAFT_KEY, JSON.stringify(plan));
-    localStorage.setItem(LAST_SAVED_KEY, new Date().toISOString());
-    updateSaveStatus();
-  }
-
-  function formatLastSaved(value) {
-    if (!value) return "Not saved yet";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "Not saved yet";
-    const today = new Date();
-    const isToday = date.toDateString() === today.toDateString();
-    return `${isToday ? "Today" : date.toLocaleDateString()} at ${date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
-  }
-
-  function updateSaveStatus(message = "") {
-    const lastSaved = localStorage.getItem(LAST_SAVED_KEY);
-    const text = message || (lastSaved ? "Saved on this device." : "Not saved yet.");
-    const status = document.getElementById("wizardSaveStatus");
-    if (status) status.textContent = text;
-    const lastSavedLabel = document.getElementById("lastSavedLabel");
-    if (lastSavedLabel) lastSavedLabel.textContent = `Last Saved: ${formatLastSaved(lastSaved)}`;
-  }
-
-  function manualSavePlan() {
-    saveDraft();
-    updateSaveStatus("Your Financial Freedom Plan has been saved successfully.");
   }
 
   function loadScenarios() {
@@ -567,25 +536,6 @@
 
   function saveScenarios(scenarios) {
     localStorage.setItem(SCENARIO_KEY, JSON.stringify(scenarios));
-  }
-
-  function selectedSamplePlan() {
-    const plans = DATA.samplePlans || [{ id: "sample", name: "Sample Plan", plan: DATA.demoPlan }];
-    return plans.find((item) => item.id === selectedSamplePlanId) || plans[0];
-  }
-
-  function renderSamplePlanOptions() {
-    const plans = DATA.samplePlans || [];
-    const options = plans.map((item) => `<option value="${escapeHtml(item.id)}"${item.id === selectedSamplePlanId ? " selected" : ""}>${escapeHtml(item.name)}</option>`).join("");
-    document.querySelectorAll("[data-sample-plan-select]").forEach((select) => {
-      select.innerHTML = options;
-      select.value = selectedSamplePlanId;
-    });
-    const summary = document.getElementById("samplePlanSummary");
-    const sample = selectedSamplePlan();
-    if (summary) summary.textContent = sample?.description || "Explore realistic examples before creating your own plan.";
-    const continuePanel = document.getElementById("continuePanel");
-    if (continuePanel) continuePanel.classList.toggle("hidden", !loadDraft());
   }
 
   function isBlankPlan(currentPlan) {
@@ -743,25 +693,19 @@
 
   function liabilityCard(item, index) {
     if (item.type === "hecsHelp") {
-      const help = CALC.calculatePlan(plan).helpRepaymentEstimate;
       return `
         <article class="form-item-card dynamic-item-card">
           <div class="item-card-title">
             <div>
               <span>HELP estimate</span>
-              <h4>Outstanding HELP Balance</h4>
+              <h4>Current HECS/HELP balance</h4>
             </div>
             ${removeButton("liabilityItems", item.id)}
           </div>
           <div class="input-grid mt-4">
-            ${dynamicInput("liabilityItems", item, "balance", "Outstanding HELP Balance", { step: "1000" })}
+            ${dynamicInput("liabilityItems", item, "balance", "Current HECS/HELP balance", { step: "1000" })}
           </div>
-          <div class="summary-grid mt-4">
-            ${summaryTile("Estimated Repayment Income", money(help.repaymentIncome))}
-            ${summaryTile("Estimated Annual Repayment", money(help.annualRepayment))}
-            ${summaryTile("Estimated Years Until Loan Repaid", help.estimatedYearsToRepay ? `${help.estimatedYearsToRepay.toFixed(1)} years` : "No compulsory repayment estimated")}
-          </div>
-          <p class="field-help mt-3">HELP repayments are estimated using the Australian Government's repayment income rules and current repayment rates.</p>
+          <p class="field-help mt-3">Estimate only. The app estimates a minimum compulsory repayment from the income entered.</p>
         </article>
       `;
     }
@@ -944,8 +888,6 @@
       { label: "Annual investing target", path: "investing.annualInvestingTarget", step: "1000" },
       { label: "Employer super contributions", path: "investing.employerSuperContributions", step: "1000" },
       { label: "Extra super contributions", path: "investing.extraSuperContributions", step: "1000" },
-    ];
-    const assumptionFields = [
       { label: "Expected investment return (%)", path: "investing.expectedInvestmentReturnPct", step: "0.1", help: "Starting assumption only. You can change this any time." },
       { label: "Expected super return (%)", path: "investing.expectedSuperReturnPct", step: "0.1", help: "Starting assumption only. You can change this any time." },
       { label: "Inflation (%)", path: "investing.inflationPct", step: "0.1", help: "Starting assumption only. You can change this any time." },
@@ -988,20 +930,12 @@
     renderForm("wizardGoalsForm", goalFields);
     renderGoalCollection("wizardGoalExamples");
     renderForm("wizardDownsizingForm", downsizingFields);
-    renderForm("wizardAssumptionsReview", assumptionFields);
-    renderForm("reportAssumptionsForm", assumptionFields);
     renderForm("downsizingForm", downsizingFields);
     renderGoalCollection("goalExamples");
   }
 
-  function metricCard(label, value, tone = "", why = "") {
-    return `
-      <article class="metric-card ${tone}">
-        <span>${escapeHtml(label)}</span>
-        <strong>${escapeHtml(value)}</strong>
-        ${why ? `<small class="why-this-matters">${escapeHtml(why)}</small>` : ""}
-      </article>
-    `;
+  function metricCard(label, value, tone = "") {
+    return `<article class="metric-card ${tone}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></article>`;
   }
 
   function summaryTile(label, value, tone = "") {
@@ -1125,15 +1059,7 @@
       panel.classList.toggle("hidden", Number(panel.dataset.wizardPanel) !== activeWizardStep);
     });
     document.getElementById("wizardPrevButton").disabled = activeWizardStep === 0;
-    document.getElementById("wizardNextButton").textContent = activeWizardStep === wizardSteps.length - 1 ? "View Dashboard ->" : "Next Step ->";
-    const chips = document.getElementById("wizardStepChips");
-    if (chips) {
-      chips.innerHTML = wizardSteps.map((item, index) => `
-        <button class="wizard-step-chip ${index === activeWizardStep ? "active" : ""}" type="button" data-wizard-step="${index}">
-          <span>${index + 1}</span>${escapeHtml(item.title)}
-        </button>
-      `).join("");
-    }
+    document.getElementById("wizardNextButton").textContent = activeWizardStep === wizardSteps.length - 1 ? "View Dashboard" : "Next";
   }
 
   function renderDashboard(result) {
@@ -1142,15 +1068,13 @@
     const stage = currentFreedomStage(percent);
     const passiveIncome = annualPassiveIncome(result);
     const target = lifestyleTarget(result);
-    const livingExpenses = result.annualLivingExpenses;
-    const annualSurplus = estimatedCashflow(result);
     const monthlySurplus = estimatedCashflow(result) / 12;
     const milestone = nextMilestone(result, percent);
     const progressWidth = Math.min(100, Math.max(0, percent));
 
-    document.getElementById("dashboardTitle").textContent = names ? `${names}'s Financial Freedom` : "Start a plan or load a sample plan.";
+    document.getElementById("dashboardTitle").textContent = names ? `${names}'s Financial Freedom` : "Start a plan or load the demo.";
     document.getElementById("dashboardSubtitle").textContent = isBlankPlan(plan)
-      ? "Enter your own details or load a fictional sample plan to see the dashboard come alive."
+      ? "Enter your own details or try the fictional demo to see the dashboard come alive."
       : "See how today's decisions shape tomorrow's financial freedom.";
     document.getElementById("heroScore").textContent = plainPercent(percent);
     document.querySelector(".score-ring").style.borderColor = percent >= 100 ? "#bdebd7" : percent >= 75 ? "#f3d08c" : "#dbe4ee";
@@ -1173,19 +1097,18 @@
     }
 
     document.getElementById("dashboardHeroMetrics").innerHTML = [
-      metricCard("Net Worth", money(result.currentNetWorth), "", "What you own minus what you owe."),
-      metricCard("Annual Surplus", money(annualSurplus), annualSurplus >= 0 ? "status-green" : "status-amber", "Estimated money left after recurring costs, debt repayments, tax, HELP and planned investing."),
-      metricCard("Investments", money(result.investmentBalance), "", "Projected investment balance includes contributions and earnings over time."),
-      metricCard("Super", money(result.superannuationBalance), "status-green", "Super is tracked separately and treated as available from age 60."),
-      metricCard("Financial Freedom Score", plainPercent(percent), percent >= 75 ? "status-green" : "", "Progress toward investments supporting your chosen lifestyle."),
-    ].join("");
-    document.getElementById("secondMetricGrid").innerHTML = [
       metricCard("Current Financial Freedom Stage", stage.name),
-      metricCard("Next Milestone", milestone.amount),
+      metricCard("Financial Freedom Progress", plainPercent(percent), percent >= 75 ? "status-green" : ""),
+      metricCard("Net Worth", money(result.currentNetWorth)),
+      metricCard("Investment Balance", money(result.investmentBalance)),
+      metricCard("Super Balance", money(result.superannuationBalance), "status-green"),
       metricCard("Debt Balance", money(result.totalLiabilities), result.totalLiabilities <= result.totalAssets * 0.5 ? "status-green" : "status-amber"),
       metricCard("Monthly Surplus / Deficit", money(monthlySurplus), monthlySurplus >= 0 ? "status-green" : "status-amber"),
-      metricCard("Annual Passive Income Estimate", money(passiveIncome), "", "This estimates the annual income your investments may generate without selling assets."),
-      metricCard("Annual Living Expenses", money(livingExpenses), "", "This is calculated from your recurring expense items and excludes investing and loan principal repayments."),
+      metricCard("Next Milestone", milestone.amount),
+    ].join("");
+    document.getElementById("secondMetricGrid").innerHTML = [
+      metricCard("Annual Passive Income Estimate", money(passiveIncome)),
+      metricCard("Annual Living Expenses", money(target)),
       metricCard("Accessible Investments", money(result.accessibleInvestmentAssets)),
       metricCard("Highest Priority", highestRecommendation(result)),
     ].join("");
@@ -1242,24 +1165,10 @@
     container.innerHTML = rows.map(([label, value]) => summaryTile(label, value)).join("");
   }
 
-  function renderHelpReview(result) {
-    const help = result.helpRepaymentEstimate;
-    const tiles = [
-      summaryTile("Outstanding HELP Balance", money(help.balance)),
-      summaryTile("Estimated Repayment Income", money(help.repaymentIncome)),
-      summaryTile("Estimated Annual HELP Repayment", money(help.annualRepayment)),
-      summaryTile("Estimated Years Until Loan Repaid", help.estimatedYearsToRepay ? `${help.estimatedYearsToRepay.toFixed(1)} years` : "No compulsory repayment estimated"),
-    ].join("") + `<p class="tax-note mt-4">HELP repayments are estimated using the Australian Government's repayment income rules and current repayment rates.</p>`;
-    ["wizardHelpReview", "reportHelpSummary"].forEach((id) => {
-      const container = document.getElementById(id);
-      if (container) container.innerHTML = tiles;
-    });
-  }
-
   function renderCashflow(result) {
     const rows = [
       ["Annual net income", result.annualNetIncome],
-      ["Annual living expenses", result.annualLivingExpenses],
+      ["Annual expenses", result.annualExpenses],
       ["Mortgage repayments", result.annualMortgageRepayments],
       ["Credit card repayments", result.annualCreditCardRepayments],
       ["Cash surplus before investing", result.cashSurplusBeforeInvesting],
@@ -1289,12 +1198,7 @@
       ...[5, 10, 20, 30].map((year) => summaryTile(`Balance at ${year} years`, money(loan.balanceAtYears[year]))),
     ].join("");
     const help = result.helpRepaymentEstimate;
-    document.getElementById("helpEstimateSummary").innerHTML = `
-      <strong>HELP estimate:</strong> ${money(help.annualRepayment)} per year from estimated repayment income of ${money(help.repaymentIncome)}.
-      ${help.estimatedYearsToRepay ? `Estimated time to repay: ${help.estimatedYearsToRepay.toFixed(1)} years.` : "No compulsory repayment estimated."}
-      ${escapeHtml(help.note)}
-      <br>HELP repayments are estimated using the Australian Government's repayment income rules and current repayment rates.
-    `;
+    document.getElementById("helpEstimateSummary").innerHTML = `Estimated HELP repayment: ${money(help.annualRepayment)} per year (${percentFromRatio(help.rate)} of estimated repayment income). ${escapeHtml(help.note)}`;
     lineChart("loanChart", [{
       label: "Loan balance",
       color: "#dc4c3e",
@@ -1393,7 +1297,7 @@
   }
 
   function renderReports(result) {
-    document.getElementById("reportSummary").textContent = `Financial Freedom Progress ${plainPercent(freedomPercent(result))}, net worth ${money(result.currentNetWorth)}, annual living expenses ${money(result.annualLivingExpenses)}, monthly cashflow estimate ${money(estimatedCashflow(result) / 12)}.`;
+    document.getElementById("reportSummary").textContent = `Financial Freedom Progress ${plainPercent(freedomPercent(result))}, net worth ${money(result.currentNetWorth)}, monthly cashflow estimate ${money(estimatedCashflow(result) / 12)}.`;
     renderScenarioComparison(loadScenarios(), "reportScenarioComparison");
   }
 
@@ -1408,10 +1312,8 @@
       ["Accessible investments", money(result.accessibleInvestmentAssets)],
       ["Super from age 60", money(result.superannuationBalance)],
       ["Annual net income", money(result.annualNetIncome)],
-      ["Annual living expenses", money(result.annualLivingExpenses)],
+      ["Annual living expenses", money(lifestyleTarget(result))],
       ["Cash surplus after investing", money(result.cashSurplusAfterInvesting)],
-      ["Investment return", `${Number(plan.investing.expectedInvestmentReturnPct || 0).toFixed(1)}%`],
-      ["1-year net worth", money(netWorthAtYear(result, 1))],
     ].map(([label, value]) => `
       <div class="setup-summary-row">
         <span>${escapeHtml(label)}</span>
@@ -1493,7 +1395,6 @@
       projectedNetWorth,
       investmentBalance,
       superBalance,
-      annualPassiveIncome: annualPassiveIncome(scenarioResult),
       debtReduction,
       annualCashflow,
       freedomProgress: freedomPercent(scenarioResult),
@@ -1505,39 +1406,6 @@
 
   function roundForDisplay(value) {
     return Math.round((Number(value) || 0) * 100) / 100;
-  }
-
-  function comparisonDiff(currentValue, scenarioValue, lowerIsBetter = false) {
-    const diff = roundForDisplay((Number(scenarioValue) || 0) - (Number(currentValue) || 0));
-    const better = lowerIsBetter ? diff < 0 : diff > 0;
-    const worse = lowerIsBetter ? diff > 0 : diff < 0;
-    return {
-      text: `${diff >= 0 ? "+" : ""}${money(diff)}`,
-      tone: better ? "better" : worse ? "worse" : "",
-    };
-  }
-
-  function comparisonTableRow(label, currentValue, scenarioValue, options = {}) {
-    if (options.textOnly) {
-      const changed = currentValue !== scenarioValue;
-      return `
-        <tr>
-          <th>${escapeHtml(label)}</th>
-          <td>${escapeHtml(currentValue)}</td>
-          <td>${escapeHtml(scenarioValue)}</td>
-          <td class="${changed ? "better" : ""}">${changed ? "Changed" : "No change"}</td>
-        </tr>
-      `;
-    }
-    const diff = comparisonDiff(currentValue, scenarioValue, options.lowerIsBetter);
-    return `
-      <tr>
-        <th>${escapeHtml(label)}</th>
-        <td>${money(currentValue)}</td>
-        <td>${money(scenarioValue)}</td>
-        <td class="${diff.tone}">${diff.text}</td>
-      </tr>
-    `;
   }
 
   function renderScenarioComparison(scenarios, containerId = "scenarioComparisonReport") {
@@ -1556,7 +1424,6 @@
     }
     const metrics = scenarios.map(scenarioComparisonMetrics).sort((a, b) => b.score - a.score);
     const best = metrics[0];
-    const currentMetrics = scenarioComparisonMetrics({ name: "Current Plan", notes: "", plan: CALC.clonePlan(plan) });
     container.innerHTML = `
       <div class="card-heading">
         <div>
@@ -1564,28 +1431,7 @@
           <span>Simple side-by-side estimate across saved scenarios.</span>
         </div>
       </div>
-      <p class="tax-note mt-4"><strong>Recommended Scenario:</strong> ${escapeHtml(best.scenario.name)}. This is preferred because it has the strongest estimated mix of cashflow, projected net worth, debt level, investment balance, super balance and progress toward the long-term financial freedom target.</p>
-      <div class="comparison-table-wrap mt-4">
-        <table class="comparison-table">
-          <thead>
-            <tr>
-              <th>Metric</th>
-              <th>Current Plan</th>
-              <th>Scenario</th>
-              <th>Difference</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${comparisonTableRow("Financial Freedom Age", currentMetrics.targetAge, best.targetAge, { textOnly: true })}
-            ${comparisonTableRow("Investment Balance", currentMetrics.investmentBalance, best.investmentBalance)}
-            ${comparisonTableRow("Super Balance", currentMetrics.superBalance, best.superBalance)}
-            ${comparisonTableRow("Net Worth", currentMetrics.projectedNetWorth, best.projectedNetWorth)}
-            ${comparisonTableRow("Annual Passive Income", currentMetrics.annualPassiveIncome, best.annualPassiveIncome)}
-            ${comparisonTableRow("Lifetime Wealth", currentMetrics.longTermNetWorth, best.longTermNetWorth)}
-            ${comparisonTableRow("Debt Balance", currentMetrics.debtBalance, best.debtBalance, { lowerIsBetter: true })}
-          </tbody>
-        </table>
-      </div>
+      <p class="tax-note mt-4"><strong>Highest Recommendation:</strong> ${escapeHtml(best.scenario.name)}. This is the preferred scenario because it has the strongest estimated mix of monthly cashflow, projected net worth, debt level, investment balance, super balance and progress toward the long-term financial freedom target.</p>
       <div class="scenario-comparison-grid mt-4">
         ${metrics.map((item, index) => `
           <article class="scenario-compare-card ${index === 0 ? "best" : ""}">
@@ -1682,8 +1528,6 @@
   function renderOutputs() {
     syncCollectionsToLegacy();
     const result = CALC.calculatePlan(plan);
-    renderSamplePlanOptions();
-    updateSaveStatus();
     updatePreview(result);
     renderDashboard(result);
     renderCashflow(result);
@@ -1697,7 +1541,6 @@
     renderReports(result);
     renderWizardResults(result);
     renderWizardStep();
-    renderHelpReview(result);
     renderSetupSummary(result);
     renderComparison(result);
     renderWhatIf(result);
@@ -1710,10 +1553,9 @@
     renderOutputs();
   }
 
-  function loadSamplePlan() {
-    const sample = selectedSamplePlan();
-    plan = CALC.clonePlan(sample.plan);
-    seedSampleScenarios(sample.plan);
+  function loadDemo() {
+    plan = CALC.clonePlan(DATA.demoPlan);
+    seedDemoScenarios();
     saveDraft();
     renderAll();
     showWorkspace("dashboard");
@@ -1730,7 +1572,6 @@
     if (!window.confirm("Clear the current plan and start again?")) return;
     plan = CALC.emptyPlan();
     localStorage.removeItem(DRAFT_KEY);
-    localStorage.removeItem(LAST_SAVED_KEY);
     document.getElementById("scenarioName").value = "";
     document.getElementById("scenarioNotes").value = "";
     activeWizardStep = 0;
@@ -1773,28 +1614,23 @@
     showWorkspace("scenarios");
   }
 
-  function seedSampleScenarios(basePlan = DATA.demoPlan) {
+  function seedDemoScenarios() {
     if (!Array.isArray(DATA.demoScenarioAdjustments)) return;
-    const existingUserScenarios = loadScenarios().filter((scenario) => scenario.source !== "sample");
-    const sampleScenarios = DATA.demoScenarioAdjustments.map((item, index) => ({
-      id: `sample-scenario-${index + 1}`,
-      source: "sample",
+    const existingUserScenarios = loadScenarios().filter((scenario) => scenario.source !== "demo");
+    const demoScenarios = DATA.demoScenarioAdjustments.map((item, index) => ({
+      id: `demo-scenario-${index + 1}`,
+      source: "demo",
       name: item.name,
       notes: item.notes,
       savedAt: new Date().toISOString(),
-      plan: applyScenarioAdjustments(basePlan, item.adjustments || {}),
+      plan: applyScenarioAdjustments(DATA.demoPlan, item.adjustments || {}),
     }));
-    saveScenarios([...sampleScenarios, ...existingUserScenarios]);
+    saveScenarios([...demoScenarios, ...existingUserScenarios]);
   }
 
   function bindEvents() {
     document.addEventListener("input", (event) => {
       const target = event.target;
-      if (target.dataset.samplePlanSelect !== undefined) {
-        selectedSamplePlanId = target.value;
-        renderSamplePlanOptions();
-        return;
-      }
       if (target.dataset.collection) {
         ensureCollectionData();
         const item = plan[target.dataset.collection]?.find((entry) => entry.id === target.dataset.id);
@@ -1859,15 +1695,6 @@
         return;
       }
 
-      const wizardStep = event.target.closest("[data-wizard-step]");
-      if (wizardStep) {
-        activeWizardStep = Number(wizardStep.dataset.wizardStep) || 0;
-        saveDraft();
-        renderOutputs();
-        document.querySelector('[data-view-panel="setup"]').scrollIntoView({ behavior: "smooth", block: "start" });
-        return;
-      }
-
       const homeStep = event.target.closest("[data-home-step]");
       if (homeStep) {
         if (homeStep.dataset.homeStep === "setup") activeWizardStep = 0;
@@ -1901,16 +1728,12 @@
       showWorkspace(homeStep.dataset.homeStep);
     });
 
-    document.getElementById("demoButton").addEventListener("click", loadSamplePlan);
-    document.getElementById("heroDemoButton").addEventListener("click", loadSamplePlan);
-    document.getElementById("continueSampleButton").addEventListener("click", loadSamplePlan);
-    document.getElementById("continuePlanButton").addEventListener("click", () => showWorkspace("dashboard"));
-    document.getElementById("continueNewPlanButton").addEventListener("click", resetPlan);
+    document.getElementById("demoButton").addEventListener("click", loadDemo);
+    document.getElementById("heroDemoButton").addEventListener("click", loadDemo);
     document.getElementById("enterDataButton").addEventListener("click", startMyPlan);
     document.getElementById("heroStartButton").addEventListener("click", startMyPlan);
-    document.getElementById("manualSaveButton").addEventListener("click", manualSavePlan);
     document.getElementById("planNewButton").addEventListener("click", resetPlan);
-    document.getElementById("planSaveButton").addEventListener("click", manualSavePlan);
+    document.getElementById("planSaveButton").addEventListener("click", () => showWorkspace("scenarios"));
     document.getElementById("saveScenarioPanelButton").addEventListener("click", saveScenario);
     document.getElementById("planLoadButton").addEventListener("click", () => showWorkspace("scenarios"));
     document.getElementById("planDuplicateButton").addEventListener("click", duplicateScenario);
@@ -1918,7 +1741,6 @@
       activeWizardStep = Math.max(0, activeWizardStep - 1);
       saveDraft();
       renderOutputs();
-      document.querySelector('[data-view-panel="setup"]').scrollIntoView({ behavior: "smooth", block: "start" });
     });
     document.getElementById("wizardNextButton").addEventListener("click", () => {
       saveDraft();
