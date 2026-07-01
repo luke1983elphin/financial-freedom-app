@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Financial Freedom Simulator</title>
+    <title>Financial Freedom</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -32,8 +32,8 @@
       <header class="sticky top-0 z-30 border-b border-line bg-white/90 backdrop-blur">
         <div class="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p class="brand-kicker text-xs font-bold uppercase text-success">Financial Freedom Simulator</p>
-            <h1 class="text-xl font-bold text-navy">Track your Financial Freedom</h1>
+            <p class="brand-kicker text-xs font-bold uppercase text-success">Financial Freedom</p>
+            <h1 class="text-xl font-bold text-navy">Plan. Test. Build Wealth.</h1>
           </div>
           <div class="toolbar-actions flex flex-wrap gap-2">
             <button class="btn btn-primary" type="button" id="demoButton">Load Demo</button>
@@ -56,31 +56,44 @@
         <section id="homeView" class="homepage mx-auto max-w-7xl px-4 py-8 lg:py-14">
           <div class="home-hero">
             <div class="hero-copy">
-              <p class="brand-kicker text-sm font-bold uppercase text-success">Financial Freedom Simulator</p>
-              <h2 class="mt-4 max-w-4xl text-4xl font-black text-navy sm:text-6xl">See your Financial Freedom Progress</h2>
-              <p class="mt-5 max-w-2xl text-lg leading-8 text-slate-600">Turn income, expenses, loans, super and investments into a clear view of your current stage and next milestone.</p>
+              <p class="brand-kicker text-sm font-bold uppercase text-success">Financial Freedom</p>
+              <h2 class="mt-4 max-w-4xl text-4xl font-black text-navy sm:text-6xl">Plan. Test. Build Wealth.</h2>
+              <p class="mt-5 max-w-2xl text-lg leading-8 text-slate-600">See how today's decisions shape tomorrow's financial freedom.</p>
               <div class="mt-8 flex flex-wrap gap-3">
                 <button class="btn btn-primary btn-large" type="button" id="heroDemoButton">Try Demo</button>
                 <button class="btn btn-large" type="button" id="heroStartButton">Start My Plan</button>
               </div>
             </div>
 
-            <div class="hero-card-grid" aria-label="Dashboard preview">
-              <article class="preview-card">
-                <span>Financial Freedom Score</span>
-                <strong id="previewScore">0%</strong>
-              </article>
-              <article class="preview-card">
-                <span>Current Stage</span>
-                <strong id="previewStage">Starting Out</strong>
-              </article>
+            <div class="home-snapshot-heading">
+              <span class="metric-label">Home Dashboard Snapshot</span>
+              <h3>Know where you stand at a glance.</h3>
+            </div>
+
+            <div class="hero-card-grid home-snapshot-grid" aria-label="Home dashboard snapshot">
               <article class="preview-card">
                 <span>Net Worth</span>
                 <strong id="previewNetWorth">$0</strong>
               </article>
               <article class="preview-card">
-                <span>Wealth Creation Rate</span>
-                <strong id="previewWealthRate">$0</strong>
+                <span>Monthly Surplus</span>
+                <strong id="previewMonthlySurplus">$0</strong>
+              </article>
+              <article class="preview-card">
+                <span>Stage</span>
+                <strong id="previewStage">Foundation</strong>
+              </article>
+              <article class="preview-card">
+                <span>Progress</span>
+                <strong id="previewScore">0%</strong>
+              </article>
+              <article class="preview-card">
+                <span>Next Milestone</span>
+                <strong id="previewNextMilestone">Set target</strong>
+              </article>
+              <article class="preview-card preview-card-wide">
+                <span>Highest Priority Recommendation</span>
+                <strong id="previewRecommendation">Load the demo or start a plan.</strong>
               </article>
             </div>
           </div>
@@ -192,7 +205,7 @@
               <section class="view-section" data-view-panel="dashboard">
                 <div class="premium-hero dashboard-hero">
                   <div>
-                    <p class="brand-kicker text-sm font-bold uppercase text-success">Financial Freedom Progress</p>
+                    <p class="brand-kicker text-sm font-bold uppercase text-success">Financial Freedom</p>
                     <h2 id="dashboardTitle" class="mt-2 text-3xl font-black text-navy sm:text-4xl">Start a plan or load the demo.</h2>
                     <p id="dashboardSubtitle" class="mt-3 text-slate-600">Your progress dashboard will update as you enter data.</p>
                   </div>
@@ -206,7 +219,7 @@
                   <article class="freedom-stage-card">
                     <div>
                       <span class="metric-label">Current Financial Freedom Stage</span>
-                      <strong id="freedomStageLabel">Starting Out</strong>
+                      <strong id="freedomStageLabel">Foundation</strong>
                     </div>
                     <p id="freedomStageText">Enter your plan to see your current financial freedom stage.</p>
                     <div class="progress-track progress-track-large" aria-hidden="true"><span id="freedomProgressBar"></span></div>
@@ -218,6 +231,10 @@
                     <p id="nextMilestoneText">Add your annual lifestyle target to calculate the next stage.</p>
                   </article>
                 </div>
+
+                <div class="dashboard-hero-metrics mt-6" id="dashboardHeroMetrics"></div>
+
+                <div class="celebration-grid mt-4" id="celebrationGrid"></div>
 
                 <article class="downsizing-boost-card mt-4 hidden" id="downsizingBoostCard">
                   <span class="metric-label">Downsizing Investment Boost</span>
@@ -238,12 +255,39 @@
                   </article>
                   <article class="card">
                     <div class="card-heading">
-                      <h3>Super Access &amp; Long-Term Sustainability</h3>
-                      <span>Age 60+</span>
+                      <h3>Investment growth</h3>
+                      <span>Non-super</span>
                     </div>
-                    <svg id="retirementChart" class="chart" viewBox="0 0 760 300" role="img" aria-label="Super access and long-term sustainability"></svg>
+                    <svg id="dashboardInvestmentChart" class="chart" viewBox="0 0 760 300" role="img" aria-label="Investment growth"></svg>
+                  </article>
+                  <article class="card">
+                    <div class="card-heading">
+                      <h3>Debt reduction</h3>
+                      <span>Home loan and debts</span>
+                    </div>
+                    <svg id="dashboardDebtChart" class="chart" viewBox="0 0 760 300" role="img" aria-label="Debt reduction"></svg>
+                  </article>
+                  <article class="card">
+                    <div class="card-heading">
+                      <h3>Super growth</h3>
+                      <span>Age 60 access</span>
+                    </div>
+                    <svg id="dashboardSuperChart" class="chart" viewBox="0 0 760 300" role="img" aria-label="Super growth"></svg>
+                  </article>
+                  <article class="card">
+                    <div class="card-heading">
+                      <h3>Financial Freedom Progress</h3>
+                      <span>Modelled progress</span>
+                    </div>
+                    <svg id="dashboardProgressChart" class="chart" viewBox="0 0 760 300" role="img" aria-label="Financial Freedom Progress"></svg>
                   </article>
                 </div>
+
+                <details class="card assumptions-panel mt-6">
+                  <summary>Assumptions</summary>
+                  <p class="mt-2 text-sm text-slate-500">These are starting assumptions only. You can change them at any time.</p>
+                  <div id="assumptionsList" class="summary-grid mt-4"></div>
+                </details>
               </section>
 
               <section class="view-section hidden" data-view-panel="cashflow">
@@ -342,6 +386,16 @@
                 <article class="card mt-6">
                   <div class="card-heading">
                     <div>
+                      <h3>What If?</h3>
+                      <span>One-click scenario simulations. These do not overwrite your saved plan.</span>
+                    </div>
+                  </div>
+                  <div class="what-if-actions mt-4" id="whatIfActions"></div>
+                  <div id="whatIfResult" class="summary-grid mt-4"></div>
+                </article>
+                <article class="card mt-6">
+                  <div class="card-heading">
+                    <div>
                       <h3>Quick Scenario Test</h3>
                       <span>Temporary estimates only. These changes do not overwrite your saved plan unless you save or duplicate the plan.</span>
                     </div>
@@ -425,12 +479,13 @@
               <section class="view-section hidden" data-view-panel="reports">
                 <div class="section-heading">
                   <h2>Reports</h2>
-                  <p>Print or export the dashboard view for discussion. This is not financial advice.</p>
+                  <p>Print or export the planning report for discussion. This is not financial advice.</p>
                 </div>
                 <div class="card">
                   <button class="btn btn-primary" type="button" id="reportPrintButton">Print / Export</button>
                   <p class="mt-4 text-sm text-slate-500" id="reportSummary"></p>
                 </div>
+                <div id="reportScenarioComparison" class="card mt-6"></div>
               </section>
 
               <p class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-800" id="disclaimer"></p>

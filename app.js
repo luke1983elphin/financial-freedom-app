@@ -53,6 +53,7 @@
   const liabilityTypeOptions = [
     ["homeLoan", "Home loan"],
     ["hecsHelp", "HECS / HELP"],
+    ["creditCard", "Credit Card"],
     ["otherDebt", "Other debt"],
   ];
   const expenseCategoryOptions = [
@@ -90,11 +91,22 @@
     oneOffCosts: 0,
     oneOffSavings: 0,
   };
+  const whatIfActions = [
+    { id: "invest-100", label: "Invest an extra $100/week", adjustments: () => ({ investmentContributionChange: 5200 }) },
+    { id: "invest-250", label: "Invest an extra $250/week", adjustments: () => ({ investmentContributionChange: 13000 }) },
+    { id: "debt-500", label: "Pay an extra $500/month off debt", adjustments: () => ({ loanRepaymentChangeMonthly: 500 }) },
+    { id: "income-5", label: "Increase income by 5%", adjustments: (result) => ({ incomeChange: Math.round(result.annualNetIncome * 0.05) }) },
+    { id: "expenses-500", label: "Reduce expenses by $500/month", adjustments: () => ({ expenseChange: -6000 }) },
+    { id: "super-10000", label: "Add $10,000 concessional super", adjustments: () => ({ extraConcessionalSuperChange: 10000 }) },
+    { id: "car-50000", label: "Buy a $50,000 car", adjustments: () => ({ oneOffCosts: 50000 }) },
+    { id: "four-days", label: "Work 4 days per week", adjustments: (result) => ({ incomeChange: -Math.round(result.annualNetIncome * 0.2) }) },
+  ];
 
   let plan = CALC.clonePlan(loadDraft() || CALC.emptyPlan());
   let activeView = "dashboard";
   let activeWizardStep = 0;
   let hasOpenedWorkspace = Boolean(loadDraft());
+  let activeWhatIfId = whatIfActions[0].id;
 
   const currency = new Intl.NumberFormat("en-AU", {
     style: "currency",
@@ -133,38 +145,32 @@
     {
       min: 0,
       nextAt: 25,
-      name: "Starting Out",
-      explanation: "You are setting the foundation: building savings, reducing pressure and getting the plan organised.",
+      name: "Foundation",
+      explanation: "Low emergency savings or high debt.",
     },
     {
       min: 25,
       nextAt: 50,
-      name: "Building Wealth",
-      explanation: "Your investments are beginning to carry part of your annual lifestyle costs.",
+      name: "Building Momentum",
+      explanation: "Positive cashflow with growing investments.",
     },
     {
       min: 50,
       nextAt: 75,
-      name: "Momentum",
-      explanation: "Your investments now fund a meaningful share of your annual lifestyle.",
+      name: "Accelerating Wealth",
+      explanation: "Investment growth is compounding and net worth is increasing strongly.",
     },
     {
       min: 75,
       nextAt: 100,
-      name: "High Progress",
-      explanation: "Your accessible investments cover a large portion of lifestyle costs, with a clear next milestone in sight.",
+      name: "Financial Independence",
+      explanation: "Investments are projected to cover a significant portion of future lifestyle costs.",
     },
     {
       min: 100,
-      nextAt: 150,
-      name: "Financial Independence",
-      explanation: "Your accessible investments are modelling enough passive income to cover annual lifestyle costs under the assumptions used.",
-    },
-    {
-      min: 150,
       nextAt: null,
       name: "Financial Freedom",
-      explanation: "Your investments provide a strong surplus above lifestyle costs based on the assumptions used.",
+      explanation: "Investments are projected to fully support the chosen lifestyle over the long term.",
     },
   ];
 
@@ -265,11 +271,70 @@
     return result.loan.schedule[Math.max(0, monthIndex)]?.closingBalance ?? result.loan.finalBalance ?? 0;
   }
 
+  function longTermNetWorth(result) {
+    return result.netWorthProjection.at(-1)?.closingBalance || result.currentNetWorth;
+  }
+
+  function targetAgeOutcome(result) {
+    if (!result.targetCapital) return "Set target";
+    const match = result.financialFreedomProgressProjection.find((row) => row.progress >= 100);
+    return match ? `Age ${match.age}` : "Beyond 30 years";
+  }
+
+  function estimateDateFromYear(year) {
+    if (!year) return "";
+    const date = new Date();
+    date.setMonth(date.getMonth() + Math.max(1, Math.round(year * 12)));
+    return date.toLocaleDateString("en-AU", { month: "short", year: "numeric" });
+  }
+
+  function investmentTargetMilestone(result) {
+    const targetGoal = Array.isArray(plan.goalItems)
+      ? plan.goalItems.find((goal) => /investment/i.test(goal.name || "") && Number(goal.target) > result.investmentBalance)
+      : null;
+    const target = Number(targetGoal?.target) || Math.max(300000, Math.ceil((result.investmentBalance + 100000) / 50000) * 50000);
+    const row = result.investmentProjection.find((item) => item.closingBalance >= target);
+    return {
+      amount: `${money(target)}`,
+      text: row
+        ? `Investment portfolio reaches ${money(target)}. Estimated ${estimateDateFromYear(row.year)}.`
+        : `${money(Math.max(0, target - result.investmentBalance))} more invested to reach ${money(target)}.`,
+      shortText: row ? `${money(target)} by ${estimateDateFromYear(row.year)}` : `${money(target)} target`,
+    };
+  }
+
+  function highestRecommendation(result) {
+    const top = result.decisionOptions[0];
+    if (!top) return "Load the demo or start a plan to see your next best step.";
+    if (top.label === "Extra super") return "Consider extra super: the model shows a strong estimated tax and long-term wealth benefit.";
+    if (top.label === "Offset account") return "Consider offset savings: it may reduce interest while keeping cash accessible.";
+    if (top.label === "ETF/share investing") return "Consider investing more: it may improve long-term growth while staying accessible.";
+    return "Consider extra debt repayments: it may reduce interest and strengthen your balance sheet.";
+  }
+
+  function celebrationItems(result) {
+    const monthlySurplus = estimatedCashflow(result) / 12;
+    const invested = (Number(plan.assets.sharesEtfs) || 0) + (Number(plan.assets.crypto) || 0);
+    const emergencyTarget = Math.max(1, result.annualExpenses / 4);
+    return [
+      { label: "Emergency fund started", active: (Number(plan.assets.cash) || 0) > 0 },
+      { label: "Emergency fund complete", active: (Number(plan.assets.cash) || 0) >= emergencyTarget },
+      { label: "First $100,000 invested", active: invested >= 100000 },
+      { label: "Investments exceed annual salary", active: invested >= result.annualNetIncome && result.annualNetIncome > 0 },
+      { label: "Debt below 50% of assets", active: result.totalAssets > 0 && result.totalLiabilities <= result.totalAssets * 0.5 },
+      { label: "Super exceeds $250,000", active: result.superannuationBalance >= 250000 },
+      { label: "Super exceeds $500,000", active: result.superannuationBalance >= 500000 },
+      { label: "Positive monthly surplus", active: monthlySurplus > 0 },
+    ].filter((item) => item.active);
+  }
+
   function scenarioScore(metrics) {
-    return metrics.projectedNetWorth
+    return metrics.longTermNetWorth
+      + metrics.oneYearNetWorth * 0.1
+      + metrics.twoYearNetWorth * 0.15
       + metrics.investmentBalance * 0.25
       + metrics.superBalance * 0.2
-      + metrics.debtReduction * 0.35
+      + metrics.debtReduction * 0.3
       + Math.max(-100000, metrics.annualCashflow) * 2;
   }
 
@@ -307,8 +372,12 @@
           termYears: plan.liabilities.remainingLoanTermYears || 0,
         },
         { id: "liability-hecs", name: "HECS / HELP", type: "hecsHelp", balance: plan.liabilities.hecsHelpDebt || 0, interestRatePct: 0, repayment: 0, repaymentFrequency: "monthly", termYears: 0 },
+        { id: "liability-credit-card", name: "Credit Card", type: "creditCard", balance: plan.liabilities.creditCardBalance || 0, interestRatePct: plan.liabilities.creditCardInterestRatePct || 19.99, repayment: plan.liabilities.creditCardMonthlyRepayment || 0, repaymentFrequency: "monthly", termYears: 0, creditLimit: plan.liabilities.creditCardLimit || 0 },
         { id: "liability-other", name: "Other debts", type: "otherDebt", balance: plan.liabilities.otherDebts || 0, interestRatePct: 0, repayment: 0, repaymentFrequency: "monthly", termYears: 0 },
       ];
+    }
+    if (!plan.liabilityItems.some((item) => item.type === "creditCard")) {
+      plan.liabilityItems.push({ id: "liability-credit-card", name: "Credit Card", type: "creditCard", balance: plan.liabilities.creditCardBalance || 0, interestRatePct: plan.liabilities.creditCardInterestRatePct || 19.99, repayment: plan.liabilities.creditCardMonthlyRepayment || 0, repaymentFrequency: "monthly", termYears: 0, creditLimit: plan.liabilities.creditCardLimit || 0 });
     }
     if (!Array.isArray(plan.expenseItems)) {
       plan.expenseItems = [
@@ -390,6 +459,13 @@
     plan.liabilities.monthlyRepayment = homeLoanRepaymentAnnual / 12;
     plan.liabilities.remainingLoanTermYears = homeLoans.reduce((max, item) => Math.max(max, Number(item.termYears) || 0), 0);
     plan.liabilities.hecsHelpDebt = liabilities.filter((item) => item.type === "hecsHelp").reduce((total, item) => total + (Number(item.balance) || 0), 0);
+    const creditCards = liabilities.filter((item) => item.type === "creditCard");
+    plan.liabilities.creditCardBalance = creditCards.reduce((total, item) => total + (Number(item.balance) || 0), 0);
+    plan.liabilities.creditCardInterestRatePct = plan.liabilities.creditCardBalance > 0
+      ? creditCards.reduce((total, item) => total + ((Number(item.balance) || 0) * (Number(item.interestRatePct) || 0)), 0) / plan.liabilities.creditCardBalance
+      : (creditCards[0]?.interestRatePct || 19.99);
+    plan.liabilities.creditCardMonthlyRepayment = creditCards.reduce((total, item) => total + annualValue(item.repayment, item.repaymentFrequency || "monthly"), 0) / 12;
+    plan.liabilities.creditCardLimit = creditCards.reduce((total, item) => total + (Number(item.creditLimit) || 0), 0);
     plan.liabilities.otherDebts = liabilities.filter((item) => item.type === "otherDebt").reduce((total, item) => total + (Number(item.balance) || 0), 0);
     plan.expenses.mortgageRepayments = plan.liabilities.monthlyRepayment;
 
@@ -633,6 +709,27 @@
         </article>
       `;
     }
+    if (item.type === "creditCard") {
+      return `
+        <article class="form-item-card dynamic-item-card">
+          <div class="item-card-title">
+            <div>
+              <span>Credit Card</span>
+              <h4>${escapeHtml(item.name || "Credit Card")}</h4>
+            </div>
+            ${removeButton("liabilityItems", item.id)}
+          </div>
+          <div class="input-grid mt-4">
+            ${dynamicInput("liabilityItems", item, "name", "Card name", { kind: "text", placeholder: "e.g. Main credit card" })}
+            ${dynamicInput("liabilityItems", item, "balance", "Balance", { step: "100" })}
+            ${dynamicInput("liabilityItems", item, "interestRatePct", "Interest rate (%)", { step: "0.01" })}
+            ${dynamicInput("liabilityItems", item, "repayment", "Monthly repayment", { step: "50" })}
+            ${dynamicInput("liabilityItems", item, "creditLimit", "Optional credit limit", { step: "500" })}
+          </div>
+          <p class="field-help mt-3">Credit cards are tracked separately from loans. The limit is optional and only used as context.</p>
+        </article>
+      `;
+    }
     return `
       <article class="form-item-card dynamic-item-card">
         <div class="item-card-title">
@@ -784,17 +881,18 @@
       { label: "Person 2 age", path: "personal.person2Age" },
     ];
     const goalFields = [
-      { label: "Momentum target age", path: "personal.workOptionalAge" },
-      { label: "High-progress target age", path: "personal.semiRetirementAge" },
-      { label: "Long-term FI target age", path: "personal.fullRetirementAge" },
+      { label: "Building wealth target age", path: "personal.workOptionalAge", help: "Starting assumption only. You can change this any time." },
+      { label: "Financial Independence target age", path: "personal.semiRetirementAge", help: "Starting assumption only. You can change this any time." },
+      { label: "Financial Freedom target age", path: "personal.fullRetirementAge", help: "Starting assumption only. You can change this any time." },
       { label: "Target annual spending", path: "personal.targetAnnualSpending", step: "1000" },
       { label: "Annual investing target", path: "investing.annualInvestingTarget", step: "1000" },
       { label: "Employer super contributions", path: "investing.employerSuperContributions", step: "1000" },
       { label: "Extra super contributions", path: "investing.extraSuperContributions", step: "1000" },
-      { label: "Expected investment return (%)", path: "investing.expectedInvestmentReturnPct", step: "0.1" },
-      { label: "Expected super return (%)", path: "investing.expectedSuperReturnPct", step: "0.1" },
-      { label: "Inflation (%)", path: "investing.inflationPct", step: "0.1" },
-      { label: "Safe withdrawal rate (%)", path: "investing.safeWithdrawalRatePct", step: "0.1" },
+      { label: "Expected investment return (%)", path: "investing.expectedInvestmentReturnPct", step: "0.1", help: "Starting assumption only. You can change this any time." },
+      { label: "Expected super return (%)", path: "investing.expectedSuperReturnPct", step: "0.1", help: "Starting assumption only. You can change this any time." },
+      { label: "Inflation (%)", path: "investing.inflationPct", step: "0.1", help: "Starting assumption only. You can change this any time." },
+      { label: "Wage growth (%)", path: "investing.wageGrowthPct", step: "0.1", help: "Starting assumption only. You can change this any time." },
+      { label: "Safe withdrawal rate (%)", path: "investing.safeWithdrawalRatePct", step: "0.1", help: "Starting assumption only. You can change this any time." },
     ];
     const downsizingFields = [
       { label: "Use downsizing strategy", path: "downsizing.enabled", type: "checkbox", help: "Off by default. Turn on only when you want the released equity included as investable money." },
@@ -812,16 +910,17 @@
     renderCashflowInputs("incomeExpenseForm");
     renderForm("investingForm", [
       { label: "Annual investing target", path: "investing.annualInvestingTarget", step: "1000" },
-      { label: "Expected investment return (%)", path: "investing.expectedInvestmentReturnPct", step: "0.1" },
-      { label: "Inflation (%)", path: "investing.inflationPct", step: "0.1" },
-      { label: "Safe withdrawal rate (%)", path: "investing.safeWithdrawalRatePct", step: "0.1" },
+      { label: "Expected investment return (%)", path: "investing.expectedInvestmentReturnPct", step: "0.1", help: "Starting assumption only. You can change this any time." },
+      { label: "Inflation (%)", path: "investing.inflationPct", step: "0.1", help: "Starting assumption only. You can change this any time." },
+      { label: "Wage growth (%)", path: "investing.wageGrowthPct", step: "0.1", help: "Starting assumption only. You can change this any time." },
+      { label: "Safe withdrawal rate (%)", path: "investing.safeWithdrawalRatePct", step: "0.1", help: "Starting assumption only. You can change this any time." },
     ]);
     renderForm("superForm", [
       { label: "Super person 1", path: "assets.superPerson1", step: "1000" },
       { label: "Super person 2", path: "assets.superPerson2", step: "1000" },
       { label: "Employer super contributions", path: "investing.employerSuperContributions", step: "1000" },
       { label: "Extra super contributions", path: "investing.extraSuperContributions", step: "1000" },
-      { label: "Expected super return (%)", path: "investing.expectedSuperReturnPct", step: "0.1" },
+      { label: "Expected super return (%)", path: "investing.expectedSuperReturnPct", step: "0.1", help: "Starting assumption only. You can change this any time." },
     ]);
     renderForm("wizardAboutForm", aboutFields);
     renderIncomeCollection("wizardIncomeForm");
@@ -867,7 +966,7 @@
     svg.innerHTML = `
       ${gridValues.map((value) => `
         <line class="chart-grid" x1="${margin.left}" y1="${y(value)}" x2="${width - margin.right}" y2="${y(value)}"></line>
-        <text class="chart-label" x="12" y="${y(value) + 4}">${compactMoney(value)}</text>
+        <text class="chart-label" x="12" y="${y(value) + 4}">${options.yLabel ? options.yLabel(value) : compactMoney(value)}</text>
       `).join("")}
       <line class="chart-axis" x1="${margin.left}" y1="${margin.top + chartHeight}" x2="${width - margin.right}" y2="${margin.top + chartHeight}"></line>
       <line class="chart-axis" x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${margin.top + chartHeight}"></line>
@@ -885,10 +984,13 @@
 
   function updatePreview(result) {
     const percent = freedomPercent(result);
+    const milestone = investmentTargetMilestone(result);
     document.getElementById("previewScore").textContent = plainPercent(percent);
     document.getElementById("previewStage").textContent = currentFreedomStage(percent).name;
     document.getElementById("previewNetWorth").textContent = money(result.currentNetWorth);
-    document.getElementById("previewWealthRate").textContent = money(result.wealthCreationRate);
+    document.getElementById("previewMonthlySurplus").textContent = money(estimatedCashflow(result) / 12);
+    document.getElementById("previewNextMilestone").textContent = milestone.shortText;
+    document.getElementById("previewRecommendation").textContent = highestRecommendation(result);
   }
 
   function lifestyleTarget(result) {
@@ -903,22 +1005,19 @@
     if (!result.targetCapital) {
       return {
         amount: "Set your target spending",
-        text: "Add your annual lifestyle target to calculate the next Financial Freedom stage.",
+        text: "Add your annual lifestyle target to calculate the next stage.",
       };
     }
-    const next = freedomStages.find((stage) => stage.min > percent);
-    if (!next) {
+    const portfolioMilestone = investmentTargetMilestone(result);
+    if (percent >= 100) {
       return {
         amount: "Financial Freedom",
-        text: "Your accessible investment assets are modelling a strong surplus above annual lifestyle costs.",
+        text: "Your investments are projected to fully support the chosen lifestyle over the long term.",
       };
     }
-    const requiredAssets = result.targetCapital * (next.min / 100);
-    const gap = Math.max(0, requiredAssets - result.financialIndependenceAssets);
-    const passiveGap = Math.round(gap * safeWithdrawalRate());
     return {
-      amount: `${money(gap)} more invested`,
-      text: `${money(gap)} more invested to reach ${next.name}. Increase passive income by ${money(passiveGap)} per year.`,
+      amount: portfolioMilestone.amount,
+      text: portfolioMilestone.text,
     };
   }
 
@@ -969,22 +1068,22 @@
     const stage = currentFreedomStage(percent);
     const passiveIncome = annualPassiveIncome(result);
     const target = lifestyleTarget(result);
-    const surplus = passiveIncome - target;
+    const monthlySurplus = estimatedCashflow(result) / 12;
     const milestone = nextMilestone(result, percent);
     const progressWidth = Math.min(100, Math.max(0, percent));
 
-    document.getElementById("dashboardTitle").textContent = names ? `${names}'s Financial Freedom Progress` : "Start a plan or load the demo.";
+    document.getElementById("dashboardTitle").textContent = names ? `${names}'s Financial Freedom` : "Start a plan or load the demo.";
     document.getElementById("dashboardSubtitle").textContent = isBlankPlan(plan)
       ? "Enter your own details or try the fictional demo to see the dashboard come alive."
-      : "See how much of your annual lifestyle is currently funded by accessible investable assets.";
+      : "See how today's decisions shape tomorrow's financial freedom.";
     document.getElementById("heroScore").textContent = plainPercent(percent);
     document.querySelector(".score-ring").style.borderColor = percent >= 100 ? "#bdebd7" : percent >= 75 ? "#f3d08c" : "#dbe4ee";
     document.getElementById("freedomStageLabel").textContent = stage.name;
     document.getElementById("freedomStageText").textContent = stage.explanation;
     document.getElementById("freedomProgressBar").style.width = `${progressWidth}%`;
     document.getElementById("freedomPassiveText").textContent = percent >= 100
-      ? "Your accessible investments are projected to cover your lifestyle costs under the assumptions used."
-      : `Your accessible investments currently fund ${plainPercent(percent)} of your annual lifestyle. You are in the ${stage.name} stage.`;
+      ? "Your investments are projected to fully support the chosen lifestyle over the long term."
+      : `You are in the ${stage.name} stage with ${plainPercent(percent)} progress toward your long-term target.`;
     document.getElementById("nextMilestoneAmount").textContent = milestone.amount;
     document.getElementById("nextMilestoneText").textContent = milestone.text;
 
@@ -997,26 +1096,73 @@
       boostCard.classList.add("hidden");
     }
 
-    document.getElementById("secondMetricGrid").innerHTML = [
-      metricCard("Current Net Worth", money(result.currentNetWorth)),
-      metricCard("Accessible Investment Assets", money(result.accessibleInvestmentAssets)),
-      metricCard("Superannuation Balance", money(result.superannuationBalance), "status-green"),
-      metricCard("Effective Mortgage", money(result.effectiveMortgageBalance)),
-      metricCard("Annual Passive Income", money(passiveIncome)),
-      metricCard("Annual Living Expenses", money(target)),
-      metricCard("Annual Investment Surplus / Shortfall", money(surplus), surplus >= 0 ? "status-green" : "status-amber"),
+    document.getElementById("dashboardHeroMetrics").innerHTML = [
+      metricCard("Current Financial Freedom Stage", stage.name),
+      metricCard("Financial Freedom Progress", plainPercent(percent), percent >= 75 ? "status-green" : ""),
+      metricCard("Net Worth", money(result.currentNetWorth)),
+      metricCard("Investment Balance", money(result.investmentBalance)),
+      metricCard("Super Balance", money(result.superannuationBalance), "status-green"),
+      metricCard("Debt Balance", money(result.totalLiabilities), result.totalLiabilities <= result.totalAssets * 0.5 ? "status-green" : "status-amber"),
+      metricCard("Monthly Surplus / Deficit", money(monthlySurplus), monthlySurplus >= 0 ? "status-green" : "status-amber"),
+      metricCard("Next Milestone", milestone.amount),
     ].join("");
+    document.getElementById("secondMetricGrid").innerHTML = [
+      metricCard("Annual Passive Income Estimate", money(passiveIncome)),
+      metricCard("Annual Living Expenses", money(target)),
+      metricCard("Accessible Investments", money(result.accessibleInvestmentAssets)),
+      metricCard("Highest Priority", highestRecommendation(result)),
+    ].join("");
+    document.getElementById("celebrationGrid").innerHTML = celebrationItems(result).slice(0, 6).map((item) => `
+      <span class="celebration-pill">${escapeHtml(item.label)}</span>
+    `).join("");
     document.getElementById("netWorthNote").textContent = result.netWorthProjection.at(-1) ? `Age ${result.netWorthProjection.at(-1).age}: ${money(result.netWorthProjection.at(-1).closingBalance)}` : "";
     lineChart("netWorthChart", [{
       label: "Net worth",
       color: "#2563eb",
       points: [{ x: 0, y: result.currentNetWorth }, ...result.netWorthProjection.map((row) => ({ x: row.year, y: row.closingBalance }))],
     }], { xMarks: [0, 10, 20, 30], xLabel: (mark) => `${mark}y` });
-    lineChart("retirementChart", result.retirementSustainability.map((model, index) => ({
-      label: model.label,
-      color: ["#0f9f6e", "#2563eb", "#d99121"][index],
-      points: [60, 70, 80, 90].map((age) => ({ x: age, y: model.balances[age] })),
-    })), { xMarks: [60, 70, 80, 90], xLabel: (age) => String(age) });
+    lineChart("dashboardInvestmentChart", [{
+      label: "Investments",
+      color: "#0f9f6e",
+      points: [{ x: 0, y: result.investmentBalance }, ...result.investmentProjection.map((row) => ({ x: row.year, y: row.closingBalance }))],
+    }], { xMarks: [0, 10, 20, 30], xLabel: (mark) => `${mark}y` });
+    lineChart("dashboardDebtChart", [{
+      label: "Debt balance",
+      color: "#dc4c3e",
+      points: [0, 5, 10, 15, 20, 25, 30].map((year) => ({
+        x: year,
+        y: year === 0 ? result.totalLiabilities : loanBalanceAtYear(result, year) + result.helpRepaymentEstimate.balance + (result.plan.liabilities.otherDebts || 0) + (result.plan.liabilities.creditCardBalance || 0),
+      })),
+    }], { xMarks: [0, 10, 20, 30], xLabel: (mark) => `${mark}y` });
+    lineChart("dashboardSuperChart", [{
+      label: "Super",
+      color: "#7c3aed",
+      points: [{ x: 0, y: result.superannuationBalance }, ...result.superProjection.map((row) => ({ x: row.year, y: row.closingBalance }))],
+    }], { xMarks: [0, 10, 20, 30], xLabel: (mark) => `${mark}y` });
+    lineChart("dashboardProgressChart", [{
+      label: "Progress",
+      color: "#d99121",
+      points: [{ x: 0, y: percent }, ...result.financialFreedomProgressProjection.map((row) => ({ x: row.year, y: row.progress }))],
+    }], { xMarks: [0, 10, 20, 30], xLabel: (mark) => `${mark}y`, yLabel: (value) => `${Math.round(value)}%` });
+    renderAssumptions(result);
+  }
+
+  function renderAssumptions(result) {
+    const container = document.getElementById("assumptionsList");
+    if (!container) return;
+    const rows = [
+      ["Tax year", result.taxEstimate.taxYear],
+      ["Investment return", `${Number(plan.investing.expectedInvestmentReturnPct || 0).toFixed(1)}% per year estimate`],
+      ["Super return", `${Number(plan.investing.expectedSuperReturnPct || 0).toFixed(1)}% per year estimate`],
+      ["Inflation", `${Number(plan.investing.inflationPct || 0).toFixed(1)}% per year estimate`],
+      ["Wage growth", `${Number(plan.investing.wageGrowthPct || 0).toFixed(1)}% per year estimate`],
+      ["Medicare levy", `${Math.round((result.taxEstimate.medicareLevyRate || 0) * 100)}% estimate`],
+      ["HELP repayment assumptions", `Estimated above $67,000 repayment income and capped by current balance`],
+      ["Concessional contributions tax", "15% applied before money is invested in super"],
+      ["Safe withdrawal rate", `${Number(plan.investing.safeWithdrawalRatePct || 0).toFixed(1)}% estimate`],
+      ["Super access age", `Age ${result.superAccessAge} in this model`],
+    ];
+    container.innerHTML = rows.map(([label, value]) => summaryTile(label, value)).join("");
   }
 
   function renderCashflow(result) {
@@ -1024,6 +1170,7 @@
       ["Annual net income", result.annualNetIncome],
       ["Annual expenses", result.annualExpenses],
       ["Mortgage repayments", result.annualMortgageRepayments],
+      ["Credit card repayments", result.annualCreditCardRepayments],
       ["Cash surplus before investing", result.cashSurplusBeforeInvesting],
       ["Investment contributions", result.annualInvestmentContributions],
       ["Cash surplus after investing", result.cashSurplusAfterInvesting],
@@ -1099,6 +1246,7 @@
       <article class="card status-${milestone.status}">
         <span class="text-sm font-bold text-slate-500">${escapeHtml(milestone.label)}</span>
         <strong class="mt-2 block text-3xl font-black text-navy">Age ${milestone.age || "-"}</strong>
+        <p class="mt-3 text-sm leading-6 text-slate-600">${escapeHtml(milestone.description || "")}</p>
         <div class="mt-4 grid gap-2 text-sm">
           <div class="flex justify-between gap-4"><span>Projected FI assets</span><b>${money(milestone.projectedFiAssets)}</b></div>
           <div class="flex justify-between gap-4"><span>Required capital</span><b>${money(milestone.requiredCapital)}</b></div>
@@ -1125,26 +1273,32 @@
 
   function renderDecision(result) {
     document.getElementById("decisionList").innerHTML = result.decisionOptions.map((option, index) => `
-      <article class="card">
+      <article class="card decision-coach-card">
         <div class="flex items-start justify-between gap-4">
           <div>
-            <span class="text-sm font-bold text-success">#${index + 1}</span>
+            <span class="text-sm font-bold text-success">${index === 0 ? "Highest Recommendation" : `Priority ${index + 1}`}</span>
             <h3 class="mt-1 text-xl font-black text-navy">${escapeHtml(option.label)}</h3>
           </div>
-          <strong class="rounded-full bg-blue-50 px-3 py-1 text-sm text-blue-700">${percentFromRatio(option.score)}</strong>
+          <strong class="rounded-full bg-blue-50 px-3 py-1 text-sm text-blue-700">${index === 0 ? "High" : index === 1 ? "Medium" : "Watch"}</strong>
         </div>
-        <p class="mt-3 text-sm text-slate-600">${escapeHtml(option.explanation)}</p>
+        <p class="mt-3 text-sm font-bold text-navy">${index === 0 ? "This appears to be your highest-value opportunity." : "This may still help, depending on your priorities."}</p>
+        <div class="coach-section">
+          <span>Why it matters</span>
+          <p>${escapeHtml(option.explanation)}</p>
+        </div>
         <div class="summary-grid mt-4">
-          ${summaryTile("Estimated after-tax benefit", percentFromRatio(option.afterTaxBenefit))}
-          ${summaryTile("Cashflow cost per $1", dollarsPerDollar(option.cashflowImpact))}
-          ${summaryTile("Tax saving estimate", percentFromRatio(option.taxSaving))}
+          ${summaryTile("Estimated tax impact", option.label === "Extra super" ? `May save about ${percentFromRatio(option.taxSaving)} of each extra dollar` : "No direct tax saving estimated")}
+          ${summaryTile("Estimated cashflow impact", `${dollarsPerDollar(option.cashflowImpact)} cost per $1 modelled`)}
+          ${summaryTile("Estimated wealth impact", `${percentFromRatio(option.afterTaxBenefit)} modelled benefit`)}
+          ${summaryTile("Priority level", index === 0 ? "Highest" : index === 1 ? "Medium" : "Lower")}
         </div>
       </article>
     `).join("");
   }
 
   function renderReports(result) {
-    document.getElementById("reportSummary").textContent = `Current Financial Freedom Percentage ${plainPercent(freedomPercent(result))}, net worth ${money(result.currentNetWorth)}, wealth creation rate ${money(result.wealthCreationRate)}.`;
+    document.getElementById("reportSummary").textContent = `Financial Freedom Progress ${plainPercent(freedomPercent(result))}, net worth ${money(result.currentNetWorth)}, monthly cashflow estimate ${money(estimatedCashflow(result) / 12)}.`;
+    renderScenarioComparison(loadScenarios(), "reportScenarioComparison");
   }
 
   function renderSetupSummary(result) {
@@ -1199,6 +1353,28 @@
     ].join("");
   }
 
+  function renderWhatIf(result) {
+    const actions = document.getElementById("whatIfActions");
+    const output = document.getElementById("whatIfResult");
+    if (!actions || !output) return;
+    actions.innerHTML = whatIfActions.map((action) => `
+      <button class="btn what-if-button ${activeWhatIfId === action.id ? "btn-primary" : ""}" type="button" data-what-if="${action.id}">${escapeHtml(action.label)}</button>
+    `).join("");
+    const active = whatIfActions.find((action) => action.id === activeWhatIfId) || whatIfActions[0];
+    const adjustedPlan = applyScenarioAdjustments(plan, active.adjustments(result));
+    const adjustedResult = CALC.calculatePlan(adjustedPlan);
+    const currentMonthly = estimatedCashflow(result) / 12;
+    const adjustedMonthly = estimatedCashflow(adjustedResult) / 12;
+    output.innerHTML = [
+      summaryTile("Scenario simulation", active.label),
+      summaryTile("Monthly cashflow", `${money(currentMonthly)} -> ${money(adjustedMonthly)}`, adjustedMonthly >= currentMonthly ? "status-green" : "status-amber"),
+      summaryTile("1-year net worth", `${money(netWorthAtYear(result, 1))} -> ${money(netWorthAtYear(adjustedResult, 1))}`),
+      summaryTile("2-year net worth", `${money(netWorthAtYear(result, 2))} -> ${money(netWorthAtYear(adjustedResult, 2))}`),
+      summaryTile("Long-term net worth", `${money(longTermNetWorth(result))} -> ${money(longTermNetWorth(adjustedResult))}`),
+      summaryTile("Financial Freedom Progress", `${plainPercent(freedomPercent(result))} -> ${plainPercent(freedomPercent(adjustedResult))}`),
+    ].join("");
+  }
+
   function scenarioComparisonMetrics(scenario) {
     const scenarioResult = CALC.calculatePlan(scenario.plan);
     const projectedNetWorth = netWorthAtYear(scenarioResult, 10);
@@ -1211,11 +1387,18 @@
     const metrics = {
       scenario,
       result: scenarioResult,
+      monthlyCashflow: estimatedCashflow(scenarioResult) / 12,
+      oneYearNetWorth: netWorthAtYear(scenarioResult, 1),
+      twoYearNetWorth: netWorthAtYear(scenarioResult, 2),
+      longTermNetWorth: longTermNetWorth(scenarioResult),
+      debtBalance: scenarioResult.totalLiabilities,
       projectedNetWorth,
       investmentBalance,
       superBalance,
       debtReduction,
       annualCashflow,
+      freedomProgress: freedomPercent(scenarioResult),
+      targetAge: targetAgeOutcome(scenarioResult),
     };
     metrics.score = scenarioScore(metrics);
     return metrics;
@@ -1225,8 +1408,8 @@
     return Math.round((Number(value) || 0) * 100) / 100;
   }
 
-  function renderScenarioComparison(scenarios) {
-    const container = document.getElementById("scenarioComparisonReport");
+  function renderScenarioComparison(scenarios, containerId = "scenarioComparisonReport") {
+    const container = document.getElementById(containerId);
     if (!container) return;
     if (!scenarios.length) {
       container.innerHTML = `
@@ -1248,18 +1431,22 @@
           <span>Simple side-by-side estimate across saved scenarios.</span>
         </div>
       </div>
-      <p class="tax-note mt-4">Best estimate: ${escapeHtml(best.scenario.name)} ranks highest because it has the strongest mix of projected net worth, investment balance, debt reduction, super balance and cashflow.</p>
+      <p class="tax-note mt-4"><strong>Highest Recommendation:</strong> ${escapeHtml(best.scenario.name)}. This is the preferred scenario because it has the strongest estimated mix of monthly cashflow, projected net worth, debt level, investment balance, super balance and progress toward the long-term financial freedom target.</p>
       <div class="scenario-comparison-grid mt-4">
         ${metrics.map((item, index) => `
           <article class="scenario-compare-card ${index === 0 ? "best" : ""}">
             <span>${index === 0 ? "Best estimated outcome" : "Saved scenario"}</span>
             <h4>${escapeHtml(item.scenario.name)}</h4>
             <div class="table-list mt-3">
-              <div class="table-row"><span>10-year net worth</span><strong>${money(item.projectedNetWorth)}</strong></div>
-              <div class="table-row"><span>10-year investments</span><strong>${money(item.investmentBalance)}</strong></div>
-              <div class="table-row"><span>Debt reduction</span><strong>${money(item.debtReduction)}</strong></div>
-              <div class="table-row"><span>10-year super</span><strong>${money(item.superBalance)}</strong></div>
-              <div class="table-row"><span>Annual cashflow estimate</span><strong>${money(item.annualCashflow)}</strong></div>
+              <div class="table-row"><span>Monthly cashflow</span><strong>${money(item.monthlyCashflow)}</strong></div>
+              <div class="table-row"><span>1-year net worth</span><strong>${money(item.oneYearNetWorth)}</strong></div>
+              <div class="table-row"><span>2-year net worth</span><strong>${money(item.twoYearNetWorth)}</strong></div>
+              <div class="table-row"><span>Long-term net worth</span><strong>${money(item.longTermNetWorth)}</strong></div>
+              <div class="table-row"><span>Debt balance</span><strong>${money(item.debtBalance)}</strong></div>
+              <div class="table-row"><span>Investment balance</span><strong>${money(item.investmentBalance)}</strong></div>
+              <div class="table-row"><span>Super balance</span><strong>${money(item.superBalance)}</strong></div>
+              <div class="table-row"><span>Freedom progress</span><strong>${plainPercent(item.freedomProgress)}</strong></div>
+              <div class="table-row"><span>Target age outcome</span><strong>${escapeHtml(item.targetAge)}</strong></div>
             </div>
           </article>
         `).join("")}
@@ -1356,6 +1543,7 @@
     renderWizardStep();
     renderSetupSummary(result);
     renderComparison(result);
+    renderWhatIf(result);
     document.getElementById("disclaimer").textContent = DATA.disclaimer;
     if (hasOpenedWorkspace) document.getElementById("appWorkspace").classList.remove("hidden");
   }
@@ -1453,6 +1641,10 @@
         syncCollectionsToLegacy();
         document.getElementById("wizardSaveStatus").textContent = "Saved on this device.";
         saveDraft();
+        if (target.dataset.collection === "liabilityItems" && target.dataset.key === "type") {
+          renderAll();
+          return;
+        }
         renderOutputs();
         return;
       }
@@ -1495,6 +1687,13 @@
 
       const nav = event.target.closest("[data-view]");
       if (nav) setView(nav.dataset.view);
+
+      const whatIfButton = event.target.closest("[data-what-if]");
+      if (whatIfButton) {
+        activeWhatIfId = whatIfButton.dataset.whatIf;
+        renderOutputs();
+        return;
+      }
 
       const homeStep = event.target.closest("[data-home-step]");
       if (homeStep) {

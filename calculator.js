@@ -116,9 +116,9 @@
         person2Name: "",
         person1Age: 0,
         person2Age: 0,
-        workOptionalAge: 0,
-        semiRetirementAge: 0,
-        fullRetirementAge: 0,
+        workOptionalAge: 50,
+        semiRetirementAge: 55,
+        fullRetirementAge: 60,
         targetAnnualSpending: 0,
       },
       assets: {
@@ -139,6 +139,10 @@
         remainingLoanTermYears: 0,
         hecsHelpDebt: 0,
         otherDebts: 0,
+        creditCardBalance: 0,
+        creditCardInterestRatePct: 19.99,
+        creditCardMonthlyRepayment: 0,
+        creditCardLimit: 0,
       },
       income: {
         person1IncomeName: "",
@@ -179,10 +183,11 @@
         annualInvestingTarget: 0,
         employerSuperContributions: 0,
         extraSuperContributions: 0,
-        expectedInvestmentReturnPct: 0,
-        expectedSuperReturnPct: 0,
-        inflationPct: 0,
-        safeWithdrawalRatePct: 0,
+        expectedInvestmentReturnPct: 7,
+        expectedSuperReturnPct: 6.5,
+        inflationPct: 2.5,
+        wageGrowthPct: 3,
+        safeWithdrawalRatePct: 4,
       },
       downsizing: {
         enabled: false,
@@ -506,7 +511,13 @@
       + nonNegative(plan.assets.superPerson2)
       + nonNegative(plan.assets.vehiclesPersonalAssets),
     );
-    const totalLiabilities = roundCurrency(nonNegative(plan.liabilities.homeLoanBalance) + nonNegative(plan.liabilities.hecsHelpDebt) + nonNegative(plan.liabilities.otherDebts));
+    const creditCardBalance = nonNegative(plan.liabilities.creditCardBalance);
+    const totalLiabilities = roundCurrency(
+      nonNegative(plan.liabilities.homeLoanBalance)
+      + nonNegative(plan.liabilities.hecsHelpDebt)
+      + nonNegative(plan.liabilities.otherDebts)
+      + creditCardBalance,
+    );
     const currentNetWorth = roundCurrency(totalAssets - totalLiabilities);
     const superannuationBalance = roundCurrency(
       nonNegative(plan.assets.superPerson1)
@@ -515,6 +526,12 @@
     const accessibleInvestmentAssets = roundCurrency(
       nonNegative(plan.assets.offsetBalance)
       + nonNegative(plan.assets.cash)
+      + nonNegative(plan.assets.sharesEtfs)
+      + nonNegative(plan.assets.crypto)
+      + downsizingBoost,
+    );
+    const investmentBalance = roundCurrency(
+      nonNegative(plan.assets.cash)
       + nonNegative(plan.assets.sharesEtfs)
       + nonNegative(plan.assets.crypto)
       + downsizingBoost,
@@ -546,8 +563,10 @@
       + annualize(plan.expenses.otherExpenses, plan.expenses.otherFrequency),
     );
     const annualMortgageRepayments = roundCurrency(nonNegative(plan.liabilities.monthlyRepayment || plan.expenses.mortgageRepayments) * MONTHS_PER_YEAR);
+    const annualCreditCardRepayments = roundCurrency(nonNegative(plan.liabilities.creditCardMonthlyRepayment) * MONTHS_PER_YEAR);
+    const annualDebtRepayments = roundCurrency(annualMortgageRepayments + annualCreditCardRepayments);
     const annualInvestmentContributions = roundCurrency(nonNegative(plan.investing.annualInvestingTarget) + nonNegative(plan.investing.extraSuperContributions));
-    const cashSurplusBeforeInvesting = roundCurrency(annualNetIncome - annualExpenses - annualMortgageRepayments);
+    const cashSurplusBeforeInvesting = roundCurrency(annualNetIncome - annualExpenses - annualDebtRepayments);
     const cashSurplusAfterInvesting = roundCurrency(cashSurplusBeforeInvesting - annualInvestmentContributions);
     const estimatedTaxAndHelp = roundCurrency(taxEstimate.totalTax + helpRepaymentEstimate.annualRepayment);
     const cashSurplusAfterTaxHelpAndInvesting = roundCurrency(cashSurplusAfterInvesting - estimatedTaxAndHelp);
@@ -592,9 +611,24 @@
     });
     const targetCapital = safeWithdrawalRate > 0 ? nonNegative(plan.personal.targetAnnualSpending) / safeWithdrawalRate : 0;
     const milestones = [
-      { label: "Momentum target", age: nonNegative(plan.personal.workOptionalAge), coverage: 0.5 },
-      { label: "High-progress target", age: nonNegative(plan.personal.semiRetirementAge), coverage: 0.75 },
-      { label: "Long-term FI target", age: nonNegative(plan.personal.fullRetirementAge), coverage: 1 },
+      {
+        label: "Building Wealth",
+        description: "Your investments are beginning to benefit from compounding and are creating long-term momentum.",
+        age: nonNegative(plan.personal.workOptionalAge),
+        coverage: 0.5,
+      },
+      {
+        label: "Financial Independence",
+        description: "Your investments are projected to cover a significant portion of your future lifestyle costs.",
+        age: nonNegative(plan.personal.semiRetirementAge),
+        coverage: 0.75,
+      },
+      {
+        label: "Financial Freedom",
+        description: "Your investments are projected to fully support your chosen lifestyle over the long term.",
+        age: nonNegative(plan.personal.fullRetirementAge),
+        coverage: 1,
+      },
     ].map((item) => {
       const investment = rowAtAge(investmentProjection, item.age);
       const superRow = rowAtAge(superProjection, item.age);
@@ -648,8 +682,17 @@
         : nonNegative(plan.assets.homeValue);
       const homeValue = (residenceValue + nonNegative(plan.assets.otherPropertyValue)) * Math.pow(1 + 0.03, year);
       const loanBalance = balanceAtMonth(loan.schedule, loan.finalBalance, year * MONTHS_PER_YEAR);
-      const closingBalance = roundCurrency(homeValue + nonNegative(plan.assets.vehiclesPersonalAssets) + nonNegative(plan.assets.offsetBalance) + row.closingBalance + superProjection[index].closingBalance - loanBalance - nonNegative(plan.liabilities.hecsHelpDebt) - nonNegative(plan.liabilities.otherDebts));
+      const closingBalance = roundCurrency(homeValue + nonNegative(plan.assets.vehiclesPersonalAssets) + nonNegative(plan.assets.offsetBalance) + row.closingBalance + superProjection[index].closingBalance - loanBalance - nonNegative(plan.liabilities.hecsHelpDebt) - nonNegative(plan.liabilities.otherDebts) - creditCardBalance);
       return { year, age: currentAge + year, closingBalance };
+    });
+    const financialFreedomProgressProjection = investmentProjection.map((row, index) => {
+      const superAccessible = row.age >= SUPER_ACCESS_AGE ? superProjection[index].closingBalance : 0;
+      const projectedAssets = roundCurrency(row.closingBalance + nonNegative(plan.assets.offsetBalance) + superAccessible);
+      return {
+        year: row.year,
+        age: row.age,
+        progress: targetCapital > 0 ? Math.min(200, roundRatio(projectedAssets / targetCapital * 100)) : 0,
+      };
     });
 
     return {
@@ -658,6 +701,7 @@
       totalAssets,
       totalLiabilities,
       currentNetWorth,
+      investmentBalance,
       accessibleInvestmentAssets,
       superannuationBalance,
       superAccessibleToday,
@@ -670,6 +714,8 @@
       otherAnnualIncome,
       annualExpenses,
       annualMortgageRepayments,
+      annualCreditCardRepayments,
+      annualDebtRepayments,
       annualInvestmentContributions,
       cashSurplusBeforeInvesting,
       cashSurplusAfterInvesting,
@@ -702,6 +748,7 @@
         liquidityPreference: "medium",
       }),
       netWorthProjection,
+      financialFreedomProgressProjection,
     };
   }
 
