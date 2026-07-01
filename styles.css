@@ -71,8 +71,59 @@ body {
   align-items: center;
 }
 
+.plan-menu {
+  position: relative;
+}
+
+.plan-menu summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.plan-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.plan-menu-panel {
+  position: absolute;
+  right: 0;
+  z-index: 40;
+  display: grid;
+  min-width: 190px;
+  gap: 4px;
+  margin-top: 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #ffffff;
+  padding: 8px;
+  box-shadow: 0 18px 40px rgba(15, 39, 66, 0.12);
+}
+
+.plan-menu-panel button {
+  min-height: 42px;
+  border-radius: 12px;
+  padding: 0 12px;
+  color: #172033;
+  font-size: 14px;
+  font-weight: 800;
+  text-align: left;
+}
+
+.plan-menu-panel button:hover {
+  background: #f5f8fb;
+}
+
 .homepage {
   background: #ffffff;
+}
+
+.clickable-step {
+  cursor: pointer;
+}
+
+.clickable-step:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.22);
+  outline-offset: 3px;
 }
 
 .home-hero {
@@ -355,6 +406,38 @@ body {
   display: grid;
   gap: 14px;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.scenario-comparison-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+}
+
+.scenario-compare-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #ffffff;
+  padding: 16px;
+}
+
+.scenario-compare-card.best {
+  border-color: #0f9f6e;
+  background: #f3fbf7;
+}
+
+.scenario-compare-card span {
+  color: #0f9f6e;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.scenario-compare-card h4 {
+  margin-top: 4px;
+  color: #0f2742;
+  font-size: 18px;
+  font-weight: 950;
 }
 
 .card-subheading h3 {

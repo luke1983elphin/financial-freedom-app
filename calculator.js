@@ -3,6 +3,27 @@
   const CHECKPOINT_YEARS = [5, 10, 20, 30];
   const SUPER_ACCESS_AGE = 60;
   const SUPER_CONTRIBUTIONS_TAX_RATE = 0.15;
+  const MEDICARE_LEVY_RATE = 0.02;
+  const TAX_YEAR = "2026-27";
+  const HELP_THRESHOLD = 67000;
+  const TAX_BRACKETS_2026_27 = [
+    { threshold: 0, rate: 0 },
+    { threshold: 18200, rate: 0.15 },
+    { threshold: 45000, rate: 0.30 },
+    { threshold: 135000, rate: 0.37 },
+    { threshold: 190000, rate: 0.45 },
+  ];
+  const HELP_REPAYMENT_BANDS = [
+    { threshold: 67000, rate: 0 },
+    { threshold: 75000, rate: 0.01 },
+    { threshold: 85000, rate: 0.02 },
+    { threshold: 95000, rate: 0.03 },
+    { threshold: 110000, rate: 0.04 },
+    { threshold: 125000, rate: 0.05 },
+    { threshold: 145000, rate: 0.06 },
+    { threshold: 165000, rate: 0.08 },
+    { threshold: 190000, rate: 0.10 },
+  ];
   const STATUS = { GREEN: "green", AMBER: "amber", RED: "red" };
 
   function number(value) {
@@ -28,6 +49,55 @@
 
   function netConcessionalSuperContribution(value) {
     return roundCurrency(nonNegative(value) * (1 - SUPER_CONTRIBUTIONS_TAX_RATE));
+  }
+
+  function taxBeforeMedicare(taxableIncome) {
+    const income = nonNegative(taxableIncome);
+    return roundCurrency(TAX_BRACKETS_2026_27.reduce((tax, bracket, index) => {
+      const next = TAX_BRACKETS_2026_27[index + 1]?.threshold ?? Infinity;
+      const taxableInBand = Math.max(0, Math.min(income, next) - bracket.threshold);
+      return tax + taxableInBand * bracket.rate;
+    }, 0));
+  }
+
+  function individualTaxEstimate(taxableIncome, includeMedicare = true) {
+    const income = nonNegative(taxableIncome);
+    const baseTax = taxBeforeMedicare(income);
+    const medicareLevy = includeMedicare ? roundCurrency(income * MEDICARE_LEVY_RATE) : 0;
+    return roundCurrency(baseTax + medicareLevy);
+  }
+
+  function marginalTaxRate(taxableIncome, includeMedicare = true) {
+    const income = nonNegative(taxableIncome);
+    const bracket = [...TAX_BRACKETS_2026_27].reverse().find((item) => income > item.threshold) || TAX_BRACKETS_2026_27[0];
+    return roundRatio(bracket.rate + (includeMedicare ? MEDICARE_LEVY_RATE : 0));
+  }
+
+  function splitAdditionalContribution(amount, person1Income, person2Income) {
+    const gross = nonNegative(amount);
+    const p1Capacity = nonNegative(person1Income);
+    const p2Capacity = nonNegative(person2Income);
+    const totalCapacity = p1Capacity + p2Capacity;
+    if (gross === 0 || totalCapacity === 0) return { person1: 0, person2: 0 };
+    const person1 = roundCurrency(Math.min(p1Capacity, gross * (p1Capacity / totalCapacity)));
+    const person2 = roundCurrency(Math.min(p2Capacity, gross - person1));
+    return { person1, person2 };
+  }
+
+  function estimateHelpRepayment(repaymentIncome, balance) {
+    const income = nonNegative(repaymentIncome);
+    const currentBalance = nonNegative(balance);
+    const activeBand = [...HELP_REPAYMENT_BANDS].reverse().find((band) => income >= band.threshold) || HELP_REPAYMENT_BANDS[0];
+    const rate = income < HELP_THRESHOLD ? 0 : activeBand.rate;
+    const annualRepayment = roundCurrency(Math.min(currentBalance, Math.max(0, income - HELP_THRESHOLD) * rate));
+    return {
+      balance: currentBalance,
+      repaymentIncome: income,
+      rate,
+      annualRepayment,
+      monthlyRepayment: roundCurrency(annualRepayment / MONTHS_PER_YEAR),
+      note: "Estimate only. Actual compulsory HELP repayments depend on official repayment income rules.",
+    };
   }
 
   function annualize(amount, frequency) {
@@ -337,28 +407,84 @@
     return roundCurrency((startingBalance - targetPresentValue) / annuityFactor);
   }
 
+  function householdTaxEstimate({ person1Income, person2Income, otherIncome, extraConcessionalSuper }) {
+    const sharedOtherIncome = nonNegative(otherIncome) / 2;
+    const person1TaxableBefore = roundCurrency(nonNegative(person1Income) + sharedOtherIncome);
+    const person2TaxableBefore = roundCurrency(nonNegative(person2Income) + sharedOtherIncome);
+    const split = splitAdditionalContribution(extraConcessionalSuper, person1TaxableBefore, person2TaxableBefore);
+    const person1TaxableAfter = roundCurrency(Math.max(0, person1TaxableBefore - split.person1));
+    const person2TaxableAfter = roundCurrency(Math.max(0, person2TaxableBefore - split.person2));
+    const person1TaxBefore = individualTaxEstimate(person1TaxableBefore);
+    const person2TaxBefore = individualTaxEstimate(person2TaxableBefore);
+    const person1TaxAfter = individualTaxEstimate(person1TaxableAfter);
+    const person2TaxAfter = individualTaxEstimate(person2TaxableAfter);
+    const totalTaxBefore = roundCurrency(person1TaxBefore + person2TaxBefore);
+    const totalTaxAfter = roundCurrency(person1TaxAfter + person2TaxAfter);
+    const grossContribution = nonNegative(extraConcessionalSuper);
+    const contributionsTax = roundCurrency(grossContribution * SUPER_CONTRIBUTIONS_TAX_RATE);
+    const netInvested = roundCurrency(grossContribution - contributionsTax);
+    const personalTaxSaving = roundCurrency(Math.max(0, totalTaxBefore - totalTaxAfter));
+    const afterTaxCashflowCost = roundCurrency(Math.max(0, grossContribution - personalTaxSaving));
+    const marginalRate = Math.max(marginalTaxRate(person1TaxableBefore), marginalTaxRate(person2TaxableBefore));
+    return {
+      taxYear: TAX_YEAR,
+      person1TaxableBefore,
+      person2TaxableBefore,
+      person1TaxableAfter,
+      person2TaxableAfter,
+      taxableIncomeBeforeExtraSuper: roundCurrency(person1TaxableBefore + person2TaxableBefore),
+      taxableIncomeAfterExtraSuper: roundCurrency(person1TaxableAfter + person2TaxableAfter),
+      totalTaxBefore,
+      totalTaxAfter,
+      totalTax: totalTaxAfter,
+      marginalTaxRate: marginalRate,
+      medicareLevyRate: MEDICARE_LEVY_RATE,
+      extraSuper: {
+        grossContribution,
+        estimatedPersonalTaxSaving: personalTaxSaving,
+        contributionsTax,
+        netAmountInvested: netInvested,
+        afterTaxCashflowCost,
+      },
+    };
+  }
+
   function rankDecisionOptions({ mortgageRate, expectedInvestmentReturn, expectedSuperReturn, taxRate, liquidityPreference }) {
     const liquidity = liquidityPreference === "high" ? 1 : liquidityPreference === "low" ? 0 : 0.5;
+    const superTaxSavingRate = Math.max(0, number(taxRate) - SUPER_CONTRIBUTIONS_TAX_RATE);
+    const etfAfterTaxReturn = Math.max(0, number(expectedInvestmentReturn) * (1 - number(taxRate) * 0.5));
     const options = [
       {
         label: "Extra super",
-        score: roundRatio(expectedSuperReturn + Math.max(0, taxRate - 0.15) * 0.35 - liquidity * 0.025),
-        explanation: "Potential tax benefit and compounding, but access is restricted until preservation age.",
+        score: roundRatio(number(expectedSuperReturn) + superTaxSavingRate * 0.35 - liquidity * 0.025),
+        afterTaxBenefit: roundRatio(number(expectedSuperReturn) + superTaxSavingRate),
+        cashflowImpact: roundRatio(1 - superTaxSavingRate),
+        taxSaving: roundRatio(superTaxSavingRate),
+        explanation: "May reduce personal tax now and invest the net amount in super after 15% contributions tax. Access is from age 60 in this model.",
       },
       {
         label: "Offset account",
         score: roundRatio(mortgageRate + liquidity * 0.01),
-        explanation: "Guaranteed interest saving, cash remains accessible, and the benefit is tax-free.",
+        afterTaxBenefit: roundRatio(mortgageRate),
+        cashflowImpact: 1,
+        taxSaving: 0,
+        explanation: "Saves mortgage interest, remains accessible, and the interest saving is not taxed.",
       },
       {
         label: "ETF/share investing",
-        score: roundRatio(expectedInvestmentReturn * (1 - taxRate * 0.5) - 0.01 + liquidity * 0.004),
-        explanation: "Higher expected return, but with market volatility and no guarantee.",
+        score: roundRatio(etfAfterTaxReturn - 0.01 + liquidity * 0.004),
+        afterTaxBenefit: roundRatio(etfAfterTaxReturn),
+        cashflowImpact: 1,
+        taxSaving: 0,
+        explanation: "Keeps money accessible and uses the expected return after a simple marginal-tax adjustment.",
       },
       {
         label: "Extra mortgage repayment",
         score: roundRatio(mortgageRate - liquidity * 0.015),
-        explanation: "Guaranteed interest saving, but less flexible than keeping funds in offset.",
+        afterTaxBenefit: roundRatio(mortgageRate),
+        cashflowImpact: 1,
+        taxSaving: 0,
+        explanation: "Saves mortgage interest, but the money is less flexible than keeping it in offset.",
       },
     ];
     return options.sort((a, b) => b.score - a.score);
@@ -395,11 +521,21 @@
     );
     const superAccessibleToday = currentAge >= SUPER_ACCESS_AGE ? superannuationBalance : 0;
     const financialIndependenceAssets = roundCurrency(accessibleInvestmentAssets + superAccessibleToday);
-    const annualNetIncome = roundCurrency(
-      annualize(plan.income.person1Income, plan.income.person1Frequency)
-      + annualize(plan.income.person2Income, plan.income.person2Frequency)
-      + annualize(plan.income.otherIncome, plan.income.otherIncomeFrequency),
-    );
+    const person1AnnualIncome = roundCurrency(annualize(plan.income.person1Income, plan.income.person1Frequency));
+    const person2AnnualIncome = roundCurrency(annualize(plan.income.person2Income, plan.income.person2Frequency));
+    const otherAnnualIncome = roundCurrency(annualize(plan.income.otherIncome, plan.income.otherIncomeFrequency));
+    const annualNetIncome = roundCurrency(person1AnnualIncome + person2AnnualIncome + otherAnnualIncome);
+    const taxEstimate = householdTaxEstimate({
+      person1Income: person1AnnualIncome,
+      person2Income: person2AnnualIncome,
+      otherIncome: otherAnnualIncome,
+      extraConcessionalSuper: plan.investing.extraSuperContributions,
+    });
+    const helpRepaymentIncome = roundCurrency(Math.max(
+      person1AnnualIncome + otherAnnualIncome / 2,
+      person2AnnualIncome + otherAnnualIncome / 2,
+    ));
+    const helpRepaymentEstimate = estimateHelpRepayment(helpRepaymentIncome, plan.liabilities.hecsHelpDebt);
     const annualExpenses = roundCurrency(
       annualize(plan.expenses.livingCosts, plan.expenses.livingFrequency)
       + annualize(plan.expenses.food, plan.expenses.foodFrequency)
@@ -413,6 +549,8 @@
     const annualInvestmentContributions = roundCurrency(nonNegative(plan.investing.annualInvestingTarget) + nonNegative(plan.investing.extraSuperContributions));
     const cashSurplusBeforeInvesting = roundCurrency(annualNetIncome - annualExpenses - annualMortgageRepayments);
     const cashSurplusAfterInvesting = roundCurrency(cashSurplusBeforeInvesting - annualInvestmentContributions);
+    const estimatedTaxAndHelp = roundCurrency(taxEstimate.totalTax + helpRepaymentEstimate.annualRepayment);
+    const cashSurplusAfterTaxHelpAndInvesting = roundCurrency(cashSurplusAfterInvesting - estimatedTaxAndHelp);
     const firstYearMortgagePrincipalReduction = roundCurrency(loan.schedule.slice(0, 12).reduce((total, row) => total + Math.max(0, row.principalRepaid), 0));
     const grossEmployerSuperContributions = nonNegative(plan.investing.employerSuperContributions);
     const grossExtraSuperContributions = nonNegative(plan.investing.extraSuperContributions);
@@ -527,11 +665,16 @@
       financialIndependenceAssets,
       effectiveMortgageBalance: loan.offsetBenefit.effectiveLoanBalance,
       annualNetIncome,
+      person1AnnualIncome,
+      person2AnnualIncome,
+      otherAnnualIncome,
       annualExpenses,
       annualMortgageRepayments,
       annualInvestmentContributions,
       cashSurplusBeforeInvesting,
       cashSurplusAfterInvesting,
+      estimatedTaxAndHelp,
+      cashSurplusAfterTaxHelpAndInvesting,
       firstYearMortgagePrincipalReduction,
       wealthCreationRate,
       grossConcessionalSuperContributions,
@@ -540,6 +683,8 @@
       netExtraSuperContributions,
       superContributionsTaxPaid,
       superContributionsTaxRate: SUPER_CONTRIBUTIONS_TAX_RATE,
+      taxEstimate,
+      helpRepaymentEstimate,
       financialFreedomScore,
       investmentProjection,
       superProjection,
@@ -553,7 +698,7 @@
         mortgageRate: annualRate(plan.liabilities.homeLoanInterestRatePct),
         expectedInvestmentReturn,
         expectedSuperReturn,
-        taxRate: 0.345,
+        taxRate: taxEstimate.marginalTaxRate,
         liquidityPreference: "medium",
       }),
       netWorthProjection,
@@ -564,6 +709,9 @@
     emptyPlan,
     clonePlan,
     annualize,
+    individualTaxEstimate,
+    marginalTaxRate,
+    estimateHelpRepayment,
     amortiseLoan,
     calculateOffsetBenefit,
     calculateLoanSummary,

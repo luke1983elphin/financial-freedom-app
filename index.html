@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Financial Freedom Simulator Professional</title>
+    <title>Financial Freedom Simulator</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -32,16 +32,21 @@
       <header class="sticky top-0 z-30 border-b border-line bg-white/90 backdrop-blur">
         <div class="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p class="brand-kicker text-xs font-bold uppercase text-success">Financial Freedom Simulator Professional</p>
-            <h1 class="text-xl font-bold text-navy">Track Financial Freedom Progress.</h1>
+            <p class="brand-kicker text-xs font-bold uppercase text-success">Financial Freedom Simulator</p>
+            <h1 class="text-xl font-bold text-navy">Track your Financial Freedom</h1>
           </div>
           <div class="toolbar-actions flex flex-wrap gap-2">
             <button class="btn btn-primary" type="button" id="demoButton">Load Demo</button>
             <button class="btn" type="button" id="enterDataButton">Enter My Data</button>
-            <button class="btn" type="button" id="newPlanButton">New Plan</button>
-            <button class="btn" type="button" id="saveScenarioButton">Save Scenario</button>
-            <button class="btn" type="button" id="loadScenarioButton">Load Scenario</button>
-            <button class="btn" type="button" id="duplicateButton">Duplicate</button>
+            <details class="plan-menu" id="planMenu">
+              <summary class="btn plan-menu-trigger">Plan</summary>
+              <div class="plan-menu-panel">
+                <button type="button" id="planNewButton">New Plan</button>
+                <button type="button" id="planSaveButton">Save Plan</button>
+                <button type="button" id="planLoadButton">Load Plan</button>
+                <button type="button" id="planDuplicateButton">Duplicate Plan</button>
+              </div>
+            </details>
             <button class="btn" type="button" id="exportButton">Print / Export</button>
           </div>
         </div>
@@ -51,7 +56,7 @@
         <section id="homeView" class="homepage mx-auto max-w-7xl px-4 py-8 lg:py-14">
           <div class="home-hero">
             <div class="hero-copy">
-              <p class="brand-kicker text-sm font-bold uppercase text-success">Financial Freedom Simulator Professional</p>
+              <p class="brand-kicker text-sm font-bold uppercase text-success">Financial Freedom Simulator</p>
               <h2 class="mt-4 max-w-4xl text-4xl font-black text-navy sm:text-6xl">See your Financial Freedom Progress</h2>
               <p class="mt-5 max-w-2xl text-lg leading-8 text-slate-600">Turn income, expenses, loans, super and investments into a clear view of your current stage and next milestone.</p>
               <div class="mt-8 flex flex-wrap gap-3">
@@ -81,17 +86,17 @@
           </div>
 
           <div class="steps-grid mt-12 grid gap-4 md:grid-cols-3">
-            <article class="step-card">
+            <article class="step-card clickable-step" role="button" tabindex="0" data-home-step="setup">
               <span>1</span>
               <h3>Enter your position</h3>
               <p>Add household income, spending, assets, loans, super and goals.</p>
             </article>
-            <article class="step-card">
+            <article class="step-card clickable-step" role="button" tabindex="0" data-home-step="decision">
               <span>2</span>
               <h3>Test decisions</h3>
               <p>Compare extra super, ETF investing, offset and mortgage options.</p>
             </article>
-            <article class="step-card">
+            <article class="step-card clickable-step" role="button" tabindex="0" data-home-step="dashboard">
               <span>3</span>
               <h3>See your next milestone</h3>
               <p>Track investment progress, current stage and long-term financial independence.</p>
@@ -155,6 +160,7 @@
                       </div>
                       <div class="wizard-panel hidden" data-wizard-panel="5">
                         <div id="wizardGoalsForm" class="input-grid"></div>
+                        <div id="wizardGoalExamples" class="setup-list mt-6"></div>
                         <div class="mt-6">
                           <div class="card-subheading">
                             <h3>Downsizing Strategy</h3>
@@ -222,34 +228,6 @@
                 <div class="dashboard-card-grid dashboard-card-grid-secondary mt-6" id="secondMetricGrid"></div>
                 <p class="tax-note mt-4" id="dashboardAssumptionNote">Accessible investments are counted before age 60. Superannuation is included from age 60 onward. Concessional super contributions are calculated net of 15% contributions tax.</p>
 
-                <article class="card mt-6">
-                  <div class="card-heading">
-                    <div>
-                      <h3>Quick Scenario Test</h3>
-                      <span>Simple income and expense movement only. This does not save a separate scenario.</span>
-                    </div>
-                  </div>
-                  <div class="comparison-grid">
-                    <label>
-                      <span class="field-label">Increase income by amount per year</span>
-                      <input class="field-input" type="number" step="1000" data-comparison="increaseIncome" value="0">
-                    </label>
-                    <label>
-                      <span class="field-label">Reduce income by amount per year</span>
-                      <input class="field-input" type="number" step="1000" data-comparison="reduceIncome" value="0">
-                    </label>
-                    <label>
-                      <span class="field-label">Increase expenses by amount per year</span>
-                      <input class="field-input" type="number" step="1000" data-comparison="increaseExpenses" value="0">
-                    </label>
-                    <label>
-                      <span class="field-label">Reduce expenses by amount per year</span>
-                      <input class="field-input" type="number" step="1000" data-comparison="reduceExpenses" value="0">
-                    </label>
-                  </div>
-                  <div id="comparisonSummary" class="summary-grid mt-4"></div>
-                </article>
-
                 <div class="dashboard-chart-grid mt-6 grid gap-4 xl:grid-cols-2">
                   <article class="card">
                     <div class="card-heading">
@@ -299,6 +277,7 @@
                   <div class="card"><div id="loanForm" class="setup-list"></div></div>
                   <div class="card">
                     <div id="loanSummary" class="summary-grid"></div>
+                    <div id="helpEstimateSummary" class="tax-note mt-4"></div>
                     <svg id="loanChart" class="chart mt-4" viewBox="0 0 760 260" role="img" aria-label="Loan balance reducing"></svg>
                   </div>
                 </div>
@@ -335,6 +314,7 @@
                   <p>Set personal details, progress ages and target lifestyle spending.</p>
                 </div>
                 <div class="card"><div id="personalForm" class="input-grid"></div></div>
+                <div id="goalExamples" class="setup-list mt-6"></div>
                 <div class="card mt-6">
                   <div class="card-subheading">
                     <h3>Downsizing Strategy</h3>
@@ -359,6 +339,63 @@
                   <p>Compare where the next dollar may have the strongest modelled impact.</p>
                 </div>
                 <div id="decisionList" class="grid gap-4 lg:grid-cols-2"></div>
+                <article class="card mt-6">
+                  <div class="card-heading">
+                    <div>
+                      <h3>Quick Scenario Test</h3>
+                      <span>Temporary estimates only. These changes do not overwrite your saved plan unless you save or duplicate the plan.</span>
+                    </div>
+                  </div>
+                  <div class="comparison-grid">
+                    <label>
+                      <span class="field-label">Income change per year</span>
+                      <input class="field-input" type="number" step="1000" data-comparison="incomeChange" value="0">
+                      <small class="field-help">Use a positive or negative number.</small>
+                    </label>
+                    <label>
+                      <span class="field-label">Expense change per year</span>
+                      <input class="field-input" type="number" step="1000" data-comparison="expenseChange" value="0">
+                    </label>
+                    <label>
+                      <span class="field-label">Loan repayment change per month</span>
+                      <input class="field-input" type="number" step="100" data-comparison="loanRepaymentChangeMonthly" value="0">
+                    </label>
+                    <label>
+                      <span class="field-label">Loan interest rate change (%)</span>
+                      <input class="field-input" type="number" step="0.1" data-comparison="loanInterestRateChangePct" value="0">
+                    </label>
+                    <label>
+                      <span class="field-label">Investment contribution change per year</span>
+                      <input class="field-input" type="number" step="1000" data-comparison="investmentContributionChange" value="0">
+                    </label>
+                    <label>
+                      <span class="field-label">Investment return change (%)</span>
+                      <input class="field-input" type="number" step="0.1" data-comparison="investmentReturnChangePct" value="0">
+                    </label>
+                    <label>
+                      <span class="field-label">Employer super contribution change</span>
+                      <input class="field-input" type="number" step="1000" data-comparison="superContributionChange" value="0">
+                    </label>
+                    <label>
+                      <span class="field-label">Additional concessional super</span>
+                      <input class="field-input" type="number" step="1000" data-comparison="extraConcessionalSuperChange" value="0">
+                      <small class="field-help">Estimate only. It applies the modelled tax saving and 15% contributions tax.</small>
+                    </label>
+                    <label>
+                      <span class="field-label">HELP balance change</span>
+                      <input class="field-input" type="number" step="1000" data-comparison="helpBalanceChange" value="0">
+                    </label>
+                    <label>
+                      <span class="field-label">Major one-off costs</span>
+                      <input class="field-input" type="number" step="1000" data-comparison="oneOffCosts" value="0">
+                    </label>
+                    <label>
+                      <span class="field-label">Major one-off savings</span>
+                      <input class="field-input" type="number" step="1000" data-comparison="oneOffSavings" value="0">
+                    </label>
+                  </div>
+                  <div id="comparisonSummary" class="summary-grid mt-4"></div>
+                </article>
               </section>
 
               <section class="view-section hidden" data-view-panel="scenarios">
@@ -382,6 +419,7 @@
                     <div id="scenarioList" class="grid gap-3"></div>
                   </div>
                 </div>
+                <div id="scenarioComparisonReport" class="card mt-6"></div>
               </section>
 
               <section class="view-section hidden" data-view-panel="reports">

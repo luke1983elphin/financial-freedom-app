@@ -62,13 +62,33 @@
     ["insurance", "Insurance"],
     ["schoolChildren", "School / children"],
     ["ratesPropertyCosts", "Rates / property costs"],
+    ["subscriptions", "Monthly Subscriptions"],
+    ["phoneInternet", "Phone / Internet"],
+    ["privateHealth", "Private Health Insurance"],
+    ["petrol", "Petrol"],
+    ["vehicleCosts", "Motor Vehicle Rego / Insurance"],
     ["other", "Other expenses"],
   ];
+  const coreExpenseCategories = new Set(["living", "food", "utilities", "insurance", "schoolChildren", "ratesPropertyCosts"]);
+  const defaultOtherExpenseItems = [
+    { id: "expense-subscriptions", name: "Monthly subscriptions", category: "subscriptions", amount: 0, frequency: "monthly" },
+    { id: "expense-phone", name: "Phone / Internet", category: "phoneInternet", amount: 0, frequency: "monthly" },
+    { id: "expense-health", name: "Private health insurance", category: "privateHealth", amount: 0, frequency: "monthly" },
+    { id: "expense-petrol", name: "Petrol", category: "petrol", amount: 0, frequency: "weekly" },
+    { id: "expense-vehicle", name: "Motor vehicle rego / insurance", category: "vehicleCosts", amount: 0, frequency: "annually" },
+  ];
   const comparisonDefaults = {
-    increaseIncome: 0,
-    reduceIncome: 0,
-    increaseExpenses: 0,
-    reduceExpenses: 0,
+    incomeChange: 0,
+    expenseChange: 0,
+    loanRepaymentChangeMonthly: 0,
+    loanInterestRateChangePct: 0,
+    investmentContributionChange: 0,
+    investmentReturnChangePct: 0,
+    superContributionChange: 0,
+    extraConcessionalSuperChange: 0,
+    helpBalanceChange: 0,
+    oneOffCosts: 0,
+    oneOffSavings: 0,
   };
 
   let plan = CALC.clonePlan(loadDraft() || CALC.emptyPlan());
@@ -103,6 +123,10 @@
 
   function plainPercent(value) {
     return `${Math.round(Number(value) || 0)}%`;
+  }
+
+  function dollarsPerDollar(value) {
+    return `$${(Number(value) || 0).toFixed(2)}`;
   }
 
   const freedomStages = [
@@ -169,6 +193,86 @@
     return options.map(([value, label]) => `<option value="${value}"${selected === value ? " selected" : ""}>${label}</option>`).join("");
   }
 
+  function addAmount(value, delta, min = 0) {
+    return Math.max(min, (Number(value) || 0) + (Number(delta) || 0));
+  }
+
+  function applyScenarioAdjustments(basePlan, adjustments = {}) {
+    const scenarioPlan = CALC.clonePlan(basePlan);
+    const incomeChange = Number(adjustments.incomeChange) || 0;
+    const expenseChange = (Number(adjustments.expenseChange) || 0) + (Number(adjustments.otherExpenseAnnualChange) || 0);
+    const repaymentChange = Number(adjustments.loanRepaymentChangeMonthly) || 0;
+    const loanRateChange = Number(adjustments.loanInterestRateChangePct) || 0;
+    const helpBalanceChange = Number(adjustments.helpBalanceChange) || 0;
+    const cashChange = (Number(adjustments.oneOffSavings) || 0) - (Number(adjustments.oneOffCosts) || 0);
+    scenarioPlan.income.otherIncome = addAmount(scenarioPlan.income.otherIncome, incomeChange, -Infinity);
+    if (incomeChange && Array.isArray(scenarioPlan.incomeItems)) {
+      scenarioPlan.incomeItems.push({ id: makeId("scenario-income"), name: "Scenario income change", amount: incomeChange, frequency: "annually" });
+    }
+    scenarioPlan.expenses.otherExpenses = addAmount(scenarioPlan.expenses.otherExpenses, expenseChange, -Infinity);
+    if (expenseChange && Array.isArray(scenarioPlan.expenseItems)) {
+      scenarioPlan.expenseItems.push({ id: makeId("scenario-expense"), name: "Scenario expense change", category: "other", amount: expenseChange, frequency: "annually" });
+    }
+    scenarioPlan.liabilities.monthlyRepayment = addAmount(scenarioPlan.liabilities.monthlyRepayment, repaymentChange);
+    scenarioPlan.expenses.mortgageRepayments = scenarioPlan.liabilities.monthlyRepayment;
+    scenarioPlan.liabilities.homeLoanInterestRatePct = addAmount(scenarioPlan.liabilities.homeLoanInterestRatePct, loanRateChange);
+    if (Array.isArray(scenarioPlan.liabilityItems)) {
+      scenarioPlan.liabilityItems = scenarioPlan.liabilityItems.map((item) => {
+        if (item.type === "homeLoan") {
+          return { ...item, repayment: addAmount(item.repayment, repaymentChange), interestRatePct: addAmount(item.interestRatePct, loanRateChange) };
+        }
+        if (item.type === "hecsHelp") {
+          return { ...item, balance: addAmount(item.balance, helpBalanceChange) };
+        }
+        return item;
+      });
+    }
+    scenarioPlan.investing.annualInvestingTarget = addAmount(scenarioPlan.investing.annualInvestingTarget, adjustments.investmentContributionChange || adjustments.annualInvestingTarget || 0);
+    scenarioPlan.investing.expectedInvestmentReturnPct = addAmount(scenarioPlan.investing.expectedInvestmentReturnPct, adjustments.investmentReturnChangePct || 0);
+    scenarioPlan.investing.employerSuperContributions = addAmount(scenarioPlan.investing.employerSuperContributions, adjustments.superContributionChange || 0);
+    scenarioPlan.investing.extraSuperContributions = addAmount(scenarioPlan.investing.extraSuperContributions, adjustments.extraConcessionalSuperChange || 0);
+    scenarioPlan.liabilities.hecsHelpDebt = addAmount(scenarioPlan.liabilities.hecsHelpDebt, helpBalanceChange);
+    scenarioPlan.assets.cash = addAmount(scenarioPlan.assets.cash, cashChange, -Infinity);
+    if (cashChange && Array.isArray(scenarioPlan.assetItems)) {
+      const cashItem = scenarioPlan.assetItems.find((item) => item.category === "cash");
+      if (cashItem) cashItem.value = addAmount(cashItem.value, cashChange, -Infinity);
+    }
+    return scenarioPlan;
+  }
+
+  function buildComparisonPlan() {
+    return applyScenarioAdjustments(plan, plan.comparison || {});
+  }
+
+  function estimatedCashflow(result) {
+    return Number(result.cashSurplusAfterTaxHelpAndInvesting) || 0;
+  }
+
+  function netWorthAtYear(result, year) {
+    return result.netWorthProjection[Math.max(0, year - 1)]?.closingBalance || result.currentNetWorth;
+  }
+
+  function investmentAtYear(result, year) {
+    return result.investmentProjection[Math.max(0, year - 1)]?.closingBalance || 0;
+  }
+
+  function superAtYear(result, year) {
+    return result.superProjection[Math.max(0, year - 1)]?.closingBalance || result.superannuationBalance || 0;
+  }
+
+  function loanBalanceAtYear(result, year) {
+    const monthIndex = year * 12 - 1;
+    return result.loan.schedule[Math.max(0, monthIndex)]?.closingBalance ?? result.loan.finalBalance ?? 0;
+  }
+
+  function scenarioScore(metrics) {
+    return metrics.projectedNetWorth
+      + metrics.investmentBalance * 0.25
+      + metrics.superBalance * 0.2
+      + metrics.debtReduction * 0.35
+      + Math.max(-100000, metrics.annualCashflow) * 2;
+  }
+
   function ensureCollectionData() {
     if (!Array.isArray(plan.incomeItems)) {
       plan.incomeItems = [
@@ -217,7 +321,26 @@
         { id: "expense-other", name: plan.expenses.otherExpensesName || "Other expenses", category: "other", amount: plan.expenses.otherExpenses || 0, frequency: plan.expenses.otherFrequency || "monthly" },
       ];
     }
-    plan.comparison = { ...comparisonDefaults, ...(plan.comparison || {}) };
+    defaultOtherExpenseItems.forEach((item) => {
+      if (!plan.expenseItems.some((expense) => expense.category === item.category)) {
+        plan.expenseItems.push({ ...item });
+      }
+    });
+    if (!Array.isArray(plan.goalItems)) {
+      const superBalance = (Number(plan.assets.superPerson1) || 0) + (Number(plan.assets.superPerson2) || 0);
+      const debtBalance = (Number(plan.liabilities.homeLoanBalance) || 0) + (Number(plan.liabilities.hecsHelpDebt) || 0) + (Number(plan.liabilities.otherDebts) || 0);
+      plan.goalItems = [
+        { id: "goal-emergency", name: "Target emergency fund", current: Number(plan.assets.cash) || 0, target: 0 },
+        { id: "goal-investments", name: "Investment portfolio target", current: Number(plan.assets.sharesEtfs) || 0, target: 0 },
+        { id: "goal-super", name: "Super balance target", current: superBalance, target: 0 },
+        { id: "goal-debt", name: "Debt reduction target", current: debtBalance, target: 0 },
+        { id: "goal-net-worth", name: "Financial freedom net worth target", current: 0, target: 0 },
+      ];
+    }
+    const oldComparison = plan.comparison || {};
+    const incomeChange = Number(oldComparison.incomeChange) || (Number(oldComparison.increaseIncome) || 0) - (Number(oldComparison.reduceIncome) || 0);
+    const expenseChange = Number(oldComparison.expenseChange) || (Number(oldComparison.increaseExpenses) || 0) - (Number(oldComparison.reduceExpenses) || 0);
+    plan.comparison = { ...comparisonDefaults, ...oldComparison, incomeChange, expenseChange };
   }
 
   function sumBy(items, category, amountKey = "value") {
@@ -285,7 +408,9 @@
     plan.expenses.schoolChildrenFrequency = "annually";
     plan.expenses.ratesPropertyCosts = expenseAnnual("ratesPropertyCosts");
     plan.expenses.ratesPropertyCostsFrequency = "annually";
-    plan.expenses.otherExpenses = expenseAnnual("other");
+    plan.expenses.otherExpenses = plan.expenseItems
+      .filter((item) => !coreExpenseCategories.has(item.category))
+      .reduce((total, item) => total + annualValue(item.amount, item.frequency), 0);
     plan.expenses.otherFrequency = "annually";
   }
 
@@ -491,6 +616,23 @@
   }
 
   function liabilityCard(item, index) {
+    if (item.type === "hecsHelp") {
+      return `
+        <article class="form-item-card dynamic-item-card">
+          <div class="item-card-title">
+            <div>
+              <span>HELP estimate</span>
+              <h4>Current HECS/HELP balance</h4>
+            </div>
+            ${removeButton("liabilityItems", item.id)}
+          </div>
+          <div class="input-grid mt-4">
+            ${dynamicInput("liabilityItems", item, "balance", "Current HECS/HELP balance", { step: "1000" })}
+          </div>
+          <p class="field-help mt-3">Estimate only. The app estimates a minimum compulsory repayment from the income entered.</p>
+        </article>
+      `;
+    }
     return `
       <article class="form-item-card dynamic-item-card">
         <div class="item-card-title">
@@ -508,6 +650,25 @@
           ${dynamicInput("liabilityItems", item, "repayment", "Repayment amount", { step: "100" })}
           ${dynamicInput("liabilityItems", item, "repaymentFrequency", "Repayment frequency", { type: "select", options: frequencies })}
           ${dynamicInput("liabilityItems", item, "termYears", "Remaining term (years)", { step: "1" })}
+        </div>
+      </article>
+    `;
+  }
+
+  function goalCard(item, index) {
+    return `
+      <article class="form-item-card dynamic-item-card">
+        <div class="item-card-title">
+          <div>
+            <span>Goal ${index + 1}</span>
+            <h4>${escapeHtml(item.name || "Goal")}</h4>
+          </div>
+          ${removeButton("goalItems", item.id)}
+        </div>
+        <div class="input-grid mt-4">
+          ${dynamicInput("goalItems", item, "name", "Goal name", { kind: "text", placeholder: "e.g. Emergency fund target" })}
+          ${dynamicInput("goalItems", item, "current", "Current amount", { step: "1000" })}
+          ${dynamicInput("goalItems", item, "target", "Target amount", { step: "1000" })}
         </div>
       </article>
     `;
@@ -538,7 +699,7 @@
     if (!container) return;
     container.innerHTML = collectionShell({
       title: "Income",
-      description: "Add each income source separately so the frequency is clear.",
+      description: "Add each income source separately. Use before-tax income if you want tax and HELP estimates to be useful.",
       addLabel: "Add income",
       collection: "incomeItems",
       body: plan.incomeItems.map(incomeCard).join(""),
@@ -562,7 +723,7 @@
     if (!container) return;
     container.innerHTML = collectionShell({
       title: "Liabilities / Loans",
-      description: "Add each loan or liability. Repayment details are most useful for home loans.",
+      description: "Add each loan or liability. HECS/HELP only needs the current balance; repayment is estimated from income.",
       addLabel: "Add liability",
       collection: "liabilityItems",
       body: plan.liabilityItems.map(liabilityCard).join(""),
@@ -581,13 +742,25 @@
     });
   }
 
+  function renderGoalCollection(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = collectionShell({
+      title: "Example Goals",
+      description: "Use these simple editable examples to show what the plan is aiming for.",
+      addLabel: "Add goal",
+      collection: "goalItems",
+      body: plan.goalItems.map(goalCard).join(""),
+    });
+  }
+
   function renderCashflowInputs(containerId) {
     const container = document.getElementById(containerId);
     if (!container) return;
     container.innerHTML = `
       ${collectionShell({
         title: "Income",
-        description: "Income items can include salary, Other Income, dividends, rent, interest or side payments.",
+        description: "Income items can include salary, Other Income, dividends, rent, interest or side payments. Use before-tax income for tax estimates.",
         addLabel: "Add income",
         collection: "incomeItems",
         body: plan.incomeItems.map(incomeCard).join(""),
@@ -656,8 +829,10 @@
     renderLiabilityCollection("wizardLoansForm");
     renderExpenseCollection("wizardExpensesForm");
     renderForm("wizardGoalsForm", goalFields);
+    renderGoalCollection("wizardGoalExamples");
     renderForm("wizardDownsizingForm", downsizingFields);
     renderForm("downsizingForm", downsizingFields);
+    renderGoalCollection("goalExamples");
   }
 
   function metricCard(label, value, tone = "") {
@@ -852,6 +1027,9 @@
       ["Cash surplus before investing", result.cashSurplusBeforeInvesting],
       ["Investment contributions", result.annualInvestmentContributions],
       ["Cash surplus after investing", result.cashSurplusAfterInvesting],
+      [`Estimated tax (${result.taxEstimate.taxYear})`, result.taxEstimate.totalTax],
+      ["Estimated HELP repayment", result.helpRepaymentEstimate.annualRepayment],
+      ["Estimated after-tax cashflow", result.cashSurplusAfterTaxHelpAndInvesting],
     ];
     document.getElementById("cashflowTable").innerHTML = rows.map(([label, value]) => `
       <div class="table-row"><span>${escapeHtml(label)}</span><strong>${money(value)}</strong></div>
@@ -872,6 +1050,8 @@
       summaryTile("Total principal repaid", money(loan.totalPrincipalRepaid)),
       ...[5, 10, 20, 30].map((year) => summaryTile(`Balance at ${year} years`, money(loan.balanceAtYears[year]))),
     ].join("");
+    const help = result.helpRepaymentEstimate;
+    document.getElementById("helpEstimateSummary").innerHTML = `Estimated HELP repayment: ${money(help.annualRepayment)} per year (${percentFromRatio(help.rate)} of estimated repayment income). ${escapeHtml(help.note)}`;
     lineChart("loanChart", [{
       label: "Loan balance",
       color: "#dc4c3e",
@@ -899,10 +1079,16 @@
       const row = result.superProjection.find((item) => item.age >= age) || result.superProjection.at(-1);
       return `<div class="mini-card"><span>Age ${age}</span><strong>${money(row?.closingBalance || 0)}</strong><small>${money(row?.passiveIncome || 0)} pa at withdrawal rate</small></div>`;
     }).join("");
-    const taxBenefit = plan.investing.extraSuperContributions * Math.max(0, 0.345 - 0.15);
+    const extra = result.taxEstimate.extraSuper;
     document.getElementById("superSummary").innerHTML = `
-      <span class="text-sm font-bold text-slate-500">Extra concessional tax benefit estimate</span>
-      <strong class="mt-1 block text-2xl font-black text-navy">${money(taxBenefit)}</strong>
+      <span class="text-sm font-bold text-slate-500">Additional concessional super estimate</span>
+      <div class="summary-grid mt-3">
+        ${summaryTile("Gross contribution", money(extra.grossContribution))}
+        ${summaryTile("Estimated personal tax saving", money(extra.estimatedPersonalTaxSaving))}
+        ${summaryTile("15% super contributions tax", money(extra.contributionsTax))}
+        ${summaryTile("Net amount invested in super", money(extra.netAmountInvested))}
+        ${summaryTile("Estimated after-tax cashflow cost", money(extra.afterTaxCashflowCost))}
+      </div>
       <p class="mt-2 text-sm text-slate-600">Super is treated as available from age ${result.superAccessAge}. Age-${result.sustainabilityStartAge}+ sustainability assets: ${money(result.totalRetirementAssets)}</p>
       <p class="tax-note mt-3">Concessional super contributions are calculated net of 15% contributions tax.</p>
     `;
@@ -925,6 +1111,8 @@
 
   function renderForecast(result) {
     const cards = [
+      ["1 year projected net worth", netWorthAtYear(result, 1)],
+      ["2 year projected net worth", netWorthAtYear(result, 2)],
       ["5 year net worth", result.netWorthProjection[4]?.closingBalance || 0],
       ["10 year net worth", result.netWorthProjection[9]?.closingBalance || 0],
       ["20 year net worth", result.netWorthProjection[19]?.closingBalance || 0],
@@ -946,6 +1134,11 @@
           <strong class="rounded-full bg-blue-50 px-3 py-1 text-sm text-blue-700">${percentFromRatio(option.score)}</strong>
         </div>
         <p class="mt-3 text-sm text-slate-600">${escapeHtml(option.explanation)}</p>
+        <div class="summary-grid mt-4">
+          ${summaryTile("Estimated after-tax benefit", percentFromRatio(option.afterTaxBenefit))}
+          ${summaryTile("Cashflow cost per $1", dollarsPerDollar(option.cashflowImpact))}
+          ${summaryTile("Tax saving estimate", percentFromRatio(option.taxSaving))}
+        </div>
       </article>
     `).join("");
   }
@@ -978,32 +1171,106 @@
   function renderComparison(result) {
     const summary = document.getElementById("comparisonSummary");
     if (!summary) return;
-    const current = Number(result.cashSurplusAfterInvesting) || 0;
     const comparison = { ...comparisonDefaults, ...(plan.comparison || {}) };
     document.querySelectorAll("[data-comparison]").forEach((input) => {
       const value = comparison[input.dataset.comparison] ?? 0;
       if (input.value !== String(value)) input.value = value;
     });
-    const delta = (Number(comparison.increaseIncome) || 0)
-      - (Number(comparison.reduceIncome) || 0)
-      - (Number(comparison.increaseExpenses) || 0)
-      + (Number(comparison.reduceExpenses) || 0);
-    const revised = current + delta;
+    const revisedPlan = buildComparisonPlan();
+    const revisedResult = CALC.calculatePlan(revisedPlan);
+    const current = estimatedCashflow(result);
+    const revised = estimatedCashflow(revisedResult);
     const currentPercent = freedomPercent(result);
-    const estimatedPercent = result.targetCapital > 0
-      ? currentPercent + (delta / result.targetCapital * 100)
-      : currentPercent;
+    const revisedPercent = freedomPercent(revisedResult);
     summary.innerHTML = [
-      summaryTile("Current annual surplus / shortfall", money(current), current >= 0 ? "status-green" : "status-amber"),
-      summaryTile("Revised annual surplus / shortfall", money(revised), revised >= 0 ? "status-green" : "status-amber"),
-      summaryTile("Extra investment capacity created or lost", money(delta), delta >= 0 ? "status-green" : "status-amber"),
-      summaryTile("Estimated FI percentage impact", `${plainPercent(Math.max(0, estimatedPercent))} vs ${plainPercent(currentPercent)}`),
+      summaryTile("Current monthly cashflow estimate", money(current / 12), current >= 0 ? "status-green" : "status-amber"),
+      summaryTile("Revised monthly cashflow estimate", money(revised / 12), revised >= 0 ? "status-green" : "status-amber"),
+      summaryTile("Current annual cashflow estimate", money(current), current >= 0 ? "status-green" : "status-amber"),
+      summaryTile("Revised annual cashflow estimate", money(revised), revised >= 0 ? "status-green" : "status-amber"),
+      summaryTile("Taxable income estimate", `${money(result.taxEstimate.taxableIncomeAfterExtraSuper)} -> ${money(revisedResult.taxEstimate.taxableIncomeAfterExtraSuper)}`),
+      summaryTile("Estimated tax", `${money(result.taxEstimate.totalTax)} -> ${money(revisedResult.taxEstimate.totalTax)}`),
+      summaryTile("HELP repayment estimate", `${money(result.helpRepaymentEstimate.annualRepayment)} -> ${money(revisedResult.helpRepaymentEstimate.annualRepayment)}`),
+      summaryTile("Super balance in 2 years", `${money(superAtYear(result, 2))} -> ${money(superAtYear(revisedResult, 2))}`),
+      summaryTile("Investment balance in 2 years", `${money(investmentAtYear(result, 2))} -> ${money(investmentAtYear(revisedResult, 2))}`),
+      summaryTile("Debt balance now", `${money(result.totalLiabilities)} -> ${money(revisedResult.totalLiabilities)}`),
+      summaryTile("1-year net worth", `${money(netWorthAtYear(result, 1))} -> ${money(netWorthAtYear(revisedResult, 1))}`),
+      summaryTile("2-year net worth", `${money(netWorthAtYear(result, 2))} -> ${money(netWorthAtYear(revisedResult, 2))}`),
+      summaryTile("Long-term freedom progress", `${plainPercent(currentPercent)} -> ${plainPercent(revisedPercent)}`, revisedPercent >= currentPercent ? "status-green" : "status-amber"),
     ].join("");
+  }
+
+  function scenarioComparisonMetrics(scenario) {
+    const scenarioResult = CALC.calculatePlan(scenario.plan);
+    const projectedNetWorth = netWorthAtYear(scenarioResult, 10);
+    const investmentBalance = investmentAtYear(scenarioResult, 10);
+    const superBalance = superAtYear(scenarioResult, 10);
+    const helpBalanceIn10 = Math.max(0, scenarioResult.helpRepaymentEstimate.balance - scenarioResult.helpRepaymentEstimate.annualRepayment * 10);
+    const debtIn10 = roundForDisplay(loanBalanceAtYear(scenarioResult, 10) + helpBalanceIn10 + (scenarioResult.plan.liabilities.otherDebts || 0));
+    const debtReduction = roundForDisplay(Math.max(0, scenarioResult.totalLiabilities - debtIn10));
+    const annualCashflow = estimatedCashflow(scenarioResult);
+    const metrics = {
+      scenario,
+      result: scenarioResult,
+      projectedNetWorth,
+      investmentBalance,
+      superBalance,
+      debtReduction,
+      annualCashflow,
+    };
+    metrics.score = scenarioScore(metrics);
+    return metrics;
+  }
+
+  function roundForDisplay(value) {
+    return Math.round((Number(value) || 0) * 100) / 100;
+  }
+
+  function renderScenarioComparison(scenarios) {
+    const container = document.getElementById("scenarioComparisonReport");
+    if (!container) return;
+    if (!scenarios.length) {
+      container.innerHTML = `
+        <div class="card-heading">
+          <div>
+            <h3>Scenario Comparison Report</h3>
+            <span>Save two or more plans to compare them side-by-side.</span>
+          </div>
+        </div>
+      `;
+      return;
+    }
+    const metrics = scenarios.map(scenarioComparisonMetrics).sort((a, b) => b.score - a.score);
+    const best = metrics[0];
+    container.innerHTML = `
+      <div class="card-heading">
+        <div>
+          <h3>Scenario Comparison Report</h3>
+          <span>Simple side-by-side estimate across saved scenarios.</span>
+        </div>
+      </div>
+      <p class="tax-note mt-4">Best estimate: ${escapeHtml(best.scenario.name)} ranks highest because it has the strongest mix of projected net worth, investment balance, debt reduction, super balance and cashflow.</p>
+      <div class="scenario-comparison-grid mt-4">
+        ${metrics.map((item, index) => `
+          <article class="scenario-compare-card ${index === 0 ? "best" : ""}">
+            <span>${index === 0 ? "Best estimated outcome" : "Saved scenario"}</span>
+            <h4>${escapeHtml(item.scenario.name)}</h4>
+            <div class="table-list mt-3">
+              <div class="table-row"><span>10-year net worth</span><strong>${money(item.projectedNetWorth)}</strong></div>
+              <div class="table-row"><span>10-year investments</span><strong>${money(item.investmentBalance)}</strong></div>
+              <div class="table-row"><span>Debt reduction</span><strong>${money(item.debtReduction)}</strong></div>
+              <div class="table-row"><span>10-year super</span><strong>${money(item.superBalance)}</strong></div>
+              <div class="table-row"><span>Annual cashflow estimate</span><strong>${money(item.annualCashflow)}</strong></div>
+            </div>
+          </article>
+        `).join("")}
+      </div>
+    `;
   }
 
   function renderScenarios() {
     const scenarios = loadScenarios();
     document.getElementById("scenarioCount").textContent = `${scenarios.length} saved`;
+    renderScenarioComparison(scenarios);
     const list = document.getElementById("scenarioList");
     if (!scenarios.length) {
       list.innerHTML = `<p class="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">No saved scenarios yet.</p>`;
@@ -1053,6 +1320,7 @@
       assetItems: { id: makeId("asset"), name: "New asset", category: "cash", value: 0 },
       liabilityItems: { id: makeId("liability"), name: "New liability", type: "otherDebt", balance: 0, interestRatePct: 0, repayment: 0, repaymentFrequency: "monthly", termYears: 0 },
       expenseItems: { id: makeId("expense"), name: "New expense", category: "other", amount: 0, frequency: "monthly" },
+      goalItems: { id: makeId("goal"), name: "New goal", current: 0, target: 0 },
     };
     if (!defaults[collection]) return;
     plan[collection].push(defaults[collection]);
@@ -1099,6 +1367,7 @@
 
   function loadDemo() {
     plan = CALC.clonePlan(DATA.demoPlan);
+    seedDemoScenarios();
     saveDraft();
     renderAll();
     showWorkspace("dashboard");
@@ -1123,6 +1392,7 @@
   }
 
   function saveScenario() {
+    syncCollectionsToLegacy();
     const scenarios = loadScenarios();
     const nameInput = document.getElementById("scenarioName");
     const notesInput = document.getElementById("scenarioNotes");
@@ -1141,6 +1411,7 @@
   }
 
   function duplicateScenario() {
+    syncCollectionsToLegacy();
     const scenarios = loadScenarios();
     const scenario = {
       id: `scenario-${Date.now()}`,
@@ -1153,6 +1424,20 @@
     saveScenarios(scenarios);
     renderScenarios();
     showWorkspace("scenarios");
+  }
+
+  function seedDemoScenarios() {
+    if (!Array.isArray(DATA.demoScenarioAdjustments)) return;
+    const existingUserScenarios = loadScenarios().filter((scenario) => scenario.source !== "demo");
+    const demoScenarios = DATA.demoScenarioAdjustments.map((item, index) => ({
+      id: `demo-scenario-${index + 1}`,
+      source: "demo",
+      name: item.name,
+      notes: item.notes,
+      savedAt: new Date().toISOString(),
+      plan: applyScenarioAdjustments(DATA.demoPlan, item.adjustments || {}),
+    }));
+    saveScenarios([...demoScenarios, ...existingUserScenarios]);
   }
 
   function bindEvents() {
@@ -1211,6 +1496,12 @@
       const nav = event.target.closest("[data-view]");
       if (nav) setView(nav.dataset.view);
 
+      const homeStep = event.target.closest("[data-home-step]");
+      if (homeStep) {
+        if (homeStep.dataset.homeStep === "setup") activeWizardStep = 0;
+        showWorkspace(homeStep.dataset.homeStep);
+      }
+
       const loadId = event.target.closest("[data-load-scenario]")?.dataset.loadScenario;
       if (loadId) {
         const scenario = loadScenarios().find((item) => item.id === loadId);
@@ -1230,15 +1521,23 @@
       }
     });
 
+    document.addEventListener("keydown", (event) => {
+      const homeStep = event.target.closest?.("[data-home-step]");
+      if (!homeStep || (event.key !== "Enter" && event.key !== " ")) return;
+      event.preventDefault();
+      if (homeStep.dataset.homeStep === "setup") activeWizardStep = 0;
+      showWorkspace(homeStep.dataset.homeStep);
+    });
+
     document.getElementById("demoButton").addEventListener("click", loadDemo);
     document.getElementById("heroDemoButton").addEventListener("click", loadDemo);
     document.getElementById("enterDataButton").addEventListener("click", startMyPlan);
     document.getElementById("heroStartButton").addEventListener("click", startMyPlan);
-    document.getElementById("newPlanButton").addEventListener("click", resetPlan);
-    document.getElementById("saveScenarioButton").addEventListener("click", () => showWorkspace("scenarios"));
+    document.getElementById("planNewButton").addEventListener("click", resetPlan);
+    document.getElementById("planSaveButton").addEventListener("click", () => showWorkspace("scenarios"));
     document.getElementById("saveScenarioPanelButton").addEventListener("click", saveScenario);
-    document.getElementById("loadScenarioButton").addEventListener("click", () => showWorkspace("scenarios"));
-    document.getElementById("duplicateButton").addEventListener("click", duplicateScenario);
+    document.getElementById("planLoadButton").addEventListener("click", () => showWorkspace("scenarios"));
+    document.getElementById("planDuplicateButton").addEventListener("click", duplicateScenario);
     document.getElementById("wizardPrevButton").addEventListener("click", () => {
       activeWizardStep = Math.max(0, activeWizardStep - 1);
       saveDraft();
