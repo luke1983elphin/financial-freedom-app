@@ -112,16 +112,27 @@ main {
   position: relative;
 }
 
-.plan-menu summary {
+.sample-plan-menu {
+  position: relative;
+}
+
+.hero-sample-plan-menu {
+  display: none;
+}
+
+.plan-menu summary,
+.sample-plan-menu summary {
   list-style: none;
   cursor: pointer;
 }
 
-.plan-menu summary::-webkit-details-marker {
+.plan-menu summary::-webkit-details-marker,
+.sample-plan-menu summary::-webkit-details-marker {
   display: none;
 }
 
-.plan-menu-panel {
+.plan-menu-panel,
+.sample-plan-menu-panel {
   position: absolute;
   right: 0;
   z-index: 40;
@@ -136,8 +147,15 @@ main {
   box-shadow: 0 18px 40px rgba(15, 39, 66, 0.12);
 }
 
-.plan-menu-panel button {
+.hero-sample-plan-menu .sample-plan-menu-panel {
+  right: auto;
+  left: 0;
+}
+
+.plan-menu-panel button,
+.sample-plan-menu-panel button {
   min-height: 42px;
+  width: 100%;
   border-radius: 12px;
   padding: 0 12px;
   color: #172033;
@@ -146,8 +164,29 @@ main {
   text-align: left;
 }
 
-.plan-menu-panel button:hover {
+.plan-menu-panel button:hover,
+.sample-plan-menu-panel button:hover {
   background: #f5f8fb;
+}
+
+.sample-plan-menu[open] summary {
+  box-shadow: 0 8px 24px rgba(15, 39, 66, 0.08);
+}
+
+.sample-plan-menu-panel {
+  animation: sampleMenuIn 140ms ease-out;
+}
+
+@keyframes sampleMenuIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .mobile-action-menu summary {
@@ -1304,6 +1343,17 @@ textarea.field-input {
   .nav-button {
     flex: 0 0 auto;
     white-space: nowrap;
+  }
+}
+
+@media (min-width: 521px) {
+  .hero-mobile-sample-select,
+  .hero-mobile-sample-button {
+    display: none !important;
+  }
+
+  .hero-sample-plan-menu {
+    display: block;
   }
 }
 

@@ -573,9 +573,15 @@
   function renderSamplePlanOptions() {
     const plans = DATA.samplePlans || [];
     const options = plans.map((item) => `<option value="${escapeHtml(item.id)}"${item.id === selectedSamplePlanId ? " selected" : ""}>${escapeHtml(item.name)}</option>`).join("");
+    const menuOptions = plans
+      .map((item) => `<button type="button" data-sample-plan-choice="${escapeHtml(item.id)}"${item.id === selectedSamplePlanId ? ' aria-current="true"' : ""}>${escapeHtml(item.name)}</button>`)
+      .join("");
     document.querySelectorAll("[data-sample-plan-select]").forEach((select) => {
       select.innerHTML = options;
       select.value = selectedSamplePlanId;
+    });
+    document.querySelectorAll("[data-sample-plan-menu]").forEach((panel) => {
+      panel.innerHTML = menuOptions;
     });
     const summary = document.getElementById("samplePlanSummary");
     const sample = selectedSamplePlan();
@@ -1756,6 +1762,12 @@
     if (planGroup) planGroup.open = false;
   }
 
+  function closeSamplePlanMenus() {
+    document.querySelectorAll(".sample-plan-menu").forEach((menu) => {
+      menu.open = false;
+    });
+  }
+
   function saveScenario() {
     syncCollectionsToLegacy();
     const scenarios = loadScenarios();
@@ -1855,6 +1867,19 @@
     });
 
     document.addEventListener("click", (event) => {
+      const sampleChoice = event.target.closest("[data-sample-plan-choice]");
+      if (sampleChoice) {
+        selectedSamplePlanId = sampleChoice.dataset.samplePlanChoice;
+        renderSamplePlanOptions();
+        closeSamplePlanMenus();
+        loadSamplePlan();
+        return;
+      }
+
+      if (document.querySelector(".sample-plan-menu[open]") && !event.target.closest(".sample-plan-menu")) {
+        closeSamplePlanMenus();
+      }
+
       const mobileAction = event.target.closest("[data-mobile-action]");
       if (mobileAction) {
         const action = mobileAction.dataset.mobileAction;
@@ -1932,7 +1957,10 @@
     });
 
     document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") closeMobileActionMenu();
+      if (event.key === "Escape") {
+        closeMobileActionMenu();
+        closeSamplePlanMenus();
+      }
 
       const homeStep = event.target.closest?.("[data-home-step]");
       if (!homeStep || (event.key !== "Enter" && event.key !== " ")) return;
@@ -1946,7 +1974,6 @@
       window.setTimeout(() => event.target.scrollIntoView({ behavior: "smooth", block: "center" }), 120);
     });
 
-    document.getElementById("demoButton").addEventListener("click", loadSamplePlan);
     document.getElementById("heroDemoButton").addEventListener("click", loadSamplePlan);
     document.getElementById("continueSampleButton").addEventListener("click", loadSamplePlan);
     document.getElementById("continuePlanButton").addEventListener("click", () => showWorkspace("dashboard"));
