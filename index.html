@@ -30,8 +30,8 @@
   <body class="bg-white text-ink antialiased">
     <div class="min-h-screen">
       <header class="sticky top-0 z-30 border-b border-line bg-white/90 backdrop-blur">
-        <div class="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
+        <div class="app-header-shell mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
+          <div class="header-brand">
             <p class="brand-kicker text-xs font-bold uppercase text-success">Financial Freedom</p>
             <h1 class="text-xl font-bold text-navy">Plan. Test. Build Wealth.</h1>
             <p class="text-xs font-bold text-slate-500" id="lastSavedLabel">Last Saved: Not saved yet</p>
@@ -52,6 +52,27 @@
             </details>
             <button class="btn" type="button" id="exportButton">Print / Export</button>
           </div>
+          <details class="mobile-action-menu" id="mobileActionMenu">
+            <summary class="btn mobile-action-trigger" aria-label="Open planner actions">
+              <span aria-hidden="true">☰</span>
+              <span>Actions</span>
+            </summary>
+            <div class="mobile-action-sheet" role="menu" aria-label="Planner actions">
+              <button type="button" role="menuitem" data-mobile-action="load-sample">Load Sample Plan</button>
+              <button type="button" role="menuitem" data-mobile-action="enter-data">Enter My Data</button>
+              <button type="button" role="menuitem" data-mobile-action="save-plan">Save My Plan</button>
+              <details class="mobile-plan-group" id="mobilePlanGroup">
+                <summary role="button">Plan</summary>
+                <div>
+                  <button type="button" role="menuitem" data-mobile-action="new-plan">New Plan</button>
+                  <button type="button" role="menuitem" data-mobile-action="save-plan">Save Plan</button>
+                  <button type="button" role="menuitem" data-mobile-action="load-plan">Load Plan</button>
+                  <button type="button" role="menuitem" data-mobile-action="duplicate-plan">Duplicate Plan</button>
+                </div>
+              </details>
+              <button type="button" role="menuitem" data-mobile-action="export">Print / Export</button>
+            </div>
+          </details>
         </div>
       </header>
 

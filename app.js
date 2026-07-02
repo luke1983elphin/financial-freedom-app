@@ -1749,6 +1749,13 @@
     showWorkspace("setup");
   }
 
+  function closeMobileActionMenu() {
+    const menu = document.getElementById("mobileActionMenu");
+    const planGroup = document.getElementById("mobilePlanGroup");
+    if (menu) menu.open = false;
+    if (planGroup) planGroup.open = false;
+  }
+
   function saveScenario() {
     syncCollectionsToLegacy();
     const scenarios = loadScenarios();
@@ -1848,6 +1855,26 @@
     });
 
     document.addEventListener("click", (event) => {
+      const mobileAction = event.target.closest("[data-mobile-action]");
+      if (mobileAction) {
+        const action = mobileAction.dataset.mobileAction;
+        closeMobileActionMenu();
+        if (action === "load-sample") loadSamplePlan();
+        if (action === "enter-data") startMyPlan();
+        if (action === "save-plan") manualSavePlan();
+        if (action === "new-plan") resetPlan();
+        if (action === "load-plan") showWorkspace("scenarios");
+        if (action === "duplicate-plan") duplicateScenario();
+        if (action === "export") window.print();
+        return;
+      }
+
+      const mobileMenu = document.getElementById("mobileActionMenu");
+      if (mobileMenu?.open && (event.target === mobileMenu || !event.target.closest("#mobileActionMenu"))) {
+        closeMobileActionMenu();
+        return;
+      }
+
       const addButton = event.target.closest("[data-add-collection]");
       if (addButton) {
         addCollectionItem(addButton.dataset.addCollection);
@@ -1905,6 +1932,8 @@
     });
 
     document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closeMobileActionMenu();
+
       const homeStep = event.target.closest?.("[data-home-step]");
       if (!homeStep || (event.key !== "Enter" && event.key !== " ")) return;
       event.preventDefault();
