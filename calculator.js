@@ -61,6 +61,17 @@
     return roundCurrency(baseTax + medicareLevy);
   }
 
+  function individualTaxBreakdown(taxableIncome) {
+    const income = nonNegative(taxableIncome);
+    const incomeTax = taxBeforeMedicare(income);
+    const medicareLevy = roundCurrency(income * MEDICARE_LEVY_RATE);
+    return {
+      incomeTax,
+      medicareLevy,
+      totalTax: roundCurrency(incomeTax + medicareLevy),
+    };
+  }
+
   function marginalTaxRate(taxableIncome, includeMedicare = true) {
     const income = nonNegative(taxableIncome);
     const bracket = [...TAX_BRACKETS_2026_27].reverse().find((item) => income > item.threshold) || TAX_BRACKETS_2026_27[0];
@@ -138,18 +149,33 @@
   }
 
   function annualRecurringExpenses(plan) {
+    return annualExpenseBreakdown(plan).total;
+  }
+
+  function annualExpenseBreakdown(plan) {
+    const coreCategories = new Set(["living", "food", "utilities", "insurance", "schoolChildren", "ratesPropertyCosts"]);
     if (Array.isArray(plan.expenseItems) && plan.expenseItems.length) {
-      return roundCurrency(plan.expenseItems.reduce((total, item) => total + annualize(item.amount, item.frequency), 0));
+      return plan.expenseItems.reduce((breakdown, item) => {
+        const amount = annualize(item.amount, item.frequency);
+        if (coreCategories.has(item.category)) {
+          breakdown.living = roundCurrency(breakdown.living + amount);
+        } else {
+          breakdown.otherRegular = roundCurrency(breakdown.otherRegular + amount);
+        }
+        breakdown.total = roundCurrency(breakdown.living + breakdown.otherRegular);
+        return breakdown;
+      }, { living: 0, otherRegular: 0, total: 0 });
     }
-    return roundCurrency(
+    const living = roundCurrency(
       annualize(plan.expenses.livingCosts, plan.expenses.livingFrequency)
       + annualize(plan.expenses.food, plan.expenses.foodFrequency)
       + annualize(plan.expenses.utilities, plan.expenses.utilitiesFrequency)
       + annualize(plan.expenses.insurance, plan.expenses.insuranceFrequency)
       + annualize(plan.expenses.schoolChildren, plan.expenses.schoolChildrenFrequency)
       + annualize(plan.expenses.ratesPropertyCosts, plan.expenses.ratesPropertyCostsFrequency)
-      + annualize(plan.expenses.otherExpenses, plan.expenses.otherFrequency),
     );
+    const otherRegular = roundCurrency(annualize(plan.expenses.otherExpenses, plan.expenses.otherFrequency));
+    return { living, otherRegular, total: roundCurrency(living + otherRegular) };
   }
 
   function emptyPlan() {
@@ -462,12 +488,14 @@
     const split = splitAdditionalContribution(extraConcessionalSuper, person1TaxableBefore, person2TaxableBefore);
     const person1TaxableAfter = roundCurrency(Math.max(0, person1TaxableBefore - split.person1));
     const person2TaxableAfter = roundCurrency(Math.max(0, person2TaxableBefore - split.person2));
-    const person1TaxBefore = individualTaxEstimate(person1TaxableBefore);
-    const person2TaxBefore = individualTaxEstimate(person2TaxableBefore);
-    const person1TaxAfter = individualTaxEstimate(person1TaxableAfter);
-    const person2TaxAfter = individualTaxEstimate(person2TaxableAfter);
-    const totalTaxBefore = roundCurrency(person1TaxBefore + person2TaxBefore);
-    const totalTaxAfter = roundCurrency(person1TaxAfter + person2TaxAfter);
+    const person1TaxBefore = individualTaxBreakdown(person1TaxableBefore);
+    const person2TaxBefore = individualTaxBreakdown(person2TaxableBefore);
+    const person1TaxAfter = individualTaxBreakdown(person1TaxableAfter);
+    const person2TaxAfter = individualTaxBreakdown(person2TaxableAfter);
+    const totalTaxBefore = roundCurrency(person1TaxBefore.totalTax + person2TaxBefore.totalTax);
+    const totalTaxAfter = roundCurrency(person1TaxAfter.totalTax + person2TaxAfter.totalTax);
+    const incomeTax = roundCurrency(person1TaxAfter.incomeTax + person2TaxAfter.incomeTax);
+    const medicareLevy = roundCurrency(person1TaxAfter.medicareLevy + person2TaxAfter.medicareLevy);
     const grossContribution = nonNegative(extraConcessionalSuper);
     const contributionsTax = roundCurrency(grossContribution * SUPER_CONTRIBUTIONS_TAX_RATE);
     const netInvested = roundCurrency(grossContribution - contributionsTax);
@@ -485,6 +513,8 @@
       totalTaxBefore,
       totalTaxAfter,
       totalTax: totalTaxAfter,
+      incomeTax,
+      medicareLevy,
       marginalTaxRate: marginalRate,
       medicareLevyRate: MEDICARE_LEVY_RATE,
       extraSuper: {
@@ -584,7 +614,7 @@
     const person1AnnualIncome = roundCurrency(annualize(plan.income.person1Income, plan.income.person1Frequency));
     const person2AnnualIncome = roundCurrency(annualize(plan.income.person2Income, plan.income.person2Frequency));
     const otherAnnualIncome = roundCurrency(annualize(plan.income.otherIncome, plan.income.otherIncomeFrequency));
-    const annualNetIncome = roundCurrency(person1AnnualIncome + person2AnnualIncome + otherAnnualIncome);
+    const annualGrossIncome = roundCurrency(person1AnnualIncome + person2AnnualIncome + otherAnnualIncome);
     const taxEstimate = householdTaxEstimate({
       person1Income: person1AnnualIncome,
       person2Income: person2AnnualIncome,
@@ -598,16 +628,22 @@
       extraConcessionalSuper: plan.investing.extraSuperContributions,
     });
     const helpRepaymentEstimate = estimateHelpRepayment(helpRepaymentIncome.estimatedRepaymentIncome, plan.liabilities.hecsHelpDebt);
-    const annualLivingExpenses = annualRecurringExpenses(plan);
-    const annualExpenses = annualLivingExpenses;
+    const expenseBreakdown = annualExpenseBreakdown(plan);
+    const annualCoreLivingExpenses = expenseBreakdown.living;
+    const annualOtherRegularExpenses = expenseBreakdown.otherRegular;
+    const annualExpenses = expenseBreakdown.total;
+    const annualLivingExpenses = annualExpenses;
     const annualMortgageRepayments = roundCurrency(nonNegative(plan.liabilities.monthlyRepayment || plan.expenses.mortgageRepayments) * MONTHS_PER_YEAR);
     const annualCreditCardRepayments = roundCurrency(nonNegative(plan.liabilities.creditCardMonthlyRepayment) * MONTHS_PER_YEAR);
     const annualDebtRepayments = roundCurrency(annualMortgageRepayments + annualCreditCardRepayments);
-    const annualInvestmentContributions = roundCurrency(nonNegative(plan.investing.annualInvestingTarget) + nonNegative(plan.investing.extraSuperContributions));
-    const cashSurplusBeforeInvesting = roundCurrency(annualNetIncome - annualExpenses - annualDebtRepayments);
-    const cashSurplusAfterInvesting = roundCurrency(cashSurplusBeforeInvesting - annualInvestmentContributions);
     const estimatedTaxAndHelp = roundCurrency(taxEstimate.totalTax + helpRepaymentEstimate.annualRepayment);
-    const cashSurplusAfterTaxHelpAndInvesting = roundCurrency(cashSurplusAfterInvesting - estimatedTaxAndHelp);
+    const netIncomeAfterTaxHelp = roundCurrency(annualGrossIncome - taxEstimate.incomeTax - taxEstimate.medicareLevy - helpRepaymentEstimate.annualRepayment);
+    const annualInvestmentContributions = roundCurrency(nonNegative(plan.investing.annualInvestingTarget));
+    const annualExtraSuperContributions = roundCurrency(nonNegative(plan.investing.extraSuperContributions));
+    const cashSurplusBeforeInvesting = roundCurrency(netIncomeAfterTaxHelp - annualCoreLivingExpenses - annualDebtRepayments - annualOtherRegularExpenses);
+    const cashSurplusAfterInvesting = roundCurrency(cashSurplusBeforeInvesting - annualInvestmentContributions - annualExtraSuperContributions);
+    const finalProjectedCashSurplus = cashSurplusAfterInvesting;
+    const cashSurplusAfterTaxHelpAndInvesting = finalProjectedCashSurplus;
     const firstYearMortgagePrincipalReduction = roundCurrency(loan.schedule.slice(0, 12).reduce((total, row) => total + Math.max(0, row.principalRepaid), 0));
     const grossEmployerSuperContributions = nonNegative(plan.investing.employerSuperContributions);
     const grossExtraSuperContributions = nonNegative(plan.investing.extraSuperContributions);
@@ -746,18 +782,24 @@
       superAccessAge: SUPER_ACCESS_AGE,
       financialIndependenceAssets,
       effectiveMortgageBalance: loan.offsetBenefit.effectiveLoanBalance,
-      annualNetIncome,
+      annualGrossIncome,
+      annualNetIncome: annualGrossIncome,
       person1AnnualIncome,
       person2AnnualIncome,
       otherAnnualIncome,
       annualExpenses,
       annualLivingExpenses,
+      annualCoreLivingExpenses,
+      annualOtherRegularExpenses,
       annualMortgageRepayments,
       annualCreditCardRepayments,
       annualDebtRepayments,
       annualInvestmentContributions,
+      annualExtraSuperContributions,
+      netIncomeAfterTaxHelp,
       cashSurplusBeforeInvesting,
       cashSurplusAfterInvesting,
+      finalProjectedCashSurplus,
       estimatedTaxAndHelp,
       cashSurplusAfterTaxHelpAndInvesting,
       firstYearMortgagePrincipalReduction,

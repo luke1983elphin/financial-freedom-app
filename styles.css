@@ -1624,6 +1624,85 @@ textarea.field-input {
   font-size: 13px;
 }
 
+.milestone-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.milestone-card {
+  border-left: 5px solid #dbe4ee;
+}
+
+.milestone-card.current-stage {
+  border-color: #0f9f6e;
+  box-shadow: 0 20px 54px rgba(15, 159, 110, 0.16);
+}
+
+.milestone-card.achieved {
+  background: linear-gradient(180deg, #ffffff 0%, #f3fbf7 100%);
+}
+
+.milestone-card summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: start;
+  cursor: pointer;
+  list-style: none;
+}
+
+.milestone-card summary::-webkit-details-marker {
+  display: none;
+}
+
+.milestone-card h3 {
+  margin-top: 4px;
+  color: #0f2742;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.milestone-card p {
+  margin-top: 8px;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.milestone-card summary > strong {
+  display: inline-flex;
+  min-width: 70px;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #eef6ff;
+  color: #0f2742;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.milestone-card.current-stage summary > strong {
+  background: #d9f5eb;
+  color: #08734e;
+}
+
+.milestone-card .progress-track {
+  margin-top: 16px;
+}
+
+.milestone-explanation {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 14px;
+}
+
+@media (min-width: 980px) {
+  .milestone-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+
 @media print {
   header,
   nav,

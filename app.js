@@ -18,7 +18,7 @@
     },
     {
       title: "Income",
-      instruction: "Add each income source with its own name, amount and frequency.",
+      instruction: "Add each income source as gross income before tax, with its own name, amount and frequency.",
     },
     {
       title: "Assets",
@@ -76,6 +76,7 @@
     ["other", "Other expenses"],
   ];
   const coreExpenseCategories = new Set(["living", "food", "utilities", "insurance", "schoolChildren", "ratesPropertyCosts"]);
+  const incomeHelperText = "Enter your gross income before tax. The simulator estimates tax and HELP repayments separately.";
   const defaultOtherExpenseItems = [
     { id: "expense-subscriptions", name: "Monthly subscriptions", category: "subscriptions", amount: 0, frequency: "monthly" },
     { id: "expense-phone", name: "Phone / Internet", category: "phoneInternet", amount: 0, frequency: "monthly" },
@@ -100,11 +101,11 @@
     { id: "invest-100", label: "Invest an extra $100/week", adjustments: () => ({ investmentContributionChange: 5200 }) },
     { id: "invest-250", label: "Invest an extra $250/week", adjustments: () => ({ investmentContributionChange: 13000 }) },
     { id: "debt-500", label: "Pay an extra $500/month off debt", adjustments: () => ({ loanRepaymentChangeMonthly: 500 }) },
-    { id: "income-5", label: "Increase income by 5%", adjustments: (result) => ({ incomeChange: Math.round(result.annualNetIncome * 0.05) }) },
+    { id: "income-5", label: "Increase income by 5%", adjustments: (result) => ({ incomeChange: Math.round((result.annualGrossIncome || result.annualNetIncome) * 0.05) }) },
     { id: "expenses-500", label: "Reduce expenses by $500/month", adjustments: () => ({ expenseChange: -6000 }) },
     { id: "super-10000", label: "Add $10,000 concessional super", adjustments: () => ({ extraConcessionalSuperChange: 10000 }) },
     { id: "car-50000", label: "Buy a $50,000 car", adjustments: () => ({ oneOffCosts: 50000 }) },
-    { id: "four-days", label: "Work 4 days per week", adjustments: (result) => ({ incomeChange: -Math.round(result.annualNetIncome * 0.2) }) },
+    { id: "four-days", label: "Work 4 days per week", adjustments: (result) => ({ incomeChange: -Math.round((result.annualGrossIncome || result.annualNetIncome) * 0.2) }) },
   ];
 
   let plan = CALC.clonePlan(loadDraft() || CALC.emptyPlan());
@@ -257,7 +258,7 @@
   }
 
   function estimatedCashflow(result) {
-    return Number(result.cashSurplusAfterTaxHelpAndInvesting) || 0;
+    return Number(result.finalProjectedCashSurplus ?? result.cashSurplusAfterTaxHelpAndInvesting) || 0;
   }
 
   function netWorthAtYear(result, year) {
@@ -326,7 +327,7 @@
       { label: "Emergency fund started", active: (Number(plan.assets.cash) || 0) > 0 },
       { label: "Emergency fund complete", active: (Number(plan.assets.cash) || 0) >= emergencyTarget },
       { label: "First $100,000 invested", active: invested >= 100000 },
-      { label: "Investments exceed annual salary", active: invested >= result.annualNetIncome && result.annualNetIncome > 0 },
+      { label: "Investments exceed annual salary", active: invested >= result.annualGrossIncome && result.annualGrossIncome > 0 },
       { label: "Debt below 50% of assets", active: result.totalAssets > 0 && result.totalLiabilities <= result.totalAssets * 0.5 },
       { label: "Super exceeds $250,000", active: result.superannuationBalance >= 250000 },
       { label: "Super exceeds $500,000", active: result.superannuationBalance >= 500000 },
@@ -867,7 +868,7 @@
     if (!container) return;
     container.innerHTML = collectionShell({
       title: "Income",
-      description: "Add each income source separately. Use before-tax income if you want tax and HELP estimates to be useful.",
+      description: incomeHelperText,
       addLabel: "Add income",
       collection: "incomeItems",
       body: plan.incomeItems.map(incomeCard).join(""),
@@ -928,7 +929,7 @@
     container.innerHTML = `
       ${collectionShell({
         title: "Income",
-        description: "Income items can include salary, Other Income, dividends, rent, interest or side payments. Use before-tax income for tax estimates.",
+        description: `Income items can include salary, Other Income, dividends, rent, interest or side payments. ${incomeHelperText}`,
         addLabel: "Add income",
         collection: "incomeItems",
         body: plan.incomeItems.map(incomeCard).join(""),
@@ -1102,6 +1103,76 @@
     };
   }
 
+  function milestoneReachEstimate(result, threshold) {
+    const currentAge = Number(result.plan.personal.person1Age) || 0;
+    const percent = freedomPercent(result);
+    if (percent >= threshold) {
+      return {
+        years: 0,
+        age: currentAge || null,
+        label: currentAge ? `Reached now at age ${currentAge}` : "Reached now",
+      };
+    }
+    const row = result.financialFreedomProgressProjection.find((item) => item.progress >= threshold);
+    if (!row) return { years: null, age: null, label: "Beyond the 30-year forecast" };
+    return {
+      years: row.year,
+      age: row.age,
+      label: `Estimated in ${row.year} ${row.year === 1 ? "year" : "years"} at age ${row.age}`,
+    };
+  }
+
+  function milestoneSuggestion(result, milestone, isCurrent, achieved) {
+    const gap = Math.max(0, (Number(milestone.requiredCapital) || 0) - (Number(result.financialIndependenceAssets) || 0));
+    const surplus = Number(result.finalProjectedCashSurplus) || 0;
+    if (achieved) {
+      return `This milestone is currently reached based on the assumptions used. Keep checking cashflow, debt and investment contributions so progress stays on track.`;
+    }
+    if (surplus > 0) {
+      return `${money(gap)} more financial independence assets are estimated for this milestone. Your model shows ${money(surplus)} final annual surplus, so directing part of that surplus to investments, offset or debt reduction may help you move faster.`;
+    }
+    if (isCurrent) {
+      return `${money(gap)} more financial independence assets are estimated for this milestone. The current plan shows a cashflow shortfall, so reviewing expenses, loan repayments or gross income assumptions may be the first practical step.`;
+    }
+    return `${money(gap)} more financial independence assets are estimated for this milestone. This is a future target; focus first on the highlighted current milestone.`;
+  }
+
+  function milestoneCards(result) {
+    const percent = freedomPercent(result);
+    const nextIndex = result.milestones.findIndex((milestone) => percent < milestone.coverage * 100);
+    const currentIndex = nextIndex === -1 ? Math.max(0, result.milestones.length - 1) : nextIndex;
+    return result.milestones.map((milestone, index) => {
+      const threshold = milestone.coverage * 100;
+      const progress = threshold > 0 ? Math.min(100, Math.max(0, percent / threshold * 100)) : 0;
+      const achieved = percent >= threshold;
+      const isCurrent = index === currentIndex;
+      const reach = milestoneReachEstimate(result, threshold);
+      const stageLabel = achieved ? "Milestone reached" : isCurrent ? "Current milestone" : "Future milestone";
+      return `
+        <details class="milestone-card card status-${milestone.status} ${isCurrent ? "current-stage" : ""} ${achieved ? "achieved" : ""}" ${isCurrent ? "open" : ""}>
+          <summary>
+            <div>
+              <span class="metric-label">${stageLabel}</span>
+              <h3>${escapeHtml(milestone.label)}</h3>
+              <p>${escapeHtml(milestone.description || "")}</p>
+            </div>
+            <strong>${plainPercent(progress)}</strong>
+          </summary>
+          <div class="progress-track" aria-hidden="true"><span style="width:${progress}%"></span></div>
+          <div class="summary-grid mt-4">
+            ${summaryTile("Progress to this milestone", plainPercent(progress))}
+            ${summaryTile("Estimated timing", reach.label)}
+            ${summaryTile("Target assets", money(milestone.requiredCapital))}
+            ${summaryTile("Current FI assets", money(result.financialIndependenceAssets))}
+            ${summaryTile("Projected assets at target age", money(milestone.projectedFiAssets))}
+            ${summaryTile("Passive income estimate", money(milestone.passiveIncomeEstimate))}
+          </div>
+          <p class="milestone-explanation">${escapeHtml(milestoneSuggestion(result, milestone, isCurrent, achieved))}</p>
+        </details>
+      `;
+    }).join("");
+  }
+
   function renderWizardResults(result) {
     const percent = freedomPercent(result);
     const stage = currentFreedomStage(percent);
@@ -1189,7 +1260,7 @@
 
     document.getElementById("dashboardHeroMetrics").innerHTML = [
       metricCard("Net Worth", money(result.currentNetWorth), "", "What you own minus what you owe."),
-      metricCard("Annual Surplus", money(annualSurplus), annualSurplus >= 0 ? "status-green" : "status-amber", "Estimated money left after recurring costs, debt repayments, tax, HELP and planned investing."),
+      metricCard("Final Projected Surplus", money(annualSurplus), annualSurplus >= 0 ? "status-green" : "status-amber", "Estimated money left after tax, Medicare, HELP, living costs, loan repayments, investing and extra super."),
       metricCard("Investments", money(result.investmentBalance), "", "Projected investment balance includes contributions and earnings over time."),
       metricCard("Super", money(result.superannuationBalance), "status-green", "Tracked separately from other investments."),
       metricCard("Financial Freedom Score", plainPercent(percent), percent >= 75 ? "status-green" : "", "Progress toward investments supporting your chosen lifestyle."),
@@ -1273,16 +1344,18 @@
 
   function renderCashflow(result) {
     const rows = [
-      ["Annual net income", result.annualNetIncome],
-      ["Annual living expenses", result.annualLivingExpenses],
-      ["Mortgage repayments", result.annualMortgageRepayments],
-      ["Credit card repayments", result.annualCreditCardRepayments],
+      ["Gross income", result.annualGrossIncome],
+      [`Less: Estimated income tax (${result.taxEstimate.taxYear})`, -result.taxEstimate.incomeTax],
+      ["Less: Medicare levy", -result.taxEstimate.medicareLevy],
+      ["Less: Estimated HECS/HELP repayment", -result.helpRepaymentEstimate.annualRepayment],
+      ["Net income after tax and HELP", result.netIncomeAfterTaxHelp],
+      ["Less: Living expenses", -result.annualCoreLivingExpenses],
+      ["Less: Loan repayments", -result.annualDebtRepayments],
+      ["Less: Other regular expenses", -result.annualOtherRegularExpenses],
       ["Cash surplus before investing", result.cashSurplusBeforeInvesting],
-      ["Investment contributions", result.annualInvestmentContributions],
-      ["Cash surplus after investing", result.cashSurplusAfterInvesting],
-      [`Estimated tax (${result.taxEstimate.taxYear})`, result.taxEstimate.totalTax],
-      ["Estimated HELP repayment", result.helpRepaymentEstimate.annualRepayment],
-      ["Estimated after-tax cashflow", result.cashSurplusAfterTaxHelpAndInvesting],
+      ["Less: Investment contributions", -result.annualInvestmentContributions],
+      ["Less: Extra super contributions / salary sacrifice", -result.annualExtraSuperContributions],
+      ["Final projected cash surplus", result.finalProjectedCashSurplus],
     ];
     document.getElementById("cashflowTable").innerHTML = rows.map(([label, value]) => `
       <div class="table-row"><span>${escapeHtml(label)}</span><strong>${money(value)}</strong></div>
@@ -1351,19 +1424,11 @@
   }
 
   function renderMilestones(result) {
-    document.getElementById("milestones").innerHTML = result.milestones.map((milestone) => `
-      <article class="card status-${milestone.status}">
-        <span class="text-sm font-bold text-slate-500">${escapeHtml(milestone.label)}</span>
-        <strong class="mt-2 block text-3xl font-black text-navy">Age ${milestone.age || "-"}</strong>
-        <p class="mt-3 text-sm leading-6 text-slate-600">${escapeHtml(milestone.description || "")}</p>
-        <div class="mt-4 grid gap-2 text-sm">
-          <div class="flex justify-between gap-4"><span>Projected FI assets</span><b>${money(milestone.projectedFiAssets)}</b></div>
-          <div class="flex justify-between gap-4"><span>Required capital</span><b>${money(milestone.requiredCapital)}</b></div>
-          <div class="flex justify-between gap-4"><span>Passive income</span><b>${money(milestone.passiveIncomeEstimate)}</b></div>
-        </div>
-        <span class="status-pill mt-4">${milestone.status}</span>
-      </article>
-    `).join("");
+    const html = milestoneCards(result);
+    ["dashboardMilestones", "forecastMilestones"].forEach((id) => {
+      const container = document.getElementById(id);
+      if (container) container.innerHTML = html;
+    });
   }
 
   function renderForecast(result) {
@@ -1406,7 +1471,7 @@
   }
 
   function renderReports(result) {
-    document.getElementById("reportSummary").textContent = `Financial Freedom Progress ${plainPercent(freedomPercent(result))}, net worth ${money(result.currentNetWorth)}, annual living expenses ${money(result.annualLivingExpenses)}, monthly cashflow estimate ${money(estimatedCashflow(result) / 12)}.`;
+    document.getElementById("reportSummary").textContent = `Financial Freedom Progress ${plainPercent(freedomPercent(result))}, net worth ${money(result.currentNetWorth)}, annual living expenses ${money(result.annualLivingExpenses)}, monthly final projected cash surplus ${money(estimatedCashflow(result) / 12)}.`;
     renderScenarioComparison(loadScenarios(), "reportScenarioComparison");
   }
 
@@ -1420,9 +1485,10 @@
       ["Current stage", stage.name],
       ["Accessible investments", money(result.accessibleInvestmentAssets)],
       ["Super from age 60", money(result.superannuationBalance)],
-      ["Annual net income", money(result.annualNetIncome)],
+      ["Gross income", money(result.annualGrossIncome)],
+      ["Net income after tax and HELP", money(result.netIncomeAfterTaxHelp)],
       ["Annual living expenses", money(result.annualLivingExpenses)],
-      ["Cash surplus after investing", money(result.cashSurplusAfterInvesting)],
+      ["Final projected cash surplus", money(result.finalProjectedCashSurplus)],
       ["Investment return", `${Number(plan.investing.expectedInvestmentReturnPct || 0).toFixed(1)}%`],
       ["1-year net worth", money(netWorthAtYear(result, 1))],
     ].map(([label, value]) => `
@@ -1448,12 +1514,13 @@
     const currentPercent = freedomPercent(result);
     const revisedPercent = freedomPercent(revisedResult);
     summary.innerHTML = [
-      summaryTile("Current monthly cashflow estimate", money(current / 12), current >= 0 ? "status-green" : "status-amber"),
-      summaryTile("Revised monthly cashflow estimate", money(revised / 12), revised >= 0 ? "status-green" : "status-amber"),
-      summaryTile("Current annual cashflow estimate", money(current), current >= 0 ? "status-green" : "status-amber"),
-      summaryTile("Revised annual cashflow estimate", money(revised), revised >= 0 ? "status-green" : "status-amber"),
+      summaryTile("Current monthly final surplus", money(current / 12), current >= 0 ? "status-green" : "status-amber"),
+      summaryTile("Revised monthly final surplus", money(revised / 12), revised >= 0 ? "status-green" : "status-amber"),
+      summaryTile("Current annual final surplus", money(current), current >= 0 ? "status-green" : "status-amber"),
+      summaryTile("Revised annual final surplus", money(revised), revised >= 0 ? "status-green" : "status-amber"),
       summaryTile("Taxable income estimate", `${money(result.taxEstimate.taxableIncomeAfterExtraSuper)} -> ${money(revisedResult.taxEstimate.taxableIncomeAfterExtraSuper)}`),
-      summaryTile("Estimated tax", `${money(result.taxEstimate.totalTax)} -> ${money(revisedResult.taxEstimate.totalTax)}`),
+      summaryTile("Estimated income tax", `${money(result.taxEstimate.incomeTax)} -> ${money(revisedResult.taxEstimate.incomeTax)}`),
+      summaryTile("Estimated Medicare levy", `${money(result.taxEstimate.medicareLevy)} -> ${money(revisedResult.taxEstimate.medicareLevy)}`),
       summaryTile("HELP repayment estimate", `${money(result.helpRepaymentEstimate.annualRepayment)} -> ${money(revisedResult.helpRepaymentEstimate.annualRepayment)}`),
       summaryTile("Super balance in 2 years", `${money(superAtYear(result, 2))} -> ${money(superAtYear(revisedResult, 2))}`),
       summaryTile("Investment balance in 2 years", `${money(investmentAtYear(result, 2))} -> ${money(investmentAtYear(revisedResult, 2))}`),
@@ -1478,7 +1545,7 @@
     const adjustedMonthly = estimatedCashflow(adjustedResult) / 12;
     output.innerHTML = [
       summaryTile("Scenario simulation", active.label),
-      summaryTile("Monthly cashflow", `${money(currentMonthly)} -> ${money(adjustedMonthly)}`, adjustedMonthly >= currentMonthly ? "status-green" : "status-amber"),
+      summaryTile("Monthly final surplus", `${money(currentMonthly)} -> ${money(adjustedMonthly)}`, adjustedMonthly >= currentMonthly ? "status-green" : "status-amber"),
       summaryTile("1-year net worth", `${money(netWorthAtYear(result, 1))} -> ${money(netWorthAtYear(adjustedResult, 1))}`),
       summaryTile("2-year net worth", `${money(netWorthAtYear(result, 2))} -> ${money(netWorthAtYear(adjustedResult, 2))}`),
       summaryTile("Long-term net worth", `${money(longTermNetWorth(result))} -> ${money(longTermNetWorth(adjustedResult))}`),
@@ -1577,7 +1644,7 @@
           <span>Simple side-by-side estimate across saved scenarios.</span>
         </div>
       </div>
-      <p class="tax-note mt-4"><strong>Recommended Scenario:</strong> ${escapeHtml(best.scenario.name)}. This is preferred because it has the strongest estimated mix of cashflow, projected net worth, debt level, investment balance, super balance and progress toward the long-term financial freedom target.</p>
+      <p class="tax-note mt-4"><strong>Recommended Scenario:</strong> ${escapeHtml(best.scenario.name)}. This is preferred because it has the strongest estimated mix of final surplus, projected net worth, debt level, investment balance, super balance and progress toward the long-term financial freedom target.</p>
       <div class="comparison-table-wrap mt-4">
         <table class="comparison-table">
           <thead>
@@ -1589,6 +1656,7 @@
             </tr>
           </thead>
           <tbody>
+            ${comparisonTableRow("Monthly final surplus", currentMetrics.monthlyCashflow, best.monthlyCashflow)}
             ${comparisonTableRow("Financial Freedom Age", currentMetrics.targetAge, best.targetAge, { textOnly: true })}
             ${comparisonTableRow("Investment Balance", currentMetrics.investmentBalance, best.investmentBalance)}
             ${comparisonTableRow("Super Balance", currentMetrics.superBalance, best.superBalance)}
@@ -1605,7 +1673,7 @@
             <span>${index === 0 ? "Best estimated outcome" : "Saved scenario"}</span>
             <h4>${escapeHtml(item.scenario.name)}</h4>
             <div class="table-list mt-3">
-              <div class="table-row"><span>Monthly cashflow</span><strong>${money(item.monthlyCashflow)}</strong></div>
+              <div class="table-row"><span>Monthly final surplus</span><strong>${money(item.monthlyCashflow)}</strong></div>
               <div class="table-row"><span>1-year net worth</span><strong>${money(item.oneYearNetWorth)}</strong></div>
               <div class="table-row"><span>2-year net worth</span><strong>${money(item.twoYearNetWorth)}</strong></div>
               <div class="table-row"><span>Long-term net worth</span><strong>${money(item.longTermNetWorth)}</strong></div>
