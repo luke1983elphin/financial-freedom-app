@@ -43,6 +43,7 @@
             </details>
             <button class="btn" type="button" id="enterDataButton">Enter My Data</button>
             <button class="btn" type="button" id="manualSaveButton">Save My Plan</button>
+            <span class="save-status-pill" id="headerSaveStatus" aria-live="polite">Last saved: Not saved yet</span>
             <details class="plan-menu" id="planMenu">
               <summary class="btn plan-menu-trigger">Plan</summary>
               <div class="plan-menu-panel">
@@ -50,6 +51,7 @@
                 <button type="button" id="planSaveButton">Save Plan</button>
                 <button type="button" id="planLoadButton">Load Plan</button>
                 <button type="button" id="planDuplicateButton">Duplicate Plan</button>
+                <button type="button" id="planClearSavedButton">Clear Saved Plan</button>
               </div>
             </details>
             <button class="btn" type="button" id="exportButton">Print / Export</button>
@@ -70,6 +72,7 @@
                   <button type="button" role="menuitem" data-mobile-action="save-plan">Save Plan</button>
                   <button type="button" role="menuitem" data-mobile-action="load-plan">Load Plan</button>
                   <button type="button" role="menuitem" data-mobile-action="duplicate-plan">Duplicate Plan</button>
+                  <button type="button" role="menuitem" data-mobile-action="clear-saved-plan">Clear Saved Plan</button>
                 </div>
               </details>
               <button type="button" role="menuitem" data-mobile-action="export">Print / Export</button>

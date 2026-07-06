@@ -108,10 +108,13 @@
     { id: "four-days", label: "Work 4 days per week", adjustments: (result) => ({ incomeChange: -Math.round((result.annualGrossIncome || result.annualNetIncome) * 0.2) }) },
   ];
 
-  let plan = CALC.clonePlan(loadDraft() || CALC.emptyPlan());
-  let activeView = "dashboard";
-  let activeWizardStep = 0;
-  let hasOpenedWorkspace = Boolean(loadDraft());
+  let restoredDraftUi = {};
+  let saveStatusTimer = null;
+  const savedDraft = loadDraft();
+  let plan = CALC.clonePlan(savedDraft || CALC.emptyPlan());
+  let activeView = restoredDraftUi.activeView || "dashboard";
+  let activeWizardStep = normaliseWizardStep(restoredDraftUi.activeWizardStep);
+  let hasOpenedWorkspace = Boolean(savedDraft) || Boolean(restoredDraftUi.hasOpenedWorkspace);
   let activeWhatIfId = whatIfActions[0].id;
   let selectedSamplePlanId = DATA.samplePlans?.[1]?.id || DATA.samplePlans?.[0]?.id || "";
 
@@ -515,19 +518,84 @@
     target[last] = value;
   }
 
+  function normaliseWizardStep(value) {
+    const step = Number(value);
+    if (!Number.isFinite(step)) return 0;
+    return Math.max(0, Math.min(wizardSteps.length - 1, Math.round(step)));
+  }
+
+  function collectDraftUi() {
+    return {
+      activeView,
+      activeWizardStep,
+      hasOpenedWorkspace,
+      scenarioName: document.getElementById("scenarioName")?.value ?? restoredDraftUi.scenarioName ?? "",
+      scenarioNotes: document.getElementById("scenarioNotes")?.value ?? restoredDraftUi.scenarioNotes ?? "",
+    };
+  }
+
+  function restoreDraftUiInputs() {
+    const nameInput = document.getElementById("scenarioName");
+    const notesInput = document.getElementById("scenarioNotes");
+    if (nameInput && restoredDraftUi.scenarioName !== undefined) nameInput.value = restoredDraftUi.scenarioName || "";
+    if (notesInput && restoredDraftUi.scenarioNotes !== undefined) notesInput.value = restoredDraftUi.scenarioNotes || "";
+  }
+
+  function hasSavedDraft() {
+    try {
+      return Boolean(localStorage.getItem(DRAFT_KEY));
+    } catch {
+      return false;
+    }
+  }
+
   function loadDraft() {
     try {
       const raw = localStorage.getItem(DRAFT_KEY);
-      return raw ? JSON.parse(raw) : null;
+      if (!raw) {
+        restoredDraftUi = {};
+        return null;
+      }
+      const saved = JSON.parse(raw);
+      if (saved?.plan) {
+        restoredDraftUi = saved.ui || {};
+        return saved.plan;
+      }
+      restoredDraftUi = {};
+      return saved;
     } catch {
+      restoredDraftUi = {};
       return null;
     }
   }
 
-  function saveDraft() {
-    localStorage.setItem(DRAFT_KEY, JSON.stringify(plan));
-    localStorage.setItem(LAST_SAVED_KEY, new Date().toISOString());
-    updateSaveStatus();
+  function persistDraft() {
+    const savedAt = new Date().toISOString();
+    const ui = collectDraftUi();
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({
+      version: 2,
+      savedAt,
+      plan: CALC.clonePlan(plan),
+      ui,
+    }));
+    localStorage.setItem(LAST_SAVED_KEY, savedAt);
+    restoredDraftUi = ui;
+    return savedAt;
+  }
+
+  function saveDraft(message = "") {
+    persistDraft();
+    updateSaveStatus(message);
+  }
+
+  function autosavePlan() {
+    updateSaveStatus("Saving...");
+    persistDraft();
+    window.clearTimeout(saveStatusTimer);
+    saveStatusTimer = window.setTimeout(() => {
+      updateSaveStatus("All changes saved");
+      saveStatusTimer = window.setTimeout(() => updateSaveStatus(), 1800);
+    }, 180);
   }
 
   function formatLastSaved(value) {
@@ -541,16 +609,19 @@
 
   function updateSaveStatus(message = "") {
     const lastSaved = localStorage.getItem(LAST_SAVED_KEY);
-    const text = message || (lastSaved ? "Saved on this device." : "Not saved yet.");
+    const formatted = formatLastSaved(lastSaved);
+    const text = message || (lastSaved ? `Last saved: ${formatted}` : "Not saved yet.");
     const status = document.getElementById("wizardSaveStatus");
     if (status) status.textContent = text;
+    const headerStatus = document.getElementById("headerSaveStatus");
+    if (headerStatus) headerStatus.textContent = text;
     const lastSavedLabel = document.getElementById("lastSavedLabel");
-    if (lastSavedLabel) lastSavedLabel.textContent = `Last Saved: ${formatLastSaved(lastSaved)}`;
+    if (lastSavedLabel) lastSavedLabel.textContent = `Last Saved: ${formatted}`;
   }
 
   function manualSavePlan() {
-    saveDraft();
-    updateSaveStatus("Your Financial Freedom Plan has been saved successfully.");
+    syncCollectionsToLegacy();
+    saveDraft("All changes saved");
   }
 
   function loadScenarios() {
@@ -588,7 +659,7 @@
     const sample = selectedSamplePlan();
     if (summary) summary.textContent = sample?.description || "Explore realistic examples before creating your own plan.";
     const continuePanel = document.getElementById("continuePanel");
-    if (continuePanel) continuePanel.classList.toggle("hidden", !loadDraft());
+    if (continuePanel) continuePanel.classList.toggle("hidden", !hasSavedDraft());
   }
 
   function blankUserPlan() {
@@ -1747,7 +1818,7 @@
     if (!defaults[collection]) return;
     plan[collection].push(defaults[collection]);
     syncCollectionsToLegacy();
-    saveDraft();
+    autosavePlan();
     renderAll();
   }
 
@@ -1756,7 +1827,7 @@
     if (!Array.isArray(plan[collection])) return;
     plan[collection] = plan[collection].filter((item) => item.id !== id);
     syncCollectionsToLegacy();
-    saveDraft();
+    autosavePlan();
     renderAll();
   }
 
@@ -1789,23 +1860,33 @@
   function renderAll() {
     renderForms();
     renderOutputs();
+    restoreDraftUiInputs();
   }
 
   function loadSamplePlan() {
     const sample = selectedSamplePlan();
     plan = CALC.clonePlan(sample.plan);
     seedSampleScenarios(sample.plan);
-    saveDraft();
+    saveDraft("All changes saved");
     renderAll();
     showWorkspace("dashboard");
   }
 
   function startMyPlan() {
-    plan = blankUserPlan();
-    localStorage.removeItem(DRAFT_KEY);
-    localStorage.removeItem(LAST_SAVED_KEY);
-    document.getElementById("scenarioName").value = "";
-    document.getElementById("scenarioNotes").value = "";
+    const saved = loadDraft();
+    if (saved) {
+      plan = CALC.clonePlan(saved);
+      restoreDraftUiInputs();
+      updateSaveStatus("Existing saved plan restored.");
+    } else if (isBlankPlan(plan)) {
+      plan = blankUserPlan();
+      restoredDraftUi = {};
+      const nameInput = document.getElementById("scenarioName");
+      const notesInput = document.getElementById("scenarioNotes");
+      if (nameInput) nameInput.value = "";
+      if (notesInput) notesInput.value = "";
+      updateSaveStatus();
+    }
     activeWizardStep = 0;
     renderAll();
     showWorkspace("setup");
@@ -1821,6 +1902,40 @@
     activeWizardStep = 0;
     renderAll();
     showWorkspace("setup");
+  }
+
+  function loadSavedPlan() {
+    const currentView = activeView;
+    const currentStep = activeWizardStep;
+    const saved = loadDraft();
+    if (!saved) {
+      updateSaveStatus("No saved plan found.");
+      return false;
+    }
+    plan = CALC.clonePlan(saved);
+    activeView = currentView;
+    activeWizardStep = currentStep;
+    renderAll();
+    if (hasOpenedWorkspace) setView(currentView);
+    restoreDraftUiInputs();
+    updateSaveStatus("Plan loaded successfully.");
+    return true;
+  }
+
+  function clearSavedPlan() {
+    if (!window.confirm("Clear the saved plan and all current entries? This cannot be undone.")) return;
+    localStorage.removeItem(DRAFT_KEY);
+    localStorage.removeItem(LAST_SAVED_KEY);
+    restoredDraftUi = {};
+    plan = blankUserPlan();
+    activeWizardStep = 0;
+    const nameInput = document.getElementById("scenarioName");
+    const notesInput = document.getElementById("scenarioNotes");
+    if (nameInput) nameInput.value = "";
+    if (notesInput) notesInput.value = "";
+    renderAll();
+    showWorkspace("setup");
+    updateSaveStatus("Saved plan cleared.");
   }
 
   function closeMobileActionMenu() {
@@ -1893,6 +2008,10 @@
         renderSamplePlanOptions();
         return;
       }
+      if (target.id === "scenarioName" || target.id === "scenarioNotes") {
+        autosavePlan();
+        return;
+      }
       if (target.dataset.collection) {
         ensureCollectionData();
         const item = plan[target.dataset.collection]?.find((entry) => entry.id === target.dataset.id);
@@ -1901,8 +2020,7 @@
         item[target.dataset.key] = value;
         syncCollectionInputs(target.dataset.collection, target.dataset.id, target.dataset.key, value);
         syncCollectionsToLegacy();
-        document.getElementById("wizardSaveStatus").textContent = "Saved on this device.";
-        saveDraft();
+        autosavePlan();
         if (target.dataset.collection === "liabilityItems" && target.dataset.key === "type") {
           renderAll();
           return;
@@ -1913,7 +2031,7 @@
       if (target.dataset.comparison) {
         ensureCollectionData();
         plan.comparison[target.dataset.comparison] = Number(target.value) || 0;
-        saveDraft();
+        autosavePlan();
         renderOutputs();
         return;
       }
@@ -1929,8 +2047,7 @@
         setPath(plan, "liabilities.monthlyRepayment", value);
         syncInputs("liabilities.monthlyRepayment", value);
       }
-      document.getElementById("wizardSaveStatus").textContent = "Saved on this device.";
-      saveDraft();
+      autosavePlan();
       renderOutputs();
     });
 
@@ -1956,8 +2073,9 @@
         if (action === "enter-data") startMyPlan();
         if (action === "save-plan") manualSavePlan();
         if (action === "new-plan") resetPlan();
-        if (action === "load-plan") showWorkspace("scenarios");
+        if (action === "load-plan") loadSavedPlan();
         if (action === "duplicate-plan") duplicateScenario();
+        if (action === "clear-saved-plan") clearSavedPlan();
         if (action === "export") window.print();
         return;
       }
@@ -2010,7 +2128,7 @@
         const scenario = loadScenarios().find((item) => item.id === loadId);
         if (scenario) {
           plan = CALC.clonePlan(scenario.plan);
-          saveDraft();
+          saveDraft("All changes saved");
           renderAll();
           showWorkspace("dashboard");
         }
@@ -2052,8 +2170,9 @@
     document.getElementById("planNewButton").addEventListener("click", resetPlan);
     document.getElementById("planSaveButton").addEventListener("click", manualSavePlan);
     document.getElementById("saveScenarioPanelButton").addEventListener("click", saveScenario);
-    document.getElementById("planLoadButton").addEventListener("click", () => showWorkspace("scenarios"));
+    document.getElementById("planLoadButton").addEventListener("click", loadSavedPlan);
     document.getElementById("planDuplicateButton").addEventListener("click", duplicateScenario);
+    document.getElementById("planClearSavedButton").addEventListener("click", clearSavedPlan);
     document.getElementById("wizardPrevButton").addEventListener("click", () => {
       activeWizardStep = Math.max(0, activeWizardStep - 1);
       saveDraft();
