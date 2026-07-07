@@ -87,13 +87,41 @@
       title: "Financial Freedom Target",
       body: "This is the investment portfolio amount you are aiming for. It is calculated based on your annual lifestyle spending and withdrawal rate.",
     },
+    targetFiCapital: {
+      title: "Target FI Capital",
+      body: "This is the amount of income-producing assets needed to support your desired annual lifestyle spending.",
+    },
+    targetFiAssets: {
+      title: "Target FI Assets",
+      body: "FI assets are income-producing assets used in the Financial Independence calculation. These may include investments, savings and other assets that can help fund your lifestyle. They generally exclude personal-use assets such as your home, cars or lifestyle assets.",
+    },
+    currentFiAssets: {
+      title: "Current FI Assets",
+      body: "Current FI assets are the income-producing assets you already have today. These are used to measure your progress toward financial independence.",
+    },
     withdrawalRate: {
       title: "Withdrawal Rate",
       body: "This is the percentage of your investment portfolio you plan to withdraw each year. A lower rate usually means a safer but higher target.",
     },
-    targetAge: {
-      title: "Target Age",
-      body: "This is the age you would like to reach financial freedom. The app uses this to estimate how long you have to build your portfolio.",
+    buildingWealthTargetAge: {
+      title: "Building Wealth Target Age",
+      body: "Your investments are beginning to benefit from compounding and are creating long-term momentum.",
+    },
+    financialIndependenceTargetAge: {
+      title: "Financial Independence Target Age",
+      body: "Your investments are projected to cover a significant portion of your future lifestyle costs.",
+    },
+    financialFreedomTargetAge: {
+      title: "Financial Freedom Target Age",
+      body: "Your investments are projected to fully support your chosen lifestyle over the long term.",
+    },
+    annualInvestingTarget: {
+      title: "Annual Investing Target",
+      body: "This is the amount of spare cashflow you want to invest into income-producing investments to build extra passive income over time.",
+    },
+    extraSuperContributions: {
+      title: "Extra Super Contributions",
+      body: "This is extra tax-deductible personal concessional super contributions you plan to make to help grow your super balance.",
     },
     investmentReturn: {
       title: "Investment Return",
@@ -236,6 +264,10 @@
 
   function optionList(options, selected) {
     return options.map(([value, label]) => `<option value="${value}"${selected === value ? " selected" : ""}>${label}</option>`).join("");
+  }
+
+  function infoButtonHtml(infoKey, label) {
+    return infoKey ? `<button class="field-info-button" type="button" data-info-key="${escapeHtml(infoKey)}" aria-label="More information about ${escapeHtml(label)}">&#9432;</button>` : "";
   }
 
   function addAmount(value, delta, min = 0) {
@@ -724,6 +756,7 @@
 
   function setView(view) {
     activeView = view;
+    document.body.dataset.activeView = view;
     document.querySelectorAll("[data-view-panel]").forEach((panel) => {
       panel.classList.toggle("hidden", panel.dataset.viewPanel !== view);
     });
@@ -740,7 +773,7 @@
   function field(config) {
     const value = getPath(plan, config.path);
     const id = config.path.replaceAll(".", "-");
-    const infoButton = config.infoKey ? `<button class="field-info-button" type="button" data-info-key="${escapeHtml(config.infoKey)}" aria-label="More information about ${escapeHtml(config.label)}">&#9432;</button>` : "";
+    const infoButton = infoButtonHtml(config.infoKey, config.label);
     let input = "";
     if (config.type === "select") {
       input = `<select class="field-input" id="${id}" data-path="${config.path}" data-type="text">${optionsHtml(value)}</select>`;
@@ -1057,13 +1090,13 @@
       { label: "Person 2 age", path: "personal.person2Age" },
     ];
     const goalFields = [
-      { label: "Building wealth target age", path: "personal.workOptionalAge", infoKey: "targetAge" },
-      { label: "Financial Independence target age", path: "personal.semiRetirementAge", infoKey: "targetAge" },
-      { label: "Financial Freedom target age", path: "personal.fullRetirementAge", infoKey: "targetAge" },
+      { label: "Building Wealth target age", path: "personal.workOptionalAge", infoKey: "buildingWealthTargetAge" },
+      { label: "Financial Independence target age", path: "personal.semiRetirementAge", infoKey: "financialIndependenceTargetAge" },
+      { label: "Financial Freedom target age", path: "personal.fullRetirementAge", infoKey: "financialFreedomTargetAge" },
       { label: "Annual Lifestyle Spending", path: "personal.targetAnnualSpending", step: "1000", infoKey: "annualLifestyleSpending" },
-      { label: "Annual investing target", path: "investing.annualInvestingTarget", step: "1000", infoKey: "financialFreedomTarget" },
+      { label: "Annual investing target", path: "investing.annualInvestingTarget", step: "1000", infoKey: "annualInvestingTarget" },
       { label: "Employer super contributions", path: "investing.employerSuperContributions", step: "1000" },
-      { label: "Extra super contributions", path: "investing.extraSuperContributions", step: "1000" },
+      { label: "Extra super contributions", path: "investing.extraSuperContributions", step: "1000", infoKey: "extraSuperContributions" },
     ];
     const assumptionFields = [
       { label: "Expected investment return (%)", path: "investing.expectedInvestmentReturnPct", step: "0.1", infoKey: "investmentReturn" },
@@ -1087,7 +1120,7 @@
     renderLiabilityCollection("loanForm");
     renderCashflowInputs("incomeExpenseForm");
     renderForm("investingForm", [
-      { label: "Annual investing target", path: "investing.annualInvestingTarget", step: "1000" },
+      { label: "Annual investing target", path: "investing.annualInvestingTarget", step: "1000", infoKey: "annualInvestingTarget" },
       { label: "Expected investment return (%)", path: "investing.expectedInvestmentReturnPct", step: "0.1" },
       { label: "Inflation (%)", path: "investing.inflationPct", step: "0.1" },
       { label: "Wage growth (%)", path: "investing.wageGrowthPct", step: "0.1" },
@@ -1097,7 +1130,7 @@
       { label: "Super person 1", path: "assets.superPerson1", step: "1000" },
       { label: "Super person 2", path: "assets.superPerson2", step: "1000" },
       { label: "Employer super contributions", path: "investing.employerSuperContributions", step: "1000" },
-      { label: "Extra super contributions", path: "investing.extraSuperContributions", step: "1000" },
+      { label: "Extra super contributions", path: "investing.extraSuperContributions", step: "1000", infoKey: "extraSuperContributions" },
       { label: "Expected super return (%)", path: "investing.expectedSuperReturnPct", step: "0.1" },
     ]);
     renderForm("wizardAboutForm", aboutFields);
@@ -1114,18 +1147,18 @@
     renderGoalCollection("goalExamples");
   }
 
-  function metricCard(label, value, tone = "", why = "") {
+  function metricCard(label, value, tone = "", why = "", infoKey = "") {
     return `
       <article class="metric-card ${tone}">
-        <span>${escapeHtml(label)}</span>
+        <span class="${infoKey ? "field-label-with-info" : ""}">${escapeHtml(label)}${infoButtonHtml(infoKey, label)}</span>
         <strong>${escapeHtml(value)}</strong>
         ${why ? `<small class="why-this-matters">${escapeHtml(why)}</small>` : ""}
       </article>
     `;
   }
 
-  function summaryTile(label, value, tone = "") {
-    return `<div class="summary-tile ${tone}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
+  function summaryTile(label, value, tone = "", infoKey = "") {
+    return `<div class="summary-tile ${tone}"><span class="${infoKey ? "field-label-with-info" : ""}">${escapeHtml(label)}${infoButtonHtml(infoKey, label)}</span><strong>${escapeHtml(value)}</strong></div>`;
   }
 
   function lineChart(svgId, series, options = {}) {
@@ -1137,8 +1170,15 @@
     const chartWidth = width - margin.left - margin.right;
     const chartHeight = height - margin.top - margin.bottom;
     const points = series.flatMap((item) => item.points || []);
-    if (!points.length) {
-      svg.innerHTML = `<text class="chart-label" x="24" y="40">Enter data to build this chart.</text>`;
+    const meaningfulThreshold = Number(options.meaningfulThreshold ?? 1);
+    const hasMeaningfulData = points.some((point) => Math.abs(Number(point.y) || 0) > meaningfulThreshold);
+    if (!points.length || !hasMeaningfulData) {
+      const message = options.emptyMessage || "Add your income, expenses, assets and investment assumptions to generate this chart.";
+      svg.innerHTML = `
+        <text class="chart-label chart-empty-label" x="${width / 2}" y="${height / 2 - 8}" text-anchor="middle">Add your income, expenses, assets and</text>
+        <text class="chart-label chart-empty-label" x="${width / 2}" y="${height / 2 + 14}" text-anchor="middle">investment assumptions to generate this chart.</text>
+        <title>${escapeHtml(message)}</title>
+      `;
       return;
     }
     const minX = Math.min(...points.map((point) => point.x));
@@ -1266,8 +1306,8 @@
           <div class="summary-grid mt-4">
             ${summaryTile("Progress to this milestone", plainPercent(progress))}
             ${summaryTile("Estimated timing", reach.label)}
-            ${summaryTile("Target assets", money(milestone.requiredCapital))}
-            ${summaryTile("Current FI assets", money(result.financialIndependenceAssets))}
+            ${summaryTile("Target FI Assets", money(milestone.requiredCapital), "", "targetFiAssets")}
+            ${summaryTile("Current FI Assets", money(result.financialIndependenceAssets), "", "currentFiAssets")}
             ${summaryTile("Projected assets at target age", money(milestone.projectedFiAssets))}
             ${summaryTile("Passive income estimate", money(milestone.passiveIncomeEstimate))}
           </div>
@@ -1544,9 +1584,19 @@
       ["20 year net worth", result.netWorthProjection[19]?.closingBalance || 0],
       ["30 year net worth", result.netWorthProjection[29]?.closingBalance || 0],
       ["Age-60+ sustainability assets", result.totalRetirementAssets],
-      ["Target FI capital", result.targetCapital],
+      ["Target FI Capital", result.targetCapital],
     ];
-    document.getElementById("forecastCards").innerHTML = cards.map(([label, value]) => metricCard(label, money(value))).join("");
+    document.getElementById("forecastCards").innerHTML = cards.map(([label, value]) => metricCard(label, money(value), "", "", label === "Target FI Capital" ? "targetFiCapital" : "")).join("");
+  }
+
+  function renderGoalsSummary(result) {
+    const container = document.getElementById("goalsFiSummary");
+    if (!container) return;
+    container.innerHTML = [
+      summaryTile("Target FI Capital", money(result.targetCapital), "", "targetFiCapital"),
+      summaryTile("Current FI Assets", money(result.financialIndependenceAssets), "", "currentFiAssets"),
+      summaryTile("Annual Lifestyle Spending", money(plan.personal.targetAnnualSpending), "", "annualLifestyleSpending"),
+    ].join("");
   }
 
   function renderDecision(result) {
@@ -1575,7 +1625,25 @@
   }
 
   function renderReports(result) {
-    document.getElementById("reportSummary").textContent = `Financial Freedom Progress ${plainPercent(freedomPercent(result))}, net worth ${money(result.currentNetWorth)}, annual living expenses ${money(result.annualLivingExpenses)}, monthly final projected cash surplus ${money(estimatedCashflow(result) / 12)}.`;
+    const percent = freedomPercent(result);
+    const stage = currentFreedomStage(percent);
+    const gap = Math.max(0, (Number(result.targetCapital) || 0) - (Number(result.financialIndependenceAssets) || 0));
+    document.getElementById("reportSummary").textContent = `Financial Freedom Progress ${plainPercent(percent)}, net worth ${money(result.currentNetWorth)}, annual lifestyle spending ${money(plan.personal.targetAnnualSpending)}, monthly final projected cash surplus ${money(estimatedCashflow(result) / 12)}.`;
+    const meaning = document.getElementById("reportWhatThisMeans");
+    if (meaning) {
+      meaning.innerHTML = `<strong>What this means:</strong> Your plan is currently in the ${escapeHtml(stage.name)} stage. ${gap > 0 ? `${money(gap)} more FI assets are estimated to reach the full Financial Freedom target.` : "Your current FI assets meet or exceed the modelled Financial Freedom target based on the assumptions used."}`;
+    }
+    const assumptions = document.getElementById("reportKeyAssumptions");
+    if (assumptions) {
+      assumptions.innerHTML = [
+        summaryTile("Annual Lifestyle Spending", money(plan.personal.targetAnnualSpending), "", "annualLifestyleSpending"),
+        summaryTile("Withdrawal Rate", `${Number(plan.investing.safeWithdrawalRatePct || 0).toFixed(1)}%`, "", "withdrawalRate"),
+        summaryTile("Target FI Capital", money(result.targetCapital), "", "targetFiCapital"),
+        summaryTile("Current FI Assets", money(result.financialIndependenceAssets), "", "currentFiAssets"),
+        summaryTile("Annual Investing Target", money(plan.investing.annualInvestingTarget), "", "annualInvestingTarget"),
+        summaryTile("Extra Super Contributions", money(plan.investing.extraSuperContributions), "", "extraSuperContributions"),
+      ].join("");
+    }
     renderScenarioComparison(loadScenarios(), "reportScenarioComparison");
   }
 
@@ -1962,6 +2030,7 @@
     renderSuper(result);
     renderMilestones(result);
     renderForecast(result);
+    renderGoalsSummary(result);
     renderDecision(result);
     renderScenarios();
     renderReports(result);

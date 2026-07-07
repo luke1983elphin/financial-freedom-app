@@ -1430,6 +1430,12 @@ textarea.field-input {
   font-weight: 700;
 }
 
+.chart-empty-label {
+  fill: #475569;
+  font-size: 16px;
+  font-weight: 850;
+}
+
 @media (max-width: 1023px) {
   .toolbar-actions {
     flex-wrap: nowrap;
@@ -1893,16 +1899,25 @@ textarea.field-input {
 }
 
 @media print {
+  @page {
+    margin: 12mm;
+  }
+
   header,
   nav,
   #homeView,
-  .btn,
-  [data-view-panel]:not([data-view-panel="dashboard"]) {
+  .btn {
+    display: none !important;
+  }
+
+  body:not([data-active-view="reports"]) [data-view-panel]:not([data-view-panel="dashboard"]),
+  body[data-active-view="reports"] [data-view-panel]:not([data-view-panel="reports"]) {
     display: none !important;
   }
 
   #appWorkspace,
-  [data-view-panel="dashboard"] {
+  body:not([data-active-view="reports"]) [data-view-panel="dashboard"],
+  body[data-active-view="reports"] [data-view-panel="reports"] {
     display: block !important;
   }
 
@@ -1911,9 +1926,43 @@ textarea.field-input {
     background: #ffffff !important;
   }
 
+  body {
+    font-size: 12px;
+  }
+
   .card,
   .metric-card,
   .premium-hero {
     box-shadow: none !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+    padding: 14px !important;
+  }
+
+  .dashboard-chart-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+  }
+
+  .chart {
+    min-height: 160px !important;
+    max-height: 210px;
+  }
+
+  .chart-label {
+    font-size: 14px;
+  }
+
+  .chart-empty-label {
+    font-size: 18px;
+  }
+
+  .section-heading,
+  .card,
+  .metric-card,
+  .milestone-grid,
+  .dashboard-chart-grid {
+    margin-top: 12px !important;
+    margin-bottom: 12px !important;
   }
 }
