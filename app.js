@@ -54,9 +54,11 @@
     ["crypto", "Crypto"],
     ["super", "Super"],
     ["vehicle", "Vehicles / personal assets"],
+    ["other", "Other"],
   ];
   const liabilityTypeOptions = [
     ["homeLoan", "Home loan"],
+    ["investmentLoan", "Investment Loan"],
     ["hecsHelp", "HECS / HELP"],
     ["creditCard", "Credit Card"],
     ["otherDebt", "Other debt"],
@@ -73,8 +75,35 @@
     ["privateHealth", "Private Health Insurance"],
     ["petrol", "Petrol"],
     ["vehicleCosts", "Motor Vehicle Rego / Insurance"],
+    ["petCosts", "Pet Costs"],
     ["other", "Other expenses"],
   ];
+  const goalInfoCopy = {
+    annualLifestyleSpending: {
+      title: "Annual Lifestyle Spending",
+      body: "This is how much you want your investments to fund each year. It is one of the most important numbers in your plan because it helps calculate your Financial Freedom Target.",
+    },
+    financialFreedomTarget: {
+      title: "Financial Freedom Target",
+      body: "This is the investment portfolio amount you are aiming for. It is calculated based on your annual lifestyle spending and withdrawal rate.",
+    },
+    withdrawalRate: {
+      title: "Withdrawal Rate",
+      body: "This is the percentage of your investment portfolio you plan to withdraw each year. A lower rate usually means a safer but higher target.",
+    },
+    targetAge: {
+      title: "Target Age",
+      body: "This is the age you would like to reach financial freedom. The app uses this to estimate how long you have to build your portfolio.",
+    },
+    investmentReturn: {
+      title: "Investment Return",
+      body: "This is the expected average yearly return on your investments before inflation. It helps estimate how your portfolio may grow over time.",
+    },
+    inflationRate: {
+      title: "Inflation Rate",
+      body: "This estimates how much living costs may increase each year. The app uses this to keep future spending targets realistic.",
+    },
+  };
   const coreExpenseCategories = new Set(["living", "food", "utilities", "insurance", "schoolChildren", "ratesPropertyCosts"]);
   const incomeHelperText = "Enter your gross income before tax. The simulator estimates tax and HELP repayments separately.";
   const defaultOtherExpenseItems = [
@@ -711,6 +740,7 @@
   function field(config) {
     const value = getPath(plan, config.path);
     const id = config.path.replaceAll(".", "-");
+    const infoButton = config.infoKey ? `<button class="field-info-button" type="button" data-info-key="${escapeHtml(config.infoKey)}" aria-label="More information about ${escapeHtml(config.label)}">&#9432;</button>` : "";
     let input = "";
     if (config.type === "select") {
       input = `<select class="field-input" id="${id}" data-path="${config.path}" data-type="text">${optionsHtml(value)}</select>`;
@@ -722,7 +752,7 @@
 
     return `
       <label class="${config.type === "checkbox" ? "toggle-field" : ""}">
-        <span class="field-label">${escapeHtml(config.label)}</span>
+        <span class="field-label field-label-with-info">${escapeHtml(config.label)}${infoButton}</span>
         ${input}
         ${config.help ? `<small class="field-help">${escapeHtml(config.help)}</small>` : ""}
       </label>
@@ -782,6 +812,9 @@
           <button class="btn btn-primary add-button" type="button" data-add-collection="${collection}">${escapeHtml(addLabel)}</button>
         </div>
         <div class="collection-list">${body || `<p class="empty-collection-note">No items added yet. Use ${escapeHtml(addLabel)} to start this section.</p>`}</div>
+        <div class="collection-footer">
+          <button class="btn btn-primary add-button" type="button" data-add-collection="${collection}">${escapeHtml(addLabel)}</button>
+        </div>
       </section>
     `;
   }
@@ -1024,20 +1057,20 @@
       { label: "Person 2 age", path: "personal.person2Age" },
     ];
     const goalFields = [
-      { label: "Building wealth target age", path: "personal.workOptionalAge" },
-      { label: "Financial Independence target age", path: "personal.semiRetirementAge" },
-      { label: "Financial Freedom target age", path: "personal.fullRetirementAge" },
-      { label: "Target annual spending", path: "personal.targetAnnualSpending", step: "1000" },
-      { label: "Annual investing target", path: "investing.annualInvestingTarget", step: "1000" },
+      { label: "Building wealth target age", path: "personal.workOptionalAge", infoKey: "targetAge" },
+      { label: "Financial Independence target age", path: "personal.semiRetirementAge", infoKey: "targetAge" },
+      { label: "Financial Freedom target age", path: "personal.fullRetirementAge", infoKey: "targetAge" },
+      { label: "Annual Lifestyle Spending", path: "personal.targetAnnualSpending", step: "1000", infoKey: "annualLifestyleSpending" },
+      { label: "Annual investing target", path: "investing.annualInvestingTarget", step: "1000", infoKey: "financialFreedomTarget" },
       { label: "Employer super contributions", path: "investing.employerSuperContributions", step: "1000" },
       { label: "Extra super contributions", path: "investing.extraSuperContributions", step: "1000" },
     ];
     const assumptionFields = [
-      { label: "Expected investment return (%)", path: "investing.expectedInvestmentReturnPct", step: "0.1" },
+      { label: "Expected investment return (%)", path: "investing.expectedInvestmentReturnPct", step: "0.1", infoKey: "investmentReturn" },
       { label: "Expected super return (%)", path: "investing.expectedSuperReturnPct", step: "0.1" },
-      { label: "Inflation (%)", path: "investing.inflationPct", step: "0.1" },
+      { label: "Inflation (%)", path: "investing.inflationPct", step: "0.1", infoKey: "inflationRate" },
       { label: "Wage growth (%)", path: "investing.wageGrowthPct", step: "0.1" },
-      { label: "Safe withdrawal rate (%)", path: "investing.safeWithdrawalRatePct", step: "0.1" },
+      { label: "Safe withdrawal rate (%)", path: "investing.safeWithdrawalRatePct", step: "0.1", infoKey: "withdrawalRate" },
     ];
     const downsizingFields = [
       { label: "Use downsizing strategy", path: "downsizing.enabled", type: "checkbox", help: "Off by default. Turn on only when you want the released equity included as investable money." },
@@ -2018,6 +2051,42 @@
     });
   }
 
+  function ensureGoalInfoModal() {
+    let modal = document.getElementById("goalInfoModal");
+    if (modal) return modal;
+    modal = document.createElement("div");
+    modal.id = "goalInfoModal";
+    modal.className = "goal-info-modal hidden";
+    modal.setAttribute("role", "dialog");
+    modal.setAttribute("aria-modal", "true");
+    modal.setAttribute("aria-labelledby", "goalInfoTitle");
+    modal.innerHTML = `
+      <div class="goal-info-backdrop" data-info-close></div>
+      <article class="goal-info-card">
+        <button class="goal-info-close" type="button" data-info-close aria-label="Close information popup">X</button>
+        <h3 id="goalInfoTitle"></h3>
+        <p id="goalInfoBody"></p>
+      </article>
+    `;
+    document.body.appendChild(modal);
+    return modal;
+  }
+
+  function openGoalInfo(key) {
+    const copy = goalInfoCopy[key];
+    if (!copy) return;
+    const modal = ensureGoalInfoModal();
+    modal.querySelector("#goalInfoTitle").textContent = copy.title;
+    modal.querySelector("#goalInfoBody").textContent = copy.body;
+    modal.classList.remove("hidden");
+    modal.querySelector(".goal-info-close").focus();
+  }
+
+  function closeGoalInfo() {
+    const modal = document.getElementById("goalInfoModal");
+    if (modal) modal.classList.add("hidden");
+  }
+
   function saveScenario() {
     saveCurrentPlanAsScenario({ useScenarioFields: true });
   }
@@ -2129,6 +2198,18 @@
     });
 
     document.addEventListener("click", (event) => {
+      const infoButton = event.target.closest("[data-info-key]");
+      if (infoButton) {
+        event.preventDefault();
+        openGoalInfo(infoButton.dataset.infoKey);
+        return;
+      }
+
+      if (event.target.closest("[data-info-close]")) {
+        closeGoalInfo();
+        return;
+      }
+
       const sampleChoice = event.target.closest("[data-sample-plan-choice]");
       if (sampleChoice) {
         selectedSamplePlanId = sampleChoice.dataset.samplePlanChoice;
@@ -2229,6 +2310,7 @@
       if (event.key === "Escape") {
         closeMobileActionMenu();
         closeSamplePlanMenus();
+        closeGoalInfo();
       }
 
       const homeStep = event.target.closest?.("[data-home-step]");
@@ -2249,7 +2331,6 @@
     document.getElementById("continueNewPlanButton").addEventListener("click", resetPlan);
     document.getElementById("enterDataButton").addEventListener("click", startMyPlan);
     document.getElementById("heroStartButton").addEventListener("click", startMyPlan);
-    document.getElementById("manualSaveButton").addEventListener("click", manualSavePlan);
     document.getElementById("planNewButton").addEventListener("click", resetPlan);
     document.getElementById("planSaveButton").addEventListener("click", manualSavePlan);
     document.getElementById("saveScenarioPanelButton").addEventListener("click", saveScenario);

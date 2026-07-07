@@ -738,6 +738,68 @@ main {
   display: none;
 }
 
+.goal-info-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+
+.goal-info-modal.hidden {
+  display: none;
+}
+
+.goal-info-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 39, 66, 0.28);
+}
+
+.goal-info-card {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 460px);
+  border: 1px solid #dbe4ee;
+  border-radius: 22px;
+  background: #ffffff;
+  padding: 24px;
+  box-shadow: 0 24px 70px rgba(15, 39, 66, 0.22);
+}
+
+.goal-info-card h3 {
+  padding-right: 38px;
+  color: #0f2742;
+  font-size: 20px;
+  font-weight: 950;
+}
+
+.goal-info-card p {
+  margin-top: 10px;
+  color: #475569;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.55;
+}
+
+.goal-info-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #dbe4ee;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #172033;
+  font-size: 13px;
+  font-weight: 900;
+}
+
 .scenario-compare-card.best {
   border-color: #0f9f6e;
   background: #f3fbf7;
@@ -1198,6 +1260,33 @@ main {
   font-weight: 800;
 }
 
+.field-label-with-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.field-info-button {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #cfe0f2;
+  border-radius: 999px;
+  background: #f5f9ff;
+  color: #0f5f9d;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.field-info-button:hover,
+.field-info-button:focus-visible {
+  border-color: #93bce0;
+  background: #eaf3ff;
+}
+
 .field-input {
   width: 100%;
   min-height: 52px;
@@ -1230,6 +1319,12 @@ textarea.field-input {
   font-size: 14px;
   font-weight: 750;
   line-height: 1.5;
+}
+
+.collection-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
 }
 
 .field-input:focus {
@@ -1600,14 +1695,73 @@ textarea.field-input {
     display: grid;
   }
 
-  .comparison-table {
-    min-width: 560px;
+  .comparison-table-wrap {
+    overflow-x: visible;
+    border: 0;
   }
 
+  .comparison-table,
+  .comparison-table tbody,
+  .comparison-table tr,
   .comparison-table th,
   .comparison-table td {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .comparison-table thead {
+    display: none;
+  }
+
+  .comparison-table tr {
+    margin-bottom: 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    background: #ffffff;
+    overflow: hidden;
+  }
+
+  .comparison-table tbody th {
+    background: #f8fafc;
+    color: #0f2742;
+    font-size: 13px;
+  }
+
+  .comparison-table td {
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+    border-bottom: 1px solid #edf2f7;
     padding: 10px;
     font-size: 12px;
+    text-align: right;
+  }
+
+  .comparison-table td::before {
+    color: #64748b;
+    font-weight: 900;
+    text-align: left;
+  }
+
+  .comparison-table td:nth-of-type(1)::before {
+    content: "Current Plan";
+  }
+
+  .comparison-table td:nth-of-type(2)::before {
+    content: "Scenario";
+  }
+
+  .comparison-table td:nth-of-type(3)::before {
+    content: "Difference";
+  }
+
+  .scenario-comparison-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .collection-footer .btn {
+    width: 100%;
   }
 }
 
