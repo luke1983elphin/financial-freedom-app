@@ -42,7 +42,7 @@
               <div class="sample-plan-menu-panel" data-sample-plan-menu aria-label="Choose sample plan"></div>
             </details>
             <button class="btn" type="button" id="enterDataButton">Enter My Data</button>
-            <button class="btn" type="button" id="manualSaveButton">Save My Plan</button>
+            <button class="btn" type="button" id="manualSaveButton">Save Plan</button>
             <span class="save-status-pill" id="headerSaveStatus" aria-live="polite">Last saved: Not saved yet</span>
             <details class="plan-menu" id="planMenu">
               <summary class="btn plan-menu-trigger">Plan</summary>
@@ -64,7 +64,7 @@
             <div class="mobile-action-sheet" role="menu" aria-label="Planner actions">
               <button type="button" role="menuitem" data-mobile-action="load-sample">Load Sample Plan</button>
               <button type="button" role="menuitem" data-mobile-action="enter-data">Enter My Data</button>
-              <button type="button" role="menuitem" data-mobile-action="save-plan">Save My Plan</button>
+              <button type="button" role="menuitem" data-mobile-action="save-plan">Save Plan</button>
               <details class="mobile-plan-group" id="mobilePlanGroup">
                 <summary role="button">Plan</summary>
                 <div>
@@ -178,7 +178,7 @@
                 <button class="nav-button" type="button" data-view="goals">Goals</button>
                 <button class="nav-button" type="button" data-view="forecast">Forecast</button>
                 <button class="nav-button" type="button" data-view="decision">Decision Engine</button>
-                <button class="nav-button" type="button" data-view="scenarios">Scenarios</button>
+                <button class="nav-button" type="button" data-view="scenarios">Saved Scenarios</button>
                 <button class="nav-button" type="button" data-view="reports">Reports</button>
               </div>
             </nav>
@@ -509,8 +509,8 @@
 
               <section class="view-section hidden" data-view-panel="scenarios">
                 <div class="section-heading">
-                  <h2>Scenarios</h2>
-                  <p>Save, load, duplicate and delete plans in this browser.</p>
+                  <h2>Saved Scenarios</h2>
+                  <p>Save plans here, then choose exactly which saved scenario to load later.</p>
                 </div>
                 <div class="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
                   <div class="card">
@@ -518,11 +518,11 @@
                     <input class="field-input" id="scenarioName" type="text" placeholder="e.g. Base case">
                     <label class="field-label mt-4" for="scenarioNotes">Notes</label>
                     <textarea class="field-input min-h-28" id="scenarioNotes" placeholder="Optional notes"></textarea>
-                    <button class="btn btn-primary mt-4 w-full justify-center" type="button" id="saveScenarioPanelButton">Save Scenario</button>
+                    <button class="btn btn-primary mt-4 w-full justify-center" type="button" id="saveScenarioPanelButton">Save Plan to Saved Scenarios</button>
                   </div>
                   <div class="card">
                     <div class="mb-4 flex items-center justify-between gap-3">
-                      <h3 class="text-lg font-bold text-navy">Saved scenarios</h3>
+                      <h3 class="text-lg font-bold text-navy">Saved Scenarios</h3>
                       <span id="scenarioCount" class="text-sm text-slate-500">0 saved</span>
                     </div>
                     <div id="scenarioList" class="grid gap-3"></div>

@@ -621,7 +621,7 @@
 
   function manualSavePlan() {
     syncCollectionsToLegacy();
-    saveDraft("All changes saved");
+    saveCurrentPlanAsScenario({ promptForName: true });
   }
 
   function loadScenarios() {
@@ -1760,28 +1760,113 @@
     `;
   }
 
+  function defaultScenarioName() {
+    const date = new Date();
+    return `Saved plan - ${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+  }
+
+  function scenarioSummary(planSnapshot, result = CALC.calculatePlan(planSnapshot)) {
+    const personal = planSnapshot.personal || {};
+    const ages = [personal.person1Age, personal.person2Age].filter((age) => Number(age) > 0).join(" / ") || "Not entered";
+    const targetAge = Number(personal.fullRetirementAge) || Number(personal.semiRetirementAge) || Number(personal.workOptionalAge) || 0;
+    return {
+      currentAge: ages,
+      targetAge: targetAge ? `Age ${targetAge}` : "Not entered",
+      income: result.annualGrossIncome || result.annualNetIncome || 0,
+      livingExpenses: result.annualLivingExpenses || ((result.annualCoreLivingExpenses || 0) + (result.annualOtherRegularExpenses || 0)),
+      netAssets: result.currentNetWorth || 0,
+      projectedFreedomAge: targetAgeOutcome(result),
+      freedomProgress: freedomPercent(result),
+    };
+  }
+
+  function saveCurrentPlanAsScenario(options = {}) {
+    syncCollectionsToLegacy();
+    const scenarios = loadScenarios();
+    const nameInput = document.getElementById("scenarioName");
+    const notesInput = document.getElementById("scenarioNotes");
+    const fallbackName = defaultScenarioName();
+    let scenarioName = options.useScenarioFields ? (nameInput?.value || "").trim() : "";
+    const notes = (notesInput?.value || "").trim();
+
+    if (options.promptForName) {
+      const response = window.prompt("Name this saved scenario", scenarioName || fallbackName);
+      if (response === null) return;
+      scenarioName = response.trim();
+    }
+
+    const name = scenarioName || fallbackName;
+    const planSnapshot = CALC.clonePlan(plan);
+    const resultSnapshot = CALC.calculatePlan(planSnapshot);
+    const scenario = {
+      id: `scenario-${Date.now()}`,
+      source: "user",
+      name,
+      notes,
+      savedAt: new Date().toISOString(),
+      plan: planSnapshot,
+      summary: scenarioSummary(planSnapshot, resultSnapshot),
+    };
+
+    const existingIndex = scenarios.findIndex((item) => (item.name || "").trim().toLowerCase() === name.toLowerCase());
+    if (existingIndex >= 0) {
+      const confirmed = window.confirm(`A saved scenario named "${name}" already exists. Overwrite it?`);
+      if (!confirmed) {
+        updateSaveStatus("Save cancelled.");
+        return;
+      }
+      scenario.id = scenarios[existingIndex].id;
+      scenarios[existingIndex] = scenario;
+    } else {
+      scenarios.unshift(scenario);
+    }
+
+    saveScenarios(scenarios);
+    saveDraft();
+    renderAll();
+    showWorkspace("scenarios");
+    updateSaveStatus("Plan saved to Saved Scenarios.");
+  }
+
+  function openSavedScenarios() {
+    renderScenarios();
+    showWorkspace("scenarios");
+    updateSaveStatus("Choose a saved scenario to load.");
+  }
+
   function renderScenarios() {
     const scenarios = loadScenarios();
     document.getElementById("scenarioCount").textContent = `${scenarios.length} saved`;
     renderScenarioComparison(scenarios);
     const list = document.getElementById("scenarioList");
     if (!scenarios.length) {
-      list.innerHTML = `<p class="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">No saved scenarios yet.</p>`;
+      list.innerHTML = `<p class="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">No saved scenarios yet. Click Save Plan to store the current plan here.</p>`;
       return;
     }
     list.innerHTML = scenarios.map((scenario) => {
       const scenarioResult = CALC.calculatePlan(scenario.plan);
+      const summary = scenario.summary || scenarioSummary(scenario.plan, scenarioResult);
       return `
         <article class="scenario-row">
-          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div class="flex flex-col gap-4">
             <div>
               <h3 class="font-black text-navy">${escapeHtml(scenario.name)}</h3>
               <p>${escapeHtml(scenario.notes || "No notes")}</p>
               <p>Saved ${new Date(scenario.savedAt).toLocaleString()}</p>
               <p class="mt-2 font-bold text-slate-600">Freedom ${plainPercent(freedomPercent(scenarioResult))} · Net worth ${money(scenarioResult.currentNetWorth)}</p>
             </div>
-            <div class="flex gap-2">
+            <div class="summary-grid">
+              ${summaryTile("Current age", summary.currentAge)}
+              ${summaryTile("Target age", summary.targetAge)}
+              ${summaryTile("Income", money(summary.income))}
+              ${summaryTile("Living expenses", money(summary.livingExpenses))}
+              ${summaryTile("Net assets", money(summary.netAssets))}
+              ${summaryTile("Projected financial freedom age", summary.projectedFreedomAge)}
+              ${summaryTile("Freedom progress", plainPercent(summary.freedomProgress))}
+            </div>
+            <div class="flex flex-wrap gap-2">
               <button class="btn" type="button" data-load-scenario="${scenario.id}">Load</button>
+              <button class="btn" type="button" data-rename-scenario="${scenario.id}">Rename</button>
               <button class="btn" type="button" data-delete-scenario="${scenario.id}">Delete</button>
             </div>
           </div>
@@ -1904,24 +1989,6 @@
     showWorkspace("setup");
   }
 
-  function loadSavedPlan() {
-    const currentView = activeView;
-    const currentStep = activeWizardStep;
-    const saved = loadDraft();
-    if (!saved) {
-      updateSaveStatus("No saved plan found.");
-      return false;
-    }
-    plan = CALC.clonePlan(saved);
-    activeView = currentView;
-    activeWizardStep = currentStep;
-    renderAll();
-    if (hasOpenedWorkspace) setView(currentView);
-    restoreDraftUiInputs();
-    updateSaveStatus("Plan loaded successfully.");
-    return true;
-  }
-
   function clearSavedPlan() {
     if (!window.confirm("Clear the saved plan and all current entries? This cannot be undone.")) return;
     localStorage.removeItem(DRAFT_KEY);
@@ -1952,17 +2019,20 @@
   }
 
   function saveScenario() {
+    saveCurrentPlanAsScenario({ useScenarioFields: true });
+  }
+
+  function duplicateScenario() {
     syncCollectionsToLegacy();
     const scenarios = loadScenarios();
-    const nameInput = document.getElementById("scenarioName");
-    const notesInput = document.getElementById("scenarioNotes");
-    const name = nameInput.value.trim() || `Scenario ${scenarios.length + 1}`;
+    const planSnapshot = CALC.clonePlan(plan);
     const scenario = {
       id: `scenario-${Date.now()}`,
-      name,
-      notes: notesInput.value.trim(),
+      name: `Copy ${scenarios.length + 1}`,
+      notes: "Duplicated from the current plan.",
       savedAt: new Date().toISOString(),
-      plan: CALC.clonePlan(plan),
+      plan: planSnapshot,
+      summary: scenarioSummary(planSnapshot),
     };
     scenarios.unshift(scenario);
     saveScenarios(scenarios);
@@ -1970,20 +2040,27 @@
     showWorkspace("scenarios");
   }
 
-  function duplicateScenario() {
-    syncCollectionsToLegacy();
+  function renameScenario(id) {
     const scenarios = loadScenarios();
-    const scenario = {
-      id: `scenario-${Date.now()}`,
-      name: `Copy ${scenarios.length + 1}`,
-      notes: "Duplicated from the current plan.",
-      savedAt: new Date().toISOString(),
-      plan: CALC.clonePlan(plan),
-    };
-    scenarios.unshift(scenario);
+    const index = scenarios.findIndex((item) => item.id === id);
+    if (index < 0) return;
+    const currentName = scenarios[index].name || "Saved scenario";
+    const response = window.prompt("Rename this saved scenario", currentName);
+    if (response === null) return;
+    const name = response.trim();
+    if (!name) {
+      updateSaveStatus("Scenario name was not changed.");
+      return;
+    }
+    const duplicate = scenarios.find((item) => item.id !== id && (item.name || "").trim().toLowerCase() === name.toLowerCase());
+    if (duplicate) {
+      updateSaveStatus("A saved scenario with that name already exists.");
+      return;
+    }
+    scenarios[index] = { ...scenarios[index], name };
     saveScenarios(scenarios);
     renderScenarios();
-    showWorkspace("scenarios");
+    updateSaveStatus("Scenario renamed.");
   }
 
   function seedSampleScenarios(basePlan = DATA.demoPlan) {
@@ -2073,7 +2150,7 @@
         if (action === "enter-data") startMyPlan();
         if (action === "save-plan") manualSavePlan();
         if (action === "new-plan") resetPlan();
-        if (action === "load-plan") loadSavedPlan();
+        if (action === "load-plan") openSavedScenarios();
         if (action === "duplicate-plan") duplicateScenario();
         if (action === "clear-saved-plan") clearSavedPlan();
         if (action === "export") window.print();
@@ -2128,10 +2205,16 @@
         const scenario = loadScenarios().find((item) => item.id === loadId);
         if (scenario) {
           plan = CALC.clonePlan(scenario.plan);
-          saveDraft("All changes saved");
+          saveDraft();
           renderAll();
           showWorkspace("dashboard");
+          updateSaveStatus("Scenario loaded successfully.");
         }
+      }
+
+      const renameId = event.target.closest("[data-rename-scenario]")?.dataset.renameScenario;
+      if (renameId) {
+        renameScenario(renameId);
       }
 
       const deleteId = event.target.closest("[data-delete-scenario]")?.dataset.deleteScenario;
@@ -2170,7 +2253,7 @@
     document.getElementById("planNewButton").addEventListener("click", resetPlan);
     document.getElementById("planSaveButton").addEventListener("click", manualSavePlan);
     document.getElementById("saveScenarioPanelButton").addEventListener("click", saveScenario);
-    document.getElementById("planLoadButton").addEventListener("click", loadSavedPlan);
+    document.getElementById("planLoadButton").addEventListener("click", openSavedScenarios);
     document.getElementById("planDuplicateButton").addEventListener("click", duplicateScenario);
     document.getElementById("planClearSavedButton").addEventListener("click", clearSavedPlan);
     document.getElementById("wizardPrevButton").addEventListener("click", () => {

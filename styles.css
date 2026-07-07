@@ -734,6 +734,10 @@ main {
   padding: 16px;
 }
 
+.scenario-row .mt-2.font-bold.text-slate-600 {
+  display: none;
+}
+
 .scenario-compare-card.best {
   border-color: #0f9f6e;
   background: #f3fbf7;
