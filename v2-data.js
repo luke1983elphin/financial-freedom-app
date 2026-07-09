@@ -227,9 +227,9 @@ const samplePlans = [
         { id: "liability-credit-card", name: "Credit card", type: "creditCard", balance: 6000, interestRatePct: 19.99, repayment: 350, repaymentFrequency: "monthly", termYears: 0, creditLimit: 12000 },
       ],
       investing: {
-        annualInvestingTarget: 32000,
+        annualInvestingTarget: 16000,
         employerSuperContributions: 25000,
-        extraSuperContributions: 5000,
+        extraSuperContributions: 2000,
         expectedInvestmentReturnPct: 7,
         expectedSuperReturnPct: 6.5,
         inflationPct: 2.5,
@@ -352,9 +352,9 @@ const samplePlans = [
         { id: "liability-credit-card", name: "Credit card", type: "creditCard", balance: 0, interestRatePct: 19.99, repayment: 0, repaymentFrequency: "monthly", termYears: 0, creditLimit: 10000 },
       ],
       investing: {
-        annualInvestingTarget: 45000,
+        annualInvestingTarget: 17500,
         employerSuperContributions: 22000,
-        extraSuperContributions: 18000,
+        extraSuperContributions: 6000,
         expectedInvestmentReturnPct: 7,
         expectedSuperReturnPct: 6.5,
         inflationPct: 2.5,

@@ -654,6 +654,26 @@ main {
   padding-bottom: 10px;
 }
 
+.setup-summary-row-clickable {
+  cursor: pointer;
+  border-radius: 12px;
+  margin: -4px;
+  padding: 8px 4px 10px;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+
+.setup-summary-row-clickable:hover,
+.setup-summary-row-clickable:focus-visible {
+  background: #f8fafc;
+  outline: none;
+}
+
+.summary-label-with-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .setup-summary-row span {
   color: #64748b;
   font-size: 12px;

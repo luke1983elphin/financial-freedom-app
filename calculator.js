@@ -5,7 +5,7 @@
   const SUPER_CONTRIBUTIONS_TAX_RATE = 0.15;
   const MEDICARE_LEVY_RATE = 0.02;
   const TAX_YEAR = "2026-27";
-  const HELP_THRESHOLD = 67000;
+  const HELP_THRESHOLD = 69528;
   const TAX_BRACKETS_2026_27 = [
     { threshold: 0, rate: 0 },
     { threshold: 18200, rate: 0.15 },
@@ -14,9 +14,9 @@
     { threshold: 190000, rate: 0.45 },
   ];
   const HELP_REPAYMENT_BRACKETS_2026_27 = [
-    { threshold: 67000, baseRepayment: 0, marginalRate: 0.15 },
-    { threshold: 125000, baseRepayment: 8700, marginalRate: 0.17 },
-    { threshold: 179286, totalIncomeRate: 0.10 },
+    { threshold: 69528, upper: 129717, baseRepayment: 0, marginalRate: 0.15 },
+    { threshold: 129717, upper: 186050, baseRepayment: 9028.5, marginalRate: 0.17 },
+    { threshold: 186050, totalIncomeRate: 0.10 },
   ];
   const STATUS = { GREEN: "green", AMBER: "amber", RED: "red" };
 
@@ -95,10 +95,10 @@
     let calculatedRepayment = 0;
     let marginalRate = 0;
 
-    if (income >= HELP_REPAYMENT_BRACKETS_2026_27[2].threshold) {
+    if (income > HELP_REPAYMENT_BRACKETS_2026_27[2].threshold) {
       calculatedRepayment = income * HELP_REPAYMENT_BRACKETS_2026_27[2].totalIncomeRate;
       marginalRate = HELP_REPAYMENT_BRACKETS_2026_27[2].totalIncomeRate;
-    } else if (income >= HELP_REPAYMENT_BRACKETS_2026_27[1].threshold) {
+    } else if (income > HELP_REPAYMENT_BRACKETS_2026_27[1].threshold) {
       const band = HELP_REPAYMENT_BRACKETS_2026_27[1];
       calculatedRepayment = band.baseRepayment + (income - band.threshold) * band.marginalRate;
       marginalRate = band.marginalRate;

@@ -123,6 +123,10 @@
       title: "Extra Super Contributions",
       body: "This is extra tax-deductible personal concessional super contributions you plan to make to help grow your super balance.",
     },
+    cashflowAllocation: {
+      title: "Spare Cashflow Allocation",
+      body: "These amounts are deducted from available cashflow because you have chosen to allocate that spare cash toward wealth-building instead of leaving it as unused surplus.",
+    },
     investmentReturn: {
       title: "Investment Return",
       body: "This is the expected average yearly return on your investments before inflation. It helps estimate how your portfolio may grow over time.",
@@ -1464,7 +1468,7 @@
       ["Inflation", `${Number(plan.investing.inflationPct || 0).toFixed(1)}% per year estimate`],
       ["Wage growth", `${Number(plan.investing.wageGrowthPct || 0).toFixed(1)}% per year estimate`],
       ["Medicare levy", `${Math.round((result.taxEstimate.medicareLevyRate || 0) * 100)}% estimate`],
-      ["HELP repayment assumptions", `Estimated above $67,000 repayment income and capped by current balance`],
+      ["HELP repayment assumptions", `Estimated above $69,528 repayment income and capped by current balance`],
       ["Concessional contributions tax", "15% applied before money is invested in super"],
       ["Safe withdrawal rate", `${Number(plan.investing.safeWithdrawalRatePct || 0).toFixed(1)}% estimate`],
       ["Super access age", `Age ${result.superAccessAge} in this model`],
@@ -1652,23 +1656,57 @@
     if (!container) return;
     const percent = freedomPercent(result);
     const stage = currentFreedomStage(percent);
-    container.innerHTML = [
-      ["Freedom progress", plainPercent(percent)],
-      ["Current stage", stage.name],
-      ["Accessible investments", money(result.accessibleInvestmentAssets)],
-      ["Super from age 60", money(result.superannuationBalance)],
-      ["Gross income", money(result.annualGrossIncome)],
-      ["Net income after tax and HELP", money(result.netIncomeAfterTaxHelp)],
-      ["Annual living expenses", money(result.annualLivingExpenses)],
-      ["Final projected cash surplus", money(result.finalProjectedCashSurplus)],
-      ["Investment return", `${Number(plan.investing.expectedInvestmentReturnPct || 0).toFixed(1)}%`],
-      ["1-year net worth", money(netWorthAtYear(result, 1))],
-    ].map(([label, value]) => `
-      <div class="setup-summary-row">
-        <span>${escapeHtml(label)}</span>
-        <strong>${escapeHtml(value)}</strong>
-      </div>
-    `).join("");
+    const rows = [
+      { label: "Freedom progress", value: plainPercent(percent) },
+      { label: "Current stage", value: stage.name },
+      { label: "Accessible investments", value: money(result.accessibleInvestmentAssets) },
+      { label: "Super from age 60", value: money(result.superannuationBalance) },
+      { label: "Gross income", value: money(result.annualGrossIncome) },
+      { label: "Net income after tax and HELP", value: money(result.netIncomeAfterTaxHelp) },
+      { label: "Annual living expenses", value: money(result.annualLivingExpenses) },
+      {
+        label: "Spare cashflow used to invest",
+        value: money(result.annualInvestmentContributions),
+        infoKey: "cashflowAllocation",
+        view: "investments",
+        path: "investing.annualInvestingTarget",
+      },
+      {
+        label: "Spare cashflow invested in extra super",
+        value: money(result.annualExtraSuperContributions),
+        infoKey: "cashflowAllocation",
+        view: "super",
+        path: "investing.extraSuperContributions",
+      },
+      { label: "Final projected cash surplus", value: money(result.finalProjectedCashSurplus) },
+      { label: "Investment return", value: `${Number(plan.investing.expectedInvestmentReturnPct || 0).toFixed(1)}%` },
+      { label: "1-year net worth", value: money(netWorthAtYear(result, 1)) },
+    ];
+    container.innerHTML = rows.map((row) => {
+      const jumpAttrs = row.path ? ` role="button" tabindex="0" data-summary-jump data-summary-view="${escapeHtml(row.view)}" data-summary-path="${escapeHtml(row.path)}" aria-label="Edit ${escapeHtml(row.label)}"` : "";
+      const label = row.infoKey
+        ? `<span class="summary-label-with-info">${escapeHtml(row.label)}${infoButtonHtml(row.infoKey, row.label)}</span>`
+        : `<span>${escapeHtml(row.label)}</span>`;
+      return `
+        <div class="setup-summary-row${row.path ? " setup-summary-row-clickable" : ""}"${jumpAttrs}>
+          ${label}
+          <strong>${escapeHtml(row.value)}</strong>
+        </div>
+      `;
+    }).join("");
+  }
+
+  function jumpToSummaryTarget(trigger) {
+    const view = trigger.dataset.summaryView || "dashboard";
+    const path = trigger.dataset.summaryPath;
+    showWorkspace(view);
+    window.setTimeout(() => {
+      const panel = document.querySelector(`[data-view-panel="${view}"]`);
+      const input = panel?.querySelector(`[data-path="${path}"]`) || document.querySelector(`[data-path="${path}"]`);
+      if (!input) return;
+      input.scrollIntoView({ behavior: "smooth", block: "center" });
+      input.focus({ preventScroll: true });
+    }, 160);
   }
 
   function renderComparison(result) {
@@ -2279,6 +2317,13 @@
         return;
       }
 
+      const summaryJump = event.target.closest("[data-summary-jump]");
+      if (summaryJump) {
+        event.preventDefault();
+        jumpToSummaryTarget(summaryJump);
+        return;
+      }
+
       const sampleChoice = event.target.closest("[data-sample-plan-choice]");
       if (sampleChoice) {
         selectedSamplePlanId = sampleChoice.dataset.samplePlanChoice;
@@ -2380,6 +2425,13 @@
         closeMobileActionMenu();
         closeSamplePlanMenus();
         closeGoalInfo();
+      }
+
+      const summaryJump = event.target.closest?.("[data-summary-jump]");
+      if (summaryJump && (event.key === "Enter" || event.key === " ")) {
+        event.preventDefault();
+        jumpToSummaryTarget(summaryJump);
+        return;
       }
 
       const homeStep = event.target.closest?.("[data-home-step]");
