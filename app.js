@@ -157,6 +157,10 @@
     helpBalanceChange: 0,
     oneOffCosts: 0,
     oneOffSavings: 0,
+    surplusAllocationTarget: "none",
+    surplusAllocationAmount: 0,
+    surplusAllocationFrequency: "annually",
+    surplusAllocationUseFull: false,
   };
   const whatIfActions = [
     { id: "invest-100", label: "Invest an extra $100/week", adjustments: () => ({ investmentContributionChange: 5200 }) },
@@ -321,8 +325,26 @@
     return scenarioPlan;
   }
 
-  function buildComparisonPlan() {
-    return applyScenarioAdjustments(plan, plan.comparison || {});
+  function comparisonSurplusAllocationAmount(baseResult, comparison = {}) {
+    if (!["investments", "debt"].includes(comparison.surplusAllocationTarget)) return 0;
+    if (comparison.surplusAllocationUseFull) return Math.max(0, estimatedCashflow(baseResult));
+    return Math.max(0, annualValue(comparison.surplusAllocationAmount, comparison.surplusAllocationFrequency || "annually"));
+  }
+
+  function comparisonAdjustmentsWithSurplus(baseResult, comparison = {}) {
+    const adjusted = { ...comparison };
+    const annualAllocation = comparisonSurplusAllocationAmount(baseResult, comparison);
+    if (annualAllocation > 0 && comparison.surplusAllocationTarget === "investments") {
+      adjusted.investmentContributionChange = (Number(adjusted.investmentContributionChange) || 0) + annualAllocation;
+    }
+    if (annualAllocation > 0 && comparison.surplusAllocationTarget === "debt") {
+      adjusted.loanRepaymentChangeMonthly = (Number(adjusted.loanRepaymentChangeMonthly) || 0) + annualAllocation / 12;
+    }
+    return adjusted;
+  }
+
+  function buildComparisonPlan(baseResult = CALC.calculatePlan(plan)) {
+    return applyScenarioAdjustments(plan, comparisonAdjustmentsWithSurplus(baseResult, plan.comparison || {}));
   }
 
   function estimatedCashflow(result) {
@@ -354,6 +376,31 @@
     if (!result.targetCapital) return "Set target";
     const match = result.financialFreedomProgressProjection.find((row) => row.progress >= 100);
     return match ? `Age ${match.age}` : "Beyond 30 years";
+  }
+
+  function progressAtYear(result, year) {
+    return result.financialFreedomProgressProjection[Math.max(0, year - 1)]?.progress || freedomPercent(result);
+  }
+
+  function projectedFiAssetsAtYear(result, year) {
+    const row = result.investmentProjection[Math.max(0, year - 1)];
+    const superAccessible = row?.age >= result.superAccessAge ? superAtYear(result, year) : 0;
+    return roundForDisplay((row?.closingBalance || 0) + (Number(result.plan.assets.offsetBalance) || 0) + superAccessible);
+  }
+
+  function projectedDebtAtYear(result, year) {
+    const helpBalance = Math.max(0, result.helpRepaymentEstimate.balance - result.helpRepaymentEstimate.annualRepayment * year);
+    return roundForDisplay(
+      loanBalanceAtYear(result, year)
+      + helpBalance
+      + (Number(result.plan.liabilities.otherDebts) || 0)
+      + (Number(result.plan.liabilities.creditCardBalance) || 0)
+    );
+  }
+
+  function formatLoanTiming(loan) {
+    if (!loan?.offsetBenefit?.grossLoanBalance) return "No home loan timing estimated";
+    return loan.yearsToRepay ? `${loan.yearsToRepay.toFixed(1)} years` : "Beyond current loan term";
   }
 
   function estimateDateFromYear(year) {
@@ -1490,8 +1537,8 @@
     });
   }
 
-  function renderCashflow(result) {
-    const rows = [
+  function cashflowRows(result) {
+    return [
       ["Gross income", result.annualGrossIncome],
       [`Less: Estimated income tax (${result.taxEstimate.taxYear})`, -result.taxEstimate.incomeTax],
       ["Less: Medicare levy", -result.taxEstimate.medicareLevy],
@@ -1505,8 +1552,21 @@
       ["Less: Extra super contributions / salary sacrifice", -result.annualExtraSuperContributions],
       ["Final projected cash surplus", result.finalProjectedCashSurplus],
     ];
-    document.getElementById("cashflowTable").innerHTML = rows.map(([label, value]) => `
-      <div class="table-row"><span>${escapeHtml(label)}</span><strong>${money(value)}</strong></div>
+  }
+
+  function cashflowRowHtml(label, value) {
+    const finalClass = label === "Final projected cash surplus" ? " cashflow-row-final" : "";
+    return `
+      <div class="table-row cashflow-row${finalClass}">
+        <span>${escapeHtml(label)}</span>
+        <strong>${money(value)}</strong>
+      </div>
+    `;
+  }
+
+  function renderCashflow(result) {
+    document.getElementById("cashflowTable").innerHTML = cashflowRows(result).map(([label, value]) => `
+      ${cashflowRowHtml(label, value)}
     `).join("");
   }
 
@@ -1632,11 +1692,64 @@
     const percent = freedomPercent(result);
     const stage = currentFreedomStage(percent);
     const gap = Math.max(0, (Number(result.targetCapital) || 0) - (Number(result.financialIndependenceAssets) || 0));
+    const milestone = nextMilestone(result, percent);
+    const monthlyFinalSurplus = estimatedCashflow(result) / 12;
+    const setHtml = (id, html) => {
+      const element = document.getElementById(id);
+      if (element) element.innerHTML = html;
+    };
     document.getElementById("reportSummary").textContent = `Financial Freedom Progress ${plainPercent(percent)}, net worth ${money(result.currentNetWorth)}, annual lifestyle spending ${money(plan.personal.targetAnnualSpending)}, monthly final projected cash surplus ${money(estimatedCashflow(result) / 12)}.`;
     const meaning = document.getElementById("reportWhatThisMeans");
     if (meaning) {
       meaning.innerHTML = `<strong>What this means:</strong> Your plan is currently in the ${escapeHtml(stage.name)} stage. ${gap > 0 ? `${money(gap)} more FI assets are estimated to reach the full Financial Freedom target.` : "Your current FI assets meet or exceed the modelled Financial Freedom target based on the assumptions used."}`;
     }
+    setHtml("reportDashboardSummary", [
+      summaryTile("Current Stage", stage.name),
+      summaryTile("Financial Freedom Progress", plainPercent(percent)),
+      summaryTile("Net Worth", money(result.currentNetWorth)),
+      summaryTile("Monthly Final Surplus", money(monthlyFinalSurplus), monthlyFinalSurplus >= 0 ? "status-green" : "status-amber"),
+      summaryTile("Next Milestone", milestone.amount),
+      summaryTile("Highest Priority", highestRecommendation(result)),
+    ].join(""));
+    setHtml("reportPositionSummary", [
+      summaryTile("Total Assets", money(result.totalAssets)),
+      summaryTile("Total Liabilities", money(result.totalLiabilities)),
+      summaryTile("Current Net Worth", money(result.currentNetWorth)),
+      summaryTile("Investment Balance", money(result.investmentBalance)),
+      summaryTile("Accessible Investment Assets", money(result.accessibleInvestmentAssets)),
+      summaryTile("Superannuation Balance", money(result.superannuationBalance)),
+      summaryTile("Effective Mortgage", money(result.effectiveMortgageBalance)),
+      summaryTile("Debt Balance", money(result.totalLiabilities)),
+    ].join(""));
+    setHtml("reportCashflowSummary", cashflowRows(result).map(([label, value]) => cashflowRowHtml(label, value)).join(""));
+    const surplusExplanation = document.getElementById("reportSurplusExplanation");
+    if (surplusExplanation) {
+      surplusExplanation.textContent = `Final projected surplus is the estimated annual amount left after tax, Medicare levy, HELP, living costs, loan repayments, investment contributions and extra super contributions. It is an estimate for modelling only.`;
+    }
+    setHtml("reportProgressSummary", [
+      summaryTile("Annual Lifestyle Spending", money(plan.personal.targetAnnualSpending), "", "annualLifestyleSpending"),
+      summaryTile("Annual Passive Income Estimate", money(annualPassiveIncome(result))),
+      summaryTile("Target FI Capital", money(result.targetCapital), "", "targetFiCapital"),
+      summaryTile("Current FI Assets", money(result.financialIndependenceAssets), "", "currentFiAssets"),
+      summaryTile("Gap to Financial Freedom Target", money(gap)),
+      summaryTile("Target Age Outcome", targetAgeOutcome(result)),
+    ].join(""));
+    setHtml("reportForecastSummary", [
+      summaryTile("1-Year Projected Net Worth", money(netWorthAtYear(result, 1))),
+      summaryTile("2-Year Projected Net Worth", money(netWorthAtYear(result, 2))),
+      summaryTile("10-Year Projected Net Worth", money(netWorthAtYear(result, 10))),
+      summaryTile("30-Year Projected Net Worth", money(netWorthAtYear(result, 30))),
+      summaryTile("10-Year Investment Balance", money(investmentAtYear(result, 10))),
+      summaryTile("10-Year Debt Estimate", money(projectedDebtAtYear(result, 10))),
+      summaryTile("10-Year Financial Freedom Progress", plainPercent(progressAtYear(result, 10))),
+      summaryTile("Long-Term Net Worth", money(longTermNetWorth(result))),
+    ].join(""));
+    setHtml("reportMilestoneSummary", result.milestones.map((item) => {
+      const threshold = item.coverage * 100;
+      const reach = milestoneReachEstimate(result, threshold);
+      const milestoneProgress = threshold > 0 ? Math.min(100, Math.max(0, percent / threshold * 100)) : 0;
+      return summaryTile(item.label, `${plainPercent(milestoneProgress)} progress - ${reach.label}`);
+    }).join(""));
     const assumptions = document.getElementById("reportKeyAssumptions");
     if (assumptions) {
       assumptions.innerHTML = [
@@ -1648,6 +1761,16 @@
         summaryTile("Extra Super Contributions", money(plan.investing.extraSuperContributions), "", "extraSuperContributions"),
       ].join("");
     }
+    lineChart("reportNetWorthChart", [{
+      label: "Net worth",
+      color: "#2563eb",
+      points: [{ x: 0, y: result.currentNetWorth }, ...result.netWorthProjection.map((row) => ({ x: row.year, y: row.closingBalance }))],
+    }], { height: 260, xMarks: [0, 10, 20, 30], xLabel: (mark) => `${mark}y` });
+    lineChart("reportProgressChart", [{
+      label: "Progress",
+      color: "#0f9f6e",
+      points: [{ x: 0, y: percent }, ...result.financialFreedomProgressProjection.map((row) => ({ x: row.year, y: row.progress }))],
+    }], { height: 260, xMarks: [0, 10, 20, 30], xLabel: (mark) => `${mark}y`, yLabel: (value) => `${Math.round(value)}%` });
     renderScenarioComparison(loadScenarios(), "reportScenarioComparison");
   }
 
@@ -1709,21 +1832,67 @@
     }, 160);
   }
 
+  function comparisonSurplusImpactTiles(result, revisedResult, comparison, annualAllocation) {
+    if (!annualAllocation || !["investments", "debt"].includes(comparison.surplusAllocationTarget)) return [];
+    const allocationLabel = comparison.surplusAllocationTarget === "investments" ? "investments" : "debt repayment";
+    const tiles = [
+      summaryTile("Surplus allocation modelled", `${money(annualAllocation)} per year to ${allocationLabel}`),
+    ];
+    if (comparison.surplusAllocationTarget === "investments") {
+      const currentFiAssets10 = projectedFiAssetsAtYear(result, 10);
+      const revisedFiAssets10 = projectedFiAssetsAtYear(revisedResult, 10);
+      const currentPassive10 = Math.round(currentFiAssets10 * safeWithdrawalRate());
+      const revisedPassive10 = Math.round(revisedFiAssets10 * safeWithdrawalRate());
+      const revisedMilestone = nextMilestone(revisedResult, freedomPercent(revisedResult));
+      tiles.push(
+        summaryTile("Projected investment balance in 10 years", `${money(investmentAtYear(result, 10))} -> ${money(investmentAtYear(revisedResult, 10))}`),
+        summaryTile("Projected FI assets in 10 years", `${money(currentFiAssets10)} -> ${money(revisedFiAssets10)}`),
+        summaryTile("Projected passive income in 10 years", `${money(currentPassive10)} -> ${money(revisedPassive10)}`),
+        summaryTile("Financial Freedom Progress", `${plainPercent(freedomPercent(result))} -> ${plainPercent(freedomPercent(revisedResult))}`),
+        summaryTile("Target age outcome", `${targetAgeOutcome(result)} -> ${targetAgeOutcome(revisedResult)}`),
+        summaryTile("Relevant milestone", revisedMilestone.text)
+      );
+      return tiles;
+    }
+
+    const currentDebt10 = projectedDebtAtYear(result, 10);
+    const revisedDebt10 = projectedDebtAtYear(revisedResult, 10);
+    const canEstimateInterest = Number(result.loan?.offsetBenefit?.grossLoanBalance) > 0 && Number(result.loan?.totalInterestPaid) > 0;
+    const interestSaved = canEstimateInterest ? Math.max(0, result.loan.totalInterestPaid - revisedResult.loan.totalInterestPaid) : null;
+    const futureAnnualCashflow = revisedResult.annualDebtRepayments > 0
+      ? revisedResult.finalProjectedCashSurplus + revisedResult.annualDebtRepayments
+      : revisedResult.finalProjectedCashSurplus;
+    tiles.push(
+      summaryTile("Remaining debt estimate in 10 years", `${money(currentDebt10)} -> ${money(revisedDebt10)}`),
+      summaryTile("Estimated debt repayment timing", `${formatLoanTiming(result.loan)} -> ${formatLoanTiming(revisedResult.loan)}`),
+      summaryTile("Estimated interest saved", interestSaved === null ? "Add loan balance, rate and repayment to estimate" : money(interestSaved)),
+      summaryTile("Future annual cashflow after debt is repaid", money(futureAnnualCashflow)),
+      summaryTile("Financial Freedom Progress", `${plainPercent(freedomPercent(result))} -> ${plainPercent(freedomPercent(revisedResult))}`),
+      summaryTile("Target age outcome", `${targetAgeOutcome(result)} -> ${targetAgeOutcome(revisedResult)}`)
+    );
+    return tiles;
+  }
+
   function renderComparison(result) {
     const summary = document.getElementById("comparisonSummary");
     if (!summary) return;
     const comparison = { ...comparisonDefaults, ...(plan.comparison || {}) };
     document.querySelectorAll("[data-comparison]").forEach((input) => {
       const value = comparison[input.dataset.comparison] ?? 0;
-      if (input.value !== String(value)) input.value = value;
+      if (input.type === "checkbox") {
+        input.checked = Boolean(value);
+      } else if (input.value !== String(value)) {
+        input.value = value;
+      }
     });
-    const revisedPlan = buildComparisonPlan();
+    const annualAllocation = comparisonSurplusAllocationAmount(result, comparison);
+    const revisedPlan = buildComparisonPlan(result);
     const revisedResult = CALC.calculatePlan(revisedPlan);
     const current = estimatedCashflow(result);
     const revised = estimatedCashflow(revisedResult);
     const currentPercent = freedomPercent(result);
     const revisedPercent = freedomPercent(revisedResult);
-    summary.innerHTML = [
+    const tiles = [
       summaryTile("Current monthly final surplus", money(current / 12), current >= 0 ? "status-green" : "status-amber"),
       summaryTile("Revised monthly final surplus", money(revised / 12), revised >= 0 ? "status-green" : "status-amber"),
       summaryTile("Current annual final surplus", money(current), current >= 0 ? "status-green" : "status-amber"),
@@ -1738,7 +1907,9 @@
       summaryTile("1-year net worth", `${money(netWorthAtYear(result, 1))} -> ${money(netWorthAtYear(revisedResult, 1))}`),
       summaryTile("2-year net worth", `${money(netWorthAtYear(result, 2))} -> ${money(netWorthAtYear(revisedResult, 2))}`),
       summaryTile("Long-term freedom progress", `${plainPercent(currentPercent)} -> ${plainPercent(revisedPercent)}`, revisedPercent >= currentPercent ? "status-green" : "status-amber"),
-    ].join("");
+      ...comparisonSurplusImpactTiles(result, revisedResult, comparison, annualAllocation),
+    ];
+    summary.innerHTML = tiles.join("");
   }
 
   function renderWhatIf(result) {
@@ -2283,7 +2454,8 @@
       }
       if (target.dataset.comparison) {
         ensureCollectionData();
-        plan.comparison[target.dataset.comparison] = Number(target.value) || 0;
+        const value = target.dataset.type === "boolean" ? target.checked : target.dataset.type === "text" ? target.value : Number(target.value) || 0;
+        plan.comparison[target.dataset.comparison] = value;
         autosavePlan();
         renderOutputs();
         return;

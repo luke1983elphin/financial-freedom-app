@@ -1420,6 +1420,43 @@ textarea.field-input {
   gap: 8px;
 }
 
+.cashflow-list {
+  gap: 8px;
+}
+
+.cashflow-row {
+  grid-template-columns: minmax(0, 1fr) minmax(112px, max-content);
+  align-items: start;
+  gap: 12px;
+  padding: 12px 14px;
+}
+
+.cashflow-row span {
+  line-height: 1.35;
+}
+
+.cashflow-row strong {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.cashflow-row span,
+.cashflow-row strong {
+  font-size: 14px;
+}
+
+.cashflow-row-final {
+  border-color: #bdebd7;
+  background: #effcf6;
+}
+
+.cashflow-row-final span,
+.cashflow-row-final strong {
+  color: #0f2742;
+  font-size: 15px;
+  font-weight: 950;
+}
+
 @media (min-width: 640px) {
   .table-row {
     grid-template-columns: minmax(0, 1fr) auto;
@@ -1441,6 +1478,75 @@ textarea.field-input {
   font-weight: 850;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.cashflow-row strong {
+  font-size: 14px;
+  min-width: 112px;
+  overflow-wrap: normal;
+}
+
+.cashflow-row-final strong {
+  font-size: 15px;
+}
+
+.quick-surplus-panel {
+  border: 1px solid #dbeafe;
+  border-radius: 18px;
+  background: #f8fbff;
+  padding: 16px;
+}
+
+.report-preview {
+  display: grid;
+  gap: 18px;
+}
+
+.report-section,
+.report-cover {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.report-chart-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.report-chart-grid .chart {
+  min-height: 220px;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #ffffff;
+  padding: 8px;
+}
+
+@media (min-width: 900px) {
+  .report-chart-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 420px) {
+  .cashflow-row {
+    grid-template-columns: minmax(0, 1fr) minmax(96px, max-content);
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .cashflow-row span,
+  .cashflow-row strong {
+    font-size: 13px;
+  }
+
+  .cashflow-row strong {
+    min-width: 96px;
+  }
+
+  .cashflow-row-final span,
+  .cashflow-row-final strong {
+    font-size: 14px;
+  }
 }
 
 .chart {
@@ -1949,7 +2055,8 @@ textarea.field-input {
   header,
   nav,
   #homeView,
-  .btn {
+  .btn,
+  .report-editor-only {
     display: none !important;
   }
 
@@ -1982,9 +2089,20 @@ textarea.field-input {
     padding: 14px !important;
   }
 
-  .dashboard-chart-grid {
+  .dashboard-chart-grid,
+  .report-chart-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     gap: 12px !important;
+  }
+
+  .report-preview {
+    gap: 10px !important;
+  }
+
+  .report-section,
+  .report-cover {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   .chart {
@@ -2004,7 +2122,8 @@ textarea.field-input {
   .card,
   .metric-card,
   .milestone-grid,
-  .dashboard-chart-grid {
+  .dashboard-chart-grid,
+  .report-chart-grid {
     margin-top: 12px !important;
     margin-bottom: 12px !important;
   }
