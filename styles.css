@@ -1527,6 +1527,361 @@ textarea.field-input {
   }
 }
 
+.report-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.report-toolbar h3 {
+  color: #0f2742;
+  font-size: 22px;
+  font-weight: 950;
+}
+
+.report-toolbar p {
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.report-document {
+  display: grid;
+  gap: 22px;
+  margin-top: 24px;
+}
+
+.report-title-card,
+.report-stage {
+  border: 1px solid #e2e8f0;
+  border-radius: 22px;
+  background: #ffffff;
+  box-shadow: 0 14px 34px rgba(15, 39, 66, 0.06);
+}
+
+.report-title-card {
+  padding: clamp(22px, 4vw, 34px);
+}
+
+.report-title-card h1 {
+  margin-top: 6px;
+  color: #0f2742;
+  font-size: clamp(30px, 4vw, 46px);
+  font-weight: 950;
+  line-height: 1.05;
+}
+
+.report-title-card p:last-child {
+  margin-top: 12px;
+  max-width: 760px;
+  color: #475569;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.report-stage {
+  display: grid;
+  gap: 18px;
+  padding: clamp(20px, 3vw, 30px);
+}
+
+.report-stage-heading {
+  display: grid;
+  gap: 6px;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 14px;
+  break-after: avoid;
+  page-break-after: avoid;
+}
+
+.report-stage-heading span {
+  color: #0f9f6e;
+  font-size: 12px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.report-stage-heading h2 {
+  color: #0f2742;
+  font-size: clamp(24px, 3vw, 34px);
+  font-weight: 950;
+  line-height: 1.12;
+}
+
+.report-stage-heading p,
+.report-narrative,
+.report-small-note {
+  color: #475569;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.65;
+}
+
+.report-narrative-box,
+.report-note,
+.report-positive,
+.report-warning,
+.report-outcome-box,
+.report-disclaimer {
+  border: 1px solid #dbeafe;
+  border-radius: 18px;
+  background: #f8fbff;
+  padding: 16px;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.report-narrative-box p + p {
+  margin-top: 10px;
+}
+
+.report-note {
+  color: #475569;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.report-positive {
+  border-color: #bdebd7;
+  background: #effcf6;
+  color: #08734e;
+}
+
+.report-warning {
+  border-color: #f2bab4;
+  background: #fff1ef;
+  color: #b42318;
+}
+
+.report-positive p,
+.report-warning p {
+  margin-top: 6px;
+  color: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.55;
+}
+
+.report-explainer-grid,
+.report-recommendation-grid,
+.report-milestone-grid {
+  display: grid;
+  gap: 14px;
+}
+
+@media (min-width: 840px) {
+  .report-explainer-grid,
+  .report-recommendation-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1040px) {
+  .report-milestone-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.report-explainer,
+.report-recommendation-card,
+.report-milestone-card,
+.report-scenario-card,
+.report-chart-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #f8fafc;
+  padding: 16px;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.report-explainer {
+  display: grid;
+  gap: 10px;
+}
+
+.report-explainer > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: 12px;
+  align-items: start;
+}
+
+.report-explainer h3,
+.report-recommendation-card h3,
+.report-milestone-card h3,
+.report-chart-card h3,
+.report-outcome-box h3,
+.report-disclaimer h3 {
+  color: #0f2742;
+  font-size: 17px;
+  font-weight: 950;
+}
+
+.report-explainer strong {
+  color: #0f2742;
+  font-size: 16px;
+  font-weight: 950;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.report-explainer p,
+.report-recommendation-card p,
+.report-milestone-card p,
+.report-chart-card p,
+.report-disclaimer p {
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.report-progress-bar {
+  overflow: hidden;
+  height: 18px;
+  border-radius: 999px;
+  background: #e5edf5;
+}
+
+.report-progress-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #0f9f6e, #2563eb);
+}
+
+.report-chart-grid {
+  align-items: stretch;
+}
+
+.report-chart-card {
+  background: #ffffff;
+}
+
+.report-chart-card .chart {
+  margin-top: 10px;
+  min-height: 260px;
+}
+
+.report-chart-wide {
+  grid-column: 1 / -1;
+}
+
+.report-milestone-title,
+.report-scenario-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.report-milestone-title span,
+.report-scenario-heading span,
+.priority-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 950;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.report-milestone-title span,
+.report-scenario-heading span {
+  background: #eef6ff;
+  color: #0f5f9d;
+}
+
+.report-mini-table {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+@media (min-width: 720px) {
+  .report-mini-table-two {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.report-mini-table div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: 12px;
+  align-items: baseline;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 8px;
+}
+
+.report-mini-table span {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.report-mini-table strong {
+  color: #0f2742;
+  font-size: 14px;
+  font-weight: 950;
+  text-align: right;
+}
+
+.priority-high {
+  background: #fff1ef;
+  color: #b42318;
+}
+
+.priority-medium {
+  background: #fff8e9;
+  color: #996515;
+}
+
+.priority-low {
+  background: #eef6ff;
+  color: #0f5f9d;
+}
+
+.report-table-wrap {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.report-comparison-table th,
+.report-comparison-table td {
+  vertical-align: top;
+}
+
+.report-action-list {
+  display: grid;
+  gap: 10px;
+  padding-left: 22px;
+  color: #334155;
+  font-weight: 800;
+  line-height: 1.55;
+}
+
+.report-disclaimer {
+  border-color: #f3d08c;
+  background: #fffaf0;
+}
+
+.report-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 14px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 @media (max-width: 420px) {
   .cashflow-row {
     grid-template-columns: minmax(0, 1fr) minmax(96px, max-content);
@@ -1731,6 +2086,80 @@ textarea.field-input {
     width: 164px;
     justify-self: center;
   }
+
+  .report-toolbar,
+  .report-milestone-title,
+  .report-scenario-heading {
+    display: grid;
+  }
+
+  .report-explainer > div,
+  .report-mini-table div {
+    grid-template-columns: 1fr;
+  }
+
+  .report-explainer strong,
+  .report-mini-table strong {
+    text-align: left;
+  }
+
+  .report-comparison-table {
+    min-width: 0;
+  }
+
+  .report-comparison-table thead {
+    display: none;
+  }
+
+  .report-comparison-table,
+  .report-comparison-table tbody,
+  .report-comparison-table tr,
+  .report-comparison-table th,
+  .report-comparison-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .report-comparison-table tr {
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    background: #ffffff;
+    padding: 10px;
+  }
+
+  .report-comparison-table tr + tr {
+    margin-top: 10px;
+  }
+
+  .report-comparison-table th,
+  .report-comparison-table td {
+    border: 0;
+    padding: 6px 0;
+  }
+
+  .report-comparison-table td::before {
+    display: block;
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 950;
+    text-transform: uppercase;
+  }
+
+  .report-comparison-table td:nth-of-type(1)::before {
+    content: "Current Plan";
+  }
+
+  .report-comparison-table td:nth-of-type(2)::before {
+    content: "Compared Scenario";
+  }
+
+  .report-comparison-table td:nth-of-type(3)::before {
+    content: "Difference";
+  }
+
+  .report-comparison-table td:nth-of-type(4)::before {
+    content: "Better Result";
+  }
 }
 
 @media (max-width: 520px) {
@@ -1911,6 +2340,27 @@ textarea.field-input {
     content: "Difference";
   }
 
+  .report-comparison-table td {
+    display: block;
+    text-align: left;
+  }
+
+  .report-comparison-table td:nth-of-type(1)::before {
+    content: "Current Plan";
+  }
+
+  .report-comparison-table td:nth-of-type(2)::before {
+    content: "Compared Scenario";
+  }
+
+  .report-comparison-table td:nth-of-type(3)::before {
+    content: "Difference";
+  }
+
+  .report-comparison-table td:nth-of-type(4)::before {
+    content: "Better Result";
+  }
+
   .scenario-comparison-grid {
     grid-template-columns: 1fr;
   }
@@ -2049,7 +2499,16 @@ textarea.field-input {
 
 @media print {
   @page {
-    margin: 12mm;
+    margin: 14mm 12mm 18mm;
+    @bottom-left {
+      content: "Financial Freedom Report";
+    }
+    @bottom-center {
+      content: "Education and modelling only";
+    }
+    @bottom-right {
+      content: "Page " counter(page);
+    }
   }
 
   header,
@@ -2078,15 +2537,51 @@ textarea.field-input {
 
   body {
     font-size: 12px;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
 
   .card,
   .metric-card,
-  .premium-hero {
+  .premium-hero,
+  .report-title-card,
+  .report-explainer,
+  .report-recommendation-card,
+  .report-milestone-card,
+  .report-scenario-card,
+  .report-chart-card,
+  .summary-tile,
+  .cashflow-row {
     box-shadow: none !important;
     break-inside: avoid;
     page-break-inside: avoid;
     padding: 14px !important;
+  }
+
+  .report-document {
+    gap: 10px !important;
+  }
+
+  .report-stage {
+    box-shadow: none !important;
+    margin: 0 0 10mm !important;
+    padding: 16px !important;
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+
+  .report-stage:nth-of-type(4),
+  .report-stage:nth-of-type(6),
+  .report-stage:nth-of-type(8),
+  .report-stage:nth-of-type(10),
+  .report-stage:nth-of-type(12) {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  .report-stage-heading {
+    break-after: avoid;
+    page-break-after: avoid;
   }
 
   .dashboard-chart-grid,
@@ -2095,23 +2590,18 @@ textarea.field-input {
     gap: 12px !important;
   }
 
-  .report-preview {
-    gap: 10px !important;
-  }
-
-  .report-section,
-  .report-cover {
-    break-inside: avoid;
-    page-break-inside: avoid;
-  }
-
   .chart {
-    min-height: 160px !important;
-    max-height: 210px;
+    min-height: 210px !important;
+    max-height: 260px;
+  }
+
+  .report-chart-card .chart {
+    min-height: 230px !important;
+    max-height: 280px;
   }
 
   .chart-label {
-    font-size: 14px;
+    font-size: 15px;
   }
 
   .chart-empty-label {
@@ -2123,8 +2613,20 @@ textarea.field-input {
   .metric-card,
   .milestone-grid,
   .dashboard-chart-grid,
-  .report-chart-grid {
+  .report-chart-grid,
+  .report-explainer-grid,
+  .report-recommendation-grid,
+  .report-milestone-grid {
     margin-top: 12px !important;
     margin-bottom: 12px !important;
+  }
+
+  .report-comparison-table {
+    min-width: 0 !important;
+  }
+
+  .report-footer {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 }

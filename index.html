@@ -574,85 +574,15 @@
                   <h2>Reports</h2>
                   <p>Print or export the planning report for discussion. This is not financial advice.</p>
                 </div>
-                <div class="report-preview">
-                  <div class="card report-cover">
-                    <div class="card-heading">
-                      <div>
-                        <h3>Financial Freedom Report</h3>
-                        <span>Dashboard summary and key results from the current plan.</span>
-                      </div>
-                      <button class="btn btn-primary" type="button" id="reportPrintButton">Print / Export</button>
-                    </div>
-                    <p class="mt-4 text-sm text-slate-500" id="reportSummary"></p>
-                    <div id="reportWhatThisMeans" class="tax-note mt-4"></div>
-                    <div id="reportDashboardSummary" class="summary-grid mt-4"></div>
+                <div class="report-toolbar card">
+                  <div>
+                    <h3>Financial Freedom Report</h3>
+                    <p>Generated from the current plan and saved scenarios.</p>
                   </div>
-
-                  <div class="card report-section">
-                    <div class="card-heading">
-                      <div>
-                        <h3>Key Financial Position</h3>
-                        <span>Current assets, debts and financial independence assets.</span>
-                      </div>
-                    </div>
-                    <div id="reportPositionSummary" class="summary-grid mt-4"></div>
-                  </div>
-
-                  <div class="card report-section">
-                    <div class="card-heading">
-                      <div>
-                        <h3>Cashflow Summary</h3>
-                        <span>How gross income moves through tax, HELP, spending and wealth-building allocations.</span>
-                      </div>
-                    </div>
-                    <div id="reportCashflowSummary" class="table-list cashflow-list mt-4"></div>
-                    <p id="reportSurplusExplanation" class="tax-note mt-4"></p>
-                  </div>
-
-                  <div class="card report-section">
-                    <div class="card-heading">
-                      <div>
-                        <h3>Financial Freedom Progress</h3>
-                        <span>Progress toward investments funding the chosen lifestyle.</span>
-                      </div>
-                    </div>
-                    <div id="reportProgressSummary" class="summary-grid mt-4"></div>
-                  </div>
-
-                  <div class="card report-section">
-                    <div class="card-heading">
-                      <div>
-                        <h3>Forecast Results</h3>
-                        <span>Projected net worth, investments, super and debt over time.</span>
-                      </div>
-                    </div>
-                    <div id="reportForecastSummary" class="summary-grid mt-4"></div>
-                    <div class="report-chart-grid mt-4">
-                      <svg id="reportNetWorthChart" class="chart" viewBox="0 0 760 260" role="img" aria-label="Report net worth forecast"></svg>
-                      <svg id="reportProgressChart" class="chart" viewBox="0 0 760 260" role="img" aria-label="Report financial freedom progress"></svg>
-                    </div>
-                  </div>
-
-                  <div class="card report-section">
-                    <div class="card-heading">
-                      <div>
-                        <h3>Important Milestones</h3>
-                        <span>Estimated stage targets and progress from the current plan.</span>
-                      </div>
-                    </div>
-                    <div id="reportMilestoneSummary" class="summary-grid mt-4"></div>
-                  </div>
-
-                  <div class="card report-section">
-                    <div class="card-heading">
-                      <div>
-                        <h3>Key Assumptions</h3>
-                        <span>Main assumptions used by the report.</span>
-                      </div>
-                    </div>
-                    <div id="reportKeyAssumptions" class="summary-grid mt-4"></div>
-                  </div>
+                  <button class="btn btn-primary" type="button" id="reportPrintButton">Print / Export</button>
                 </div>
+
+                <div id="financialReportBody" class="report-document"></div>
 
                 <div class="card mt-6 report-section report-editor-only">
                   <div class="card-heading">
