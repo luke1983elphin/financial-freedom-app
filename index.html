@@ -50,6 +50,8 @@
                 <button type="button" id="planSaveButton">Save Plan</button>
                 <button type="button" id="planLoadButton">Load Plan</button>
                 <button type="button" id="planDuplicateButton">Duplicate Plan</button>
+                <button type="button" id="planExportJsonButton">Export Plan</button>
+                <button type="button" id="planImportJsonButton">Import Plan</button>
                 <button type="button" id="planClearSavedButton">Clear Saved Plan</button>
               </div>
             </details>
@@ -70,12 +72,15 @@
                   <button type="button" role="menuitem" data-mobile-action="save-plan">Save Plan</button>
                   <button type="button" role="menuitem" data-mobile-action="load-plan">Load Plan</button>
                   <button type="button" role="menuitem" data-mobile-action="duplicate-plan">Duplicate Plan</button>
+                  <button type="button" role="menuitem" data-mobile-action="export-plan-json">Export Plan</button>
+                  <button type="button" role="menuitem" data-mobile-action="import-plan-json">Import Plan</button>
                   <button type="button" role="menuitem" data-mobile-action="clear-saved-plan">Clear Saved Plan</button>
                 </div>
               </details>
               <button type="button" role="menuitem" data-mobile-action="export">Print / Export</button>
             </div>
           </details>
+          <input class="hidden" id="planImportJsonInput" type="file" accept="application/json,.json">
         </div>
       </header>
 
@@ -576,6 +581,7 @@
                 </div>
                 <div class="report-toolbar card">
                   <div>
+                    <span class="metric-label">Financial Reports</span>
                     <h3>Financial Freedom Report</h3>
                     <p>Generated from the current plan and saved scenarios.</p>
                   </div>
@@ -583,6 +589,44 @@
                 </div>
 
                 <div id="financialReportBody" class="report-document"></div>
+
+                <div class="planner-export-panel card mt-6">
+                  <div class="card-heading">
+                    <div>
+                      <span class="metric-label">Action Planner</span>
+                      <h3>Weekly Cashflow Planner</h3>
+                      <span>Turn your completed financial plan into a practical weekly cashflow schedule. The planner uses your existing information to show expected income, bills, transfers, investing and projected weekly balances.</span>
+                    </div>
+                  </div>
+                  <div class="planner-setup-grid mt-4">
+                    <label>
+                      <span class="field-label">Planner start date</span>
+                      <input class="field-input" id="plannerStartDate" type="date">
+                      <small class="field-help">This is the beginning of Week 1. It defaults to the next Monday.</small>
+                    </label>
+                    <label>
+                      <span class="field-label">Starting everyday bank balance</span>
+                      <input class="field-input" id="plannerStartingBalance" type="number" step="100">
+                      <small class="field-help">Opening balance of the main account used to receive income and pay normal expenses.</small>
+                    </label>
+                    <label>
+                      <span class="field-label">Planner period</span>
+                      <select class="field-input" id="plannerPeriod">
+                        <option value="12">12 weeks</option>
+                        <option value="26">26 weeks</option>
+                        <option value="52" selected>52 weeks</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div class="planner-actions mt-4">
+                    <button class="btn btn-primary" type="button" id="plannerGenerateButton">Generate Weekly Cashflow Planner</button>
+                    <button class="btn" type="button" id="plannerRegenerateButton">Regenerate Planner</button>
+                    <button class="btn" type="button" id="plannerDownloadExcelButton" disabled>Download Excel Planner</button>
+                    <button class="btn" type="button" id="plannerDownloadPdfButton" disabled>Download / Print PDF Planner</button>
+                  </div>
+                  <div id="plannerWarning" class="planner-warning hidden mt-4" role="status" aria-live="polite"></div>
+                  <div id="weeklyPlannerPreview" class="weekly-planner-preview mt-4"></div>
+                </div>
 
                 <div class="card mt-6 report-section report-editor-only">
                   <div class="card-heading">
@@ -606,6 +650,7 @@
 
     <script src="v2-data.js"></script>
     <script src="calculator.js"></script>
+    <script src="weekly-planner-export.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

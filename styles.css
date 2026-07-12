@@ -1882,6 +1882,181 @@ textarea.field-input {
   font-weight: 800;
 }
 
+.planner-export-panel {
+  border-left: 5px solid #0f9f6e;
+}
+
+.planner-setup-grid {
+  display: grid;
+  gap: 14px;
+}
+
+@media (min-width: 820px) {
+  .planner-setup-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.planner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.planner-actions .btn {
+  justify-content: center;
+}
+
+.planner-warning,
+.planner-empty-state {
+  border-radius: 18px;
+  border: 1px solid #bdebd7;
+  background: #effcf6;
+  padding: 14px 16px;
+  color: #0f2742;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.55;
+}
+
+.planner-warning-negative {
+  border-color: #f3d08c;
+  background: #fff8e9;
+}
+
+.planner-warning-positive {
+  border-color: #bdebd7;
+  background: #effcf6;
+}
+
+.planner-empty-state p,
+.planner-warning p {
+  margin-top: 4px;
+  color: #64748b;
+  font-weight: 700;
+}
+
+.planner-summary-grid {
+  align-items: stretch;
+}
+
+.planner-print-heading {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 16px;
+}
+
+.planner-print-heading h3 {
+  color: #0f2742;
+  font-size: 20px;
+  font-weight: 950;
+}
+
+.planner-print-heading p {
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.planner-week-grid {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+@media (min-width: 980px) {
+  .planner-week-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.planner-week-card {
+  break-inside: avoid;
+  page-break-inside: avoid;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #ffffff;
+  padding: 16px;
+}
+
+.planner-week-warning {
+  border-color: #f2bab4;
+  background: #fff8f7;
+}
+
+.planner-week-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.planner-week-title span {
+  color: #0f9f6e;
+  font-size: 12px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.planner-week-title h4 {
+  margin-top: 3px;
+  color: #0f2742;
+  font-size: 18px;
+  font-weight: 950;
+}
+
+.planner-week-title strong {
+  color: #0f2742;
+  font-size: 17px;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.planner-week-lines {
+  display: grid;
+  gap: 7px;
+  margin-top: 14px;
+}
+
+.planner-week-lines div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: 12px;
+  border-top: 1px solid #edf2f7;
+  padding-top: 7px;
+}
+
+.planner-week-lines span {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.planner-week-lines strong {
+  color: #0f2742;
+  font-size: 13px;
+  font-weight: 950;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.planner-week-card p {
+  margin-top: 14px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.55;
+}
+
+.planner-checkbox-list {
+  display: grid;
+  gap: 5px;
+  margin-top: 14px;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 850;
+}
+
 @media (max-width: 420px) {
   .cashflow-row {
     grid-template-columns: minmax(0, 1fr) minmax(96px, max-content);
@@ -2089,8 +2264,14 @@ textarea.field-input {
 
   .report-toolbar,
   .report-milestone-title,
-  .report-scenario-heading {
+  .report-scenario-heading,
+  .planner-actions {
     display: grid;
+  }
+
+  .planner-actions .btn {
+    width: 100%;
+    min-height: 48px;
   }
 
   .report-explainer > div,
@@ -2517,6 +2698,39 @@ textarea.field-input {
   .btn,
   .report-editor-only {
     display: none !important;
+  }
+
+  body[data-print-mode="financial-report"] .planner-export-panel {
+    display: none !important;
+  }
+
+  body[data-print-mode="weekly-planner"] #financialReportBody,
+  body[data-print-mode="weekly-planner"] .report-toolbar,
+  body[data-print-mode="weekly-planner"] #reportScenarioComparison,
+  body[data-print-mode="weekly-planner"] .planner-setup-grid,
+  body[data-print-mode="weekly-planner"] .planner-actions,
+  body[data-print-mode="weekly-planner"] .planner-summary-grid,
+  body[data-print-mode="weekly-planner"] .planner-warning {
+    display: none !important;
+  }
+
+  body[data-print-mode="weekly-planner"] .planner-export-panel {
+    display: block !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+
+  body[data-print-mode="weekly-planner"] .planner-week-grid {
+    grid-template-columns: 1fr !important;
+    gap: 8mm !important;
+  }
+
+  body[data-print-mode="weekly-planner"] .planner-week-card {
+    border-radius: 10px;
+    box-shadow: none !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   body:not([data-active-view="reports"]) [data-view-panel]:not([data-view-panel="dashboard"]),

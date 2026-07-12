@@ -4,6 +4,8 @@
   const DRAFT_KEY = "ffs-current-plan-v3-mobile-dashboard-ux-test";
   const LAST_SAVED_KEY = "ffs-current-plan-last-saved-v3-mobile-dashboard-ux-test";
   const SCENARIO_KEY = "ffs-scenarios-v3-mobile-dashboard-ux-test";
+  const APP_VERSION = "3.0-test-weekly-planner";
+  const EXPORT_SCHEMA_VERSION = 1;
   const frequencies = [
     ["weekly", "Weekly"],
     ["fortnightly", "Fortnightly"],
@@ -182,6 +184,7 @@
   let hasOpenedWorkspace = Boolean(savedDraft) || Boolean(restoredDraftUi.hasOpenedWorkspace);
   let activeWhatIfId = whatIfActions[0].id;
   let selectedSamplePlanId = DATA.samplePlans?.[1]?.id || DATA.samplePlans?.[0]?.id || "";
+  let generatedWeeklyPlanner = null;
 
   const currency = new Intl.NumberFormat("en-AU", {
     style: "currency",
@@ -528,6 +531,7 @@
     const incomeChange = Number(oldComparison.incomeChange) || (Number(oldComparison.increaseIncome) || 0) - (Number(oldComparison.reduceIncome) || 0);
     const expenseChange = Number(oldComparison.expenseChange) || (Number(oldComparison.increaseExpenses) || 0) - (Number(oldComparison.reduceExpenses) || 0);
     plan.comparison = { ...comparisonDefaults, ...oldComparison, incomeChange, expenseChange };
+    ensurePlanSettings(plan);
   }
 
   function sumBy(items, category, amountKey = "value") {
@@ -636,6 +640,36 @@
     return Math.max(0, Math.min(wizardSteps.length - 1, Math.round(step)));
   }
 
+  function ensurePlanSettings(targetPlan = plan) {
+    if (!targetPlan.reportSettings || typeof targetPlan.reportSettings !== "object") targetPlan.reportSettings = {};
+    if (!targetPlan.reportSettings.weeklyPlanner || typeof targetPlan.reportSettings.weeklyPlanner !== "object") {
+      targetPlan.reportSettings.weeklyPlanner = {};
+    }
+    return targetPlan.reportSettings.weeklyPlanner;
+  }
+
+  function migratePlanData(planInput) {
+    const migrated = CALC.clonePlan(planInput || {});
+    ensurePlanSettings(migrated);
+    if (!migrated.comparison || typeof migrated.comparison !== "object") migrated.comparison = { ...comparisonDefaults };
+    migrated.comparison = { ...comparisonDefaults, ...migrated.comparison };
+    return migrated;
+  }
+
+  function migrateScenarioData(scenario) {
+    if (!scenario || typeof scenario !== "object") return null;
+    return {
+      ...scenario,
+      savedAt: scenario.savedAt || new Date().toISOString(),
+      plan: migratePlanData(scenario.plan || scenario),
+    };
+  }
+
+  function migrateScenarioList(scenarios) {
+    if (!Array.isArray(scenarios)) return [];
+    return scenarios.map(migrateScenarioData).filter(Boolean);
+  }
+
   function collectDraftUi() {
     return {
       activeView,
@@ -671,10 +705,10 @@
       const saved = JSON.parse(raw);
       if (saved?.plan) {
         restoredDraftUi = saved.ui || {};
-        return saved.plan;
+        return migratePlanData(saved.plan);
       }
       restoredDraftUi = {};
-      return saved;
+      return migratePlanData(saved);
     } catch {
       restoredDraftUi = {};
       return null;
@@ -685,9 +719,10 @@
     const savedAt = new Date().toISOString();
     const ui = collectDraftUi();
     localStorage.setItem(DRAFT_KEY, JSON.stringify({
-      version: 2,
+      version: 3,
+      appVersion: APP_VERSION,
       savedAt,
-      plan: CALC.clonePlan(plan),
+      plan: migratePlanData(plan),
       ui,
     }));
     localStorage.setItem(LAST_SAVED_KEY, savedAt);
@@ -739,14 +774,119 @@
   function loadScenarios() {
     try {
       const raw = localStorage.getItem(SCENARIO_KEY);
-      return raw ? JSON.parse(raw) : [];
+      return raw ? migrateScenarioList(JSON.parse(raw)) : [];
     } catch {
       return [];
     }
   }
 
   function saveScenarios(scenarios) {
-    localStorage.setItem(SCENARIO_KEY, JSON.stringify(scenarios));
+    localStorage.setItem(SCENARIO_KEY, JSON.stringify(migrateScenarioList(scenarios)));
+  }
+
+  function householdNameForFile() {
+    const names = [plan.personal?.person1Name, plan.personal?.person2Name]
+      .map((name) => String(name || "").trim())
+      .filter(Boolean);
+    return names.length ? names.join("-and-") : "Current-Plan";
+  }
+
+  function safeFilename(value, extension) {
+    const base = String(value || "Financial-Freedom")
+      .replace(/[^a-z0-9-_]+/gi, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 80) || "Financial-Freedom";
+    return `${base}.${extension}`;
+  }
+
+  function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1200);
+  }
+
+  function exportPlanJson() {
+    syncCollectionsToLegacy();
+    const payload = {
+      app: "Financial Freedom",
+      type: "financial-freedom-plan-export",
+      appVersion: APP_VERSION,
+      schemaVersion: EXPORT_SCHEMA_VERSION,
+      exportedAt: new Date().toISOString(),
+      storageKeys: {
+        draft: DRAFT_KEY,
+        scenarios: SCENARIO_KEY,
+      },
+      plan: migratePlanData(plan),
+      scenarios: loadScenarios(),
+      ui: collectDraftUi(),
+    };
+    const json = JSON.stringify(payload, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    downloadBlob(blob, safeFilename(`Financial-Freedom-Plan-${householdNameForFile()}`, "json"));
+    updateSaveStatus("Plan exported as a JSON backup.");
+  }
+
+  function validateImportedPlanPayload(payload) {
+    if (!payload || typeof payload !== "object") throw new Error("The selected file is not a valid Financial Freedom plan export.");
+    const rawPlan = payload.plan || (payload.personal || payload.assets ? payload : null);
+    if (!rawPlan || typeof rawPlan !== "object") throw new Error("No plan data was found in the selected file.");
+    return {
+      plan: migratePlanData(rawPlan),
+      scenarios: migrateScenarioList(payload.scenarios || []),
+      ui: payload.ui && typeof payload.ui === "object" ? payload.ui : {},
+      exportedAt: payload.exportedAt || "",
+    };
+  }
+
+  function importPlanPayload(payload) {
+    let imported;
+    try {
+      imported = validateImportedPlanPayload(payload);
+    } catch (error) {
+      updateSaveStatus(error.message || "Import failed. The file was not changed.");
+      return;
+    }
+    const confirmed = window.confirm("Import this plan backup? This will replace the current plan and saved scenarios on this device.");
+    if (!confirmed) {
+      updateSaveStatus("Import cancelled.");
+      return;
+    }
+    plan = imported.plan;
+    generatedWeeklyPlanner = null;
+    restoredDraftUi = imported.ui || {};
+    saveScenarios(imported.scenarios);
+    saveDraft("Plan imported successfully.");
+    renderAll();
+    showWorkspace(activeView || "dashboard");
+    updateSaveStatus("Plan imported successfully.");
+  }
+
+  function importPlanJsonFile(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        importPlanPayload(JSON.parse(String(reader.result || "")));
+      } catch {
+        updateSaveStatus("Import failed. Choose a valid Financial Freedom JSON export.");
+      }
+    };
+    reader.onerror = () => updateSaveStatus("Import failed. The selected file could not be read.");
+    reader.readAsText(file);
+  }
+
+  function triggerImportPlanJson() {
+    const input = document.getElementById("planImportJsonInput");
+    if (!input) return;
+    input.value = "";
+    input.click();
   }
 
   function selectedSamplePlan() {
@@ -782,6 +922,7 @@
     blank.expenseItems = [];
     blank.goalItems = [];
     blank.comparison = { ...comparisonDefaults };
+    ensurePlanSettings(blank);
     return blank;
   }
 
@@ -1688,6 +1829,440 @@
     `).join("");
   }
 
+  function plannerDateIso(date) {
+    const copy = new Date(date);
+    copy.setHours(0, 0, 0, 0);
+    return `${copy.getFullYear()}-${String(copy.getMonth() + 1).padStart(2, "0")}-${String(copy.getDate()).padStart(2, "0")}`;
+  }
+
+  function nextMondayIso() {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    const daysUntilMonday = (8 - date.getDay()) % 7 || 7;
+    date.setDate(date.getDate() + daysUntilMonday);
+    return plannerDateIso(date);
+  }
+
+  function addDays(date, days) {
+    const copy = new Date(date);
+    copy.setDate(copy.getDate() + days);
+    return copy;
+  }
+
+  function addMonths(date, months) {
+    const copy = new Date(date);
+    const day = copy.getDate();
+    copy.setMonth(copy.getMonth() + months, 1);
+    const lastDay = new Date(copy.getFullYear(), copy.getMonth() + 1, 0).getDate();
+    copy.setDate(Math.min(day, lastDay));
+    return copy;
+  }
+
+  function plannerShortDate(value) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ""));
+    const date = match
+      ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+      : new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" });
+  }
+
+  function plannerFrequencyLabel(frequency) {
+    return frequencies.find(([value]) => value === frequency)?.[1] || "Annually";
+  }
+
+  function plannerRound(value) {
+    return Math.round(((Number(value) || 0) + Number.EPSILON) * 100) / 100;
+  }
+
+  function defaultPlannerStartingBalance() {
+    ensureCollectionData();
+    const cashItems = (plan.assetItems || []).filter((item) => item.category === "cash");
+    if (cashItems.length) return cashItems.reduce((total, item) => total + (Number(item.value) || 0), 0);
+    return Number(plan.assets.cash) || 0;
+  }
+
+  function readPlannerSettingsFromInputs() {
+    ensurePlanSettings(plan);
+    const startInput = document.getElementById("plannerStartDate");
+    const balanceInput = document.getElementById("plannerStartingBalance");
+    const periodInput = document.getElementById("plannerPeriod");
+    const period = Number(periodInput?.value || plan.reportSettings.weeklyPlanner.periodWeeks || 52);
+    const periodWeeks = [12, 26, 52].includes(period) ? period : 52;
+    const settings = {
+      startDate: startInput?.value || plan.reportSettings.weeklyPlanner.startDate || nextMondayIso(),
+      startingBalance: Number(balanceInput?.value ?? plan.reportSettings.weeklyPlanner.startingBalance ?? defaultPlannerStartingBalance()) || 0,
+      periodWeeks,
+    };
+    plan.reportSettings.weeklyPlanner = { ...plan.reportSettings.weeklyPlanner, ...settings };
+    return settings;
+  }
+
+  function scheduleWeeklyProvision(amount, frequency, weeks) {
+    const weekly = plannerRound(annualValue(amount, frequency || "annually") / 52);
+    return Array.from({ length: weeks.length }, () => weekly);
+  }
+
+  function weekIndexForDate(date, startDate, weeksCount) {
+    const index = Math.floor((date.getTime() - startDate.getTime()) / (7 * 24 * 60 * 60 * 1000));
+    return index >= 0 && index < weeksCount ? index : -1;
+  }
+
+  function scheduleKnownFrequency(amount, frequency, weeks, startDate) {
+    const value = plannerRound(Number(amount) || 0);
+    const values = Array.from({ length: weeks.length }, () => 0);
+    if (value <= 0) return values;
+    if (frequency === "weekly") return values.map(() => value);
+    if (frequency === "fortnightly") return values.map((_, index) => (index % 2 === 0 ? value : 0));
+    if (frequency === "monthly" || frequency === "quarterly") {
+      const interval = frequency === "quarterly" ? 3 : 1;
+      for (let month = 0; month <= 12; month += interval) {
+        const paymentDate = addMonths(startDate, month);
+        const weekIndex = weekIndexForDate(paymentDate, startDate, weeks.length);
+        if (weekIndex >= 0) values[weekIndex] = plannerRound(values[weekIndex] + value);
+      }
+      return values;
+    }
+    return scheduleWeeklyProvision(value, frequency, weeks);
+  }
+
+  function totalValues(values) {
+    return plannerRound((values || []).reduce((total, value) => total + (Number(value) || 0), 0));
+  }
+
+  function addPlannerItem(section, item) {
+    const values = (item.values || []).map(plannerRound);
+    if (totalValues(values) <= 0) return;
+    section.push({
+      name: item.name,
+      frequency: item.frequency,
+      frequencyLabel: item.frequencyLabel,
+      values,
+      rowKey: item.rowKey,
+    });
+  }
+
+  function plannerExpenseName(item) {
+    const label = expenseCategoryOptions.find(([value]) => value === item.category)?.[1] || "Expense";
+    return item.name || label;
+  }
+
+  function isEssentialPlannerExpense(item) {
+    return new Set([
+      "living",
+      "food",
+      "utilities",
+      "insurance",
+      "schoolChildren",
+      "ratesPropertyCosts",
+      "phoneInternet",
+      "privateHealth",
+      "petrol",
+      "vehicleCosts",
+      "petCosts",
+    ]).has(item.category);
+  }
+
+  function buildPlannerSections(weeks, startDate) {
+    ensureCollectionData();
+    const sections = { receipts: [], essential: [], discretionary: [], transfers: [] };
+    (plan.incomeItems || []).forEach((item, index) => {
+      const frequency = item.frequency || "annually";
+      const knownTiming = ["weekly", "fortnightly", "monthly", "quarterly"].includes(frequency);
+      const values = knownTiming
+        ? scheduleKnownFrequency(item.amount, frequency, weeks, startDate)
+        : scheduleWeeklyProvision(item.amount, frequency, weeks);
+      addPlannerItem(sections.receipts, {
+        name: item.name || `Income ${index + 1}`,
+        frequency,
+        frequencyLabel: knownTiming ? plannerFrequencyLabel(frequency) : `${plannerFrequencyLabel(frequency)} - weekly estimate`,
+        values,
+      });
+    });
+
+    (plan.expenseItems || []).forEach((item) => {
+      const frequency = item.frequency || "annually";
+      const precise = frequency === "weekly" || frequency === "fortnightly";
+      const values = precise
+        ? scheduleKnownFrequency(item.amount, frequency, weeks, startDate)
+        : scheduleWeeklyProvision(item.amount, frequency, weeks);
+      addPlannerItem(isEssentialPlannerExpense(item) ? sections.essential : sections.discretionary, {
+        name: precise ? plannerExpenseName(item) : `${plannerExpenseName(item)} provision`,
+        frequency,
+        frequencyLabel: precise ? plannerFrequencyLabel(frequency) : `${plannerFrequencyLabel(frequency)} - weekly provision`,
+        values,
+      });
+    });
+
+    (plan.liabilityItems || []).forEach((item) => {
+      if (item.type === "hecsHelp") return;
+      const frequency = item.repaymentFrequency || "monthly";
+      addPlannerItem(sections.essential, {
+        name: item.name ? `${item.name} repayment` : "Debt repayment",
+        frequency,
+        frequencyLabel: plannerFrequencyLabel(frequency),
+        values: scheduleKnownFrequency(item.repayment, frequency, weeks, startDate),
+      });
+    });
+
+    addPlannerItem(sections.transfers, {
+      name: "Investment contribution",
+      frequency: "annually",
+      frequencyLabel: "Annual target - weekly transfer",
+      values: scheduleWeeklyProvision(plan.investing.annualInvestingTarget, "annually", weeks),
+      rowKey: "investmentTransfer",
+    });
+
+    addPlannerItem(sections.transfers, {
+      name: "Additional super contribution",
+      frequency: "annually",
+      frequencyLabel: "Annual target - weekly transfer",
+      values: scheduleWeeklyProvision(plan.investing.extraSuperContributions, "annually", weeks),
+      rowKey: "superTransfer",
+    });
+
+    return sections;
+  }
+
+  function plannerSectionTotal(section, weekIndex) {
+    return plannerRound(section.reduce((total, item) => total + (Number(item.values[weekIndex]) || 0), 0));
+  }
+
+  function plannerTransferTotal(section, rowKey, weekIndex) {
+    return plannerRound(section
+      .filter((item) => item.rowKey === rowKey)
+      .reduce((total, item) => total + (Number(item.values[weekIndex]) || 0), 0));
+  }
+
+  function weeklyPriority(week) {
+    const actions = [];
+    if (week.offsetTransferTotal > 0) actions.push(`transfer ${money(week.offsetTransferTotal)} to offset`);
+    if (week.debtTransferTotal > 0) actions.push(`pay ${money(week.debtTransferTotal)} extra off debt`);
+    if (week.investmentTransferTotal > 0) actions.push(`invest ${money(week.investmentTransferTotal)}`);
+    if (week.superTransferTotal > 0) actions.push(`contribute ${money(week.superTransferTotal)} to super`);
+    if (week.discretionaryTotal > 0) actions.push(`keep discretionary spending near ${money(week.discretionaryTotal)}`);
+    if (!actions.length) return "Review expected money in, bills and the closing bank balance for this week.";
+    return `This week, ${actions.join(", ")}.`;
+  }
+
+  function plannerAssumptions(result) {
+    return [
+      { label: "Planner start date", value: plannerShortDate(plan.reportSettings.weeklyPlanner.startDate), note: "Beginning of Week 1." },
+      { label: "Annual Lifestyle Spending", value: money(plan.personal.targetAnnualSpending), note: "Used in the Financial Freedom target." },
+      { label: "Investment return", value: `${Number(plan.investing.expectedInvestmentReturnPct || 0).toFixed(1)}%`, note: "Not applied to the weekly bank schedule." },
+      { label: "Super return", value: `${Number(plan.investing.expectedSuperReturnPct || 0).toFixed(1)}%`, note: "Not applied to the weekly bank schedule." },
+      { label: "Inflation", value: `${Number(plan.investing.inflationPct || 0).toFixed(1)}%`, note: "Shown as a plan assumption only." },
+      { label: "Safe withdrawal rate", value: `${Number(plan.investing.safeWithdrawalRatePct || 0).toFixed(1)}%`, note: "Used to estimate target FI capital." },
+      { label: "Current net worth", value: money(result.currentNetWorth), note: "From the currently loaded plan." },
+      { label: "Final projected annual surplus", value: money(result.finalProjectedCashSurplus), note: "From the app cashflow model before planner timing." },
+      { label: "Estimated provisions", value: "Used where no due date is stored", note: "Annual or irregular bills are spread evenly across 52 weeks." },
+    ];
+  }
+
+  function buildWeeklyPlannerData(result) {
+    syncCollectionsToLegacy();
+    const settings = readPlannerSettingsFromInputs();
+    const startDate = new Date(`${settings.startDate}T00:00:00`);
+    const weeks = Array.from({ length: settings.periodWeeks }, (_, index) => ({
+      week: index + 1,
+      startDateIso: plannerDateIso(addDays(startDate, index * 7)),
+    }));
+    const sections = buildPlannerSections(weeks, startDate);
+    let opening = plannerRound(settings.startingBalance);
+    weeks.forEach((week, index) => {
+      const receiptsTotal = plannerSectionTotal(sections.receipts, index);
+      const essentialTotal = plannerSectionTotal(sections.essential, index);
+      const discretionaryTotal = plannerSectionTotal(sections.discretionary, index);
+      const transfersTotal = plannerSectionTotal(sections.transfers, index);
+      const investmentTransferTotal = plannerTransferTotal(sections.transfers, "investmentTransfer", index);
+      const superTransferTotal = plannerTransferTotal(sections.transfers, "superTransfer", index);
+      const debtTransferTotal = plannerTransferTotal(sections.transfers, "debtTransfer", index);
+      const offsetTransferTotal = plannerTransferTotal(sections.transfers, "offsetTransfer", index);
+      const closingBalance = plannerRound(opening + receiptsTotal - essentialTotal - discretionaryTotal - transfersTotal);
+      Object.assign(week, {
+        openingBalance: opening,
+        receiptsTotal,
+        essentialTotal,
+        discretionaryTotal,
+        transfersTotal,
+        investmentTransferTotal,
+        superTransferTotal,
+        debtTransferTotal,
+        offsetTransferTotal,
+        closingBalance,
+      });
+      week.priority = weeklyPriority(week);
+      opening = closingBalance;
+    });
+    return {
+      appVersion: APP_VERSION,
+      householdName: [plan.personal.person1Name, plan.personal.person2Name].filter(Boolean).join(" and ") || "Current plan",
+      planName: householdNameForFile(),
+      startDateIso: settings.startDate,
+      generatedAtIso: new Date().toISOString(),
+      startingBalance: plannerRound(settings.startingBalance),
+      weeks,
+      sections,
+      lookupRows: {},
+      assumptions: plannerAssumptions(result),
+      snapshot: {
+        offsetBalance: Number(plan.assets.offsetBalance) || 0,
+        cashSavings: Number(plan.assets.cash) || 0,
+        investmentBalance: (Number(plan.assets.sharesEtfs) || 0) + (Number(plan.assets.crypto) || 0),
+        superBalance: result.superannuationBalance || 0,
+        totalDebtBalance: result.totalLiabilities || 0,
+      },
+      negativeWeeks: weeks.filter((week) => week.closingBalance < 0).map((week) => week.week),
+    };
+  }
+
+  function renderWeeklyPlannerPreview(planner) {
+    const preview = document.getElementById("weeklyPlannerPreview");
+    const warning = document.getElementById("plannerWarning");
+    const excelButton = document.getElementById("plannerDownloadExcelButton");
+    const pdfButton = document.getElementById("plannerDownloadPdfButton");
+    if (!preview) return;
+    const firstWeek = planner.weeks[0];
+    const finalWeek = planner.weeks.at(-1);
+    const totalReceipts = plannerRound(planner.weeks.reduce((total, week) => total + week.receiptsTotal, 0));
+    const totalTransfers = plannerRound(planner.weeks.reduce((total, week) => total + week.transfersTotal, 0));
+    const totalInvesting = plannerRound(planner.weeks.reduce((total, week) => total + week.investmentTransferTotal, 0));
+    const totalSuper = plannerRound(planner.weeks.reduce((total, week) => total + week.superTransferTotal, 0));
+    if (warning) {
+      warning.classList.remove("hidden");
+      warning.classList.toggle("planner-warning-negative", planner.negativeWeeks.length > 0);
+      warning.classList.toggle("planner-warning-positive", planner.negativeWeeks.length === 0);
+      warning.innerHTML = planner.negativeWeeks.length
+        ? `<strong>Cashflow warning:</strong> Your current schedule produces a negative projected bank balance in ${planner.negativeWeeks.length} week${planner.negativeWeeks.length === 1 ? "" : "s"}. Review the timing of planned transfers, spending or bills before relying on the planner.`
+        : `<strong>Planner ready:</strong> No negative weekly closing bank balances are projected from the current schedule.`;
+    }
+    if (excelButton) excelButton.disabled = false;
+    if (pdfButton) pdfButton.disabled = false;
+    preview.innerHTML = `
+      <div class="summary-grid planner-summary-grid">
+        ${summaryTile("Planner period", `${planner.weeks.length} weeks`)}
+        ${summaryTile("Week 1 starts", plannerShortDate(firstWeek.startDateIso))}
+        ${summaryTile("Starting bank balance", money(planner.startingBalance))}
+        ${summaryTile("Projected ending balance", money(finalWeek.closingBalance), finalWeek.closingBalance >= 0 ? "status-green" : "status-amber")}
+        ${summaryTile("Expected receipts", money(totalReceipts))}
+        ${summaryTile("Planned transfers", money(totalTransfers))}
+        ${summaryTile("Investing scheduled", money(totalInvesting))}
+        ${summaryTile("Extra super scheduled", money(totalSuper))}
+      </div>
+      <div class="planner-print-section mt-4">
+        <div class="planner-print-heading">
+          <h3>Weekly Action Plan</h3>
+          <p>Use this as a practical weekly guide. The Excel file remains editable after download.</p>
+        </div>
+        <div class="planner-week-grid">
+          ${planner.weeks.map((week) => `
+            <article class="planner-week-card ${week.closingBalance < 0 ? "planner-week-warning" : ""}">
+              <div class="planner-week-title">
+                <div>
+                  <span>Week ${week.week}</span>
+                  <h4>${plannerShortDate(week.startDateIso)}</h4>
+                </div>
+                <strong>${money(week.closingBalance)}</strong>
+              </div>
+              <div class="planner-week-lines">
+                <div><span>Expected money in</span><strong>${money(week.receiptsTotal)}</strong></div>
+                <div><span>Bills and spending</span><strong>${money(week.essentialTotal + week.discretionaryTotal)}</strong></div>
+                <div><span>Planned transfers</span><strong>${money(week.transfersTotal)}</strong></div>
+                <div><span>Opening balance</span><strong>${money(week.openingBalance)}</strong></div>
+                <div><span>Expected closing balance</span><strong>${money(week.closingBalance)}</strong></div>
+              </div>
+              <p>${escapeHtml(week.priority)}</p>
+              <div class="planner-checkbox-list">
+                <span>&#9633; Income received</span>
+                <span>&#9633; Bills paid</span>
+                <span>&#9633; Investing done</span>
+                <span>&#9633; Super done</span>
+              </div>
+            </article>
+          `).join("")}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderWeeklyPlannerControls(result) {
+    const startInput = document.getElementById("plannerStartDate");
+    const balanceInput = document.getElementById("plannerStartingBalance");
+    const periodInput = document.getElementById("plannerPeriod");
+    const preview = document.getElementById("weeklyPlannerPreview");
+    const excelButton = document.getElementById("plannerDownloadExcelButton");
+    const pdfButton = document.getElementById("plannerDownloadPdfButton");
+    if (!startInput || !balanceInput || !periodInput || !preview) return;
+    ensurePlanSettings(plan);
+    const settings = plan.reportSettings.weeklyPlanner;
+    if (!startInput.value) startInput.value = settings.startDate || nextMondayIso();
+    if (balanceInput.value === "") balanceInput.value = settings.startingBalance ?? defaultPlannerStartingBalance();
+    if (!periodInput.value) periodInput.value = String(settings.periodWeeks || 52);
+    plan.reportSettings.weeklyPlanner = {
+      ...settings,
+      startDate: startInput.value,
+      startingBalance: Number(balanceInput.value) || 0,
+      periodWeeks: Number(periodInput.value) || 52,
+    };
+    if (generatedWeeklyPlanner) {
+      renderWeeklyPlannerPreview(generatedWeeklyPlanner);
+      return;
+    }
+    if (excelButton) excelButton.disabled = true;
+    if (pdfButton) pdfButton.disabled = true;
+    const warning = document.getElementById("plannerWarning");
+    if (warning) warning.classList.add("hidden");
+    preview.innerHTML = `
+      <div class="planner-empty-state">
+        <strong>Generate the planner when your plan is ready.</strong>
+        <p>The Excel workbook will include Start Here, Weekly Planner, Weekly Action Plan, Wealth Snapshot and Annual Summary worksheets.</p>
+      </div>
+    `;
+  }
+
+  function generateWeeklyPlanner() {
+    const result = CALC.calculatePlan(plan);
+    generatedWeeklyPlanner = buildWeeklyPlannerData(result);
+    saveDraft("Weekly planner settings saved.");
+    renderWeeklyPlannerPreview(generatedWeeklyPlanner);
+    updateSaveStatus("Weekly cashflow planner generated.");
+  }
+
+  function downloadWeeklyPlannerExcel() {
+    if (!generatedWeeklyPlanner) generateWeeklyPlanner();
+    if (!window.FFSWeeklyPlannerExport?.createWorkbookBlob) {
+      updateSaveStatus("Excel export is not available in this browser.");
+      return;
+    }
+    const blob = window.FFSWeeklyPlannerExport.createWorkbookBlob(generatedWeeklyPlanner);
+    downloadBlob(blob, safeFilename(`Financial-Freedom-Weekly-Planner-${generatedWeeklyPlanner.planName}`, "xlsx"));
+    updateSaveStatus("Weekly planner Excel downloaded.");
+  }
+
+  function printWithMode(mode) {
+    document.body.dataset.printMode = mode;
+    window.print();
+    window.setTimeout(() => {
+      if (document.body.dataset.printMode === mode) delete document.body.dataset.printMode;
+    }, 1000);
+  }
+
+  function printWeeklyPlannerPdf() {
+    if (!generatedWeeklyPlanner) generateWeeklyPlanner();
+    updateSaveStatus("Use the print dialog to save the weekly planner as PDF.");
+    printWithMode("weekly-planner");
+  }
+
+  function updatePlannerSettingsFromInput(target) {
+    ensurePlanSettings(plan);
+    if (target.id === "plannerStartDate") plan.reportSettings.weeklyPlanner.startDate = target.value || nextMondayIso();
+    if (target.id === "plannerStartingBalance") plan.reportSettings.weeklyPlanner.startingBalance = Number(target.value) || 0;
+    if (target.id === "plannerPeriod") plan.reportSettings.weeklyPlanner.periodWeeks = Number(target.value) || 52;
+    generatedWeeklyPlanner = null;
+    autosavePlan();
+    renderWeeklyPlannerControls(CALC.calculatePlan(plan));
+  }
+
   function reportSection(number, title, intro, body, extraClass = "") {
     return `
       <section class="report-stage ${extraClass}">
@@ -2250,6 +2825,7 @@
       `)}
     `;
 
+    renderWeeklyPlannerControls(result);
     lineChart("reportNetWorthChart", [{
       label: "Net worth",
       color: "#2563eb",
@@ -2767,6 +3343,7 @@
   function loadSamplePlan() {
     const sample = selectedSamplePlan();
     plan = CALC.clonePlan(sample.plan);
+    generatedWeeklyPlanner = null;
     seedSampleScenarios(sample.plan);
     saveDraft("All changes saved");
     renderAll();
@@ -2777,10 +3354,12 @@
     const saved = loadDraft();
     if (saved) {
       plan = CALC.clonePlan(saved);
+      generatedWeeklyPlanner = null;
       restoreDraftUiInputs();
       updateSaveStatus("Existing saved plan restored.");
     } else if (isBlankPlan(plan)) {
       plan = blankUserPlan();
+      generatedWeeklyPlanner = null;
       restoredDraftUi = {};
       const nameInput = document.getElementById("scenarioName");
       const notesInput = document.getElementById("scenarioNotes");
@@ -2796,6 +3375,7 @@
   function resetPlan() {
     if (!window.confirm("Clear the current plan and start again?")) return;
     plan = blankUserPlan();
+    generatedWeeklyPlanner = null;
     localStorage.removeItem(DRAFT_KEY);
     localStorage.removeItem(LAST_SAVED_KEY);
     document.getElementById("scenarioName").value = "";
@@ -2811,6 +3391,7 @@
     localStorage.removeItem(LAST_SAVED_KEY);
     restoredDraftUi = {};
     plan = blankUserPlan();
+    generatedWeeklyPlanner = null;
     activeWizardStep = 0;
     const nameInput = document.getElementById("scenarioName");
     const notesInput = document.getElementById("scenarioNotes");
@@ -2941,12 +3522,17 @@
         autosavePlan();
         return;
       }
+      if (["plannerStartDate", "plannerStartingBalance", "plannerPeriod"].includes(target.id)) {
+        updatePlannerSettingsFromInput(target);
+        return;
+      }
       if (target.dataset.collection) {
         ensureCollectionData();
         const item = plan[target.dataset.collection]?.find((entry) => entry.id === target.dataset.id);
         if (!item) return;
         const value = target.dataset.type === "text" ? target.value : Number(target.value);
         item[target.dataset.key] = value;
+        generatedWeeklyPlanner = null;
         syncCollectionInputs(target.dataset.collection, target.dataset.id, target.dataset.key, value);
         syncCollectionsToLegacy();
         autosavePlan();
@@ -2961,6 +3547,7 @@
         ensureCollectionData();
         const value = target.dataset.type === "boolean" ? target.checked : target.dataset.type === "text" ? target.value : Number(target.value) || 0;
         plan.comparison[target.dataset.comparison] = value;
+        generatedWeeklyPlanner = null;
         autosavePlan();
         renderOutputs();
         return;
@@ -2968,6 +3555,7 @@
       if (!target.dataset.path) return;
       const value = target.dataset.type === "boolean" ? target.checked : target.dataset.type === "text" ? target.value : Number(target.value);
       setPath(plan, target.dataset.path, value);
+      generatedWeeklyPlanner = null;
       syncInputs(target.dataset.path, value);
       if (target.dataset.path === "liabilities.monthlyRepayment") {
         setPath(plan, "expenses.mortgageRepayments", value);
@@ -3024,6 +3612,8 @@
         if (action === "new-plan") resetPlan();
         if (action === "load-plan") openSavedScenarios();
         if (action === "duplicate-plan") duplicateScenario();
+        if (action === "export-plan-json") exportPlanJson();
+        if (action === "import-plan-json") triggerImportPlanJson();
         if (action === "clear-saved-plan") clearSavedPlan();
         if (action === "export") window.print();
         return;
@@ -3077,6 +3667,7 @@
         const scenario = loadScenarios().find((item) => item.id === loadId);
         if (scenario) {
           plan = CALC.clonePlan(scenario.plan);
+          generatedWeeklyPlanner = null;
           saveDraft();
           renderAll();
           showWorkspace("dashboard");
@@ -3134,6 +3725,9 @@
     document.getElementById("saveScenarioPanelButton").addEventListener("click", saveScenario);
     document.getElementById("planLoadButton").addEventListener("click", openSavedScenarios);
     document.getElementById("planDuplicateButton").addEventListener("click", duplicateScenario);
+    document.getElementById("planExportJsonButton").addEventListener("click", exportPlanJson);
+    document.getElementById("planImportJsonButton").addEventListener("click", triggerImportPlanJson);
+    document.getElementById("planImportJsonInput").addEventListener("change", (event) => importPlanJsonFile(event.target.files?.[0]));
     document.getElementById("planClearSavedButton").addEventListener("click", clearSavedPlan);
     document.getElementById("wizardPrevButton").addEventListener("click", () => {
       activeWizardStep = Math.max(0, activeWizardStep - 1);
@@ -3152,7 +3746,11 @@
       document.querySelector('[data-view-panel="setup"]').scrollIntoView({ behavior: "smooth", block: "start" });
     });
     document.getElementById("exportButton").addEventListener("click", () => window.print());
-    document.getElementById("reportPrintButton").addEventListener("click", () => window.print());
+    document.getElementById("reportPrintButton").addEventListener("click", () => printWithMode("financial-report"));
+    document.getElementById("plannerGenerateButton").addEventListener("click", generateWeeklyPlanner);
+    document.getElementById("plannerRegenerateButton").addEventListener("click", generateWeeklyPlanner);
+    document.getElementById("plannerDownloadExcelButton").addEventListener("click", downloadWeeklyPlannerExcel);
+    document.getElementById("plannerDownloadPdfButton").addEventListener("click", printWeeklyPlannerPdf);
   }
 
   renderAll();
