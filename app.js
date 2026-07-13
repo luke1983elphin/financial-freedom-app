@@ -4,6 +4,7 @@
   const DRAFT_KEY = "ffs-current-plan-v3-mobile-dashboard-ux-test";
   const LAST_SAVED_KEY = "ffs-current-plan-last-saved-v3-mobile-dashboard-ux-test";
   const SCENARIO_KEY = "ffs-scenarios-v3-mobile-dashboard-ux-test";
+  const WEEKLY_PLAN_KEY = "ffs-weekly-plan-v1-v3-mobile-dashboard-ux-test";
   const APP_VERSION = "3.0-test-weekly-planner";
   const EXPORT_SCHEMA_VERSION = 1;
   const frequencies = [
@@ -185,6 +186,9 @@
   let activeWhatIfId = whatIfActions[0].id;
   let selectedSamplePlanId = DATA.samplePlans?.[1]?.id || DATA.samplePlans?.[0]?.id || "";
   let generatedWeeklyPlanner = null;
+  let weeklyPlan = loadWeeklyPlan();
+  let activeWeeklyPlanTab = restoredDraftUi.activeWeeklyPlanTab || "thisWeek";
+  let weeklyEditingWeek = null;
 
   const currency = new Intl.NumberFormat("en-AU", {
     style: "currency",
@@ -674,6 +678,7 @@
     return {
       activeView,
       activeWizardStep,
+      activeWeeklyPlanTab,
       hasOpenedWorkspace,
       scenarioName: document.getElementById("scenarioName")?.value ?? restoredDraftUi.scenarioName ?? "",
       scenarioNotes: document.getElementById("scenarioNotes")?.value ?? restoredDraftUi.scenarioNotes ?? "",
@@ -784,6 +789,33 @@
     localStorage.setItem(SCENARIO_KEY, JSON.stringify(migrateScenarioList(scenarios)));
   }
 
+  function loadWeeklyPlan() {
+    try {
+      const raw = localStorage.getItem(WEEKLY_PLAN_KEY);
+      return raw ? window.FFSWeeklyPlan.migrate(JSON.parse(raw)) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function saveWeeklyPlan(message = "") {
+    if (!weeklyPlan) {
+      localStorage.removeItem(WEEKLY_PLAN_KEY);
+      return;
+    }
+    weeklyPlan.updatedAt = new Date().toISOString();
+    localStorage.setItem(WEEKLY_PLAN_KEY, JSON.stringify(window.FFSWeeklyPlan.migrate(weeklyPlan)));
+    if (message) updateSaveStatus(message);
+  }
+
+  function resetWeeklyPlanStorage(message = "Weekly Plan reset.") {
+    weeklyPlan = null;
+    generatedWeeklyPlanner = null;
+    weeklyEditingWeek = null;
+    localStorage.removeItem(WEEKLY_PLAN_KEY);
+    updateSaveStatus(message);
+  }
+
   function householdNameForFile() {
     const names = [plan.personal?.person1Name, plan.personal?.person2Name]
       .map((name) => String(name || "").trim())
@@ -822,9 +854,11 @@
       storageKeys: {
         draft: DRAFT_KEY,
         scenarios: SCENARIO_KEY,
+        weeklyPlan: WEEKLY_PLAN_KEY,
       },
       plan: migratePlanData(plan),
       scenarios: loadScenarios(),
+      weeklyPlan: weeklyPlan ? window.FFSWeeklyPlan.migrate(weeklyPlan) : null,
       ui: collectDraftUi(),
     };
     const json = JSON.stringify(payload, null, 2);
@@ -840,6 +874,7 @@
     return {
       plan: migratePlanData(rawPlan),
       scenarios: migrateScenarioList(payload.scenarios || []),
+      weeklyPlan: payload.weeklyPlan ? window.FFSWeeklyPlan.migrate(payload.weeklyPlan) : null,
       ui: payload.ui && typeof payload.ui === "object" ? payload.ui : {},
       exportedAt: payload.exportedAt || "",
     };
@@ -860,8 +895,11 @@
     }
     plan = imported.plan;
     generatedWeeklyPlanner = null;
+    weeklyPlan = imported.weeklyPlan;
     restoredDraftUi = imported.ui || {};
     saveScenarios(imported.scenarios);
+    if (weeklyPlan) saveWeeklyPlan();
+    else localStorage.removeItem(WEEKLY_PLAN_KEY);
     saveDraft("Plan imported successfully.");
     renderAll();
     showWorkspace(activeView || "dashboard");
@@ -1987,9 +2025,9 @@
         ? scheduleKnownFrequency(item.amount, frequency, weeks, startDate)
         : scheduleWeeklyProvision(item.amount, frequency, weeks);
       addPlannerItem(isEssentialPlannerExpense(item) ? sections.essential : sections.discretionary, {
-        name: precise ? plannerExpenseName(item) : `${plannerExpenseName(item)} provision`,
+        name: precise ? plannerExpenseName(item) : `${plannerExpenseName(item)} amount set aside`,
         frequency,
-        frequencyLabel: precise ? plannerFrequencyLabel(frequency) : `${plannerFrequencyLabel(frequency)} - weekly provision`,
+        frequencyLabel: precise ? plannerFrequencyLabel(frequency) : `${plannerFrequencyLabel(frequency)} - weekly amount set aside`,
         values,
       });
     });
@@ -2021,7 +2059,63 @@
       rowKey: "superTransfer",
     });
 
+    addPlannerItem(sections.transfers, {
+      name: "Extra debt repayment",
+      frequency: "annually",
+      frequencyLabel: "Annual target - weekly transfer",
+      values: scheduleWeeklyProvision(plan.reportSettings?.weeklyPlanner?.extraDebtRepaymentTarget || 0, "annually", weeks),
+      rowKey: "debtTransfer",
+    });
+
     return sections;
+  }
+
+  function buildPlannerSectionsFromWeeklyPlan(weeks) {
+    const sourceWeeks = weeklyPlan?.weeks || [];
+    const values = (key) => weeks.map((_, index) => Number(sourceWeeks[index]?.planned?.[key]) || 0);
+    return {
+      receipts: [{
+        name: "Money coming in",
+        frequency: "weekly",
+        frequencyLabel: "Weekly Plan",
+        values: values("income"),
+      }],
+      essential: [{
+        name: "Bills and essentials",
+        frequency: "weekly",
+        frequencyLabel: "Weekly Plan",
+        values: values("essentialCosts"),
+      }],
+      discretionary: [{
+        name: "Spending allowance",
+        frequency: "weekly",
+        frequencyLabel: "Weekly Plan",
+        values: values("discretionaryAllowance"),
+      }],
+      transfers: [
+        {
+          name: "Invest",
+          frequency: "weekly",
+          frequencyLabel: "Weekly Plan",
+          values: values("investment"),
+          rowKey: "investmentTransfer",
+        },
+        {
+          name: "Add to super",
+          frequency: "weekly",
+          frequencyLabel: "Weekly Plan",
+          values: values("extraSuper"),
+          rowKey: "superTransfer",
+        },
+        {
+          name: "Pay extra off debt",
+          frequency: "weekly",
+          frequencyLabel: "Weekly Plan",
+          values: values("extraDebtRepayment"),
+          rowKey: "debtTransfer",
+        },
+      ].filter((item) => totalValues(item.values) > 0),
+    };
   }
 
   function plannerSectionTotal(section, weekIndex) {
@@ -2055,7 +2149,7 @@
       { label: "Safe withdrawal rate", value: `${Number(plan.investing.safeWithdrawalRatePct || 0).toFixed(1)}%`, note: "Used to estimate target FI capital." },
       { label: "Current net worth", value: money(result.currentNetWorth), note: "From the currently loaded plan." },
       { label: "Final projected annual surplus", value: money(result.finalProjectedCashSurplus), note: "From the app cashflow model before planner timing." },
-      { label: "Estimated provisions", value: "Used where no due date is stored", note: "Annual or irregular bills are spread evenly across 52 weeks." },
+      { label: "Estimated amounts set aside", value: "Used where no due date is stored", note: "Annual or irregular bills are spread evenly across 52 weeks." },
     ];
   }
 
@@ -2067,20 +2161,25 @@
       week: index + 1,
       startDateIso: plannerDateIso(addDays(startDate, index * 7)),
     }));
-    const sections = buildPlannerSections(weeks, startDate);
+    const sections = weeklyPlan?.weeks?.length === weeks.length
+      ? buildPlannerSectionsFromWeeklyPlan(weeks)
+      : buildPlannerSections(weeks, startDate);
     let opening = plannerRound(settings.startingBalance);
     weeks.forEach((week, index) => {
-      const receiptsTotal = plannerSectionTotal(sections.receipts, index);
-      const essentialTotal = plannerSectionTotal(sections.essential, index);
-      const discretionaryTotal = plannerSectionTotal(sections.discretionary, index);
-      const transfersTotal = plannerSectionTotal(sections.transfers, index);
+      const activeWeek = weeklyPlan?.weeks?.[index];
+      const receiptsTotal = activeWeek?.planned ? activeWeek.planned.income : plannerSectionTotal(sections.receipts, index);
+      const essentialTotal = activeWeek?.planned ? activeWeek.planned.essentialCosts : plannerSectionTotal(sections.essential, index);
+      const discretionaryTotal = activeWeek?.planned ? activeWeek.planned.discretionaryAllowance : plannerSectionTotal(sections.discretionary, index);
+      const transfersTotal = activeWeek?.planned
+        ? activeWeek.planned.investment + activeWeek.planned.extraSuper + activeWeek.planned.extraDebtRepayment
+        : plannerSectionTotal(sections.transfers, index);
       const investmentTransferTotal = plannerTransferTotal(sections.transfers, "investmentTransfer", index);
       const superTransferTotal = plannerTransferTotal(sections.transfers, "superTransfer", index);
       const debtTransferTotal = plannerTransferTotal(sections.transfers, "debtTransfer", index);
       const offsetTransferTotal = plannerTransferTotal(sections.transfers, "offsetTransfer", index);
-      const closingBalance = plannerRound(opening + receiptsTotal - essentialTotal - discretionaryTotal - transfersTotal);
+      const closingBalance = activeWeek?.planned ? activeWeek.planned.closingBalance : plannerRound(opening + receiptsTotal - essentialTotal - discretionaryTotal - transfersTotal);
       Object.assign(week, {
-        openingBalance: opening,
+        openingBalance: activeWeek?.planned ? activeWeek.planned.openingBalance : opening,
         receiptsTotal,
         essentialTotal,
         discretionaryTotal,
@@ -2133,7 +2232,7 @@
       warning.classList.toggle("planner-warning-negative", planner.negativeWeeks.length > 0);
       warning.classList.toggle("planner-warning-positive", planner.negativeWeeks.length === 0);
       warning.innerHTML = planner.negativeWeeks.length
-        ? `<strong>Cashflow warning:</strong> Your current schedule produces a negative projected bank balance in ${planner.negativeWeeks.length} week${planner.negativeWeeks.length === 1 ? "" : "s"}. Review the timing of planned transfers, spending or bills before relying on the planner.`
+        ? `<strong>Weekly Plan warning:</strong> Your current plan produces a negative projected bank balance in ${planner.negativeWeeks.length} week${planner.negativeWeeks.length === 1 ? "" : "s"}. Review the timing of planned transfers, spending or bills before relying on the planner.`
         : `<strong>Planner ready:</strong> No negative weekly closing bank balances are projected from the current schedule.`;
     }
     if (excelButton) excelButton.disabled = false;
@@ -2144,14 +2243,14 @@
         ${summaryTile("Week 1 starts", plannerShortDate(firstWeek.startDateIso))}
         ${summaryTile("Starting bank balance", money(planner.startingBalance))}
         ${summaryTile("Projected ending balance", money(finalWeek.closingBalance), finalWeek.closingBalance >= 0 ? "status-green" : "status-amber")}
-        ${summaryTile("Expected receipts", money(totalReceipts))}
+        ${summaryTile("Expected money in", money(totalReceipts))}
         ${summaryTile("Planned transfers", money(totalTransfers))}
         ${summaryTile("Investing scheduled", money(totalInvesting))}
         ${summaryTile("Extra super scheduled", money(totalSuper))}
       </div>
       <div class="planner-print-section mt-4">
         <div class="planner-print-heading">
-          <h3>Weekly Action Plan</h3>
+          <h3>Weekly Money Plan</h3>
           <p>Use this as a practical weekly guide. The Excel file remains editable after download.</p>
         </div>
         <div class="planner-week-grid">
@@ -2215,7 +2314,7 @@
     preview.innerHTML = `
       <div class="planner-empty-state">
         <strong>Generate the planner when your plan is ready.</strong>
-        <p>The Excel workbook will include Start Here, Weekly Planner, Weekly Action Plan, Wealth Snapshot and Annual Summary worksheets.</p>
+        <p>The Excel workbook will include Start Here, Weekly Planner, Weekly Money Plan, Wealth Snapshot and Annual Summary worksheets.</p>
       </div>
     `;
   }
@@ -2225,7 +2324,7 @@
     generatedWeeklyPlanner = buildWeeklyPlannerData(result);
     saveDraft("Weekly planner settings saved.");
     renderWeeklyPlannerPreview(generatedWeeklyPlanner);
-    updateSaveStatus("Weekly cashflow planner generated.");
+    updateSaveStatus("Weekly planner generated.");
   }
 
   function downloadWeeklyPlannerExcel() {
@@ -2261,6 +2360,732 @@
     generatedWeeklyPlanner = null;
     autosavePlan();
     renderWeeklyPlannerControls(CALC.calculatePlan(plan));
+  }
+
+  function syncWeeklyPlanExportSettings() {
+    if (!weeklyPlan) return;
+    ensurePlanSettings(plan);
+    plan.reportSettings.weeklyPlanner = {
+      ...plan.reportSettings.weeklyPlanner,
+      startDate: weeklyPlan.startDate,
+      startingBalance: weeklyPlan.openingBankBalance,
+      periodWeeks: weeklyPlan.durationWeeks,
+      extraDebtRepaymentTarget: weeklyPlan.settings?.extraDebtRepaymentTarget || 0,
+    };
+    const startInput = document.getElementById("plannerStartDate");
+    const balanceInput = document.getElementById("plannerStartingBalance");
+    const periodInput = document.getElementById("plannerPeriod");
+    if (startInput) startInput.value = weeklyPlan.startDate;
+    if (balanceInput) balanceInput.value = weeklyPlan.openingBankBalance;
+    if (periodInput) periodInput.value = String(weeklyPlan.durationWeeks);
+  }
+
+  function weeklyDateLabel(startDate, endDate = "") {
+    const start = new Date(`${startDate}T00:00:00`);
+    const end = endDate ? new Date(`${endDate}T00:00:00`) : null;
+    if (Number.isNaN(start.getTime())) return startDate || "";
+    const startText = start.toLocaleDateString("en-AU", { day: "numeric", month: "long" });
+    if (!end || Number.isNaN(end.getTime())) return startText;
+    const endText = end.toLocaleDateString("en-AU", { day: "numeric", month: "long" });
+    return `${startText} to ${endText}`;
+  }
+
+  function weeklyStatusClass(status) {
+    if (status === "on-track") return "weekly-status-on-track";
+    if (status === "tight") return "weekly-status-tight";
+    return "weekly-status-action";
+  }
+
+  function weeklyStatusLabel(status) {
+    if (status === "on-track") return "On track";
+    if (status === "tight") return "Tight week";
+    return "Action needed";
+  }
+
+  function weeklyProgressPercent(actual, target) {
+    if (!target) return 0;
+    return Math.min(100, Math.max(0, (Number(actual) || 0) / target * 100));
+  }
+
+  function weeklyInputValue(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? String(number) : "0";
+  }
+
+  function weeklyTimingRows(items, type, values = {}) {
+    if (!items.length) return `<p class="weekly-muted">No ${type === "payDates" ? "income" : "bill"} items available yet.</p>`;
+    return `
+      <div class="weekly-timing-list">
+        ${items.map((item) => `
+          <label>
+            <span class="field-label">${escapeHtml(item.name || item.label || "Item")}</span>
+            <input class="field-input" type="date" data-weekly-setup-date="${type}" data-weekly-id="${escapeHtml(item.id)}" value="${escapeHtml(values[item.id] || "")}">
+          </label>
+        `).join("")}
+      </div>
+    `;
+  }
+
+  function weeklyDateSettingsRows(items, type, values = {}) {
+    if (!items.length) return `<p class="weekly-muted">No ${type === "payDates" ? "income" : "bill"} items available yet.</p>`;
+    return `
+      <div class="weekly-timing-list">
+        ${items.map((item) => `
+          <label>
+            <span class="field-label">${escapeHtml(item.name || item.label || "Item")}</span>
+            <input class="field-input" type="date" data-weekly-date="${type}" data-weekly-id="${escapeHtml(item.id)}" value="${escapeHtml(values[item.id] || "")}">
+          </label>
+        `).join("")}
+      </div>
+    `;
+  }
+
+  function weeklyBillTimingItems() {
+    ensureCollectionData();
+    return [
+      ...(plan.expenseItems || []).map((item) => ({ id: item.id, name: item.name || "Expense" })),
+      ...(plan.liabilityItems || []).filter((item) => item.type !== "hecsHelp").map((item) => ({ id: item.id, name: `${item.name || "Debt"} repayment` })),
+    ];
+  }
+
+  function weeklyPlanSetupHtml(result) {
+    ensureCollectionData();
+    const savedSetup = plan.reportSettings?.weeklyPlanSetup || {};
+    const defaults = window.FFSWeeklyPlan.defaultSettings(plan, result, savedSetup);
+    return `
+      <article class="weekly-setup-card card">
+        <div class="card-heading">
+          <div>
+            <span class="metric-label">First-time setup</span>
+            <h3>Create your Weekly Plan</h3>
+            <span>Your Weekly Money Plan turns your financial strategy into practical weekly actions. Review the information below, confirm your opening balance and select when you want the plan to begin.</span>
+          </div>
+        </div>
+        <div class="weekly-setup-grid mt-4">
+          <label>
+            <span class="field-label">Planner start date</span>
+            <input class="field-input" type="date" data-weekly-setup="startDate" data-type="text" value="${escapeHtml(defaults.startDate)}">
+          </label>
+          <label>
+            <span class="field-label">Everyday bank opening balance</span>
+            <input class="field-input" type="number" step="100" data-weekly-setup="openingBankBalance" value="${weeklyInputValue(defaults.openingBankBalance)}">
+            <small class="field-help">Main account used for income and normal spending.</small>
+          </label>
+          <label>
+            <span class="field-label">Planner duration</span>
+            <select class="field-input" data-weekly-setup="durationWeeks" data-type="number">
+              <option value="12"${defaults.durationWeeks === 12 ? " selected" : ""}>12 weeks</option>
+              <option value="26"${defaults.durationWeeks === 26 ? " selected" : ""}>26 weeks</option>
+              <option value="52"${defaults.durationWeeks === 52 ? " selected" : ""}>52 weeks</option>
+            </select>
+          </label>
+          <label>
+            <span class="field-label">Minimum cash buffer</span>
+            <input class="field-input" type="number" step="100" data-weekly-setup="minimumCashBuffer" value="${weeklyInputValue(defaults.minimumCashBuffer)}">
+          </label>
+          <label>
+            <span class="field-label">Weekly spending limit</span>
+            <input class="field-input" type="number" step="25" data-weekly-setup="weeklyDiscretionaryLimit" value="${weeklyInputValue(defaults.weeklyDiscretionaryLimit)}">
+          </label>
+          <label>
+            <span class="field-label">Preferred surplus allocation</span>
+            <select class="field-input" data-weekly-setup="allocationMode" data-type="text">
+              <option value="priority"${defaults.allocationSettings.mode === "priority" ? " selected" : ""}>Use priority order</option>
+              <option value="split"${defaults.allocationSettings.mode === "split" ? " selected" : ""}>Split by percentage</option>
+              <option value="cash"${defaults.allocationSettings.mode === "cash" ? " selected" : ""}>Keep surplus as cash</option>
+            </select>
+          </label>
+          <label>
+            <span class="field-label">Optional transfer priority</span>
+            <select class="field-input" data-weekly-setup="priorityFirst" data-type="text">
+              <option value="extraDebt"${defaults.allocationSettings.priority[0] === "extraDebt" ? " selected" : ""}>Extra debt repayment first</option>
+              <option value="investment"${defaults.allocationSettings.priority[0] === "investment" ? " selected" : ""}>Invest first</option>
+              <option value="extraSuper"${defaults.allocationSettings.priority[0] === "extraSuper" ? " selected" : ""}>Extra super first</option>
+            </select>
+          </label>
+          <label>
+            <span class="field-label">Missed wealth transfers</span>
+            <select class="field-input" data-weekly-setup="missedTransferTreatment" data-type="text">
+              <option value="carry-forward"${defaults.missedTransferTreatment === "carry-forward" ? " selected" : ""}>Carry forward when affordable</option>
+              <option value="spread"${defaults.missedTransferTreatment === "spread" ? " selected" : ""}>Spread across remaining weeks</option>
+              <option value="none"${defaults.missedTransferTreatment === "none" ? " selected" : ""}>Do not carry forward</option>
+            </select>
+          </label>
+        </div>
+        <details class="weekly-setup-details mt-4">
+          <summary>Optional pay dates and bill dates</summary>
+          <p class="weekly-muted mt-2">Add dates where you know them. If dates are not entered, the app uses the frequency and labels annual or irregular costs as amounts set aside.</p>
+          <div class="weekly-timing-grid mt-4">
+            <div>
+              <h4>Pay dates</h4>
+              ${weeklyTimingRows(plan.incomeItems || [], "payDates", defaults.payDates)}
+            </div>
+            <div>
+              <h4>Bill dates</h4>
+              ${weeklyTimingRows(weeklyBillTimingItems(), "billDates", defaults.billDates)}
+            </div>
+          </div>
+        </details>
+        <div class="weekly-setup-actions mt-4">
+          <button class="btn btn-primary" type="button" data-weekly-action="create-plan">Create My Weekly Plan</button>
+        </div>
+      </article>
+    `;
+  }
+
+  function readWeeklySetupOptions() {
+    const options = {
+      payDates: {},
+      billDates: {},
+    };
+    document.querySelectorAll("[data-weekly-setup]").forEach((input) => {
+      const key = input.dataset.weeklySetup;
+      const value = input.dataset.type === "text" ? input.value : Number(input.value) || 0;
+      if (key === "allocationMode") {
+        options.allocationSettings = { ...(options.allocationSettings || {}), mode: input.value };
+      } else if (key === "priorityFirst") {
+        const rest = ["extraDebt", "investment", "extraSuper"].filter((item) => item !== input.value);
+        options.allocationSettings = { ...(options.allocationSettings || {}), priority: [input.value, ...rest] };
+      } else {
+        options[key] = value;
+      }
+    });
+    document.querySelectorAll("[data-weekly-setup-date]").forEach((input) => {
+      if (!input.value) return;
+      options[input.dataset.weeklySetupDate][input.dataset.weeklyId] = input.value;
+    });
+    plan.reportSettings.weeklyPlanSetup = options;
+    return options;
+  }
+
+  function createWeeklyPlanFromSetup() {
+    syncCollectionsToLegacy();
+    const result = CALC.calculatePlan(plan);
+    weeklyPlan = window.FFSWeeklyPlan.createFromPlan(plan, result, readWeeklySetupOptions(), null);
+    activeWeeklyPlanTab = "thisWeek";
+    weeklyEditingWeek = null;
+    generatedWeeklyPlanner = null;
+    syncWeeklyPlanExportSettings();
+    saveWeeklyPlan("Weekly Plan created.");
+    saveDraft();
+    renderAll();
+    showWorkspace("weeklyplan");
+  }
+
+  function weeklyTabsHtml() {
+    const tabs = [
+      ["thisWeek", "This Week"],
+      ["upcoming", "Upcoming Weeks"],
+      ["progress", "Progress"],
+      ["settings", "Settings"],
+    ];
+    return `
+      <div class="weekly-tabs" role="tablist" aria-label="Weekly Plan sections">
+        ${tabs.map(([id, label]) => `<button class="weekly-tab${activeWeeklyPlanTab === id ? " active" : ""}" type="button" data-weekly-tab="${id}" role="tab" aria-selected="${activeWeeklyPlanTab === id}">${label}</button>`).join("")}
+      </div>
+    `;
+  }
+
+  function weeklyCurrentWeek() {
+    if (!weeklyPlan?.weeks?.length) return null;
+    return weeklyPlan.weeks.find((week) => week.weekNumber === weeklyPlan.currentWeekNumber) || weeklyPlan.weeks.find((week) => !week.isCompleted) || weeklyPlan.weeks.at(-1);
+  }
+
+  function weeklySummaryCard(label, value, help = "") {
+    return `
+      <article class="weekly-summary-card">
+        <span>${escapeHtml(label)}</span>
+        <strong>${escapeHtml(value)}</strong>
+        ${help ? `<small>${escapeHtml(help)}</small>` : ""}
+      </article>
+    `;
+  }
+
+  function weeklyActualField(week, key, label, defaultValue, options = {}) {
+    const actual = week.actual || {};
+    const value = actual[key] ?? defaultValue ?? 0;
+    return `
+      <label>
+        <span class="field-label">${escapeHtml(label)}</span>
+        <input class="field-input" type="${options.type || "number"}" step="${options.step || "1"}" data-weekly-actual="${escapeHtml(key)}" data-weekly-week="${week.weekNumber}" value="${options.type === "text" ? escapeHtml(value || "") : weeklyInputValue(value)}">
+      </label>
+    `;
+  }
+
+  function weeklyCheckbox(week, key, label) {
+    const checked = week.actual?.checks?.[key] ? " checked" : "";
+    return `
+      <label class="weekly-check">
+        <input type="checkbox" data-weekly-actual-check="${escapeHtml(key)}" data-weekly-week="${week.weekNumber}"${checked}>
+        <span>${escapeHtml(label)}</span>
+      </label>
+    `;
+  }
+
+  function weeklyDetailList(title, items) {
+    return `
+      <div class="weekly-detail-list">
+        <h4>${escapeHtml(title)}</h4>
+        ${items?.length ? items.map((item) => `
+          <div>
+            <span>${escapeHtml(item.name)}${item.timing === "set-aside" ? " (set aside)" : ""}</span>
+            <strong>${money(item.amount)}</strong>
+          </div>
+        `).join("") : `<p class="weekly-muted">No items this week.</p>`}
+      </div>
+    `;
+  }
+
+  function weeklyThisWeekHtml() {
+    const week = weeklyCurrentWeek();
+    if (!week) return "";
+    const planned = week.planned;
+    const statusClass = weeklyStatusClass(planned.status);
+    const isEditableCompleted = week.isCompleted && weeklyEditingWeek === week.weekNumber;
+    const canEdit = !week.isCompleted || isEditableCompleted;
+    return `
+      <article class="weekly-hero card ${statusClass}">
+        <div>
+          <span class="metric-label">This Week's Money Plan</span>
+          <h3>Week ${week.weekNumber}: ${escapeHtml(weeklyDateLabel(week.startDate, week.endDate))}</h3>
+          <p>${escapeHtml(planned.statusMessage)}</p>
+          ${planned.adjustmentReason ? `<p class="weekly-adjustment">${escapeHtml(planned.adjustmentReason)}</p>` : ""}
+        </div>
+        <div class="weekly-status-badge">
+          <span>Current status</span>
+          <strong>${escapeHtml(planned.statusLabel || weeklyStatusLabel(planned.status))}</strong>
+        </div>
+      </article>
+
+      <div class="weekly-summary-grid mt-4">
+        ${weeklySummaryCard("Money coming in", money(planned.income))}
+        ${weeklySummaryCard("Bills and essentials", money(planned.essentialCosts), planned.amountSetAside ? `${money(planned.amountSetAside)} is being set aside for future bills.` : "")}
+        ${weeklySummaryCard("Spending allowance", money(planned.discretionaryAllowance))}
+        ${weeklySummaryCard("Invest", money(planned.investment))}
+        ${weeklySummaryCard("Add to super", money(planned.extraSuper))}
+        ${weeklySummaryCard("Pay extra off debt", money(planned.extraDebtRepayment))}
+        ${weeklySummaryCard("Expected bank balance", money(planned.closingBalance))}
+        ${weeklySummaryCard("Minimum cash buffer", money(weeklyPlan.minimumCashBuffer))}
+      </div>
+
+      <div class="weekly-week-detail-grid mt-4">
+        ${weeklyDetailList("Money coming in", week.detail?.incomeItems || [])}
+        ${weeklyDetailList("Bills due this week", week.detail?.billItems || [])}
+        ${weeklyDetailList("Amounts set aside", week.detail?.setAsideItems || [])}
+        ${weeklyDetailList("Lifestyle spending", week.detail?.discretionaryItems || [])}
+      </div>
+
+      <article class="card mt-4">
+        <div class="card-heading">
+          <div>
+            <h3>${week.isCompleted && !isEditableCompleted ? "Completed week" : "Record what actually happened"}</h3>
+            <span>${week.isCompleted && !isEditableCompleted ? "Actual results are saved. You can edit them if needed." : "These fields autosave as you enter them."}</span>
+          </div>
+          ${week.isCompleted && weeklyPlan.settings.allowCompletedWeekEditing && !isEditableCompleted ? `<button class="btn" type="button" data-weekly-action="edit-week" data-weekly-week="${week.weekNumber}">Edit Completed Week</button>` : ""}
+        </div>
+        <div class="weekly-actual-grid mt-4 ${canEdit ? "" : "weekly-readonly"}">
+          ${weeklyActualField(week, "income", "Actual income received", planned.income)}
+          ${weeklyActualField(week, "essentialCosts", "Actual bills and essential costs", planned.essentialCosts)}
+          ${weeklyActualField(week, "discretionarySpending", "Actual discretionary spending", planned.discretionaryAllowance)}
+          ${weeklyActualField(week, "investment", "Actual amount invested", planned.investment)}
+          ${weeklyActualField(week, "extraSuper", "Actual amount contributed to super", planned.extraSuper)}
+          ${weeklyActualField(week, "extraDebtRepayment", "Actual extra debt repayment", planned.extraDebtRepayment)}
+          ${weeklyActualField(week, "closingBalance", "Actual closing bank balance", planned.closingBalance)}
+          ${weeklyActualField(week, "notes", "Optional notes", week.actual?.notes || "", { type: "text" })}
+        </div>
+        <div class="weekly-check-grid mt-4">
+          ${weeklyCheckbox(week, "incomeReceived", "Income received")}
+          ${weeklyCheckbox(week, "billsPaid", "Bills paid")}
+          ${weeklyCheckbox(week, "investmentCompleted", "Investment completed")}
+          ${weeklyCheckbox(week, "superCompleted", "Super contribution completed")}
+          ${weeklyCheckbox(week, "debtCompleted", "Debt repayment completed")}
+        </div>
+        <div class="weekly-action-row mt-4">
+          ${canEdit ? `<button class="btn btn-primary" type="button" data-weekly-action="complete-week" data-weekly-week="${week.weekNumber}">Complete Week and Update My Plan</button>` : ""}
+          ${canEdit ? `<button class="btn" type="button" data-weekly-action="save-week" data-weekly-week="${week.weekNumber}">Save Progress</button>` : ""}
+        </div>
+      </article>
+    `;
+  }
+
+  function weeklyUpcomingHtml() {
+    const visibleWeeks = weeklyPlan.settings?.showAllUpcoming ? weeklyPlan.weeks : weeklyPlan.weeks.slice(Math.max(0, weeklyPlan.currentWeekNumber - 1), weeklyPlan.currentWeekNumber + 7);
+    return `
+      <article class="card">
+        <div class="card-heading">
+          <div>
+            <h3>Upcoming Weeks</h3>
+            <span>Forecast view showing this week, next week and the following six weeks by default.</span>
+          </div>
+          <button class="btn" type="button" data-weekly-action="toggle-upcoming">${weeklyPlan.settings?.showAllUpcoming ? "Show fewer weeks" : "View more weeks"}</button>
+        </div>
+        <div class="weekly-upcoming-list mt-4">
+          ${visibleWeeks.map((week) => {
+            const planned = week.planned;
+            const transfers = planned.investment + planned.extraSuper + planned.extraDebtRepayment;
+            return `
+              <details class="weekly-upcoming-card ${weeklyStatusClass(planned.status)}" ${week.weekNumber === weeklyPlan.currentWeekNumber ? "open" : ""}>
+                <summary>
+                  <div>
+                    <span>Week ${week.weekNumber}</span>
+                    <strong>${escapeHtml(weeklyDateLabel(week.startDate, week.endDate))}</strong>
+                  </div>
+                  <div class="weekly-upcoming-metrics">
+                    <span>${money(planned.income)}</span>
+                    <span>${money(planned.essentialCosts)}</span>
+                    <span>${money(planned.discretionaryAllowance)}</span>
+                    <span>${money(transfers)}</span>
+                    <span>${money(planned.closingBalance)}</span>
+                    <em>${escapeHtml(planned.statusLabel || weeklyStatusLabel(planned.status))}</em>
+                  </div>
+                </summary>
+                <div class="weekly-expanded-detail">
+                  ${weeklyDetailList("Money coming in", week.detail?.incomeItems || [])}
+                  ${weeklyDetailList("Bills due this week", week.detail?.billItems || [])}
+                  ${weeklyDetailList("Amounts set aside", week.detail?.setAsideItems || [])}
+                  <div class="weekly-detail-list">
+                    <h4>Weekly plan</h4>
+                    <div><span>Opening balance</span><strong>${money(planned.openingBalance)}</strong></div>
+                    <div><span>Investment amount</span><strong>${money(planned.investment)}</strong></div>
+                    <div><span>Super amount</span><strong>${money(planned.extraSuper)}</strong></div>
+                    <div><span>Extra debt repayment</span><strong>${money(planned.extraDebtRepayment)}</strong></div>
+                    <div><span>Expected closing balance</span><strong>${money(planned.closingBalance)}</strong></div>
+                  </div>
+                  ${planned.adjustmentReason ? `<p class="weekly-adjustment">${escapeHtml(planned.adjustmentReason)}</p>` : ""}
+                </div>
+              </details>
+            `;
+          }).join("")}
+        </div>
+      </article>
+    `;
+  }
+
+  function weeklyProgressBar(label, actual, target) {
+    const pct = weeklyProgressPercent(actual, target);
+    return `
+      <article class="weekly-progress-card">
+        <div>
+          <span>${escapeHtml(label)}</span>
+          <strong>${money(actual)} of ${money(target)}</strong>
+        </div>
+        <div class="progress-track" aria-hidden="true"><span style="width:${pct}%"></span></div>
+        <small>${plainPercent(pct)} complete</small>
+      </article>
+    `;
+  }
+
+  function weeklyProgressHtml() {
+    const progress = weeklyPlan.progress || {};
+    const remaining = weeklyPlan.weeks.length - (progress.weeksCompleted || 0);
+    const spendingMessage = progress.weeksCompleted
+      ? `Your average discretionary spending is ${money(progress.averageWeeklyDiscretionarySpending)} per completed week.`
+      : "Complete your first week to start tracking actual spending against your weekly limit.";
+    return `
+      <article class="card">
+        <div class="card-heading">
+          <div>
+            <h3>Progress</h3>
+            <span>Actual completed results are separated from remaining planned amounts.</span>
+          </div>
+        </div>
+        <div class="summary-grid mt-4">
+          ${summaryTile("Weeks completed", `${progress.weeksCompleted || 0} of ${weeklyPlan.weeks.length}`)}
+          ${summaryTile("Income received this year", money(progress.incomeReceived))}
+          ${summaryTile("Essential costs paid", money(progress.essentialCostsPaid))}
+          ${summaryTile("Average weekly spending", money(progress.averageWeeklyDiscretionarySpending))}
+          ${summaryTile("Amount invested this year", money(progress.amountInvested))}
+          ${summaryTile("Extra super contributed", money(progress.extraSuperContributed))}
+          ${summaryTile("Extra debt repaid", money(progress.extraDebtRepaid))}
+          ${summaryTile("Current bank balance", money(progress.currentBankBalance))}
+          ${summaryTile("Annual savings rate", `${Number(progress.annualSavingsRate || 0).toFixed(1)}%`)}
+          ${summaryTile("Planned wealth transfers remaining", money(progress.plannedWealthTransfersRemaining))}
+          ${summaryTile("Estimated improvement", money(progress.estimatedImprovementInFinancialPosition))}
+          ${summaryTile("Weeks below buffer", `${progress.weeksBelowBuffer || 0}`)}
+        </div>
+        <div class="weekly-progress-grid mt-4">
+          ${weeklyProgressBar("Invested this year", progress.amountInvested || 0, progress.investmentTarget || 0)}
+          ${weeklyProgressBar("Extra super this year", progress.extraSuperContributed || 0, progress.extraSuperTarget || 0)}
+          ${weeklyProgressBar("Extra debt repaid this year", progress.extraDebtRepaid || 0, progress.extraDebtRepaymentTarget || 0)}
+          ${weeklyProgressBar("Emergency fund or cash buffer", progress.currentBankBalance || 0, weeklyPlan.minimumCashBuffer || 0)}
+        </div>
+        <p class="weekly-progress-summary mt-4">You have completed ${progress.weeksCompleted || 0} week${progress.weeksCompleted === 1 ? "" : "s"} with ${remaining} week${remaining === 1 ? "" : "s"} remaining in this plan. ${escapeHtml(spendingMessage)} Remaining wealth transfers are estimated from the current plan and may change as actual results are entered.</p>
+      </article>
+    `;
+  }
+
+  function weeklySettingsHtml() {
+    const settings = weeklyPlan.settings || {};
+    const allocation = weeklyPlan.allocationSettings || settings.allocationSettings || {};
+    const payDates = settings.payDates || {};
+    const billDates = settings.billDates || {};
+    return `
+      <article class="card">
+        <div class="card-heading">
+          <div>
+            <h3>Settings</h3>
+            <span>Update how the Weekly Plan protects your cash buffer and allocates available surplus.</span>
+          </div>
+        </div>
+        <div class="weekly-setup-grid mt-4">
+          <label>
+            <span class="field-label">Plan name</span>
+            <input class="field-input" type="text" data-weekly-setting="planName" data-type="text" value="${escapeHtml(weeklyPlan.planName || "")}">
+          </label>
+          <label>
+            <span class="field-label">Planner start date</span>
+            <input class="field-input" type="date" data-weekly-setting="startDate" data-type="text" value="${escapeHtml(weeklyPlan.startDate)}">
+          </label>
+          <label>
+            <span class="field-label">Planner duration</span>
+            <select class="field-input" data-weekly-setting="durationWeeks">
+              <option value="12"${weeklyPlan.durationWeeks === 12 ? " selected" : ""}>12 weeks</option>
+              <option value="26"${weeklyPlan.durationWeeks === 26 ? " selected" : ""}>26 weeks</option>
+              <option value="52"${weeklyPlan.durationWeeks === 52 ? " selected" : ""}>52 weeks</option>
+            </select>
+          </label>
+          <label>
+            <span class="field-label">Minimum cash buffer</span>
+            <input class="field-input" type="number" step="100" data-weekly-setting="minimumCashBuffer" value="${weeklyInputValue(weeklyPlan.minimumCashBuffer)}">
+          </label>
+          <label>
+            <span class="field-label">Opening or current bank balance</span>
+            <input class="field-input" type="number" step="100" data-weekly-setting="openingBankBalance" value="${weeklyInputValue(weeklyPlan.openingBankBalance)}">
+          </label>
+          <label>
+            <span class="field-label">Weekly spending limit</span>
+            <input class="field-input" type="number" step="25" data-weekly-setting="weeklyDiscretionaryLimit" value="${weeklyInputValue(settings.weeklyDiscretionaryLimit)}">
+          </label>
+          <label>
+            <span class="field-label">Investment target</span>
+            <input class="field-input" type="number" step="100" data-weekly-setting="investmentTarget" value="${weeklyInputValue(settings.investmentTarget)}">
+          </label>
+          <label>
+            <span class="field-label">Extra super target</span>
+            <input class="field-input" type="number" step="100" data-weekly-setting="extraSuperTarget" value="${weeklyInputValue(settings.extraSuperTarget)}">
+          </label>
+          <label>
+            <span class="field-label">Extra debt repayment target</span>
+            <input class="field-input" type="number" step="100" data-weekly-setting="extraDebtRepaymentTarget" value="${weeklyInputValue(settings.extraDebtRepaymentTarget)}">
+          </label>
+          <label>
+            <span class="field-label">Allocation priority</span>
+            <select class="field-input" data-weekly-setting="priorityFirst" data-type="text">
+              <option value="extraDebt"${allocation.priority?.[0] === "extraDebt" ? " selected" : ""}>Extra debt repayment first</option>
+              <option value="investment"${allocation.priority?.[0] === "investment" ? " selected" : ""}>Invest first</option>
+              <option value="extraSuper"${allocation.priority?.[0] === "extraSuper" ? " selected" : ""}>Extra super first</option>
+            </select>
+          </label>
+          <label>
+            <span class="field-label">Surplus allocation method</span>
+            <select class="field-input" data-weekly-setting="allocationMode" data-type="text">
+              <option value="priority"${allocation.mode === "priority" ? " selected" : ""}>Priority order</option>
+              <option value="split"${allocation.mode === "split" ? " selected" : ""}>Split by percentage</option>
+              <option value="cash"${allocation.mode === "cash" ? " selected" : ""}>Keep as cash</option>
+            </select>
+          </label>
+          <label>
+            <span class="field-label">Investments split %</span>
+            <input class="field-input" type="number" step="1" data-weekly-setting="splitInvestment" value="${weeklyInputValue(allocation.split?.investment)}">
+          </label>
+          <label>
+            <span class="field-label">Extra debt split %</span>
+            <input class="field-input" type="number" step="1" data-weekly-setting="splitExtraDebt" value="${weeklyInputValue(allocation.split?.extraDebt)}">
+          </label>
+          <label>
+            <span class="field-label">Extra super split %</span>
+            <input class="field-input" type="number" step="1" data-weekly-setting="splitExtraSuper" value="${weeklyInputValue(allocation.split?.extraSuper)}">
+          </label>
+          <label>
+            <span class="field-label">Missed-transfer treatment</span>
+            <select class="field-input" data-weekly-setting="missedTransferTreatment" data-type="text">
+              <option value="carry-forward"${settings.missedTransferTreatment === "carry-forward" ? " selected" : ""}>Carry forward when affordable</option>
+              <option value="spread"${settings.missedTransferTreatment === "spread" ? " selected" : ""}>Spread across remaining weeks</option>
+              <option value="none"${settings.missedTransferTreatment === "none" ? " selected" : ""}>Do not carry forward</option>
+            </select>
+          </label>
+          <label class="toggle-field">
+            <span><span class="field-label">Allow completed weeks to be edited</span></span>
+            <input class="toggle-input" type="checkbox" data-weekly-setting="allowCompletedWeekEditing" data-type="boolean"${settings.allowCompletedWeekEditing !== false ? " checked" : ""}>
+          </label>
+          <label class="toggle-field">
+            <span><span class="field-label">Show reminders inside the app</span></span>
+            <input class="toggle-input" type="checkbox" data-weekly-setting="showInAppReminders" data-type="boolean"${settings.showInAppReminders !== false ? " checked" : ""}>
+          </label>
+        </div>
+        ${allocation.mode === "split" && !allocation.splitIsValid ? `<p class="weekly-warning mt-4">Custom percentage split must total 100% before it can be used reliably.</p>` : ""}
+        <details class="weekly-setup-details mt-4">
+          <summary>Pay dates and bill dates</summary>
+          <p class="weekly-muted mt-2">Some annual and irregular costs have been spread across the year because exact payment dates were not entered.</p>
+          <div class="weekly-timing-grid mt-4">
+            <div>
+              <h4>Pay dates</h4>
+              ${weeklyDateSettingsRows(plan.incomeItems || [], "payDates", payDates)}
+            </div>
+            <div>
+              <h4>Bill dates</h4>
+              ${weeklyDateSettingsRows(weeklyBillTimingItems(), "billDates", billDates)}
+            </div>
+          </div>
+        </details>
+        <div class="weekly-action-row mt-4">
+          <button class="btn btn-primary" type="button" data-weekly-action="rebuild-plan">Rebuild Future Plan</button>
+          <button class="btn" type="button" data-weekly-action="reset-plan">Reset Weekly Plan</button>
+        </div>
+        <p class="weekly-device-note mt-4">Your Weekly Plan is currently saved in this browser on this device. Export a backup before clearing browser data or changing devices.</p>
+      </article>
+    `;
+  }
+
+  function renderWeeklyPlan(result) {
+    const root = document.getElementById("weeklyPlanRoot");
+    const exportPanel = document.getElementById("weeklyPlanExportPrint");
+    if (!root) return;
+    if (!weeklyPlan) {
+      if (exportPanel) exportPanel.classList.add("hidden");
+      root.innerHTML = weeklyPlanSetupHtml(result);
+      return;
+    }
+    weeklyPlan = window.FFSWeeklyPlan.reforecast(plan, result, weeklyPlan);
+    syncWeeklyPlanExportSettings();
+    saveWeeklyPlan();
+    if (!["thisWeek", "upcoming", "progress", "settings"].includes(activeWeeklyPlanTab)) activeWeeklyPlanTab = "thisWeek";
+    const tabHtml = activeWeeklyPlanTab === "thisWeek"
+      ? weeklyThisWeekHtml()
+      : activeWeeklyPlanTab === "upcoming"
+        ? weeklyUpcomingHtml()
+        : activeWeeklyPlanTab === "progress"
+          ? weeklyProgressHtml()
+          : weeklySettingsHtml();
+    root.innerHTML = `
+      <div class="weekly-plan-shell">
+        <article class="weekly-plan-header card">
+          <div>
+            <span class="metric-label">Ongoing Weekly Money Plan</span>
+            <h3>${escapeHtml(weeklyPlan.planName || "Weekly Plan")}</h3>
+            <p>Use this each week to check money coming in, bills, spending, investments, super and extra debt repayments.</p>
+          </div>
+          <div class="weekly-plan-header-stat">
+            <span>Current week</span>
+            <strong>Week ${weeklyPlan.currentWeekNumber}</strong>
+          </div>
+        </article>
+        ${weeklyTabsHtml()}
+        <div class="weekly-tab-panel">${tabHtml}</div>
+      </div>
+    `;
+    if (exportPanel) exportPanel.classList.toggle("hidden", activeWeeklyPlanTab !== "settings");
+    renderWeeklyPlannerControls(result);
+  }
+
+  function readWeekActual(weekNumber) {
+    const actual = { checks: {} };
+    document.querySelectorAll(`[data-weekly-actual][data-weekly-week="${weekNumber}"]`).forEach((input) => {
+      const key = input.dataset.weeklyActual;
+      actual[key] = input.type === "text" ? input.value : Number(input.value) || 0;
+    });
+    document.querySelectorAll(`[data-weekly-actual-check][data-weekly-week="${weekNumber}"]`).forEach((input) => {
+      actual.checks[input.dataset.weeklyActualCheck] = input.checked;
+    });
+    return actual;
+  }
+
+  function saveWeekProgress(weekNumber, complete = false) {
+    if (!weeklyPlan) return;
+    const result = CALC.calculatePlan(plan);
+    const actual = readWeekActual(weekNumber);
+    weeklyPlan = complete
+      ? window.FFSWeeklyPlan.completeWeek(plan, result, weeklyPlan, weekNumber, actual)
+      : window.FFSWeeklyPlan.updateActual(weeklyPlan, weekNumber, actual);
+    if (complete) weeklyEditingWeek = null;
+    generatedWeeklyPlanner = null;
+    saveWeeklyPlan(complete ? "Week completed. Your remaining plan has been updated using your actual closing bank balance." : "Weekly progress saved.");
+    renderAll();
+    showWorkspace("weeklyplan");
+  }
+
+  function updateWeeklySettingFromInput(target) {
+    if (!weeklyPlan) return;
+    const key = target.dataset.weeklySetting;
+    const value = target.dataset.type === "boolean" ? target.checked : target.dataset.type === "text" ? target.value : Number(target.value) || 0;
+    const settings = { ...(weeklyPlan.settings || {}) };
+    if (key === "planName") {
+      weeklyPlan.planName = String(value || "Weekly Plan");
+      settings.planName = weeklyPlan.planName;
+    } else if (key === "allocationMode") {
+      settings.allocationSettings = { ...(settings.allocationSettings || {}), mode: value };
+    } else if (key === "priorityFirst") {
+      const rest = ["extraDebt", "investment", "extraSuper"].filter((item) => item !== value);
+      settings.allocationSettings = { ...(settings.allocationSettings || {}), priority: [value, ...rest] };
+    } else if (key === "splitInvestment" || key === "splitExtraDebt" || key === "splitExtraSuper") {
+      const splitKey = key === "splitInvestment" ? "investment" : key === "splitExtraDebt" ? "extraDebt" : "extraSuper";
+      settings.allocationSettings = {
+        ...(settings.allocationSettings || {}),
+        split: { ...(settings.allocationSettings?.split || {}), [splitKey]: value },
+      };
+    } else {
+      settings[key] = value;
+    }
+    weeklyPlan = window.FFSWeeklyPlan.updateSettings(plan, CALC.calculatePlan(plan), weeklyPlan, settings);
+    generatedWeeklyPlanner = null;
+    syncWeeklyPlanExportSettings();
+    saveWeeklyPlan("Weekly Plan settings saved.");
+  }
+
+  function updateWeeklyDateFromInput(target) {
+    if (!weeklyPlan) return;
+    const type = target.dataset.weeklyDate;
+    const id = target.dataset.weeklyId;
+    const settings = { ...(weeklyPlan.settings || {}) };
+    settings[type] = { ...(settings[type] || {}) };
+    if (target.value) settings[type][id] = target.value;
+    else delete settings[type][id];
+    weeklyPlan = window.FFSWeeklyPlan.updateSettings(plan, CALC.calculatePlan(plan), weeklyPlan, settings);
+    generatedWeeklyPlanner = null;
+    syncWeeklyPlanExportSettings();
+    saveWeeklyPlan("Weekly Plan timing saved.");
+  }
+
+  function exportWeeklyPlanBackup() {
+    if (!weeklyPlan) {
+      updateSaveStatus("Create a Weekly Plan before exporting a backup.");
+      return;
+    }
+    const payload = window.FFSWeeklyPlan.exportPayload(weeklyPlan);
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    downloadBlob(blob, safeFilename(`Financial-Freedom-Weekly-Plan-${weeklyPlan.planName || householdNameForFile()}`, "json"));
+    updateSaveStatus("Weekly Plan backup exported.");
+  }
+
+  function triggerWeeklyPlanImport() {
+    const input = document.getElementById("weeklyPlanImportInput");
+    if (!input) return;
+    input.value = "";
+    input.click();
+  }
+
+  function importWeeklyPlanBackup(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const imported = window.FFSWeeklyPlan.importPayload(JSON.parse(String(reader.result || "")));
+        if (!window.confirm("Import this Weekly Plan backup? This will replace the current Weekly Plan history on this device, but not your full Financial Freedom plan.")) {
+          updateSaveStatus("Weekly Plan import cancelled.");
+          return;
+        }
+        weeklyPlan = imported;
+        generatedWeeklyPlanner = null;
+        activeWeeklyPlanTab = "thisWeek";
+        saveWeeklyPlan("Weekly Plan backup imported.");
+        renderAll();
+        showWorkspace("weeklyplan");
+      } catch (error) {
+        updateSaveStatus(error.message || "Weekly Plan import failed.");
+      }
+    };
+    reader.onerror = () => updateSaveStatus("Weekly Plan import failed. The selected file could not be read.");
+    reader.readAsText(file);
   }
 
   function reportSection(title, intro, body, extraClass = "") {
@@ -3345,6 +4170,7 @@
     renderDecision(result);
     renderScenarios();
     renderReports(result);
+    renderWeeklyPlan(result);
     renderWizardResults(result);
     renderWizardStep();
     renderHelpReview(result);
@@ -3365,6 +4191,7 @@
     const sample = selectedSamplePlan();
     plan = CALC.clonePlan(sample.plan);
     generatedWeeklyPlanner = null;
+    resetWeeklyPlanStorage("");
     seedSampleScenarios(sample.plan);
     saveDraft("All changes saved");
     renderAll();
@@ -3397,6 +4224,7 @@
     if (!window.confirm("Clear the current plan and start again?")) return;
     plan = blankUserPlan();
     generatedWeeklyPlanner = null;
+    resetWeeklyPlanStorage("");
     localStorage.removeItem(DRAFT_KEY);
     localStorage.removeItem(LAST_SAVED_KEY);
     document.getElementById("scenarioName").value = "";
@@ -3413,6 +4241,7 @@
     restoredDraftUi = {};
     plan = blankUserPlan();
     generatedWeeklyPlanner = null;
+    resetWeeklyPlanStorage("");
     activeWizardStep = 0;
     const nameInput = document.getElementById("scenarioName");
     const notesInput = document.getElementById("scenarioNotes");
@@ -3534,6 +4363,49 @@
   function bindEvents() {
     document.addEventListener("input", (event) => {
       const target = event.target;
+      if (target.dataset.weeklySetup !== undefined) {
+        ensurePlanSettings(plan);
+        const current = plan.reportSettings.weeklyPlanSetup || {};
+        const key = target.dataset.weeklySetup;
+        const value = target.dataset.type === "text" ? target.value : Number(target.value) || 0;
+        if (key === "allocationMode") {
+          current.allocationSettings = { ...(current.allocationSettings || {}), mode: target.value };
+        } else if (key === "priorityFirst") {
+          const rest = ["extraDebt", "investment", "extraSuper"].filter((item) => item !== target.value);
+          current.allocationSettings = { ...(current.allocationSettings || {}), priority: [target.value, ...rest] };
+        } else {
+          current[key] = value;
+        }
+        plan.reportSettings.weeklyPlanSetup = current;
+        autosavePlan();
+        return;
+      }
+      if (target.dataset.weeklySetupDate !== undefined) {
+        ensurePlanSettings(plan);
+        const current = plan.reportSettings.weeklyPlanSetup || {};
+        const type = target.dataset.weeklySetupDate;
+        current[type] = { ...(current[type] || {}) };
+        if (target.value) current[type][target.dataset.weeklyId] = target.value;
+        else delete current[type][target.dataset.weeklyId];
+        plan.reportSettings.weeklyPlanSetup = current;
+        autosavePlan();
+        return;
+      }
+      if (target.dataset.weeklyActual !== undefined || target.dataset.weeklyActualCheck !== undefined) {
+        if (!weeklyPlan) return;
+        const weekNumber = Number(target.dataset.weeklyWeek) || weeklyPlan.currentWeekNumber;
+        weeklyPlan = window.FFSWeeklyPlan.updateActual(weeklyPlan, weekNumber, readWeekActual(weekNumber));
+        saveWeeklyPlan("Weekly progress autosaved.");
+        return;
+      }
+      if (target.dataset.weeklySetting !== undefined) {
+        updateWeeklySettingFromInput(target);
+        return;
+      }
+      if (target.dataset.weeklyDate !== undefined) {
+        updateWeeklyDateFromInput(target);
+        return;
+      }
       if (target.dataset.samplePlanSelect !== undefined) {
         selectedSamplePlanId = target.value;
         renderSamplePlanOptions();
@@ -3646,6 +4518,44 @@
         return;
       }
 
+      const weeklyTab = event.target.closest("[data-weekly-tab]");
+      if (weeklyTab) {
+        activeWeeklyPlanTab = weeklyTab.dataset.weeklyTab;
+        saveDraft();
+        renderOutputs();
+        return;
+      }
+
+      const weeklyAction = event.target.closest("[data-weekly-action]");
+      if (weeklyAction) {
+        const action = weeklyAction.dataset.weeklyAction;
+        const weekNumber = Number(weeklyAction.dataset.weeklyWeek) || weeklyPlan?.currentWeekNumber || 1;
+        if (action === "create-plan") createWeeklyPlanFromSetup();
+        if (action === "save-week") saveWeekProgress(weekNumber, false);
+        if (action === "complete-week") saveWeekProgress(weekNumber, true);
+        if (action === "edit-week") {
+          weeklyEditingWeek = weekNumber;
+          renderOutputs();
+        }
+        if (action === "toggle-upcoming" && weeklyPlan) {
+          weeklyPlan.settings.showAllUpcoming = !weeklyPlan.settings.showAllUpcoming;
+          saveWeeklyPlan();
+          renderOutputs();
+        }
+        if (action === "rebuild-plan" && weeklyPlan) {
+          weeklyPlan = window.FFSWeeklyPlan.reforecast(plan, CALC.calculatePlan(plan), weeklyPlan);
+          generatedWeeklyPlanner = null;
+          saveWeeklyPlan("Future weeks rebuilt. Completed week history was preserved.");
+          renderAll();
+        }
+        if (action === "reset-plan") {
+          if (!window.confirm("Reset the Weekly Plan? This will delete Weekly Plan history, but it will not reset your full Financial Freedom plan.")) return;
+          resetWeeklyPlanStorage("Weekly Plan reset.");
+          renderAll();
+        }
+        return;
+      }
+
       const addButton = event.target.closest("[data-add-collection]");
       if (addButton) {
         addCollectionItem(addButton.dataset.addCollection);
@@ -3689,7 +4599,9 @@
         if (scenario) {
           plan = CALC.clonePlan(scenario.plan);
           generatedWeeklyPlanner = null;
+          if (weeklyPlan) weeklyPlan = window.FFSWeeklyPlan.reforecast(plan, CALC.calculatePlan(plan), weeklyPlan);
           saveDraft();
+          saveWeeklyPlan();
           renderAll();
           showWorkspace("dashboard");
           updateSaveStatus("Scenario loaded successfully.");
@@ -3772,6 +4684,9 @@
     document.getElementById("plannerRegenerateButton").addEventListener("click", generateWeeklyPlanner);
     document.getElementById("plannerDownloadExcelButton").addEventListener("click", downloadWeeklyPlannerExcel);
     document.getElementById("plannerDownloadPdfButton").addEventListener("click", printWeeklyPlannerPdf);
+    document.getElementById("weeklyPlanBackupExportButton").addEventListener("click", exportWeeklyPlanBackup);
+    document.getElementById("weeklyPlanBackupImportButton").addEventListener("click", triggerWeeklyPlanImport);
+    document.getElementById("weeklyPlanImportInput").addEventListener("change", (event) => importWeeklyPlanBackup(event.target.files?.[0]));
   }
 
   renderAll();

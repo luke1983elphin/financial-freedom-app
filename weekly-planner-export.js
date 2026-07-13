@@ -136,7 +136,7 @@
   function buildStartHere(planner) {
     const assumptions = planner.assumptions || [];
     const rows = [
-      [text("Financial Freedom Weekly Cashflow Planner", STYLE.title), blank(), blank()],
+      [text("Financial Freedom Weekly Money Plan", STYLE.title), blank(), blank()],
       [blank(), blank(), blank()],
       [text("Household", STYLE.header), text(planner.householdName || "Current plan"), blank()],
       [text("Planner start date", STYLE.header), text(shortDate(planner.startDateIso)), blank()],
@@ -144,9 +144,9 @@
       [text("Generated", STYLE.header), text(shortDate(planner.generatedAtIso)), blank()],
       [blank(), blank(), blank()],
       [text("How to use this planner", STYLE.section), blank(STYLE.section), blank(STYLE.section)],
-      [text("This planner converts your Financial Freedom plan into a practical weekly cashflow schedule. Review each week, complete the planned transfers and update the spreadsheet when your income or expenses change.", STYLE.note), blank(), blank()],
-      [text("Weekly provisions", STYLE.section), blank(STYLE.section), blank(STYLE.section)],
-      [text("Where exact bill dates are not entered, the planner uses an estimated weekly provision instead of pretending the bill is paid on a specific date.", STYLE.note), blank(), blank()],
+      [text("This workbook converts your Financial Freedom plan into a practical weekly money plan. Review each week, complete the planned transfers and update the spreadsheet when your income or expenses change.", STYLE.note), blank(), blank()],
+      [text("Weekly amounts set aside", STYLE.section), blank(STYLE.section), blank(STYLE.section)],
+      [text("Where exact bill dates are not entered, the planner uses an estimated amount set aside instead of pretending the bill is paid on a specific date.", STYLE.note), blank(), blank()],
       [text("Key assumptions", STYLE.section), blank(STYLE.section), blank(STYLE.section)],
       [text("Assumption", STYLE.header), text("Value", STYLE.header), text("Notes", STYLE.header)],
       ...assumptions.map((item) => [text(item.label), text(item.value), text(item.note || "")]),
@@ -166,7 +166,7 @@
     planner.lookupRows = planner.lookupRows || {};
     const rows = [
       [text("Weekly Planner", STYLE.title), blank(), ...weeks.map((week) => text(weekHeading(week), STYLE.header))],
-      [text("Cashflow item", STYLE.header), text("Frequency", STYLE.header), ...weeks.map((week) => text(shortDate(week.startDateIso), STYLE.header))],
+      [text("Money item", STYLE.header), text("Frequency", STYLE.header), ...weeks.map((week) => text(shortDate(week.startDateIso), STYLE.header))],
     ];
     const meta = {};
 
@@ -200,32 +200,32 @@
       return totalRow;
     }
 
-    addSection("receipts", "Receipts", planner.sections.receipts);
-    addSection("essential", "Essential payments", planner.sections.essential);
-    addSection("discretionary", "Lifestyle and discretionary spending", planner.sections.discretionary);
-    addSection("transfers", "Financial Freedom transfers", planner.sections.transfers);
+    addSection("receipts", "Money coming in", planner.sections.receipts);
+    addSection("essential", "Bills and essentials", planner.sections.essential);
+    addSection("discretionary", "Lifestyle spending", planner.sections.discretionary);
+    addSection("transfers", "Wealth transfers", planner.sections.transfers);
 
-    rows.push([text("Weekly balance calculation", STYLE.section), blank(STYLE.section), ...weeks.map(() => blank(STYLE.section))]);
+    rows.push([text("Weekly balance", STYLE.section), blank(STYLE.section), ...weeks.map(() => blank(STYLE.section))]);
     const openingRow = rows.length + 1;
     rows.push([
       text("Opening everyday bank balance"),
-      text("Formula"),
+      text("Calculated"),
       ...weeks.map((_, index) => index === 0
         ? number(planner.startingBalance, STYLE.currency)
         : formula(`${colName(index + 2)}${meta.closingRow || openingRow + 5}`, STYLE.currency)),
     ]);
     const addReceiptsRow = rows.length + 1;
-    rows.push([text("Add total receipts"), text("Formula"), ...weeks.map((_, index) => formula(`${colName(index + 3)}${meta.receiptsTotalRow}`, STYLE.currency))]);
+    rows.push([text("Add money coming in"), text("Calculated"), ...weeks.map((_, index) => formula(`${colName(index + 3)}${meta.receiptsTotalRow}`, STYLE.currency))]);
     const lessEssentialRow = rows.length + 1;
-    rows.push([text("Less essential payments"), text("Formula"), ...weeks.map((_, index) => formula(`${colName(index + 3)}${meta.essentialTotalRow}`, STYLE.currency))]);
+    rows.push([text("Less bills and essentials"), text("Calculated"), ...weeks.map((_, index) => formula(`${colName(index + 3)}${meta.essentialTotalRow}`, STYLE.currency))]);
     const lessDiscretionaryRow = rows.length + 1;
-    rows.push([text("Less discretionary spending"), text("Formula"), ...weeks.map((_, index) => formula(`${colName(index + 3)}${meta.discretionaryTotalRow}`, STYLE.currency))]);
+    rows.push([text("Less lifestyle spending"), text("Calculated"), ...weeks.map((_, index) => formula(`${colName(index + 3)}${meta.discretionaryTotalRow}`, STYLE.currency))]);
     const lessTransfersRow = rows.length + 1;
-    rows.push([text("Less planned transfers"), text("Formula"), ...weeks.map((_, index) => formula(`${colName(index + 3)}${meta.transfersTotalRow}`, STYLE.currency))]);
+    rows.push([text("Less wealth transfers"), text("Calculated"), ...weeks.map((_, index) => formula(`${colName(index + 3)}${meta.transfersTotalRow}`, STYLE.currency))]);
     const closingRow = rows.length + 1;
     rows.push([
       text("Expected closing everyday bank balance", STYLE.header),
-      text("Formula", STYLE.header),
+      text("Calculated", STYLE.header),
       ...weeks.map((_, index) => {
         const col = colName(index + 3);
         return formula(`${col}${openingRow}+${col}${addReceiptsRow}-${col}${lessEssentialRow}-${col}${lessDiscretionaryRow}-${col}${lessTransfersRow}`, STYLE.totalCurrency);
@@ -254,7 +254,7 @@
 
   function buildWeeklyActionPlan(planner) {
     const rows = [
-      [text("Weekly Action Plan", STYLE.title), blank(), blank(), blank(), blank(), blank(), blank(), blank(), blank(), blank(), blank(), blank(), blank(), blank()],
+      [text("Weekly Money Plan", STYLE.title), blank(), blank(), blank(), blank(), blank(), blank(), blank(), blank(), blank(), blank(), blank(), blank(), blank()],
       [
         text("Week", STYLE.header),
         text("Week commencing", STYLE.header),
@@ -289,7 +289,7 @@
       ]),
     ];
     return {
-      name: "Weekly Action Plan",
+      name: "Weekly Money Plan",
       xml: sheetXml(makeRows(14, rows), {
         cols: [10, 18, 16, 16, 18, 16, 14, 17, 19, 58, 15, 12, 14, 12],
         freeze: { rows: 2, cols: 2, topLeftCell: "C3" },
@@ -309,7 +309,7 @@
     const rows = [
       [text("Wealth Snapshot", STYLE.title), blank(), blank(), blank(), blank()],
       [text("Item", STYLE.header), text("Starting balance", STYLE.header), text("Planned change", STYLE.header), text("Estimated ending balance", STYLE.header), text("Notes", STYLE.header)],
-      [text("Everyday bank account"), number(planner.startingBalance, STYLE.currency), formula(`${endingBankFormula}-B3`, STYLE.currency), formula(endingBankFormula, STYLE.currency), text("Flows from the weekly cashflow schedule.")],
+      [text("Everyday bank account"), number(planner.startingBalance, STYLE.currency), formula(`${endingBankFormula}-B3`, STYLE.currency), formula(endingBankFormula, STYLE.currency), text("Flows from the Weekly Plan.")],
       [text("Offset account"), number(planner.snapshot.offsetBalance, STYLE.currency), formula(sumRow(offsetTransferRow), STYLE.currency), formula(`B4+C4`, STYLE.currency), text("Only planned offset transfers are added.")],
       [text("Cash savings"), number(planner.snapshot.cashSavings, STYLE.currency), number(0, STYLE.currency), formula("B5+C5", STYLE.currency), text("Existing cash entered in the plan.")],
       [text("Shares and investments"), number(planner.snapshot.investmentBalance, STYLE.currency), formula(sumRow(investmentTransferRow), STYLE.currency), formula("B6+C6", STYLE.currency), text("Does not add assumed market growth.")],
@@ -333,9 +333,9 @@
     const rows = [
       [text("Annual Summary", STYLE.title), blank(), blank()],
       [text("Measure", STYLE.header), text("Amount", STYLE.header), text("Notes", STYLE.header)],
-      [text("Total expected income"), formula(`SUM(${rangeFor(weeklyMeta.receiptsTotalRow)})`, STYLE.currency), text("All scheduled receipts in the planner period.")],
-      [text("Total essential spending"), formula(`SUM(${rangeFor(weeklyMeta.essentialTotalRow)})`, STYLE.currency), text("Essential payments and weekly provisions.")],
-      [text("Total discretionary spending"), formula(`SUM(${rangeFor(weeklyMeta.discretionaryTotalRow)})`, STYLE.currency), text("Lifestyle and discretionary spending.")],
+      [text("Total expected income"), formula(`SUM(${rangeFor(weeklyMeta.receiptsTotalRow)})`, STYLE.currency), text("All scheduled money coming in during the planner period.")],
+      [text("Total essential spending"), formula(`SUM(${rangeFor(weeklyMeta.essentialTotalRow)})`, STYLE.currency), text("Bills, essentials and amounts set aside.")],
+      [text("Total lifestyle spending"), formula(`SUM(${rangeFor(weeklyMeta.discretionaryTotalRow)})`, STYLE.currency), text("Lifestyle and discretionary spending.")],
       [text("Total planned offset savings"), formula(lookup.offsetTransferRow ? `SUM(${rangeFor(lookup.offsetTransferRow)})` : "0", STYLE.currency), text("Only if an offset transfer was available in the plan.")],
       [text("Total additional debt repayments"), formula(lookup.debtTransferRow ? `SUM(${rangeFor(lookup.debtTransferRow)})` : "0", STYLE.currency), text("Additional debt transfers only.")],
       [text("Total investing"), formula(lookup.investmentTransferRow ? `SUM(${rangeFor(lookup.investmentTransferRow)})` : "0", STYLE.currency), text("Planned investment contributions.")],
@@ -440,7 +440,7 @@
   function corePropsXml(planner) {
     return `${XML_HEADER}
 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-  <dc:title>Financial Freedom Weekly Cashflow Planner</dc:title>
+  <dc:title>Financial Freedom Weekly Money Plan</dc:title>
   <dc:creator>Financial Freedom</dc:creator>
   <cp:lastModifiedBy>Financial Freedom</cp:lastModifiedBy>
   <dcterms:created xsi:type="dcterms:W3CDTF">${escapeXml(planner.generatedAtIso)}</dcterms:created>

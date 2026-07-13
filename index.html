@@ -147,21 +147,27 @@
             </div>
           </div>
 
-          <div class="steps-grid mt-12 grid gap-4 md:grid-cols-3">
+          <div class="steps-grid mt-12 grid gap-4 md:grid-cols-4">
             <article class="step-card clickable-step" role="button" tabindex="0" data-home-step="setup">
               <span>1</span>
-              <h3>Enter your position</h3>
-              <p>Add household income, spending, assets, loans, super and goals.</p>
+              <h3>Build Your Plan</h3>
+              <p>Enter income, expenses, assets, liabilities and goals.</p>
             </article>
-            <article class="step-card clickable-step" role="button" tabindex="0" data-home-step="decision">
+            <article class="step-card clickable-step" role="button" tabindex="0" data-home-step="forecast">
               <span>2</span>
-              <h3>Test decisions</h3>
-              <p>Compare extra super, ETF investing, offset and mortgage options.</p>
+              <h3>See Your Future</h3>
+              <p>View forecasts, financial milestones and projected wealth growth.</p>
             </article>
-            <article class="step-card clickable-step" role="button" tabindex="0" data-home-step="dashboard">
+            <article class="step-card clickable-step" role="button" tabindex="0" data-home-step="reports">
               <span>3</span>
-              <h3>See your next milestone</h3>
-              <p>Track investment progress, current stage and long-term financial independence.</p>
+              <h3>Review Your Strategy</h3>
+              <p>Review reports, recommendations and saved scenario comparisons.</p>
+            </article>
+            <article class="step-card clickable-step step-card-featured" role="button" tabindex="0" data-home-step="weeklyplan">
+              <span>4</span>
+              <h3>Follow Your Weekly Plan</h3>
+              <p>Turn the strategy into weekly actions, record actual results and stay on track.</p>
+              <button class="btn btn-primary mt-4" type="button" data-home-step-button="weeklyplan">Open Weekly Money Plan</button>
             </article>
           </div>
         </section>
@@ -182,6 +188,7 @@
                 <button class="nav-button" type="button" data-view="forecast">Forecast</button>
                 <button class="nav-button" type="button" data-view="decision">Decision Engine</button>
                 <button class="nav-button" type="button" data-view="scenarios">Saved Scenarios</button>
+                <button class="nav-button" type="button" data-view="weeklyplan">Weekly Plan</button>
                 <button class="nav-button" type="button" data-view="reports">Reports</button>
               </div>
             </nav>
@@ -574,28 +581,19 @@
                 <div id="scenarioComparisonReport" class="card mt-6"></div>
               </section>
 
-              <section class="view-section hidden" data-view-panel="reports">
+              <section class="view-section hidden" data-view-panel="weeklyplan">
                 <div class="section-heading">
-                  <h2>Reports</h2>
-                  <p>Print or export the planning report for discussion. This is not financial advice.</p>
+                  <h2>Weekly Plan</h2>
+                  <p>Turn the financial strategy into simple weekly actions, record what happened and update the weeks ahead.</p>
                 </div>
-                <div class="report-toolbar card">
-                  <div>
-                    <span class="metric-label">Financial Reports</span>
-                    <h3>Financial Freedom Report</h3>
-                    <p>Generated from the current plan and saved scenarios.</p>
-                  </div>
-                  <button class="btn btn-primary" type="button" id="reportPrintButton">Print / Export</button>
-                </div>
+                <div id="weeklyPlanRoot"></div>
 
-                <div id="financialReportBody" class="report-document"></div>
-
-                <div class="planner-export-panel card mt-6">
+                <div class="planner-export-panel card mt-6 hidden" id="weeklyPlanExportPrint">
                   <div class="card-heading">
                     <div>
-                      <span class="metric-label">Action Planner</span>
-                      <h3>Weekly Cashflow Planner</h3>
-                      <span>Turn your completed financial plan into a practical weekly cashflow schedule. The planner uses your existing information to show expected income, bills, transfers, investing and projected weekly balances.</span>
+                      <span class="metric-label">Export and Print</span>
+                      <h3>Weekly Plan Downloads</h3>
+                      <span>Download the detailed workbook or print a simple PDF version when you want an offline copy.</span>
                     </div>
                   </div>
                   <div class="planner-setup-grid mt-4">
@@ -619,14 +617,34 @@
                     </label>
                   </div>
                   <div class="planner-actions mt-4">
-                    <button class="btn btn-primary" type="button" id="plannerGenerateButton">Generate Weekly Cashflow Planner</button>
-                    <button class="btn" type="button" id="plannerRegenerateButton">Regenerate Planner</button>
+                    <button class="btn btn-primary" type="button" id="plannerGenerateButton">Generate Weekly Plan Export</button>
+                    <button class="btn" type="button" id="plannerRegenerateButton">Regenerate Export</button>
                     <button class="btn" type="button" id="plannerDownloadExcelButton" disabled>Download Excel Planner</button>
                     <button class="btn" type="button" id="plannerDownloadPdfButton" disabled>Download / Print PDF Planner</button>
+                    <button class="btn" type="button" id="weeklyPlanBackupExportButton">Export Weekly Plan Backup</button>
+                    <button class="btn" type="button" id="weeklyPlanBackupImportButton">Import Weekly Plan Backup</button>
                   </div>
                   <div id="plannerWarning" class="planner-warning hidden mt-4" role="status" aria-live="polite"></div>
                   <div id="weeklyPlannerPreview" class="weekly-planner-preview mt-4"></div>
                 </div>
+                <input class="hidden" id="weeklyPlanImportInput" type="file" accept="application/json,.json">
+              </section>
+
+              <section class="view-section hidden" data-view-panel="reports">
+                <div class="section-heading">
+                  <h2>Reports</h2>
+                  <p>Print or export the planning report for discussion. This is not financial advice.</p>
+                </div>
+                <div class="report-toolbar card">
+                  <div>
+                    <span class="metric-label">Financial Reports</span>
+                    <h3>Financial Freedom Report</h3>
+                    <p>Generated from the current plan and saved scenarios.</p>
+                  </div>
+                  <button class="btn btn-primary" type="button" id="reportPrintButton">Print / Export</button>
+                </div>
+
+                <div id="financialReportBody" class="report-document"></div>
 
                 <div class="card mt-6 report-section report-editor-only">
                   <div class="card-heading">
@@ -650,6 +668,7 @@
 
     <script src="v2-data.js"></script>
     <script src="calculator.js"></script>
+    <script src="weekly-plan.js"></script>
     <script src="weekly-planner-export.js"></script>
     <script src="app.js"></script>
   </body>
