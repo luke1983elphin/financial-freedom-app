@@ -7,6 +7,8 @@
     monthly: "Monthly",
     quarterly: "Quarterly",
     annually: "Annually",
+    oneOff: "One-off",
+    weeklyProvision: "Weekly provision",
   };
   const essentialExpenseCategories = new Set([
     "living",
@@ -37,10 +39,11 @@
 
   function annualize(amount, frequency = "annually") {
     const value = toNumber(amount);
-    if (frequency === "weekly") return value * 52;
+    if (frequency === "weekly" || frequency === "weeklyProvision") return value * 52;
     if (frequency === "fortnightly") return value * 26;
     if (frequency === "monthly") return value * 12;
     if (frequency === "quarterly") return value * 4;
+    if (frequency === "oneOff") return value;
     return value;
   }
 
@@ -66,6 +69,13 @@
     const copy = new Date(date);
     copy.setMonth(copy.getMonth() + months);
     return copy;
+  }
+
+  function addMonthsClamped(date, months, anchorDay = date.getDate()) {
+    const target = new Date(date.getFullYear(), date.getMonth() + months, 1);
+    const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+    target.setDate(Math.min(anchorDay, lastDay));
+    return target;
   }
 
   function nextMondayIso(today = new Date()) {
@@ -140,6 +150,9 @@
       showInAppReminders: existing.showInAppReminders !== false,
       payDates: existing.payDates && typeof existing.payDates === "object" ? { ...existing.payDates } : {},
       billDates: existing.billDates && typeof existing.billDates === "object" ? { ...existing.billDates } : {},
+      timingItems: Array.isArray(existing.timingItems) ? existing.timingItems.map(normaliseTimingItem) : [],
+      oneOffItems: Array.isArray(existing.oneOffItems) ? existing.oneOffItems.map(normaliseTimingItem) : [],
+      occurrenceOverrides: Array.isArray(existing.occurrenceOverrides) ? existing.occurrenceOverrides.map(normaliseOccurrenceOverride).filter(Boolean) : [],
       notes: existing.notes || "",
       sourcePlanUpdatedAt: existing.sourcePlanUpdatedAt || "",
     };
@@ -160,22 +173,231 @@
     return Math.max(0, (toNumber(result.annualOtherRegularExpenses) || 0) / 52);
   }
 
+  function occurrenceCount(frequency) {
+    if (frequency === "weekly" || frequency === "weeklyProvision") return 52;
+    if (frequency === "fortnightly") return 26;
+    if (frequency === "monthly") return 12;
+    if (frequency === "quarterly") return 4;
+    return 1;
+  }
+
+  function amountFromAnnual(annualAmount, frequency) {
+    return roundMoney(toNumber(annualAmount) / occurrenceCount(frequency || "annually"));
+  }
+
+  function firstDateFor(settings, id, fallback) {
+    return settings.payDates?.[id] || settings.billDates?.[id] || fallback || settings.startDate;
+  }
+
+  function normaliseType(value, fallback = "bill") {
+    if (["money-in", "bill", "provision", "transfer"].includes(value)) return value;
+    return fallback;
+  }
+
+  function normaliseFrequency(value, fallback = "weekly") {
+    if (["weekly", "fortnightly", "monthly", "quarterly", "annually", "oneOff", "weeklyProvision"].includes(value)) return value;
+    return fallback;
+  }
+
+  function normaliseTimingItem(item = {}) {
+    const type = normaliseType(item.type, "bill");
+    const frequency = normaliseFrequency(item.frequency, type === "provision" ? "weeklyProvision" : "weekly");
+    return {
+      id: String(item.id || `timing-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`),
+      sourceId: String(item.sourceId || item.id || ""),
+      description: String(item.description || item.name || "Cashflow item"),
+      amount: roundMoney(item.amount),
+      frequency,
+      firstDate: item.firstDate || item.date || "",
+      endDate: item.endDate || "",
+      type,
+      transferType: item.transferType || "",
+      treatment: item.treatment || (type === "provision" || frequency === "weeklyProvision" ? "set-aside" : "pay-on-date"),
+      active: item.active !== false,
+      note: item.note || "",
+      estimated: Boolean(item.estimated),
+      isNetPay: Boolean(item.isNetPay),
+    };
+  }
+
+  function normaliseOccurrenceOverride(override = {}) {
+    if (!override.itemId || !override.occurrenceDate) return null;
+    return {
+      itemId: String(override.itemId),
+      occurrenceDate: override.occurrenceDate,
+      amount: override.amount === undefined ? undefined : roundMoney(override.amount),
+      date: override.date || "",
+      active: override.active !== false,
+      note: override.note || "",
+    };
+  }
+
+  function estimatedNetIncomeAnnuals(plan = {}, result = {}) {
+    const person1Annual = toNumber(result.person1AnnualIncome ?? annualize(plan.income?.person1Income, plan.income?.person1Frequency));
+    const person2Annual = toNumber(result.person2AnnualIncome ?? annualize(plan.income?.person2Income, plan.income?.person2Frequency));
+    const otherAnnual = toNumber(result.otherAnnualIncome ?? annualize(plan.income?.otherIncome, plan.income?.otherIncomeFrequency));
+    const gross = toNumber(result.annualGrossIncome) || person1Annual + person2Annual + otherAnnual;
+    const net = toNumber(result.netIncomeAfterTaxHelp);
+    let deductions = Math.max(0, gross - (net || gross));
+    const employmentGross = person1Annual + person2Annual;
+    let person1Net = person1Annual;
+    let person2Net = person2Annual;
+    let otherNet = otherAnnual;
+    if (employmentGross > 0 && deductions > 0) {
+      const employmentDeduction = Math.min(deductions, employmentGross);
+      person1Net = Math.max(0, roundMoney(person1Annual - employmentDeduction * (person1Annual / employmentGross)));
+      person2Net = Math.max(0, roundMoney(person2Annual - employmentDeduction * (person2Annual / employmentGross)));
+      deductions = roundMoney(deductions - employmentDeduction);
+    }
+    if (otherNet > 0 && deductions > 0) otherNet = Math.max(0, roundMoney(otherNet - deductions));
+    return { person1Annual, person2Annual, otherAnnual, person1Net, person2Net, otherNet };
+  }
+
+  function defaultIncomeName(plan, key, fallback) {
+    const name = key === "person1"
+      ? (plan.income?.person1IncomeName || plan.personal?.person1Name && `${plan.personal.person1Name} salary`)
+      : key === "person2"
+        ? (plan.income?.person2IncomeName || plan.personal?.person2Name && `${plan.personal.person2Name} salary`)
+        : plan.income?.otherIncomeName;
+    return String(name || fallback).trim();
+  }
+
+  function buildDefaultTimingItems(plan = {}, result = {}, settings = {}) {
+    const items = [];
+    const netIncome = estimatedNetIncomeAnnuals(plan, result);
+    const addItem = (item) => {
+      const normalised = normaliseTimingItem(item);
+      if (normalised.amount > 0) items.push(normalised);
+    };
+    const p1Frequency = normaliseFrequency(plan.income?.person1Frequency, "fortnightly");
+    const p2Frequency = normaliseFrequency(plan.income?.person2Frequency, "fortnightly");
+    const otherFrequency = normaliseFrequency(plan.income?.otherIncomeFrequency, "annually");
+    addItem({
+      id: "timing-income-person-1",
+      sourceId: "income-person-1",
+      description: `${defaultIncomeName(plan, "person1", "Salary")} - estimated net pay`,
+      amount: amountFromAnnual(netIncome.person1Net, p1Frequency),
+      frequency: p1Frequency,
+      firstDate: firstDateFor(settings, "income-person-1", settings.startDate),
+      type: "money-in",
+      active: netIncome.person1Annual > 0,
+      isNetPay: true,
+      estimated: true,
+      note: "Estimated net amount after tax, Medicare and HELP based on the information entered in the plan.",
+    });
+    addItem({
+      id: "timing-income-person-2",
+      sourceId: "income-person-2",
+      description: `${defaultIncomeName(plan, "person2", "Partner salary")} - estimated net pay`,
+      amount: amountFromAnnual(netIncome.person2Net, p2Frequency),
+      frequency: p2Frequency,
+      firstDate: firstDateFor(settings, "income-person-2", settings.startDate),
+      type: "money-in",
+      active: netIncome.person2Annual > 0,
+      isNetPay: true,
+      estimated: true,
+      note: "Estimated net amount after tax, Medicare and HELP based on the information entered in the plan.",
+    });
+    addItem({
+      id: "timing-income-other",
+      sourceId: "income-other",
+      description: defaultIncomeName(plan, "other", "Other income"),
+      amount: amountFromAnnual(netIncome.otherNet, otherFrequency),
+      frequency: otherFrequency,
+      firstDate: firstDateFor(settings, "income-other", settings.startDate),
+      type: "money-in",
+      active: netIncome.otherAnnual > 0,
+      estimated: true,
+    });
+
+    (plan.expenseItems || []).forEach((item) => {
+      const frequency = normaliseFrequency(item.frequency, "monthly");
+      const exactDate = settings.billDates?.[item.id] || "";
+      const annualAmount = annualize(item.amount, frequency);
+      const useProvision = !exactDate && frequency === "annually";
+      addItem({
+        id: `timing-expense-${item.id}`,
+        sourceId: item.id,
+        description: useProvision ? `${displayName(item, "Annual cost")} provision` : `${displayName(item, "Expense")} bill`,
+        amount: useProvision ? amountFromAnnual(annualAmount, "weeklyProvision") : roundMoney(item.amount),
+        frequency: useProvision ? "weeklyProvision" : frequency,
+        firstDate: exactDate || settings.startDate,
+        type: useProvision ? "provision" : "bill",
+        treatment: useProvision ? "set-aside" : "pay-on-date",
+        active: true,
+        estimated: !exactDate,
+      });
+    });
+
+    (plan.liabilityItems || []).forEach((item) => {
+      if (item.type === "hecsHelp") return;
+      const frequency = normaliseFrequency(item.repaymentFrequency, "monthly");
+      addItem({
+        id: `timing-liability-${item.id}`,
+        sourceId: item.id,
+        description: `${displayName(item, "Debt")} repayment`,
+        amount: roundMoney(item.repayment),
+        frequency,
+        firstDate: firstDateFor(settings, item.id, settings.startDate),
+        type: "bill",
+        treatment: "pay-on-date",
+        active: true,
+      });
+    });
+
+    addItem({
+      id: "timing-transfer-investment",
+      sourceId: "annual-investing-target",
+      description: "Investment contribution",
+      amount: amountFromAnnual(settings.investmentTarget ?? plan.investing?.annualInvestingTarget, "weeklyProvision"),
+      frequency: "weeklyProvision",
+      firstDate: settings.startDate,
+      type: "transfer",
+      transferType: "investment",
+      active: true,
+    });
+    addItem({
+      id: "timing-transfer-super",
+      sourceId: "extra-super-target",
+      description: "Additional super contribution",
+      amount: amountFromAnnual(settings.extraSuperTarget ?? plan.investing?.extraSuperContributions, "weeklyProvision"),
+      frequency: "weeklyProvision",
+      firstDate: settings.startDate,
+      type: "transfer",
+      transferType: "extraSuper",
+      active: true,
+    });
+    addItem({
+      id: "timing-transfer-extra-debt",
+      sourceId: "extra-debt-target",
+      description: "Extra debt repayment",
+      amount: amountFromAnnual(settings.extraDebtRepaymentTarget, "weeklyProvision"),
+      frequency: "weeklyProvision",
+      firstDate: settings.startDate,
+      type: "transfer",
+      transferType: "extraDebt",
+      active: true,
+    });
+    return items;
+  }
+
   function displayName(options, fallback) {
     return String(options?.name || options?.label || fallback || "").trim();
   }
 
   function intervalForFrequency(frequency) {
-    if (frequency === "weekly") return { days: 7 };
+    if (frequency === "weekly" || frequency === "weeklyProvision") return { days: 7 };
     if (frequency === "fortnightly") return { days: 14 };
     if (frequency === "monthly") return { months: 1 };
     if (frequency === "quarterly") return { months: 3 };
     if (frequency === "annually") return { months: 12 };
+    if (frequency === "oneOff") return null;
     return null;
   }
 
-  function advanceDate(date, interval) {
+  function advanceDate(date, interval, anchorDay = date.getDate()) {
     if (interval?.days) return addDays(date, interval.days);
-    if (interval?.months) return addMonths(date, interval.months);
+    if (interval?.months) return addMonthsClamped(date, interval.months, anchorDay);
     return addDays(date, 7);
   }
 
@@ -186,33 +408,40 @@
     const plannerStart = startDate;
     const plannerEnd = addDays(plannerStart, weeks.length * 7);
     const interval = intervalForFrequency(frequency);
+    if (frequency === "oneOff") {
+      const date = dateFromIso(exactDateIso || options.firstDate || dateIso(plannerStart));
+      const index = weekIndexForDate(date, plannerStart, weeks.length);
+      if (index >= 0) values[index] = value;
+      return values;
+    }
     if (exactDateIso && interval) {
       let date = dateFromIso(exactDateIso);
+      const anchorDay = date.getDate();
       let guard = 0;
       while (date < plannerStart && guard < 160) {
-        date = advanceDate(date, interval);
+        date = advanceDate(date, interval, anchorDay);
         guard += 1;
       }
       while (date < plannerEnd && guard < 320) {
         const index = weekIndexForDate(date, plannerStart, weeks.length);
         if (index >= 0) values[index] = roundMoney(values[index] + value);
-        date = advanceDate(date, interval);
+        date = advanceDate(date, interval, anchorDay);
         guard += 1;
       }
       return values;
     }
-    if (frequency === "weekly") return values.map(() => value);
+    if (frequency === "weekly" || frequency === "weeklyProvision") return values.map(() => value);
     if (frequency === "fortnightly") return values.map((_, index) => (index % 2 === 0 ? value : 0));
     if (frequency === "monthly") {
       for (let month = 0; month < Math.ceil(weeks.length / 4) + 1; month += 1) {
-        const index = weekIndexForDate(addMonths(plannerStart, month), plannerStart, weeks.length);
+        const index = weekIndexForDate(addMonthsClamped(plannerStart, month), plannerStart, weeks.length);
         if (index >= 0) values[index] = roundMoney(values[index] + value);
       }
       return values;
     }
     if (frequency === "quarterly") {
       for (let month = 0; month < Math.ceil(weeks.length / 4) + 3; month += 3) {
-        const index = weekIndexForDate(addMonths(plannerStart, month), plannerStart, weeks.length);
+        const index = weekIndexForDate(addMonthsClamped(plannerStart, month), plannerStart, weeks.length);
         if (index >= 0) values[index] = roundMoney(values[index] + value);
       }
       return values;
@@ -234,6 +463,8 @@
       frequency: item.frequency || "annually",
       frequencyLabel: item.frequencyLabel || frequencyLabels[item.frequency] || "Estimate",
       timing: item.timing || "estimated",
+      type: item.type || "",
+      transferType: item.transferType || "",
       values,
     });
   }
@@ -242,63 +473,64 @@
     return roundMoney((items || []).reduce((total, item) => total + toNumber(item.values?.[index]), 0));
   }
 
-  function buildScheduleItems(plan, settings, weeks) {
+  function applyOccurrenceOverrides(values, item, weeks, startDate, overrides = []) {
+    const updated = [...values];
+    overrides
+      .filter((override) => override.itemId === item.id)
+      .forEach((override) => {
+        const originalDate = dateFromIso(override.occurrenceDate);
+        const originalIndex = weekIndexForDate(originalDate, startDate, weeks.length);
+        if (originalIndex >= 0) updated[originalIndex] = 0;
+        if (override.active === false) return;
+        const newDate = dateFromIso(override.date || override.occurrenceDate);
+        const newIndex = weekIndexForDate(newDate, startDate, weeks.length);
+        if (newIndex >= 0) updated[newIndex] = roundMoney(updated[newIndex] + (override.amount ?? item.amount));
+      });
+    return updated;
+  }
+
+  function scheduleTimingItem(item, weeks, startDate, overrides) {
+    if (!item.active) return Array.from({ length: weeks.length }, () => 0);
+    const values = scheduleRecurring(item.amount, item.frequency, weeks, startDate, item.firstDate, { firstDate: item.firstDate });
+    const endDate = item.endDate ? dateFromIso(item.endDate) : null;
+    const trimmed = endDate
+      ? values.map((value, index) => dateFromIso(weeks[index].startDate) > endDate ? 0 : value)
+      : values;
+    return applyOccurrenceOverrides(trimmed, item, weeks, startDate, overrides);
+  }
+
+  function buildScheduleItems(plan, result, settings, weeks) {
     const startDate = dateFromIso(settings.startDate);
     const incomeItems = [];
     const billItems = [];
-    const setAsideItems = [];
+    const provisionItems = [];
     const discretionaryItems = [];
     const requiredDebtItems = [];
-    const incomeList = Array.isArray(plan.incomeItems) ? plan.incomeItems : [];
-    const expenseList = Array.isArray(plan.expenseItems) ? plan.expenseItems : [];
-    const liabilityList = Array.isArray(plan.liabilityItems) ? plan.liabilityItems : [];
+    const transferItems = [];
+    const timingItems = (settings.timingItems && settings.timingItems.length ? settings.timingItems : buildDefaultTimingItems(plan, result, settings)).map(normaliseTimingItem);
+    const oneOffItems = (settings.oneOffItems || []).map(normaliseTimingItem);
+    const allItems = [...timingItems, ...oneOffItems];
 
-    incomeList.forEach((item, index) => {
-      const frequency = item.frequency || "annually";
-      const exactDate = settings.payDates?.[item.id] || "";
-      const values = scheduleRecurring(item.amount, frequency, weeks, startDate, exactDate);
-      addScheduledItem(incomeItems, {
+    allItems.forEach((item) => {
+      const values = scheduleTimingItem(item, weeks, startDate, settings.occurrenceOverrides || []);
+      const scheduled = {
         id: item.id,
-        name: displayName(item, `Income ${index + 1}`),
-        frequency,
-        frequencyLabel: exactDate ? `${frequencyLabels[frequency] || "Income"} from pay date` : frequencyLabels[frequency],
-        timing: exactDate ? "dated" : frequency === "annually" ? "weekly-estimate" : "estimated",
+        name: item.description,
+        frequency: item.frequency,
+        frequencyLabel: `${frequencyLabels[item.frequency] || item.frequency}${item.isNetPay ? " - estimated net pay" : ""}`,
+        timing: item.treatment === "set-aside" || item.type === "provision" ? "set-aside" : item.estimated ? "estimated" : "dated",
+        type: item.type,
+        transferType: item.transferType,
         values,
-      });
+      };
+      if (item.type === "money-in") addScheduledItem(incomeItems, scheduled);
+      else if (item.type === "provision") addScheduledItem(provisionItems, scheduled);
+      else if (item.type === "transfer") addScheduledItem(transferItems, scheduled);
+      else if (essentialExpenseCategories.has(item.category)) addScheduledItem(billItems, scheduled);
+      else addScheduledItem(billItems, scheduled);
     });
 
-    expenseList.forEach((item) => {
-      const frequency = item.frequency || "annually";
-      const exactDate = settings.billDates?.[item.id] || "";
-      const isEssential = essentialExpenseCategories.has(item.category);
-      const useSetAside = !exactDate && frequency === "annually";
-      const values = scheduleRecurring(item.amount, frequency, weeks, startDate, exactDate, { assignAnnualToFirstWeek: false });
-      addScheduledItem(useSetAside ? setAsideItems : isEssential ? billItems : discretionaryItems, {
-        id: item.id,
-        name: useSetAside ? `${displayName(item, "Annual cost")} set aside` : displayName(item, "Expense"),
-        frequency,
-        frequencyLabel: exactDate ? `${frequencyLabels[frequency]} from bill date` : useSetAside ? `${frequencyLabels[frequency]} - weekly amount set aside` : `${frequencyLabels[frequency]} estimate`,
-        timing: exactDate ? "dated" : useSetAside ? "set-aside" : "estimated",
-        values,
-      });
-    });
-
-    liabilityList.forEach((item) => {
-      if (item.type === "hecsHelp") return;
-      const frequency = item.repaymentFrequency || "monthly";
-      const exactDate = settings.billDates?.[item.id] || "";
-      const values = scheduleRecurring(item.repayment, frequency, weeks, startDate, exactDate);
-      addScheduledItem(requiredDebtItems, {
-        id: item.id,
-        name: `${displayName(item, "Debt")} repayment`,
-        frequency,
-        frequencyLabel: exactDate ? `${frequencyLabels[frequency]} from repayment date` : `${frequencyLabels[frequency]} estimate`,
-        timing: exactDate ? "dated" : "estimated",
-        values,
-      });
-    });
-
-    return { incomeItems, billItems, setAsideItems, discretionaryItems, requiredDebtItems };
+    return { incomeItems, billItems, provisionItems, setAsideItems: provisionItems, discretionaryItems, requiredDebtItems, transferItems, timingItems, oneOffItems };
   }
 
   function desiredTransfers(settings, weekIndex, remainingWeeks, carryForward) {
@@ -447,11 +679,11 @@
     const now = new Date().toISOString();
     const settings = defaultSettings(plan, result, existingPlan?.settings ? { ...existingPlan.settings, ...options } : options);
     const weeksBase = createWeeks(settings.startDate, settings.durationWeeks);
-    const schedule = buildScheduleItems(plan, settings, weeksBase);
+    if (!settings.timingItems.length) settings.timingItems = buildDefaultTimingItems(plan, result, settings);
+    const schedule = buildScheduleItems(plan, result, settings, weeksBase);
     const completed = completedWeekMap(existingPlan);
     const actuals = actualWeekMap(existingPlan);
     const weeks = [];
-    const carryForward = { investment: 0, extraSuper: 0, extraDebt: 0 };
     let opening = roundMoney(settings.openingBankBalance);
     const allocationSettings = normaliseAllocationSettings(settings.allocationSettings);
 
@@ -464,40 +696,29 @@
       }
       const income = itemValueAt(schedule.incomeItems, index);
       const billsDue = roundMoney(itemValueAt(schedule.billItems, index) + itemValueAt(schedule.requiredDebtItems, index));
-      const amountSetAside = itemValueAt(schedule.setAsideItems, index);
-      const essentialCosts = roundMoney(billsDue + amountSetAside);
+      const amountSetAside = itemValueAt(schedule.provisionItems, index);
+      const essentialCosts = roundMoney(billsDue);
       const discretionaryFromItems = itemValueAt(schedule.discretionaryItems, index);
-      const discretionaryAllowance = roundMoney(settings.weeklyDiscretionaryLimit || discretionaryFromItems);
-      const remainingWeeks = Math.max(1, settings.durationWeeks - index);
-      const desired = desiredTransfers(settings, index, remainingWeeks, carryForward);
-      const availableAfterBuffer = roundMoney(opening + income - essentialCosts - discretionaryAllowance - settings.minimumCashBuffer);
-      const allocated = allocateOptionalTransfers(availableAfterBuffer, desired, allocationSettings);
-      const totalTransfers = roundMoney(allocated.investment + allocated.extraSuper + allocated.extraDebt);
-      const closingBalance = roundMoney(opening + income - essentialCosts - discretionaryAllowance - totalTransfers);
-      const reducedInvestment = desired.investment > allocated.investment;
-      const reducedSuper = desired.extraSuper > allocated.extraSuper;
-      const reducedDebt = desired.extraDebt > allocated.extraDebt;
+      const discretionaryAllowance = roundMoney(discretionaryFromItems || 0);
+      const transferTotal = (transferType) => roundMoney((schedule.transferItems || [])
+        .filter((item) => item.transferType === transferType)
+        .reduce((total, item) => total + toNumber(item.values?.[index]), 0));
+      const investment = transferTotal("investment");
+      const extraSuper = transferTotal("extraSuper");
+      const extraDebt = transferTotal("extraDebt");
+      const offset = transferTotal("offset");
+      const otherTransfers = roundMoney((schedule.transferItems || [])
+        .filter((item) => !["investment", "extraSuper", "extraDebt", "offset"].includes(item.transferType))
+        .reduce((total, item) => total + toNumber(item.values?.[index]), 0));
+      const totalTransfers = roundMoney(investment + extraSuper + extraDebt + offset + otherTransfers);
+      const closingBalance = roundMoney(opening + income - essentialCosts - amountSetAside - discretionaryAllowance - totalTransfers);
       let adjustmentReason = "";
-      if (reducedInvestment || reducedSuper || reducedDebt) {
-        const parts = [];
-        if (reducedInvestment) parts.push(`investment reduced from ${roundMoney(desired.investment)} to ${roundMoney(allocated.investment)}`);
-        if (reducedDebt) parts.push(`extra debt repayment reduced from ${roundMoney(desired.extraDebt)} to ${roundMoney(allocated.extraDebt)}`);
-        if (reducedSuper) parts.push(`extra super reduced from ${roundMoney(desired.extraSuper)} to ${roundMoney(allocated.extraSuper)}`);
-        adjustmentReason = `Your optional transfers were adjusted so the plan protects the minimum cash buffer where possible: ${parts.join(", ")}.`;
-      }
-      if (opening + income - essentialCosts < settings.minimumCashBuffer) {
-        adjustmentReason = "Essential payments are expected to reduce your bank balance below the minimum buffer this week. Review upcoming bills or add funds before they are due.";
+      if (closingBalance < settings.minimumCashBuffer) {
+        adjustmentReason = closingBalance < 0
+          ? "Warning: this schedule creates a negative projected bank balance this week. Review timing, bills, income or planned transfers before relying on the plan."
+          : "Warning: this schedule falls below the minimum cash buffer this week. Review timing, bills, income or planned transfers.";
       }
       const status = weekStatus(closingBalance, settings.minimumCashBuffer, adjustmentReason);
-      if (settings.missedTransferTreatment === "carry-forward" || settings.missedTransferTreatment === "spread") {
-        carryForward.investment = roundMoney(Math.max(0, desired.investment - allocated.investment));
-        carryForward.extraSuper = roundMoney(Math.max(0, desired.extraSuper - allocated.extraSuper));
-        carryForward.extraDebt = roundMoney(Math.max(0, desired.extraDebt - allocated.extraDebt));
-      } else {
-        carryForward.investment = 0;
-        carryForward.extraSuper = 0;
-        carryForward.extraDebt = 0;
-      }
       const week = {
         ...baseWeek,
         isCompleted: false,
@@ -507,10 +728,13 @@
           essentialCosts,
           billsDue,
           amountSetAside,
+          provisions: amountSetAside,
           discretionaryAllowance,
-          investment: allocated.investment,
-          extraSuper: allocated.extraSuper,
-          extraDebtRepayment: allocated.extraDebt,
+          investment,
+          extraSuper,
+          extraDebtRepayment: extraDebt,
+          offsetTransfer: offset,
+          otherTransfers,
           closingBalance,
           status: status.status,
           statusLabel: status.label,
@@ -520,8 +744,10 @@
         detail: {
           incomeItems: valuesForWeek(schedule.incomeItems, index),
           billItems: valuesForWeek([...schedule.billItems, ...schedule.requiredDebtItems], index),
-          setAsideItems: valuesForWeek(schedule.setAsideItems, index),
+          provisionItems: valuesForWeek(schedule.provisionItems, index),
+          setAsideItems: valuesForWeek(schedule.provisionItems, index),
           discretionaryItems: valuesForWeek(schedule.discretionaryItems, index),
+          transferItems: valuesForWeek(schedule.transferItems, index),
         },
       };
       if (actuals.has(baseWeek.weekNumber)) week.actual = actuals.get(baseWeek.weekNumber);
@@ -560,7 +786,7 @@
 
   function valuesForWeek(items, index) {
     return (items || [])
-      .map((item) => ({ name: item.name, amount: roundMoney(item.values?.[index] || 0), frequencyLabel: item.frequencyLabel, timing: item.timing }))
+      .map((item) => ({ id: item.id, name: item.name, amount: roundMoney(item.values?.[index] || 0), frequencyLabel: item.frequencyLabel, timing: item.timing, type: item.type, transferType: item.transferType }))
       .filter((item) => item.amount > 0);
   }
 
@@ -578,10 +804,13 @@
         essentialCosts: roundMoney(week.planned?.essentialCosts),
         billsDue: roundMoney(week.planned?.billsDue),
         amountSetAside: roundMoney(week.planned?.amountSetAside),
+        provisions: roundMoney(week.planned?.provisions ?? week.planned?.amountSetAside),
         discretionaryAllowance: roundMoney(week.planned?.discretionaryAllowance),
         investment: Math.max(0, roundMoney(week.planned?.investment)),
         extraSuper: Math.max(0, roundMoney(week.planned?.extraSuper)),
         extraDebtRepayment: Math.max(0, roundMoney(week.planned?.extraDebtRepayment)),
+        offsetTransfer: Math.max(0, roundMoney(week.planned?.offsetTransfer)),
+        otherTransfers: Math.max(0, roundMoney(week.planned?.otherTransfers)),
         closingBalance: roundMoney(week.planned?.closingBalance),
         status: week.planned?.status || "on-track",
         statusLabel: week.planned?.statusLabel || "",
@@ -600,7 +829,7 @@
         completedAt: week.actual.completedAt || "",
         checks: week.actual.checks && typeof week.actual.checks === "object" ? { ...week.actual.checks } : {},
       } : undefined,
-      detail: week.detail || { incomeItems: [], billItems: [], setAsideItems: [], discretionaryItems: [] },
+      detail: week.detail || { incomeItems: [], billItems: [], provisionItems: [], setAsideItems: [], discretionaryItems: [], transferItems: [] },
     })) : [];
     return {
       version: WEEKLY_PLAN_VERSION,
@@ -617,7 +846,12 @@
       allocationSettings: normaliseAllocationSettings(input.allocationSettings || settings.allocationSettings),
       weeks,
       progress: input.progress && typeof input.progress === "object" ? input.progress : buildProgress(weeks, settings),
-      settings,
+      settings: {
+        ...settings,
+        timingItems: Array.isArray(input.settings?.timingItems) ? input.settings.timingItems.map(normaliseTimingItem) : settings.timingItems,
+        oneOffItems: Array.isArray(input.settings?.oneOffItems) ? input.settings.oneOffItems.map(normaliseTimingItem) : settings.oneOffItems,
+        occurrenceOverrides: Array.isArray(input.settings?.occurrenceOverrides) ? input.settings.occurrenceOverrides.map(normaliseOccurrenceOverride).filter(Boolean) : settings.occurrenceOverrides,
+      },
       sourceSnapshot: input.sourceSnapshot || {},
     };
   }
@@ -662,6 +896,76 @@
     return createFromPlan(plan, result, settings, migrated);
   }
 
+  function updateTimingItem(plan, result, weeklyPlan, itemId, patch = {}) {
+    const migrated = migrate(weeklyPlan);
+    if (!migrated) return null;
+    const settings = { ...(migrated.settings || {}) };
+    const timingItems = (settings.timingItems || []).map(normaliseTimingItem);
+    const index = timingItems.findIndex((item) => item.id === itemId);
+    if (index >= 0) timingItems[index] = normaliseTimingItem({ ...timingItems[index], ...patch, id: timingItems[index].id });
+    settings.timingItems = timingItems;
+    return createFromPlan(plan, result, settings, migrated);
+  }
+
+  function addOneOffItem(plan, result, weeklyPlan, item = {}) {
+    const migrated = migrate(weeklyPlan);
+    if (!migrated) return null;
+    const settings = { ...(migrated.settings || {}) };
+    const oneOffItems = (settings.oneOffItems || []).map(normaliseTimingItem);
+    oneOffItems.push(normaliseTimingItem({
+      id: item.id || `one-off-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      description: item.description || "One-off item",
+      amount: item.amount,
+      frequency: "oneOff",
+      firstDate: item.date || item.firstDate || settings.startDate,
+      type: normaliseType(item.type, "bill"),
+      transferType: item.transferType || "",
+      treatment: "pay-on-date",
+      active: item.active !== false,
+      note: item.note || "",
+    }));
+    settings.oneOffItems = oneOffItems;
+    return createFromPlan(plan, result, settings, migrated);
+  }
+
+  function applyOccurrenceEdit(plan, result, weeklyPlan, itemId, occurrenceDate, patch = {}, scope = "this") {
+    const migrated = migrate(weeklyPlan);
+    if (!migrated) return null;
+    const settings = { ...(migrated.settings || {}) };
+    const timingItems = (settings.timingItems || []).map(normaliseTimingItem);
+    const index = timingItems.findIndex((item) => item.id === itemId);
+    if (index < 0) return migrated;
+    const item = timingItems[index];
+    if (scope === "all") {
+      timingItems[index] = normaliseTimingItem({ ...item, ...patch, id: item.id });
+    } else if (scope === "future") {
+      const effectiveDate = patch.date || occurrenceDate;
+      const dayBefore = dateIso(addDays(dateFromIso(effectiveDate), -1));
+      timingItems[index] = normaliseTimingItem({ ...item, endDate: dayBefore, id: item.id });
+      timingItems.push(normaliseTimingItem({
+        ...item,
+        ...patch,
+        id: `${item.id}-future-${Date.now()}`,
+        sourceId: item.sourceId,
+        firstDate: effectiveDate,
+        endDate: "",
+      }));
+    } else {
+      const overrides = (settings.occurrenceOverrides || []).map(normaliseOccurrenceOverride).filter(Boolean);
+      overrides.push(normaliseOccurrenceOverride({
+        itemId,
+        occurrenceDate,
+        amount: patch.amount,
+        date: patch.date,
+        active: patch.active !== false,
+        note: patch.note || "",
+      }));
+      settings.occurrenceOverrides = overrides;
+    }
+    settings.timingItems = timingItems;
+    return createFromPlan(plan, result, settings, migrated);
+  }
+
   function exportPayload(weeklyPlan) {
     return {
       app: "Financial Freedom",
@@ -690,6 +994,9 @@
     updateActual,
     completeWeek,
     updateSettings,
+    updateTimingItem,
+    addOneOffItem,
+    applyOccurrenceEdit,
     migrate,
     exportPayload,
     importPayload,

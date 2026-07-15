@@ -129,15 +129,15 @@
                 <strong id="previewMonthlySurplus">$0</strong>
               </article>
               <article class="preview-card">
-                <span>Stage</span>
-                <strong id="previewStage">Foundation</strong>
+                <span>Current Stage</span>
+                <strong id="previewStage">Building the Foundation</strong>
               </article>
               <article class="preview-card">
-                <span>Progress</span>
+                <span>Target Lifestyle Funded</span>
                 <strong id="previewScore">0%</strong>
               </article>
               <article class="preview-card">
-                <span>Next Milestone</span>
+                <span>Next Stage Focus</span>
                 <strong id="previewNextMilestone">Set target</strong>
               </article>
               <article class="preview-card preview-card-wide">
@@ -274,7 +274,7 @@
                     <p id="dashboardSubtitle" class="mt-3 text-slate-600">Your progress dashboard will update as you enter data.</p>
                   </div>
                   <div class="score-ring">
-                    <span>Freedom</span>
+                    <span>Lifestyle funded</span>
                     <strong id="heroScore">0%</strong>
                   </div>
                 </div>
@@ -282,15 +282,15 @@
                 <div class="freedom-progress-section mt-6">
                   <article class="freedom-stage-card">
                     <div>
-                      <span class="metric-label">Current Financial Freedom Stage</span>
-                      <strong id="freedomStageLabel">Foundation</strong>
+                      <span class="metric-label">Your current financial stage</span>
+                      <strong id="freedomStageLabel">Building the Foundation</strong>
                     </div>
                     <p id="freedomStageText">Enter your plan to see your current financial freedom stage.</p>
                     <div class="progress-track progress-track-large" aria-hidden="true"><span id="freedomProgressBar"></span></div>
                     <p id="freedomPassiveText" class="progress-caption">Your investments currently fund 0% of your annual lifestyle.</p>
                   </article>
                   <article class="next-milestone-card">
-                    <span class="metric-label">Next Milestone</span>
+                    <span class="metric-label">Progress toward next stage</span>
                     <strong id="nextMilestoneAmount">Set your target spending</strong>
                     <p id="nextMilestoneText">Add your annual lifestyle target to calculate the next stage.</p>
                   </article>
@@ -592,8 +592,8 @@
                   <div class="card-heading">
                     <div>
                       <span class="metric-label">Export and Print</span>
-                      <h3>Weekly Plan Downloads</h3>
-                      <span>Download the detailed workbook or print a simple PDF version when you want an offline copy.</span>
+                      <h3>Step 3 — Download or save</h3>
+                      <span>Download the editable planner, print a concise Weekly Plan or save a backup for later.</span>
                     </div>
                   </div>
                   <div class="planner-setup-grid mt-4">
@@ -617,13 +617,19 @@
                     </label>
                   </div>
                   <div class="planner-actions mt-4">
-                    <button class="btn btn-primary" type="button" id="plannerGenerateButton">Generate Weekly Plan Export</button>
-                    <button class="btn" type="button" id="plannerRegenerateButton">Regenerate Export</button>
-                    <button class="btn" type="button" id="plannerDownloadExcelButton" disabled>Download Excel Planner</button>
-                    <button class="btn" type="button" id="plannerDownloadPdfButton" disabled>Download / Print PDF Planner</button>
-                    <button class="btn" type="button" id="weeklyPlanBackupExportButton">Export Weekly Plan Backup</button>
-                    <button class="btn" type="button" id="weeklyPlanBackupImportButton">Import Weekly Plan Backup</button>
+                    <button class="btn btn-primary" type="button" id="plannerGenerateButton">Generate Weekly Plan</button>
+                    <button class="btn" type="button" id="plannerDownloadExcelButton" disabled>Download Excel</button>
+                    <button class="btn" type="button" id="plannerDownloadPdfButton" disabled>Print Weekly Plan</button>
                   </div>
+                  <details class="weekly-setup-details mt-4">
+                    <summary>More options</summary>
+                    <p class="weekly-muted mt-2">Save a backup of your editable weekly plan so it can be restored later or moved to another device.</p>
+                    <div class="planner-actions mt-3">
+                      <button class="btn" type="button" id="plannerRegenerateButton">Regenerate files</button>
+                      <button class="btn" type="button" id="weeklyPlanBackupExportButton">Export backup</button>
+                      <button class="btn" type="button" id="weeklyPlanBackupImportButton">Import backup</button>
+                    </div>
+                  </details>
                   <div id="plannerWarning" class="planner-warning hidden mt-4" role="status" aria-live="polite"></div>
                   <div id="weeklyPlannerPreview" class="weekly-planner-preview mt-4"></div>
                 </div>

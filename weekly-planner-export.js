@@ -145,6 +145,7 @@
       [blank(), blank(), blank()],
       [text("How to use this planner", STYLE.section), blank(STYLE.section), blank(STYLE.section)],
       [text("This workbook converts your Financial Freedom plan into a practical weekly money plan. Review each week, complete the planned transfers and update the spreadsheet when your income or expenses change.", STYLE.note), blank(), blank()],
+      [text("Salary and wage rows are estimated net amounts after tax and applicable payroll deductions based on the plan information.", STYLE.note), blank(), blank()],
       [text("Weekly amounts set aside", STYLE.section), blank(STYLE.section), blank(STYLE.section)],
       [text("Where exact bill dates are not entered, the planner uses an estimated amount set aside instead of pretending the bill is paid on a specific date.", STYLE.note), blank(), blank()],
       [text("Key assumptions", STYLE.section), blank(STYLE.section), blank(STYLE.section)],
@@ -201,9 +202,10 @@
     }
 
     addSection("receipts", "Money coming in", planner.sections.receipts);
-    addSection("essential", "Bills and essentials", planner.sections.essential);
+    addSection("essential", "Bills and spending", planner.sections.essential);
+    addSection("provisions", "Provisions", planner.sections.provisions || []);
     addSection("discretionary", "Lifestyle spending", planner.sections.discretionary);
-    addSection("transfers", "Wealth transfers", planner.sections.transfers);
+    addSection("transfers", "Financial Freedom transfers", planner.sections.transfers);
 
     rows.push([text("Weekly balance", STYLE.section), blank(STYLE.section), ...weeks.map(() => blank(STYLE.section))]);
     const openingRow = rows.length + 1;
@@ -217,18 +219,20 @@
     const addReceiptsRow = rows.length + 1;
     rows.push([text("Add money coming in"), text("Calculated"), ...weeks.map((_, index) => formula(`${colName(index + 3)}${meta.receiptsTotalRow}`, STYLE.currency))]);
     const lessEssentialRow = rows.length + 1;
-    rows.push([text("Less bills and essentials"), text("Calculated"), ...weeks.map((_, index) => formula(`${colName(index + 3)}${meta.essentialTotalRow}`, STYLE.currency))]);
+    rows.push([text("Less bills and spending"), text("Calculated"), ...weeks.map((_, index) => formula(`${colName(index + 3)}${meta.essentialTotalRow}`, STYLE.currency))]);
     const lessDiscretionaryRow = rows.length + 1;
-    rows.push([text("Less lifestyle spending"), text("Calculated"), ...weeks.map((_, index) => formula(`${colName(index + 3)}${meta.discretionaryTotalRow}`, STYLE.currency))]);
+    rows.push([text("Less provisions"), text("Calculated"), ...weeks.map((_, index) => formula(`${colName(index + 3)}${meta.provisionsTotalRow}`, STYLE.currency))]);
     const lessTransfersRow = rows.length + 1;
-    rows.push([text("Less wealth transfers"), text("Calculated"), ...weeks.map((_, index) => formula(`${colName(index + 3)}${meta.transfersTotalRow}`, STYLE.currency))]);
+    rows.push([text("Less lifestyle spending"), text("Calculated"), ...weeks.map((_, index) => formula(`${colName(index + 3)}${meta.discretionaryTotalRow}`, STYLE.currency))]);
+    const lessFreedomTransfersRow = rows.length + 1;
+    rows.push([text("Less Financial Freedom transfers"), text("Calculated"), ...weeks.map((_, index) => formula(`${colName(index + 3)}${meta.transfersTotalRow}`, STYLE.currency))]);
     const closingRow = rows.length + 1;
     rows.push([
       text("Expected closing everyday bank balance", STYLE.header),
       text("Calculated", STYLE.header),
       ...weeks.map((_, index) => {
         const col = colName(index + 3);
-        return formula(`${col}${openingRow}+${col}${addReceiptsRow}-${col}${lessEssentialRow}-${col}${lessDiscretionaryRow}-${col}${lessTransfersRow}`, STYLE.totalCurrency);
+        return formula(`${col}${openingRow}+${col}${addReceiptsRow}-${col}${lessEssentialRow}-${col}${lessDiscretionaryRow}-${col}${lessTransfersRow}-${col}${lessFreedomTransfersRow}`, STYLE.totalCurrency);
       }),
     ]);
     meta.openingRow = openingRow;
@@ -237,6 +241,7 @@
     meta.lessEssentialRow = lessEssentialRow;
     meta.lessDiscretionaryRow = lessDiscretionaryRow;
     meta.lessTransfersRow = lessTransfersRow;
+    meta.lessFreedomTransfersRow = lessFreedomTransfersRow;
 
     const lastCol = colName(width);
     const conditionalFormatting = `<conditionalFormatting sqref="C${closingRow}:${lastCol}${closingRow}"><cfRule type="cellIs" dxfId="0" priority="1" operator="lessThan"><formula>0</formula></cfRule></conditionalFormatting>`;
@@ -258,9 +263,9 @@
       [
         text("Week", STYLE.header),
         text("Week commencing", STYLE.header),
-        text("Expected money in", STYLE.header),
-        text("Bills to pay", STYLE.header),
-        text("Amount to keep available", STYLE.header),
+        text("Estimated net money in", STYLE.header),
+        text("Bills and spending", STYLE.header),
+        text("Provisions", STYLE.header),
         text("Transfer to offset", STYLE.header),
         text("Invest", STYLE.header),
         text("Contribute to super", STYLE.header),
@@ -276,7 +281,7 @@
         text(shortDate(week.startDateIso), STYLE.date),
         number(week.receiptsTotal, STYLE.currency),
         number(week.essentialTotal + week.discretionaryTotal, STYLE.currency),
-        number(week.discretionaryTotal, STYLE.currency),
+        number(week.provisionsTotal || 0, STYLE.currency),
         number(week.offsetTransferTotal, STYLE.currency),
         number(week.investmentTransferTotal, STYLE.currency),
         number(week.superTransferTotal, STYLE.currency),

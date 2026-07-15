@@ -130,6 +130,10 @@
       title: "Spare Cashflow Allocation",
       body: "These amounts are deducted from available cashflow because you have chosen to allocate that spare cash toward wealth-building instead of leaving it as unused surplus.",
     },
+    financialStage: {
+      title: "Financial stages",
+      body: "The stage shows where your plan appears to sit today. Stage progress looks at practical steps such as positive cashflow, emergency savings, debt control and investment progress. Lifestyle funding is separate: it compares passive income or FI assets with your target annual lifestyle cost.",
+    },
     investmentReturn: {
       title: "Investment Return",
       body: "This is the expected average yearly return on your investments before inflation. It helps estimate how your portfolio may grow over time.",
@@ -227,32 +231,26 @@
     {
       min: 0,
       nextAt: 25,
-      name: "Foundation",
-      explanation: "Low emergency savings or high debt.",
+      name: "Building the Foundation",
+      explanation: "Establishing positive cashflow, building emergency savings and gaining control over debt.",
     },
     {
       min: 25,
-      nextAt: 50,
-      name: "Building Momentum",
-      explanation: "Positive cashflow with growing investments.",
-    },
-    {
-      min: 50,
       nextAt: 75,
-      name: "Accelerating Wealth",
-      explanation: "Investment growth is compounding and net worth is increasing strongly.",
+      name: "Building Wealth",
+      explanation: "Regularly reducing debt, investing and increasing long-term financial assets.",
     },
     {
       min: 75,
       nextAt: 100,
       name: "Financial Independence",
-      explanation: "Investments are projected to cover a significant portion of future lifestyle costs.",
+      explanation: "Investments and passive income can fund a meaningful portion of the household's lifestyle.",
     },
     {
       min: 100,
       nextAt: null,
       name: "Financial Freedom",
-      explanation: "Investments are projected to fully support the chosen lifestyle over the long term.",
+      explanation: "Investments and passive income are projected to fund the household's target lifestyle.",
     },
   ];
 
@@ -263,6 +261,83 @@
 
   function currentFreedomStage(percent) {
     return [...freedomStages].reverse().find((stage) => percent >= stage.min) || freedomStages[0];
+  }
+
+  function stageDisplayName(name) {
+    return name === "Foundation" ? "Building the Foundation" : name;
+  }
+
+  function financialStageInfo(result) {
+    const lifestylePercent = Math.max(0, freedomPercent(result));
+    const cash = Number(result.plan.assets.cash || 0) + Number(result.plan.assets.offsetBalance || 0);
+    const annualLifestyle = Number(result.annualLivingExpenses || result.plan.personal.targetAnnualSpending || 0);
+    const emergencyTarget = Math.max(0, annualLifestyle / 4);
+    const surplus = Number(result.finalProjectedCashSurplus) || 0;
+    const totalAssets = Number(result.totalAssets) || 0;
+    const totalDebt = Number(result.totalLiabilities) || 0;
+    const debtRatio = totalAssets > 0 ? totalDebt / totalAssets : totalDebt > 0 ? 1 : 0;
+    const investmentAssets = Number(result.accessibleInvestmentAssets || 0);
+    const insufficient = !annualLifestyle && !result.targetCapital && !result.annualGrossIncome && !totalAssets;
+    let stageIndex = 0;
+    if (insufficient) stageIndex = 0;
+    else if (lifestylePercent >= 100) stageIndex = 3;
+    else if (lifestylePercent >= 75) stageIndex = 2;
+    else if (surplus > 0 && investmentAssets > 0 && (cash >= emergencyTarget * 0.5 || debtRatio <= 0.75)) stageIndex = 1;
+    const stage = freedomStages[stageIndex];
+    const nextStage = freedomStages[stageIndex + 1] || null;
+    let progressToNext = 100;
+    if (insufficient) {
+      progressToNext = 0;
+    } else if (stageIndex === 0) {
+      const emergencyProgress = emergencyTarget > 0 ? Math.min(1, cash / emergencyTarget) : cash > 0 ? 1 : 0;
+      const cashflowProgress = surplus > 0 ? 1 : 0;
+      const debtProgress = debtRatio <= 0.5 ? 1 : debtRatio <= 0.75 ? 0.65 : debtRatio <= 1 ? 0.35 : 0;
+      const investmentProgress = investmentAssets > 0 ? 1 : 0;
+      progressToNext = Math.round((emergencyProgress * 0.35 + cashflowProgress * 0.3 + debtProgress * 0.2 + investmentProgress * 0.15) * 100);
+    } else if (stageIndex === 1) {
+      progressToNext = Math.round(Math.min(100, Math.max(0, lifestylePercent / 75 * 100)));
+    } else if (stageIndex === 2) {
+      progressToNext = Math.round(Math.min(100, Math.max(0, (lifestylePercent - 75) / 25 * 100)));
+    }
+    const actions = [];
+    if (insufficient) {
+      actions.push("Complete the remaining plan information to calculate your financial stage.");
+    } else {
+      if (emergencyTarget > 0 && cash < emergencyTarget) actions.push(`Build your emergency reserve to ${money(emergencyTarget)}.`);
+      if (surplus <= 0) actions.push("Maintain positive annual spare cashflow.");
+      if (investmentAssets <= 0) actions.push("Start building income-producing FI assets.");
+      if (debtRatio > 0.5 && totalDebt > 0) actions.push("Reduce debt to below 50% of total assets.");
+      if (lifestylePercent < 100 && investmentAssets > 0) actions.push(`Continue building FI assets toward ${money(result.targetCapital || 0)}.`);
+    }
+    if (!actions.length) actions.push("Keep reviewing cashflow, debt and investment contributions so progress stays on track.");
+    return {
+      stage,
+      stageIndex,
+      nextStage,
+      progressToNext: Math.min(100, Math.max(0, progressToNext)),
+      lifestylePercent,
+      emergencyTarget,
+      actions: actions.slice(0, 3),
+      insufficient,
+    };
+  }
+
+  function stageJourneyHtml(stageInfo) {
+    return `
+      <div class="stage-journey" role="list" aria-label="Financial stage journey">
+        ${freedomStages.map((stage, index) => {
+          const completed = index < stageInfo.stageIndex;
+          const current = index === stageInfo.stageIndex;
+          return `
+            <div class="stage-journey-step ${completed ? "complete" : ""} ${current ? "current" : ""}" role="listitem" aria-current="${current ? "step" : "false"}">
+              <span>${completed ? "✓" : index + 1}</span>
+              <strong>${escapeHtml(stage.name)}</strong>
+              <small>${current ? "Current stage" : completed ? "Completed" : index === stageInfo.stageIndex + 1 ? "Next stage" : "Future stage"}</small>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    `;
   }
 
   function safeWithdrawalRate() {
@@ -1440,12 +1515,12 @@
 
   function updatePreview(result) {
     const percent = freedomPercent(result);
-    const milestone = investmentTargetMilestone(result);
+    const stageInfo = financialStageInfo(result);
     document.getElementById("previewScore").textContent = plainPercent(percent);
-    document.getElementById("previewStage").textContent = currentFreedomStage(percent).name;
+    document.getElementById("previewStage").textContent = stageInfo.stage.name;
     document.getElementById("previewNetWorth").textContent = money(result.currentNetWorth);
     document.getElementById("previewMonthlySurplus").textContent = money(estimatedCashflow(result) / 12);
-    document.getElementById("previewNextMilestone").textContent = milestone.shortText;
+    document.getElementById("previewNextMilestone").textContent = stageInfo.insufficient ? "Complete plan information" : stageInfo.actions[0];
     document.getElementById("previewRecommendation").textContent = highestRecommendation(result);
   }
 
@@ -1549,7 +1624,8 @@
 
   function renderWizardResults(result) {
     const percent = freedomPercent(result);
-    const stage = currentFreedomStage(percent);
+    const stageInfo = financialStageInfo(result);
+    const stage = stageInfo.stage;
     const passive = annualPassiveIncome(result);
     const target = lifestyleTarget(result);
     const milestone = nextMilestone(result, percent);
@@ -1557,16 +1633,17 @@
     if (!container) return;
     container.innerHTML = `
       <article class="freedom-stage-card">
-        <span class="metric-label">Financial Freedom Percentage</span>
-        <strong>${plainPercent(percent)}</strong>
+        <span class="metric-label">Your current financial stage</span>
+        <strong>${escapeHtml(stage.name)}</strong>
         <p>${escapeHtml(stage.explanation)}</p>
-        <div class="progress-track progress-track-large" aria-hidden="true"><span style="width:${Math.min(100, Math.max(0, percent))}%"></span></div>
+        <p><strong>${plainPercent(stageInfo.progressToNext)}</strong> toward ${escapeHtml(stageInfo.nextStage?.name || "maintaining Financial Freedom")}.</p>
+        <div class="progress-track progress-track-large" aria-label="${plainPercent(stageInfo.progressToNext)} progress toward the next stage"><span style="width:${stageInfo.progressToNext}%"></span></div>
       </article>
       <div class="dashboard-card-grid mt-4">
         ${metricCard("Current stage", stage.name)}
         ${metricCard("Annual passive income", money(passive))}
         ${metricCard("Annual lifestyle target", money(target))}
-        ${metricCard("Next milestone", milestone.amount)}
+        ${metricCard("Target lifestyle funded", plainPercent(percent))}
       </div>
       <button class="btn btn-primary mt-4 w-full justify-center" type="button" data-view="dashboard">View Dashboard</button>
     `;
@@ -1599,7 +1676,8 @@
   function renderDashboard(result) {
     const names = [plan.personal.person1Name, plan.personal.person2Name].filter(Boolean).join(" and ");
     const percent = freedomPercent(result);
-    const stage = currentFreedomStage(percent);
+    const stageInfo = financialStageInfo(result);
+    const stage = stageInfo.stage;
     const passiveIncome = annualPassiveIncome(result);
     const target = lifestyleTarget(result);
     const livingExpenses = result.annualLivingExpenses;
@@ -1613,13 +1691,35 @@
       ? "Enter your own details or load a fictional sample plan to see the dashboard come alive."
       : "See how today's decisions shape tomorrow's financial freedom.";
     document.getElementById("heroScore").textContent = plainPercent(percent);
+    document.querySelector(".score-ring span").textContent = "Lifestyle funded";
     document.querySelector(".score-ring").style.borderColor = percent >= 100 ? "#bdebd7" : percent >= 75 ? "#f3d08c" : "#dbe4ee";
-    document.getElementById("freedomStageLabel").textContent = stage.name;
-    document.getElementById("freedomStageText").textContent = stage.explanation;
-    document.getElementById("freedomProgressBar").style.width = `${progressWidth}%`;
-    document.getElementById("freedomPassiveText").textContent = percent >= 100
-      ? "Your investments are projected to fully support the chosen lifestyle over the long term."
-      : `You are in the ${stage.name} stage with ${plainPercent(percent)} progress toward your long-term target.`;
+    document.querySelector(".freedom-stage-card").innerHTML = `
+      <div class="stage-heading-row">
+        <span class="metric-label">Your current financial stage</span>
+        ${infoButtonHtml("financialStage", "financial stages")}
+      </div>
+      <strong id="freedomStageLabel">${escapeHtml(stage.name)}</strong>
+      <p id="freedomStageText">${escapeHtml(stageInfo.insufficient ? "Complete the remaining plan information to calculate your financial stage." : stage.explanation)}</p>
+      ${stageJourneyHtml(stageInfo)}
+      <div class="stage-progress-block">
+        <div>
+          <span class="metric-label">Progress toward your next stage</span>
+          <strong>${stageInfo.nextStage ? `${plainPercent(stageInfo.progressToNext)} toward ${escapeHtml(stageInfo.nextStage.name)}` : "Financial Freedom reached"}</strong>
+        </div>
+        <div class="progress-track progress-track-large" aria-label="${plainPercent(stageInfo.progressToNext)} progress toward the next stage"><span id="freedomProgressBar" style="width:${stageInfo.progressToNext}%"></span></div>
+      </div>
+      <div class="stage-progress-block">
+        <div>
+          <span class="metric-label">Target lifestyle funded</span>
+          <strong>${plainPercent(percent)} of target lifestyle funded</strong>
+        </div>
+        <p id="freedomPassiveText" class="progress-caption">Based on projected investment and passive income compared with your target annual lifestyle cost.</p>
+      </div>
+      <div class="stage-actions">
+        <span class="metric-label">What moves you forward</span>
+        <ul>${stageInfo.actions.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+      </div>
+    `;
     document.getElementById("nextMilestoneAmount").textContent = milestone.amount;
     document.getElementById("nextMilestoneText").textContent = milestone.text;
 
@@ -1637,11 +1737,11 @@
       metricCard("Final Projected Surplus", money(annualSurplus), annualSurplus >= 0 ? "status-green" : "status-amber", "Estimated money left after tax, Medicare, HELP, living costs, loan repayments, investing and extra super."),
       metricCard("Investments", money(result.investmentBalance), "", "Projected investment balance includes contributions and earnings over time."),
       metricCard("Super", money(result.superannuationBalance), "status-green", "Tracked separately from other investments."),
-      metricCard("Financial Freedom Score", plainPercent(percent), percent >= 75 ? "status-green" : "", "Progress toward investments supporting your chosen lifestyle."),
+      metricCard("Target Lifestyle Funded", plainPercent(percent), percent >= 75 ? "status-green" : "", "Based on projected investment and passive income compared with your target annual lifestyle cost."),
     ].join("");
     document.getElementById("secondMetricGrid").innerHTML = [
-      metricCard("Current Financial Freedom Stage", stage.name),
-      metricCard("Next Milestone", milestone.amount),
+      metricCard("Your Current Financial Stage", stage.name),
+      metricCard("Progress Toward Next Stage", stageInfo.nextStage ? `${plainPercent(stageInfo.progressToNext)} toward ${stageInfo.nextStage.name}` : "Financial Freedom reached"),
       metricCard("Debt Balance", money(result.totalLiabilities), result.totalLiabilities <= result.totalAssets * 0.5 ? "status-green" : "status-amber"),
       metricCard("Monthly Surplus / Deficit", money(monthlySurplus), monthlySurplus >= 0 ? "status-green" : "status-amber"),
       metricCard("Annual Passive Income Estimate", money(passiveIncome), "", "This estimates the annual income your investments may generate without selling assets."),
@@ -2003,7 +2103,7 @@
 
   function buildPlannerSections(weeks, startDate) {
     ensureCollectionData();
-    const sections = { receipts: [], essential: [], discretionary: [], transfers: [] };
+    const sections = { receipts: [], essential: [], provisions: [], discretionary: [], transfers: [] };
     (plan.incomeItems || []).forEach((item, index) => {
       const frequency = item.frequency || "annually";
       const knownTiming = ["weekly", "fortnightly", "monthly", "quarterly"].includes(frequency);
@@ -2024,7 +2124,8 @@
       const values = precise
         ? scheduleKnownFrequency(item.amount, frequency, weeks, startDate)
         : scheduleWeeklyProvision(item.amount, frequency, weeks);
-      addPlannerItem(isEssentialPlannerExpense(item) ? sections.essential : sections.discretionary, {
+      const targetSection = !precise && frequency === "annually" ? sections.provisions : isEssentialPlannerExpense(item) ? sections.essential : sections.discretionary;
+      addPlannerItem(targetSection, {
         name: precise ? plannerExpenseName(item) : `${plannerExpenseName(item)} amount set aside`,
         frequency,
         frequencyLabel: precise ? plannerFrequencyLabel(frequency) : `${plannerFrequencyLabel(frequency)} - weekly amount set aside`,
@@ -2081,10 +2182,16 @@
         values: values("income"),
       }],
       essential: [{
-        name: "Bills and essentials",
+        name: "Bills and spending",
         frequency: "weekly",
         frequencyLabel: "Weekly Plan",
         values: values("essentialCosts"),
+      }],
+      provisions: [{
+        name: "Provisions",
+        frequency: "weekly",
+        frequencyLabel: "Weekly Plan",
+        values: values("provisions"),
       }],
       discretionary: [{
         name: "Spending allowance",
@@ -2093,6 +2200,13 @@
         values: values("discretionaryAllowance"),
       }],
       transfers: [
+        {
+          name: "Transfer to offset",
+          frequency: "weekly",
+          frequencyLabel: "Weekly Plan",
+          values: values("offsetTransfer"),
+          rowKey: "offsetTransfer",
+        },
         {
           name: "Invest",
           frequency: "weekly",
@@ -2130,11 +2244,13 @@
 
   function weeklyPriority(week) {
     const actions = [];
+    if (week.receiptsTotal > 0) actions.push(`${money(week.receiptsTotal)} of estimated net income is expected`);
+    if (week.essentialTotal > 0) actions.push(`pay ${money(week.essentialTotal)} of bills and spending`);
+    if (week.provisionsTotal > 0) actions.push(`set aside ${money(week.provisionsTotal)} for future expenses`);
     if (week.offsetTransferTotal > 0) actions.push(`transfer ${money(week.offsetTransferTotal)} to offset`);
     if (week.debtTransferTotal > 0) actions.push(`pay ${money(week.debtTransferTotal)} extra off debt`);
     if (week.investmentTransferTotal > 0) actions.push(`invest ${money(week.investmentTransferTotal)}`);
     if (week.superTransferTotal > 0) actions.push(`contribute ${money(week.superTransferTotal)} to super`);
-    if (week.discretionaryTotal > 0) actions.push(`keep discretionary spending near ${money(week.discretionaryTotal)}`);
     if (!actions.length) return "Review expected money in, bills and the closing bank balance for this week.";
     return `This week, ${actions.join(", ")}.`;
   }
@@ -2169,19 +2285,21 @@
       const activeWeek = weeklyPlan?.weeks?.[index];
       const receiptsTotal = activeWeek?.planned ? activeWeek.planned.income : plannerSectionTotal(sections.receipts, index);
       const essentialTotal = activeWeek?.planned ? activeWeek.planned.essentialCosts : plannerSectionTotal(sections.essential, index);
+      const provisionsTotal = activeWeek?.planned ? (activeWeek.planned.provisions || activeWeek.planned.amountSetAside || 0) : plannerSectionTotal(sections.provisions || [], index);
       const discretionaryTotal = activeWeek?.planned ? activeWeek.planned.discretionaryAllowance : plannerSectionTotal(sections.discretionary, index);
       const transfersTotal = activeWeek?.planned
-        ? activeWeek.planned.investment + activeWeek.planned.extraSuper + activeWeek.planned.extraDebtRepayment
+        ? activeWeek.planned.investment + activeWeek.planned.extraSuper + activeWeek.planned.extraDebtRepayment + (activeWeek.planned.offsetTransfer || 0) + (activeWeek.planned.otherTransfers || 0)
         : plannerSectionTotal(sections.transfers, index);
       const investmentTransferTotal = plannerTransferTotal(sections.transfers, "investmentTransfer", index);
       const superTransferTotal = plannerTransferTotal(sections.transfers, "superTransfer", index);
       const debtTransferTotal = plannerTransferTotal(sections.transfers, "debtTransfer", index);
       const offsetTransferTotal = plannerTransferTotal(sections.transfers, "offsetTransfer", index);
-      const closingBalance = activeWeek?.planned ? activeWeek.planned.closingBalance : plannerRound(opening + receiptsTotal - essentialTotal - discretionaryTotal - transfersTotal);
+      const closingBalance = activeWeek?.planned ? activeWeek.planned.closingBalance : plannerRound(opening + receiptsTotal - essentialTotal - provisionsTotal - discretionaryTotal - transfersTotal);
       Object.assign(week, {
         openingBalance: activeWeek?.planned ? activeWeek.planned.openingBalance : opening,
         receiptsTotal,
         essentialTotal,
+        provisionsTotal,
         discretionaryTotal,
         transfersTotal,
         investmentTransferTotal,
@@ -2224,6 +2342,7 @@
     const firstWeek = planner.weeks[0];
     const finalWeek = planner.weeks.at(-1);
     const totalReceipts = plannerRound(planner.weeks.reduce((total, week) => total + week.receiptsTotal, 0));
+    const totalProvisions = plannerRound(planner.weeks.reduce((total, week) => total + (week.provisionsTotal || 0), 0));
     const totalTransfers = plannerRound(planner.weeks.reduce((total, week) => total + week.transfersTotal, 0));
     const totalInvesting = plannerRound(planner.weeks.reduce((total, week) => total + week.investmentTransferTotal, 0));
     const totalSuper = plannerRound(planner.weeks.reduce((total, week) => total + week.superTransferTotal, 0));
@@ -2243,7 +2362,8 @@
         ${summaryTile("Week 1 starts", plannerShortDate(firstWeek.startDateIso))}
         ${summaryTile("Starting bank balance", money(planner.startingBalance))}
         ${summaryTile("Projected ending balance", money(finalWeek.closingBalance), finalWeek.closingBalance >= 0 ? "status-green" : "status-amber")}
-        ${summaryTile("Expected money in", money(totalReceipts))}
+        ${summaryTile("Estimated net money in", money(totalReceipts))}
+        ${summaryTile("Provisions", money(totalProvisions))}
         ${summaryTile("Planned transfers", money(totalTransfers))}
         ${summaryTile("Investing scheduled", money(totalInvesting))}
         ${summaryTile("Extra super scheduled", money(totalSuper))}
@@ -2264,8 +2384,9 @@
                 <strong>${money(week.closingBalance)}</strong>
               </div>
               <div class="planner-week-lines">
-                <div><span>Expected money in</span><strong>${money(week.receiptsTotal)}</strong></div>
+                <div><span>Estimated net money in</span><strong>${money(week.receiptsTotal)}</strong></div>
                 <div><span>Bills and spending</span><strong>${money(week.essentialTotal + week.discretionaryTotal)}</strong></div>
+                <div><span>Provisions</span><strong>${money(week.provisionsTotal || 0)}</strong></div>
                 <div><span>Planned transfers</span><strong>${money(week.transfersTotal)}</strong></div>
                 <div><span>Opening balance</span><strong>${money(week.openingBalance)}</strong></div>
                 <div><span>Expected closing balance</span><strong>${money(week.closingBalance)}</strong></div>
@@ -2437,6 +2558,172 @@
           </label>
         `).join("")}
       </div>
+    `;
+  }
+
+  const weeklyTimingFrequencyOptions = [
+    ["weekly", "Weekly"],
+    ["fortnightly", "Fortnightly"],
+    ["monthly", "Monthly"],
+    ["quarterly", "Quarterly"],
+    ["annually", "Annually"],
+    ["oneOff", "One-off"],
+    ["weeklyProvision", "Weekly provision"],
+  ];
+
+  const weeklyTimingTypeOptions = [
+    ["money-in", "Money in"],
+    ["bill", "Bills and spending"],
+    ["provision", "Provisions"],
+    ["transfer", "Financial Freedom transfers"],
+  ];
+
+  function weeklyTimingTypeLabel(type) {
+    return weeklyTimingTypeOptions.find(([value]) => value === type)?.[1] || "Bills and spending";
+  }
+
+  function weeklyTimingRowsHtml() {
+    const items = weeklyPlan?.settings?.timingItems || [];
+    if (!items.length) return `<p class="weekly-muted">Create or rebuild the Weekly Plan to prefill income, bills, provisions and transfers from the current financial plan.</p>`;
+    return `
+      <div class="weekly-timing-table" role="table" aria-label="Cashflow timing setup">
+        <div class="weekly-timing-header" role="row">
+          <span>Item</span>
+          <span>Amount</span>
+          <span>Frequency</span>
+          <span>First date</span>
+          <span>Type</span>
+          <span>Active</span>
+        </div>
+        ${items.map((item) => `
+          <article class="weekly-timing-row" role="row">
+            <label>
+              <span class="field-label">Item</span>
+              <input class="field-input" type="text" data-weekly-timing="${escapeHtml(item.id)}" data-key="description" data-type="text" value="${escapeHtml(item.description || "")}">
+              ${item.isNetPay ? `<small class="field-help">Estimated net amount after tax and applicable payroll deductions.</small>` : ""}
+            </label>
+            <label>
+              <span class="field-label">Amount</span>
+              <input class="field-input" type="number" step="0.01" data-weekly-timing="${escapeHtml(item.id)}" data-key="amount" value="${weeklyInputValue(item.amount)}">
+            </label>
+            <label>
+              <span class="field-label">Frequency</span>
+              <select class="field-input" data-weekly-timing="${escapeHtml(item.id)}" data-key="frequency" data-type="text">${optionList(weeklyTimingFrequencyOptions, item.frequency)}</select>
+            </label>
+            <label>
+              <span class="field-label">First date</span>
+              <input class="field-input" type="date" data-weekly-timing="${escapeHtml(item.id)}" data-key="firstDate" data-type="text" value="${escapeHtml(item.firstDate || weeklyPlan.startDate)}">
+            </label>
+            <label>
+              <span class="field-label">Type</span>
+              <select class="field-input" data-weekly-timing="${escapeHtml(item.id)}" data-key="type" data-type="text">${optionList(weeklyTimingTypeOptions, item.type)}</select>
+            </label>
+            <label class="weekly-active-toggle">
+              <span class="field-label">Active</span>
+              <input type="checkbox" data-weekly-timing="${escapeHtml(item.id)}" data-key="active" data-type="boolean"${item.active !== false ? " checked" : ""}>
+            </label>
+            <details class="weekly-timing-advanced">
+              <summary>Advanced timing</summary>
+              <div class="weekly-setup-grid mt-3">
+                <label>
+                  <span class="field-label">End date</span>
+                  <input class="field-input" type="date" data-weekly-timing="${escapeHtml(item.id)}" data-key="endDate" data-type="text" value="${escapeHtml(item.endDate || "")}">
+                </label>
+                <label>
+                  <span class="field-label">Treatment</span>
+                  <select class="field-input" data-weekly-timing="${escapeHtml(item.id)}" data-key="treatment" data-type="text">
+                    <option value="pay-on-date"${item.treatment !== "set-aside" ? " selected" : ""}>Pay on due date</option>
+                    <option value="set-aside"${item.treatment === "set-aside" ? " selected" : ""}>Set aside progressively</option>
+                  </select>
+                </label>
+                <label>
+                  <span class="field-label">Transfer category</span>
+                  <select class="field-input" data-weekly-timing="${escapeHtml(item.id)}" data-key="transferType" data-type="text">
+                    ${optionList([["", "Other"], ["offset", "Offset"], ["extraDebt", "Debt repayment"], ["investment", "Investing"], ["extraSuper", "Extra super"]], item.transferType || "")}
+                  </select>
+                </label>
+              </div>
+              <div class="weekly-occurrence-editor mt-4">
+                <h4>Adjust a payment or receipt</h4>
+                <p class="weekly-muted mt-2">Move, skip or update one expected occurrence without rebuilding the whole plan.</p>
+                <div class="weekly-setup-grid mt-3">
+                  <label>
+                    <span class="field-label">Occurrence date</span>
+                    <input class="field-input" type="date" data-weekly-occurrence-date value="${escapeHtml(item.firstDate || weeklyPlan.startDate)}">
+                  </label>
+                  <label>
+                    <span class="field-label">New amount</span>
+                    <input class="field-input" type="number" step="0.01" data-weekly-occurrence-amount placeholder="${weeklyInputValue(item.amount)}">
+                  </label>
+                  <label>
+                    <span class="field-label">Move to date</span>
+                    <input class="field-input" type="date" data-weekly-occurrence-new-date>
+                  </label>
+                  <label>
+                    <span class="field-label">Apply this change to</span>
+                    <select class="field-input" data-weekly-occurrence-scope>
+                      <option value="this">This occurrence only</option>
+                      <option value="future">This and future occurrences</option>
+                      <option value="all">Every occurrence</option>
+                    </select>
+                  </label>
+                  <label class="weekly-active-toggle weekly-skip-toggle">
+                    <span class="field-label">Skip this occurrence</span>
+                    <input type="checkbox" data-weekly-occurrence-skip>
+                  </label>
+                </div>
+                <button class="btn mt-3" type="button" data-weekly-action="apply-occurrence-edit" data-weekly-timing-id="${escapeHtml(item.id)}">Apply timing change</button>
+              </div>
+            </details>
+          </article>
+        `).join("")}
+      </div>
+    `;
+  }
+
+  function weeklyOneOffFormHtml() {
+    return `
+      <details class="weekly-setup-details mt-4">
+        <summary>Add one-off item</summary>
+        <p class="weekly-muted mt-2">Add a once-only receipt, bill, provision or transfer to the weekly schedule. This does not change your long-term Financial Freedom plan.</p>
+        <div class="weekly-setup-grid mt-4">
+          <label>
+            <span class="field-label">Description</span>
+            <input class="field-input" id="weeklyOneOffDescription" type="text" placeholder="e.g. Car repair">
+          </label>
+          <label>
+            <span class="field-label">Amount</span>
+            <input class="field-input" id="weeklyOneOffAmount" type="number" step="0.01">
+          </label>
+          <label>
+            <span class="field-label">Date</span>
+            <input class="field-input" id="weeklyOneOffDate" type="date" value="${escapeHtml(weeklyPlan?.startDate || "")}">
+          </label>
+          <label>
+            <span class="field-label">Type</span>
+            <select class="field-input" id="weeklyOneOffType">${optionList(weeklyTimingTypeOptions, "bill")}</select>
+          </label>
+        </div>
+        <button class="btn btn-primary mt-4" type="button" data-weekly-action="add-one-off">Add one-off item</button>
+      </details>
+    `;
+  }
+
+  function weeklyTimingSetupHtml() {
+    return `
+      <article class="card weekly-step-card">
+        <div class="card-heading">
+          <div>
+            <span class="metric-label">Step 1 - Review timing</span>
+            <h3>Cashflow Timing Setup</h3>
+            <span>Review when your income, bills and planned transfers are expected to occur. The app has prefilled this information from your financial plan. Adjust only the timing or amounts that differ.</span>
+          </div>
+        </div>
+        <p class="weekly-device-note mt-4">Salary and wage amounts are estimated net amounts after tax and applicable payroll deductions based on the information entered in your plan.</p>
+        <p class="weekly-device-note mt-3">Changes made here update your weekly schedule only. They do not automatically change your long-term Financial Freedom plan.</p>
+        <div class="mt-4">${weeklyTimingRowsHtml()}</div>
+        ${weeklyOneOffFormHtml()}
+      </article>
     `;
   }
 
@@ -2658,20 +2945,24 @@
       </article>
 
       <div class="weekly-summary-grid mt-4">
-        ${weeklySummaryCard("Money coming in", money(planned.income))}
-        ${weeklySummaryCard("Bills and essentials", money(planned.essentialCosts), planned.amountSetAside ? `${money(planned.amountSetAside)} is being set aside for future bills.` : "")}
+        ${weeklySummaryCard("Net income received", money(planned.income))}
+        ${weeklySummaryCard("Bills and spending", money(planned.essentialCosts))}
+        ${weeklySummaryCard("Provisions", money(planned.provisions || planned.amountSetAside), planned.amountSetAside ? `${money(planned.amountSetAside)} is being set aside for future bills.` : "")}
         ${weeklySummaryCard("Spending allowance", money(planned.discretionaryAllowance))}
+        ${weeklySummaryCard("Offset transfer", money(planned.offsetTransfer || 0))}
         ${weeklySummaryCard("Invest", money(planned.investment))}
         ${weeklySummaryCard("Add to super", money(planned.extraSuper))}
         ${weeklySummaryCard("Pay extra off debt", money(planned.extraDebtRepayment))}
+        ${weeklySummaryCard("Other transfers", money(planned.otherTransfers || 0))}
         ${weeklySummaryCard("Expected bank balance", money(planned.closingBalance))}
         ${weeklySummaryCard("Minimum cash buffer", money(weeklyPlan.minimumCashBuffer))}
       </div>
 
       <div class="weekly-week-detail-grid mt-4">
-        ${weeklyDetailList("Money coming in", week.detail?.incomeItems || [])}
-        ${weeklyDetailList("Bills due this week", week.detail?.billItems || [])}
-        ${weeklyDetailList("Amounts set aside", week.detail?.setAsideItems || [])}
+        ${weeklyDetailList("Net money in", week.detail?.incomeItems || [])}
+        ${weeklyDetailList("Bills and spending", week.detail?.billItems || [])}
+        ${weeklyDetailList("Provisions", week.detail?.provisionItems || week.detail?.setAsideItems || [])}
+        ${weeklyDetailList("Financial Freedom transfers", week.detail?.transferItems || [])}
         ${weeklyDetailList("Lifestyle spending", week.detail?.discretionaryItems || [])}
       </div>
 
@@ -2741,11 +3032,14 @@
                 </summary>
                 <div class="weekly-expanded-detail">
                   ${weeklyDetailList("Money coming in", week.detail?.incomeItems || [])}
-                  ${weeklyDetailList("Bills due this week", week.detail?.billItems || [])}
-                  ${weeklyDetailList("Amounts set aside", week.detail?.setAsideItems || [])}
+                  ${weeklyDetailList("Bills and spending", week.detail?.billItems || [])}
+                  ${weeklyDetailList("Provisions", week.detail?.provisionItems || week.detail?.setAsideItems || [])}
+                  ${weeklyDetailList("Financial Freedom transfers", week.detail?.transferItems || [])}
                   <div class="weekly-detail-list">
                     <h4>Weekly plan</h4>
                     <div><span>Opening balance</span><strong>${money(planned.openingBalance)}</strong></div>
+                    <div><span>Provisions</span><strong>${money(planned.provisions || planned.amountSetAside || 0)}</strong></div>
+                    <div><span>Offset transfer</span><strong>${money(planned.offsetTransfer || 0)}</strong></div>
                     <div><span>Investment amount</span><strong>${money(planned.investment)}</strong></div>
                     <div><span>Super amount</span><strong>${money(planned.extraSuper)}</strong></div>
                     <div><span>Extra debt repayment</span><strong>${money(planned.extraDebtRepayment)}</strong></div>
@@ -2970,11 +3264,23 @@
             <strong>Week ${weeklyPlan.currentWeekNumber}</strong>
           </div>
         </article>
+        ${weeklyTimingSetupHtml()}
+        <article class="card weekly-step-card">
+          <div class="card-heading">
+            <div>
+              <span class="metric-label">Step 2 - View weekly plan</span>
+              <h3>Weekly Plan</h3>
+              <span>Review expected opening balance, cash movements and closing balance for each week.</span>
+            </div>
+          </div>
+          <div class="mt-4">
         ${weeklyTabsHtml()}
         <div class="weekly-tab-panel">${tabHtml}</div>
+          </div>
+        </article>
       </div>
     `;
-    if (exportPanel) exportPanel.classList.toggle("hidden", activeWeeklyPlanTab !== "settings");
+    if (exportPanel) exportPanel.classList.remove("hidden");
     renderWeeklyPlannerControls(result);
   }
 
@@ -3046,6 +3352,65 @@
     saveWeeklyPlan("Weekly Plan timing saved.");
   }
 
+  function updateWeeklyTimingFromInput(target) {
+    if (!weeklyPlan) return;
+    const itemId = target.dataset.weeklyTiming;
+    const key = target.dataset.key;
+    const value = target.dataset.type === "boolean" ? target.checked : target.dataset.type === "text" ? target.value : Number(target.value) || 0;
+    weeklyPlan = window.FFSWeeklyPlan.updateTimingItem(plan, CALC.calculatePlan(plan), weeklyPlan, itemId, { [key]: value });
+    generatedWeeklyPlanner = null;
+    syncWeeklyPlanExportSettings();
+    saveWeeklyPlan("Weekly timing saved.");
+    renderOutputs();
+  }
+
+  function addWeeklyOneOffItem() {
+    if (!weeklyPlan) return;
+    const description = document.getElementById("weeklyOneOffDescription")?.value || "One-off item";
+    const amount = Number(document.getElementById("weeklyOneOffAmount")?.value) || 0;
+    const date = document.getElementById("weeklyOneOffDate")?.value || weeklyPlan.startDate;
+    const type = document.getElementById("weeklyOneOffType")?.value || "bill";
+    if (!amount) {
+      updateSaveStatus("Enter an amount before adding a one-off item.");
+      return;
+    }
+    weeklyPlan = window.FFSWeeklyPlan.addOneOffItem(plan, CALC.calculatePlan(plan), weeklyPlan, { description, amount, date, type });
+    generatedWeeklyPlanner = null;
+    syncWeeklyPlanExportSettings();
+    saveWeeklyPlan("One-off item added to the Weekly Plan.");
+    renderAll();
+    showWorkspace("weeklyplan");
+  }
+
+  function applyWeeklyOccurrenceEdit(button) {
+    if (!weeklyPlan || !window.FFSWeeklyPlan) return;
+    const row = button.closest(".weekly-timing-row");
+    const itemId = button.dataset.weeklyTimingId;
+    const occurrenceDate = row?.querySelector("[data-weekly-occurrence-date]")?.value || "";
+    if (!itemId || !occurrenceDate) {
+      updateSaveStatus("Choose the occurrence date to adjust.");
+      return;
+    }
+    const amountRaw = row.querySelector("[data-weekly-occurrence-amount]")?.value;
+    const newDate = row.querySelector("[data-weekly-occurrence-new-date]")?.value || "";
+    const scope = row.querySelector("[data-weekly-occurrence-scope]")?.value || "this";
+    const skip = row.querySelector("[data-weekly-occurrence-skip]")?.checked || false;
+    const patch = {};
+    if (amountRaw !== "") patch.amount = Number(amountRaw) || 0;
+    if (newDate) patch.date = newDate;
+    if (skip) patch.active = false;
+    if (!Object.keys(patch).length) {
+      updateSaveStatus("Enter a new amount, date, or select skip before applying.");
+      return;
+    }
+    weeklyPlan = window.FFSWeeklyPlan.applyOccurrenceEdit(plan, CALC.calculatePlan(plan), weeklyPlan, itemId, occurrenceDate, patch, scope);
+    generatedWeeklyPlanner = null;
+    syncWeeklyPlanExportSettings();
+    saveWeeklyPlan("Weekly timing updated.");
+    renderAll();
+    showWorkspace("weeklyplan");
+  }
+
   function exportWeeklyPlanBackup() {
     if (!weeklyPlan) {
       updateSaveStatus("Create a Weekly Plan before exporting a backup.");
@@ -3115,7 +3480,7 @@
   function reportProgressBar(percent) {
     const capped = Math.min(100, Math.max(0, Number(percent) || 0));
     return `
-      <div class="report-progress-bar" aria-label="Financial Freedom progress">
+      <div class="report-progress-bar" aria-label="Target lifestyle funding progress">
         <span style="width:${capped}%"></span>
       </div>
       <p class="report-small-note">Visual progress is capped at 100%. The calculated progress shown in the figures may be higher where projected Financial Independence assets exceed the selected target.</p>
@@ -3126,22 +3491,28 @@
     const percent = freedomPercent(result);
     const milestoneDefinitions = [
       {
+        label: "Building the Foundation",
+        coverage: 0.25,
+        targetAge: plan.personal.person1Age,
+        description: "Establishing positive cashflow, building emergency savings and gaining control over debt.",
+      },
+      {
         label: "Building Wealth",
         coverage: 0.5,
         targetAge: plan.personal.workOptionalAge,
-        description: "Continue increasing investments and reducing debt so compounding can create stronger long-term momentum.",
+        description: "Regularly reducing debt, investing and increasing long-term financial assets.",
       },
       {
         label: "Financial Independence",
         coverage: 0.75,
         targetAge: plan.personal.semiRetirementAge,
-        description: "Financial Independence assets are projected to cover a significant portion of future lifestyle costs.",
+        description: "Investments and passive income can fund a meaningful portion of the household's lifestyle.",
       },
       {
         label: "Financial Freedom",
         coverage: 1,
         targetAge: plan.personal.fullRetirementAge,
-        description: "Assets are projected to fully support the chosen annual lifestyle over the long term.",
+        description: "Investments and passive income are projected to fund the household's target lifestyle.",
       },
     ];
     return milestoneDefinitions.map((milestone) => {
@@ -3431,7 +3802,7 @@
             <div><span>Debt balance</span><strong>${money(metrics.debtNow)}</strong></div>
             <div><span>Investment balance</span><strong>${money(metrics.investments10)}</strong></div>
             <div><span>Superannuation balance</span><strong>${money(metrics.super10)}</strong></div>
-            <div><span>Financial Freedom progress</span><strong>${plainPercent(metrics.progress)}</strong></div>
+            <div><span>Target lifestyle funded</span><strong>${plainPercent(metrics.progress)}</strong></div>
             <div><span>Estimated Financial Freedom age</span><strong>${escapeHtml(metrics.financialFreedomAge)}</strong></div>
           </div>
         </article>
@@ -3484,7 +3855,7 @@
     const container = document.getElementById("financialReportBody");
     if (!container) return;
     const percent = freedomPercent(result);
-    const stage = currentFreedomStage(percent);
+    const stage = financialStageInfo(result).stage;
     const gap = Math.max(0, (Number(result.targetCapital) || 0) - (Number(result.financialIndependenceAssets) || 0));
     const monthlyFinalSurplus = estimatedCashflow(result) / 12;
     const annualFinalSurplus = estimatedCashflow(result);
@@ -3504,7 +3875,7 @@
     const tenYearProgress = progressAtYear(result, 10);
     const tenYearProgressText = tenYearProgress > 100
       ? "Projected FI assets exceed the selected target in the 10-year view, based on the assumptions entered."
-      : `Projected Financial Freedom progress is ${plainPercent(tenYearProgress)} in 10 years, based on the assumptions entered.`;
+      : `Projected target lifestyle funding is ${plainPercent(tenYearProgress)} in 10 years, based on the assumptions entered.`;
 
     const summaryNarrative = `
       <div class="report-narrative-box">
@@ -3524,8 +3895,8 @@
       ${reportSection("Executive Summary", "A concise overview of your current financial position, progress and estimated future outcome.", `
         ${summaryNarrative}
         <div class="summary-grid mt-4">
-          ${summaryTile("Financial Freedom Score", plainPercent(Math.min(100, percent)))}
-          ${summaryTile("Current stage", stage.name)}
+          ${summaryTile("Target lifestyle funded", plainPercent(percent))}
+          ${summaryTile("Current financial stage", stage.name)}
           ${summaryTile("Current annual surplus", money(annualFinalSurplus), annualFinalSurplus >= 0 ? "status-green" : "status-amber")}
           ${summaryTile("Current investment amount", money(result.investmentBalance))}
           ${summaryTile("Current debt", money(result.totalLiabilities))}
@@ -3574,12 +3945,12 @@
         <div class="${cashflowTone}"><strong>${cashflowHeading}</strong><p>${cashflowText}</p></div>
       `, "report-page-break report-compact-section")}
 
-      ${reportSection("Financial Freedom Progress", "This section estimates how close your current FI assets are to funding your chosen lifestyle.", `
+      ${reportSection("Target Lifestyle Funding", "This section estimates how close your current FI assets are to funding your chosen lifestyle.", `
         <div class="summary-grid">
           ${summaryTile("Current FI assets", money(result.financialIndependenceAssets))}
           ${summaryTile("Target FI assets", money(result.targetCapital))}
           ${summaryTile("Gap to target", money(gap))}
-          ${summaryTile("Financial Freedom progress", plainPercent(percent))}
+          ${summaryTile("Target lifestyle funded", plainPercent(percent))}
           ${summaryTile("Estimated annual passive income", money(annualPassiveIncome(result)))}
           ${summaryTile("10-year investment balance", money(investmentAtYear(result, 10)))}
           ${summaryTile("10-year debt estimate", money(projectedDebtAtYear(result, 10)))}
@@ -3587,8 +3958,8 @@
         ${reportProgressBar(percent)}
         <div class="report-chart-grid mt-4">
           <article class="report-chart-card report-chart-wide">
-            <h3>Financial Freedom progress</h3>
-            <svg id="reportProgressChart" class="chart" viewBox="0 0 760 280" role="img" aria-label="Report financial freedom progress"></svg>
+            <h3>Target lifestyle funding</h3>
+            <svg id="reportProgressChart" class="chart" viewBox="0 0 760 280" role="img" aria-label="Report target lifestyle funding progress"></svg>
             <p>Progress compares current FI assets with the estimated target FI assets. The visual chart is capped at 100% where projected FI assets exceed the selected target.</p>
           </article>
         </div>
@@ -3655,7 +4026,7 @@
         <div class="report-outcome-box">
           <h3>Current estimated outcome</h3>
           <div class="summary-grid mt-4">
-            ${summaryTile("Financial Freedom progress", plainPercent(percent))}
+            ${summaryTile("Target lifestyle funded", plainPercent(percent))}
             ${summaryTile("Estimated Financial Freedom age", estimatedFreedomAge)}
             ${summaryTile("Target FI capital", money(result.targetCapital))}
             ${summaryTile("Current FI assets", money(result.financialIndependenceAssets))}
@@ -3705,9 +4076,9 @@
     const container = document.getElementById("setupSummary");
     if (!container) return;
     const percent = freedomPercent(result);
-    const stage = currentFreedomStage(percent);
+    const stage = financialStageInfo(result).stage;
     const rows = [
-      { label: "Freedom progress", value: plainPercent(percent) },
+      { label: "Target lifestyle funded", value: plainPercent(percent) },
       { label: "Current stage", value: stage.name },
       { label: "Accessible investments", value: money(result.accessibleInvestmentAssets) },
       { label: "Super from age 60", value: money(result.superannuationBalance) },
@@ -3775,7 +4146,7 @@
         summaryTile("Projected investment balance in 10 years", `${money(investmentAtYear(result, 10))} -> ${money(investmentAtYear(revisedResult, 10))}`),
         summaryTile("Projected FI assets in 10 years", `${money(currentFiAssets10)} -> ${money(revisedFiAssets10)}`),
         summaryTile("Projected passive income in 10 years", `${money(currentPassive10)} -> ${money(revisedPassive10)}`),
-        summaryTile("Financial Freedom Progress", `${plainPercent(freedomPercent(result))} -> ${plainPercent(freedomPercent(revisedResult))}`),
+        summaryTile("Target lifestyle funded", `${plainPercent(freedomPercent(result))} -> ${plainPercent(freedomPercent(revisedResult))}`),
         summaryTile("Target age outcome", `${targetAgeOutcome(result)} -> ${targetAgeOutcome(revisedResult)}`),
         summaryTile("Relevant milestone", revisedMilestone.text)
       );
@@ -3794,7 +4165,7 @@
       summaryTile("Estimated debt repayment timing", `${formatLoanTiming(result.loan)} -> ${formatLoanTiming(revisedResult.loan)}`),
       summaryTile("Estimated interest saved", interestSaved === null ? "Add loan balance, rate and repayment to estimate" : money(interestSaved)),
       summaryTile("Future annual cashflow after debt is repaid", money(futureAnnualCashflow)),
-      summaryTile("Financial Freedom Progress", `${plainPercent(freedomPercent(result))} -> ${plainPercent(freedomPercent(revisedResult))}`),
+      summaryTile("Target lifestyle funded", `${plainPercent(freedomPercent(result))} -> ${plainPercent(freedomPercent(revisedResult))}`),
       summaryTile("Target age outcome", `${targetAgeOutcome(result)} -> ${targetAgeOutcome(revisedResult)}`)
     );
     return tiles;
@@ -3857,7 +4228,7 @@
       summaryTile("1-year net worth", `${money(netWorthAtYear(result, 1))} -> ${money(netWorthAtYear(adjustedResult, 1))}`),
       summaryTile("2-year net worth", `${money(netWorthAtYear(result, 2))} -> ${money(netWorthAtYear(adjustedResult, 2))}`),
       summaryTile("Long-term net worth", `${money(longTermNetWorth(result))} -> ${money(longTermNetWorth(adjustedResult))}`),
-      summaryTile("Financial Freedom Progress", `${plainPercent(freedomPercent(result))} -> ${plainPercent(freedomPercent(adjustedResult))}`),
+      summaryTile("Target lifestyle funded", `${plainPercent(freedomPercent(result))} -> ${plainPercent(freedomPercent(adjustedResult))}`),
     ].join("");
   }
 
@@ -3988,7 +4359,7 @@
               <div class="table-row"><span>Debt balance</span><strong>${money(item.debtBalance)}</strong></div>
               <div class="table-row"><span>Investment balance</span><strong>${money(item.investmentBalance)}</strong></div>
               <div class="table-row"><span>Super balance</span><strong>${money(item.superBalance)}</strong></div>
-              <div class="table-row"><span>Freedom progress</span><strong>${plainPercent(item.freedomProgress)}</strong></div>
+              <div class="table-row"><span>Target lifestyle funded</span><strong>${plainPercent(item.freedomProgress)}</strong></div>
               <div class="table-row"><span>Target age outcome</span><strong>${escapeHtml(item.targetAge)}</strong></div>
             </div>
           </article>
@@ -4090,7 +4461,7 @@
               <h3 class="font-black text-navy">${escapeHtml(scenario.name)}</h3>
               <p>${escapeHtml(scenario.notes || "No notes")}</p>
               <p>Saved ${new Date(scenario.savedAt).toLocaleString()}</p>
-              <p class="mt-2 font-bold text-slate-600">Freedom ${plainPercent(freedomPercent(scenarioResult))} · Net worth ${money(scenarioResult.currentNetWorth)}</p>
+              <p class="mt-2 font-bold text-slate-600">Target lifestyle funded ${plainPercent(freedomPercent(scenarioResult))} · Net worth ${money(scenarioResult.currentNetWorth)}</p>
             </div>
             <div class="summary-grid">
               ${summaryTile("Current age", summary.currentAge)}
@@ -4099,7 +4470,7 @@
               ${summaryTile("Living expenses", money(summary.livingExpenses))}
               ${summaryTile("Net assets", money(summary.netAssets))}
               ${summaryTile("Projected financial freedom age", summary.projectedFreedomAge)}
-              ${summaryTile("Freedom progress", plainPercent(summary.freedomProgress))}
+              ${summaryTile("Target lifestyle funded", plainPercent(summary.freedomProgress))}
             </div>
             <div class="flex flex-wrap gap-2">
               <button class="btn" type="button" data-load-scenario="${scenario.id}">Load</button>
@@ -4402,6 +4773,10 @@
         updateWeeklySettingFromInput(target);
         return;
       }
+      if (target.dataset.weeklyTiming !== undefined) {
+        updateWeeklyTimingFromInput(target);
+        return;
+      }
       if (target.dataset.weeklyDate !== undefined) {
         updateWeeklyDateFromInput(target);
         return;
@@ -4531,6 +4906,8 @@
         const action = weeklyAction.dataset.weeklyAction;
         const weekNumber = Number(weeklyAction.dataset.weeklyWeek) || weeklyPlan?.currentWeekNumber || 1;
         if (action === "create-plan") createWeeklyPlanFromSetup();
+        if (action === "add-one-off") addWeeklyOneOffItem();
+        if (action === "apply-occurrence-edit") applyWeeklyOccurrenceEdit(weeklyAction);
         if (action === "save-week") saveWeekProgress(weekNumber, false);
         if (action === "complete-week") saveWeekProgress(weekNumber, true);
         if (action === "edit-week") {
@@ -4599,9 +4976,8 @@
         if (scenario) {
           plan = CALC.clonePlan(scenario.plan);
           generatedWeeklyPlanner = null;
-          if (weeklyPlan) weeklyPlan = window.FFSWeeklyPlan.reforecast(plan, CALC.calculatePlan(plan), weeklyPlan);
+          resetWeeklyPlanStorage("");
           saveDraft();
-          saveWeeklyPlan();
           renderAll();
           showWorkspace("dashboard");
           updateSaveStatus("Scenario loaded successfully.");
