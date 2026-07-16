@@ -2411,6 +2411,59 @@ textarea.field-input {
   min-width: 0;
 }
 
+.weekly-accordion-toggle {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+}
+
+.weekly-accordion-toggle h3 {
+  margin: 2px 0 6px;
+  color: #0f2742;
+  font-size: 22px;
+  font-weight: 950;
+}
+
+.weekly-accordion-toggle strong,
+.weekly-review-status strong {
+  color: #0f2742;
+  font-weight: 950;
+}
+
+.weekly-accordion-toggle span,
+.weekly-accordion-toggle small {
+  display: block;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.weekly-accordion-toggle b {
+  border-radius: 999px;
+  background: #eef6ff;
+  padding: 8px 12px;
+  color: #0f5f9d;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.weekly-review-status {
+  border-radius: 16px;
+  background: #f5f9ff;
+  padding: 12px 14px;
+  color: #475569;
+  font-size: 14px;
+  font-weight: 850;
+  line-height: 1.5;
+}
+
 .weekly-timing-table {
   display: grid;
   gap: 10px;
@@ -2596,6 +2649,39 @@ textarea.field-input {
   display: grid;
   gap: 16px;
   border-left: 5px solid #0f9f6e;
+}
+
+.weekly-week-navigation {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #ffffff;
+  padding: 12px;
+}
+
+.weekly-week-navigation-center {
+  display: grid;
+  gap: 3px;
+  justify-items: center;
+  text-align: center;
+}
+
+.weekly-week-navigation-center strong {
+  color: #0f2742;
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.weekly-week-navigation-center span,
+.weekly-week-navigation-center em,
+.weekly-week-navigation-center small {
+  color: #64748b;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 850;
 }
 
 @media (min-width: 760px) {
@@ -2910,6 +2996,18 @@ textarea.field-input {
   .weekly-setup-actions .btn,
   .planner-actions .btn {
     width: 100%;
+  }
+
+  .weekly-week-navigation {
+    grid-template-columns: 1fr;
+  }
+
+  .weekly-week-navigation .btn {
+    width: 100%;
+  }
+
+  .weekly-accordion-toggle {
+    grid-template-columns: 1fr;
   }
 
   .weekly-upcoming-metrics {

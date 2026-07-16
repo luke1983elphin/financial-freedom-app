@@ -155,6 +155,10 @@
       occurrenceOverrides: Array.isArray(existing.occurrenceOverrides) ? existing.occurrenceOverrides.map(normaliseOccurrenceOverride).filter(Boolean) : [],
       notes: existing.notes || "",
       sourcePlanUpdatedAt: existing.sourcePlanUpdatedAt || "",
+      timingSetupReviewed: Boolean(existing.timingSetupReviewed),
+      timingSetupReviewedAt: existing.timingSetupReviewedAt || "",
+      timingSetupRequiresReview: Boolean(existing.timingSetupRequiresReview),
+      todayIso: existing.todayIso || "",
     };
   }
 
@@ -691,11 +695,20 @@
     };
   }
 
-  function currentWeekNumberFor(weeks, startDateIso) {
-    const todayIndex = weekIndexForDate(new Date(), dateFromIso(startDateIso), weeks.length);
-    const firstIncomplete = weeks.find((week) => !week.isCompleted)?.weekNumber || weeks.length;
-    if (todayIndex < 0) return firstIncomplete;
-    return clamp(Math.max(firstIncomplete, todayIndex + 1), 1, weeks.length);
+  function currentCalendarWeekNumberFor(weeks, startDateIso, todayIso = "") {
+    if (!Array.isArray(weeks) || !weeks.length) return 0;
+    const todaySource = todayIso ? dateFromIso(todayIso) : new Date();
+    const today = new Date(todaySource.getFullYear(), todaySource.getMonth(), todaySource.getDate());
+    const start = dateFromIso(startDateIso);
+    const todayIndex = weekIndexForDate(today, start, weeks.length);
+    if (todayIndex >= 0) return todayIndex + 1;
+    const finalWeekEnd = dateFromIso(weeks[weeks.length - 1]?.endDate);
+    if (today > finalWeekEnd) return weeks.length;
+    return 0;
+  }
+
+  function currentWeekNumberFor(weeks, startDateIso, todayIso = "") {
+    return currentCalendarWeekNumberFor(weeks, startDateIso, todayIso) || 1;
   }
 
   function createFromPlan(plan = {}, result = {}, options = {}, existingPlan = null) {
@@ -779,6 +792,7 @@
     });
 
     const migrated = migrate(existingPlan);
+    const currentCalendarWeekNumber = currentCalendarWeekNumberFor(weeks, settings.startDate, settings.todayIso);
     const weeklyPlan = {
       version: WEEKLY_PLAN_VERSION,
       id: migrated?.id || `weekly-plan-${Date.now()}`,
@@ -787,7 +801,8 @@
       updatedAt: now,
       startDate: settings.startDate,
       durationWeeks: settings.durationWeeks,
-      currentWeekNumber: currentWeekNumberFor(weeks, settings.startDate),
+      currentCalendarWeekNumber,
+      currentWeekNumber: currentCalendarWeekNumber || 1,
       status: "active",
       minimumCashBuffer: settings.minimumCashBuffer,
       openingBankBalance: settings.openingBankBalance,
@@ -862,7 +877,8 @@
       updatedAt: input.updatedAt || new Date().toISOString(),
       startDate: input.startDate || settings.startDate,
       durationWeeks: normaliseDuration(input.durationWeeks || settings.durationWeeks),
-      currentWeekNumber: Number(input.currentWeekNumber) || 1,
+      currentCalendarWeekNumber: currentCalendarWeekNumberFor(weeks, input.startDate || settings.startDate, settings.todayIso),
+      currentWeekNumber: currentWeekNumberFor(weeks, input.startDate || settings.startDate, settings.todayIso),
       status: input.status || "active",
       minimumCashBuffer: roundMoney(input.minimumCashBuffer ?? settings.minimumCashBuffer),
       openingBankBalance: roundMoney(input.openingBankBalance ?? settings.openingBankBalance),
@@ -904,13 +920,25 @@
     if (options.complete) week.isCompleted = true;
     migrated.updatedAt = new Date().toISOString();
     migrated.progress = buildProgress(migrated.weeks, migrated.settings);
-    migrated.currentWeekNumber = currentWeekNumberFor(migrated.weeks, migrated.startDate);
+    migrated.currentCalendarWeekNumber = currentCalendarWeekNumberFor(migrated.weeks, migrated.startDate, migrated.settings?.todayIso);
+    migrated.currentWeekNumber = migrated.currentCalendarWeekNumber || 1;
     return migrated;
   }
 
   function completeWeek(plan, result, weeklyPlan, weekNumber, actual = {}) {
     const updated = updateActual(weeklyPlan, weekNumber, actual, { complete: true });
     return reforecast(plan, result, updated);
+  }
+
+  function markWeekIncomplete(plan, result, weeklyPlan, weekNumber) {
+    const migrated = migrate(weeklyPlan);
+    if (!migrated) return null;
+    const week = migrated.weeks.find((item) => item.weekNumber === Number(weekNumber));
+    if (!week) return migrated;
+    week.isCompleted = false;
+    migrated.updatedAt = new Date().toISOString();
+    migrated.progress = buildProgress(migrated.weeks, migrated.settings);
+    return reforecast(plan, result, migrated);
   }
 
   function updateSettings(plan, result, weeklyPlan, settingsPatch = {}) {
@@ -1048,6 +1076,8 @@
     reforecast,
     updateActual,
     completeWeek,
+    markWeekIncomplete,
+    currentCalendarWeekNumberFor,
     updateSettings,
     updateTimingItem,
     addOneOffItem,
