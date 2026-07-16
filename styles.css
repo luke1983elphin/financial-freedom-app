@@ -2416,10 +2416,6 @@ textarea.field-input {
   gap: 10px;
 }
 
-.weekly-timing-header {
-  display: none;
-}
-
 .weekly-timing-row {
   display: grid;
   gap: 12px;
@@ -2428,6 +2424,60 @@ textarea.field-input {
   border-radius: 18px;
   background: #ffffff;
   padding: 14px;
+}
+
+.weekly-timing-summary {
+  display: grid;
+  gap: 12px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.weekly-timing-summary::-webkit-details-marker {
+  display: none;
+}
+
+.weekly-timing-summary strong {
+  color: #0f2742;
+  font-size: 15px;
+  font-weight: 950;
+  line-height: 1.3;
+}
+
+.weekly-timing-summary span,
+.weekly-timing-summary small {
+  display: block;
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.weekly-timing-summary-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.weekly-timing-summary-meta span,
+.weekly-timing-summary-meta b {
+  border-radius: 999px;
+  background: #eef6ff;
+  padding: 6px 10px;
+  color: #0f2742;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.weekly-timing-summary-meta b {
+  background: #0f9f6e;
+  color: #ffffff;
+}
+
+.weekly-timing-editor {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 12px;
 }
 
 .weekly-timing-row label {
@@ -2480,29 +2530,58 @@ textarea.field-input {
   align-content: center;
 }
 
+.weekly-scope-options {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.weekly-scope-options legend {
+  color: #0f2742;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.weekly-scope-options label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 9px;
+  align-items: start;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 10px;
+}
+
+.weekly-scope-options input {
+  margin-top: 4px;
+  accent-color: #0f9f6e;
+}
+
+.weekly-scope-options strong,
+.weekly-scope-options span {
+  display: block;
+}
+
+.weekly-scope-options strong {
+  color: #0f2742;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.weekly-scope-options span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
 @media (min-width: 980px) {
-  .weekly-timing-header,
-  .weekly-timing-row {
-    grid-template-columns: minmax(220px, 1.5fr) minmax(110px, 0.7fr) minmax(130px, 0.85fr) minmax(140px, 0.85fr) minmax(150px, 0.9fr) 76px;
-    align-items: start;
-  }
-
-  .weekly-timing-header {
-    display: grid;
-    gap: 10px;
-    padding: 0 14px;
-    color: #64748b;
-    font-size: 12px;
-    font-weight: 900;
-    text-transform: uppercase;
-  }
-
-  .weekly-timing-row .field-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
+  .weekly-timing-summary {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
   }
 }
 

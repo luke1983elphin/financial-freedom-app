@@ -1636,8 +1636,8 @@
         <span class="metric-label">Your current financial stage</span>
         <strong>${escapeHtml(stage.name)}</strong>
         <p>${escapeHtml(stage.explanation)}</p>
-        <p><strong>${plainPercent(stageInfo.progressToNext)}</strong> toward ${escapeHtml(stageInfo.nextStage?.name || "maintaining Financial Freedom")}.</p>
-        <div class="progress-track progress-track-large" aria-label="${plainPercent(stageInfo.progressToNext)} progress toward the next stage"><span style="width:${stageInfo.progressToNext}%"></span></div>
+        <p><strong>${stageInfo.nextStage ? plainPercent(stageInfo.progressToNext) : "100%"}</strong> ${stageInfo.nextStage ? `toward ${escapeHtml(stageInfo.nextStage.name)}` : "Financial Freedom achieved"}.</p>
+        <div class="progress-track progress-track-large" aria-label="${stageInfo.nextStage ? `${plainPercent(stageInfo.progressToNext)} progress toward ${stageInfo.nextStage.name}` : "Financial Freedom achieved"}"><span style="width:${stageInfo.nextStage ? stageInfo.progressToNext : 100}%"></span></div>
       </article>
       <div class="dashboard-card-grid mt-4">
         ${metricCard("Current stage", stage.name)}
@@ -1703,10 +1703,10 @@
       ${stageJourneyHtml(stageInfo)}
       <div class="stage-progress-block">
         <div>
-          <span class="metric-label">Progress toward your next stage</span>
-          <strong>${stageInfo.nextStage ? `${plainPercent(stageInfo.progressToNext)} toward ${escapeHtml(stageInfo.nextStage.name)}` : "Financial Freedom reached"}</strong>
+          <span class="metric-label">${stageInfo.nextStage ? `Progress toward ${escapeHtml(stageInfo.nextStage.name)}` : "Financial Freedom achieved"}</span>
+          <strong>${stageInfo.nextStage ? plainPercent(stageInfo.progressToNext) : "100%"}</strong>
         </div>
-        <div class="progress-track progress-track-large" aria-label="${plainPercent(stageInfo.progressToNext)} progress toward the next stage"><span id="freedomProgressBar" style="width:${stageInfo.progressToNext}%"></span></div>
+        <div class="progress-track progress-track-large" aria-label="${stageInfo.nextStage ? `${plainPercent(stageInfo.progressToNext)} progress toward ${stageInfo.nextStage.name}` : "Financial Freedom achieved"}"><span id="freedomProgressBar" style="width:${stageInfo.nextStage ? stageInfo.progressToNext : 100}%"></span></div>
       </div>
       <div class="stage-progress-block">
         <div>
@@ -1741,7 +1741,7 @@
     ].join("");
     document.getElementById("secondMetricGrid").innerHTML = [
       metricCard("Your Current Financial Stage", stage.name),
-      metricCard("Progress Toward Next Stage", stageInfo.nextStage ? `${plainPercent(stageInfo.progressToNext)} toward ${stageInfo.nextStage.name}` : "Financial Freedom reached"),
+      metricCard(stageInfo.nextStage ? `Progress Toward ${stageInfo.nextStage.name}` : "Financial Freedom Achieved", stageInfo.nextStage ? plainPercent(stageInfo.progressToNext) : "100%"),
       metricCard("Debt Balance", money(result.totalLiabilities), result.totalLiabilities <= result.totalAssets * 0.5 ? "status-green" : "status-amber"),
       metricCard("Monthly Surplus / Deficit", money(monthlySurplus), monthlySurplus >= 0 ? "status-green" : "status-amber"),
       metricCard("Annual Passive Income Estimate", money(passiveIncome), "", "This estimates the annual income your investments may generate without selling assets."),
@@ -2582,52 +2582,77 @@
     return weeklyTimingTypeOptions.find(([value]) => value === type)?.[1] || "Bills and spending";
   }
 
+  function weeklyTimingNextDate(item) {
+    const start = new Date(`${weeklyPlan?.weeks?.[(weeklyPlan?.currentWeekNumber || 1) - 1]?.startDate || weeklyPlan?.startDate || item.firstDate}T00:00:00`);
+    let date = new Date(`${item.firstDate || weeklyPlan?.startDate}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return item.firstDate || weeklyPlan?.startDate || "";
+    const anchorDay = date.getDate();
+    const addMonths = (source, months) => {
+      const target = new Date(source.getFullYear(), source.getMonth() + months, 1);
+      const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+      target.setDate(Math.min(anchorDay, lastDay));
+      return target;
+    };
+    const advance = () => {
+      if (item.frequency === "fortnightly") date.setDate(date.getDate() + 14);
+      else if (item.frequency === "monthly") date = addMonths(date, 1);
+      else if (item.frequency === "quarterly") date = addMonths(date, 3);
+      else if (item.frequency === "annually") date = addMonths(date, 12);
+      else date.setDate(date.getDate() + 7);
+    };
+    let guard = 0;
+    while (date < start && item.frequency !== "oneOff" && guard < 160) {
+      advance();
+      guard += 1;
+    }
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  }
+
   function weeklyTimingRowsHtml() {
     const items = weeklyPlan?.settings?.timingItems || [];
     if (!items.length) return `<p class="weekly-muted">Create or rebuild the Weekly Plan to prefill income, bills, provisions and transfers from the current financial plan.</p>`;
     return `
-      <div class="weekly-timing-table" role="table" aria-label="Cashflow timing setup">
-        <div class="weekly-timing-header" role="row">
-          <span>Item</span>
-          <span>Amount</span>
-          <span>Frequency</span>
-          <span>First date</span>
-          <span>Type</span>
-          <span>Active</span>
-        </div>
+      <div class="weekly-timing-table" aria-label="Cashflow timing setup">
         ${items.map((item) => `
-          <article class="weekly-timing-row" role="row">
-            <label>
-              <span class="field-label">Item</span>
-              <input class="field-input" type="text" data-weekly-timing="${escapeHtml(item.id)}" data-key="description" data-type="text" value="${escapeHtml(item.description || "")}">
-              ${item.isNetPay ? `<small class="field-help">Estimated net amount after tax and applicable payroll deductions.</small>` : ""}
-            </label>
-            <label>
-              <span class="field-label">Amount</span>
-              <input class="field-input" type="number" step="0.01" data-weekly-timing="${escapeHtml(item.id)}" data-key="amount" value="${weeklyInputValue(item.amount)}">
-            </label>
-            <label>
-              <span class="field-label">Frequency</span>
-              <select class="field-input" data-weekly-timing="${escapeHtml(item.id)}" data-key="frequency" data-type="text">${optionList(weeklyTimingFrequencyOptions, item.frequency)}</select>
-            </label>
-            <label>
-              <span class="field-label">First date</span>
-              <input class="field-input" type="date" data-weekly-timing="${escapeHtml(item.id)}" data-key="firstDate" data-type="text" value="${escapeHtml(item.firstDate || weeklyPlan.startDate)}">
-            </label>
-            <label>
-              <span class="field-label">Type</span>
-              <select class="field-input" data-weekly-timing="${escapeHtml(item.id)}" data-key="type" data-type="text">${optionList(weeklyTimingTypeOptions, item.type)}</select>
-            </label>
-            <label class="weekly-active-toggle">
-              <span class="field-label">Active</span>
-              <input type="checkbox" data-weekly-timing="${escapeHtml(item.id)}" data-key="active" data-type="boolean"${item.active !== false ? " checked" : ""}>
-            </label>
-            <details class="weekly-timing-advanced">
-              <summary>Advanced timing</summary>
+          <details class="weekly-timing-row">
+            <summary class="weekly-timing-summary">
+              <div>
+                <strong>${escapeHtml(item.description || "Cashflow item")} - ${money(item.amount)} ${escapeHtml((weeklyTimingFrequencyOptions.find(([value]) => value === item.frequency)?.[1] || item.frequency || "Weekly").toLowerCase())}</strong>
+                <span>Next expected: ${plannerShortDate(weeklyTimingNextDate(item))}</span>
+                ${item.isNetPay ? `<small>Estimated net pay</small>` : ""}
+              </div>
+              <div class="weekly-timing-summary-meta">
+                <span>${escapeHtml(weeklyTimingTypeLabel(item.type))}</span>
+                <span>${item.active !== false ? "Active" : "Inactive"}</span>
+                <b>Edit</b>
+              </div>
+            </summary>
+            <div class="weekly-timing-editor">
               <div class="weekly-setup-grid mt-3">
+                <label>
+                  <span class="field-label">Description</span>
+                  <input class="field-input" type="text" data-weekly-timing="${escapeHtml(item.id)}" data-key="description" data-type="text" value="${escapeHtml(item.description || "")}">
+                  ${item.isNetPay ? `<small class="field-help">Estimated net pay is based on income, tax, Medicare levy, HELP and salary-sacrifice information entered in the Financial Plan.</small>` : ""}
+                </label>
+                <label>
+                  <span class="field-label">Amount</span>
+                  <input class="field-input" type="number" step="0.01" data-weekly-timing="${escapeHtml(item.id)}" data-key="amount" value="${weeklyInputValue(item.amount)}">
+                </label>
+                <label>
+                  <span class="field-label">Frequency</span>
+                  <select class="field-input" data-weekly-timing="${escapeHtml(item.id)}" data-key="frequency" data-type="text">${optionList(weeklyTimingFrequencyOptions, item.frequency)}</select>
+                </label>
+                <label>
+                  <span class="field-label">First date</span>
+                  <input class="field-input" type="date" data-weekly-timing="${escapeHtml(item.id)}" data-key="firstDate" data-type="text" value="${escapeHtml(item.firstDate || weeklyPlan.startDate)}">
+                </label>
                 <label>
                   <span class="field-label">End date</span>
                   <input class="field-input" type="date" data-weekly-timing="${escapeHtml(item.id)}" data-key="endDate" data-type="text" value="${escapeHtml(item.endDate || "")}">
+                </label>
+                <label>
+                  <span class="field-label">Type</span>
+                  <select class="field-input" data-weekly-timing="${escapeHtml(item.id)}" data-key="type" data-type="text">${optionList(weeklyTimingTypeOptions, item.type)}</select>
                 </label>
                 <label>
                   <span class="field-label">Treatment</span>
@@ -2641,6 +2666,10 @@
                   <select class="field-input" data-weekly-timing="${escapeHtml(item.id)}" data-key="transferType" data-type="text">
                     ${optionList([["", "Other"], ["offset", "Offset"], ["extraDebt", "Debt repayment"], ["investment", "Investing"], ["extraSuper", "Extra super"]], item.transferType || "")}
                   </select>
+                </label>
+                <label class="weekly-active-toggle">
+                  <span class="field-label">Active</span>
+                  <input type="checkbox" data-weekly-timing="${escapeHtml(item.id)}" data-key="active" data-type="boolean"${item.active !== false ? " checked" : ""}>
                 </label>
               </div>
               <div class="weekly-occurrence-editor mt-4">
@@ -2660,11 +2689,10 @@
                     <input class="field-input" type="date" data-weekly-occurrence-new-date>
                   </label>
                   <label>
-                    <span class="field-label">Apply this change to</span>
-                    <select class="field-input" data-weekly-occurrence-scope>
-                      <option value="this">This occurrence only</option>
-                      <option value="future">This and future occurrences</option>
-                      <option value="all">Every occurrence</option>
+                    <span class="field-label">New frequency</span>
+                    <select class="field-input" data-weekly-occurrence-frequency>
+                      <option value="">Keep current frequency</option>
+                      ${optionList(weeklyTimingFrequencyOptions, "")}
                     </select>
                   </label>
                   <label class="weekly-active-toggle weekly-skip-toggle">
@@ -2672,10 +2700,17 @@
                     <input type="checkbox" data-weekly-occurrence-skip>
                   </label>
                 </div>
+                <fieldset class="weekly-scope-options mt-3">
+                  <legend>Apply this change to</legend>
+                  <label><input type="radio" name="weekly-scope-${escapeHtml(item.id)}" value="this" data-weekly-occurrence-scope checked><span><strong>This occurrence only</strong>Change only this payment or receipt.</span></label>
+                  <label><input type="radio" name="weekly-scope-${escapeHtml(item.id)}" value="future" data-weekly-occurrence-scope><span><strong>This and future occurrences</strong>Use the new timing or amount from this occurrence onward.</span></label>
+                  <label><input type="radio" name="weekly-scope-${escapeHtml(item.id)}" value="all" data-weekly-occurrence-scope><span><strong>Every occurrence</strong>Replace the recurring setup across the whole planner period.</span></label>
+                </fieldset>
+                <p class="weekly-device-note mt-3">This updates your Weekly Plan only. If this is a permanent pay rise or ongoing lifestyle change, also update your main Financial Plan so your long-term projections remain accurate.</p>
                 <button class="btn mt-3" type="button" data-weekly-action="apply-occurrence-edit" data-weekly-timing-id="${escapeHtml(item.id)}">Apply timing change</button>
               </div>
-            </details>
-          </article>
+            </div>
+          </details>
         `).join("")}
       </div>
     `;
@@ -2719,7 +2754,7 @@
             <span>Review when your income, bills and planned transfers are expected to occur. The app has prefilled this information from your financial plan. Adjust only the timing or amounts that differ.</span>
           </div>
         </div>
-        <p class="weekly-device-note mt-4">Salary and wage amounts are estimated net amounts after tax and applicable payroll deductions based on the information entered in your plan.</p>
+        <p class="weekly-device-note mt-4">Estimated net pay is based on the income, tax, Medicare levy, HELP and salary-sacrifice information entered in the Financial Plan. Actual payroll amounts may differ.</p>
         <p class="weekly-device-note mt-3">Changes made here update your weekly schedule only. They do not automatically change your long-term Financial Freedom plan.</p>
         <div class="mt-4">${weeklyTimingRowsHtml()}</div>
         ${weeklyOneOffFormHtml()}
@@ -3393,11 +3428,13 @@
     }
     const amountRaw = row.querySelector("[data-weekly-occurrence-amount]")?.value;
     const newDate = row.querySelector("[data-weekly-occurrence-new-date]")?.value || "";
-    const scope = row.querySelector("[data-weekly-occurrence-scope]")?.value || "this";
+    const newFrequency = row.querySelector("[data-weekly-occurrence-frequency]")?.value || "";
+    const scope = row.querySelector("[data-weekly-occurrence-scope]:checked")?.value || "this";
     const skip = row.querySelector("[data-weekly-occurrence-skip]")?.checked || false;
     const patch = {};
     if (amountRaw !== "") patch.amount = Number(amountRaw) || 0;
     if (newDate) patch.date = newDate;
+    if (newFrequency) patch.frequency = newFrequency;
     if (skip) patch.active = false;
     if (!Object.keys(patch).length) {
       updateSaveStatus("Enter a new amount, date, or select skip before applying.");

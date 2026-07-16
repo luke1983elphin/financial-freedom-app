@@ -204,6 +204,8 @@
     const frequency = normaliseFrequency(item.frequency, type === "provision" ? "weeklyProvision" : "weekly");
     return {
       id: String(item.id || `timing-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`),
+      parentSeriesId: String(item.parentSeriesId || item.parentId || item.rootId || ""),
+      replacementSeriesId: String(item.replacementSeriesId || ""),
       sourceId: String(item.sourceId || item.id || ""),
       description: String(item.description || item.name || "Cashflow item"),
       amount: roundMoney(item.amount),
@@ -217,6 +219,8 @@
       note: item.note || "",
       estimated: Boolean(item.estimated),
       isNetPay: Boolean(item.isNetPay),
+      supersedesFrom: item.supersedesFrom || item.splitFrom || "",
+      splitFrom: item.supersedesFrom || item.splitFrom || "",
     };
   }
 
@@ -224,6 +228,7 @@
     if (!override.itemId || !override.occurrenceDate) return null;
     return {
       itemId: String(override.itemId),
+      id: String(override.id || `override-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`),
       occurrenceDate: override.occurrenceDate,
       amount: override.amount === undefined ? undefined : roundMoney(override.amount),
       date: override.date || "",
@@ -236,6 +241,23 @@
     const person1Annual = toNumber(result.person1AnnualIncome ?? annualize(plan.income?.person1Income, plan.income?.person1Frequency));
     const person2Annual = toNumber(result.person2AnnualIncome ?? annualize(plan.income?.person2Income, plan.income?.person2Frequency));
     const otherAnnual = toNumber(result.otherAnnualIncome ?? annualize(plan.income?.otherIncome, plan.income?.otherIncomeFrequency));
+    const payrollEstimates = result.payrollEstimates || result.payrollEstimate;
+    if (payrollEstimates?.person1 || payrollEstimates?.person2) {
+      return {
+        person1Annual,
+        person2Annual,
+        otherAnnual,
+        person1Net: roundMoney(payrollEstimates?.person1?.estimatedNetEmploymentIncome ?? person1Annual),
+        person2Net: roundMoney(payrollEstimates?.person2?.estimatedNetEmploymentIncome ?? person2Annual),
+        otherNet: otherAnnual,
+        household: payrollEstimates?.household || {},
+        method: "person-level-payroll-estimate",
+      };
+    }
+    return fallbackProportionalNetIncomeAnnuals(plan, result, person1Annual, person2Annual, otherAnnual);
+  }
+
+  function fallbackProportionalNetIncomeAnnuals(plan = {}, result = {}, person1Annual = 0, person2Annual = 0, otherAnnual = 0) {
     const gross = toNumber(result.annualGrossIncome) || person1Annual + person2Annual + otherAnnual;
     const net = toNumber(result.netIncomeAfterTaxHelp);
     let deductions = Math.max(0, gross - (net || gross));
@@ -250,7 +272,7 @@
       deductions = roundMoney(deductions - employmentDeduction);
     }
     if (otherNet > 0 && deductions > 0) otherNet = Math.max(0, roundMoney(otherNet - deductions));
-    return { person1Annual, person2Annual, otherAnnual, person1Net, person2Net, otherNet };
+    return { person1Annual, person2Annual, otherAnnual, person1Net, person2Net, otherNet, household: {}, method: "fallback-proportional-household-net-income" };
   }
 
   function defaultIncomeName(plan, key, fallback) {
@@ -265,6 +287,7 @@
   function buildDefaultTimingItems(plan = {}, result = {}, settings = {}) {
     const items = [];
     const netIncome = estimatedNetIncomeAnnuals(plan, result);
+    const salarySacrificeAlreadyDeducted = toNumber(netIncome.household?.allocatedExtraSuper ?? netIncome.household?.totalSalarySacrifice);
     const addItem = (item) => {
       const normalised = normaliseTimingItem(item);
       if (normalised.amount > 0) items.push(normalised);
@@ -360,7 +383,7 @@
       id: "timing-transfer-super",
       sourceId: "extra-super-target",
       description: "Additional super contribution",
-      amount: amountFromAnnual(settings.extraSuperTarget ?? plan.investing?.extraSuperContributions, "weeklyProvision"),
+      amount: amountFromAnnual(Math.max(0, toNumber(settings.extraSuperTarget ?? plan.investing?.extraSuperContributions) - salarySacrificeAlreadyDeducted), "weeklyProvision"),
       frequency: "weeklyProvision",
       firstDate: settings.startDate,
       type: "transfer",
@@ -932,24 +955,56 @@
     const migrated = migrate(weeklyPlan);
     if (!migrated) return null;
     const settings = { ...(migrated.settings || {}) };
-    const timingItems = (settings.timingItems || []).map(normaliseTimingItem);
-    const index = timingItems.findIndex((item) => item.id === itemId);
+    let timingItems = (settings.timingItems || []).map(normaliseTimingItem);
+    let index = timingItems.findIndex((item) => item.id === itemId);
     if (index < 0) return migrated;
     const item = timingItems[index];
     if (scope === "all") {
-      timingItems[index] = normaliseTimingItem({ ...item, ...patch, id: item.id });
+      const allPatch = { ...patch };
+      if (allPatch.date) {
+        allPatch.firstDate = allPatch.date;
+        delete allPatch.date;
+      }
+      timingItems[index] = normaliseTimingItem({ ...item, ...allPatch, id: item.id });
     } else if (scope === "future") {
-      const effectiveDate = patch.date || occurrenceDate;
-      const dayBefore = dateIso(addDays(dateFromIso(effectiveDate), -1));
-      timingItems[index] = normaliseTimingItem({ ...item, endDate: dayBefore, id: item.id });
+      const selectedOccurrenceDate = occurrenceDate;
+      const replacementStartDate = patch.date || selectedOccurrenceDate;
+      const selectedDate = dateFromIso(selectedOccurrenceDate);
+      const parentSeriesId = item.parentSeriesId || item.id;
+      const replacementSeriesId = `${parentSeriesId}-future-${selectedOccurrenceDate.replaceAll("-", "")}`;
+      timingItems = timingItems.filter((candidate, candidateIndex) => {
+        if (candidateIndex === index) return true;
+        const candidateParent = candidate.parentSeriesId || candidate.id;
+        if (candidateParent !== parentSeriesId) return true;
+        if (candidate.id === replacementSeriesId || candidate.replacementSeriesId === replacementSeriesId) return false;
+        const candidateSupersedesFrom = candidate.supersedesFrom || candidate.splitFrom || candidate.firstDate || selectedOccurrenceDate;
+        return dateFromIso(candidateSupersedesFrom) < selectedDate;
+      });
+      index = timingItems.findIndex((candidate) => candidate.id === itemId);
+      const originalSeriesEndDate = dateIso(addDays(dateFromIso(selectedOccurrenceDate), -1));
+      timingItems[index] = normaliseTimingItem({ ...item, endDate: originalSeriesEndDate, id: item.id, parentSeriesId: item.parentSeriesId });
       timingItems.push(normaliseTimingItem({
         ...item,
         ...patch,
-        id: `${item.id}-future-${Date.now()}`,
+        id: replacementSeriesId,
+        parentSeriesId,
+        replacementSeriesId,
         sourceId: item.sourceId,
-        firstDate: effectiveDate,
+        firstDate: replacementStartDate,
         endDate: "",
+        supersedesFrom: selectedOccurrenceDate,
       }));
+      const remainingOverrides = (settings.occurrenceOverrides || [])
+        .map(normaliseOccurrenceOverride)
+        .filter((override) => override && !(override.itemId === item.id && dateFromIso(override.occurrenceDate) >= selectedDate));
+      remainingOverrides.push(normaliseOccurrenceOverride({
+        id: `override-${item.id}-${selectedOccurrenceDate}`,
+        itemId: item.id,
+        occurrenceDate: selectedOccurrenceDate,
+        active: false,
+        note: "Original occurrence removed by future series split.",
+      }));
+      settings.occurrenceOverrides = remainingOverrides;
     } else {
       const overrides = (settings.occurrenceOverrides || []).map(normaliseOccurrenceOverride).filter(Boolean);
       overrides.push(normaliseOccurrenceOverride({

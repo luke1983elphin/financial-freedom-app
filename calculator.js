@@ -139,6 +139,82 @@
     };
   }
 
+  function calculatePayrollEstimate({
+    person1Income,
+    person2Income,
+    extraConcessionalSuper,
+    helpDebt,
+    person1HelpDebt,
+    person2HelpDebt,
+    person1SalarySacrifice,
+    person2SalarySacrifice,
+    person1PayrollDeductions,
+    person2PayrollDeductions,
+  }) {
+    const gross1 = nonNegative(person1Income);
+    const gross2 = nonNegative(person2Income);
+    const explicitSacrifice1 = nonNegative(person1SalarySacrifice);
+    const explicitSacrifice2 = nonNegative(person2SalarySacrifice);
+    const split = explicitSacrifice1 || explicitSacrifice2
+      ? { person1: Math.min(gross1, explicitSacrifice1), person2: Math.min(gross2, explicitSacrifice2) }
+      : splitAdditionalContribution(extraConcessionalSuper, gross1, gross2);
+    const p1Sacrifice = roundCurrency(Math.min(gross1, split.person1));
+    const p2Sacrifice = roundCurrency(Math.min(gross2, split.person2));
+    const p1OtherDeductions = nonNegative(person1PayrollDeductions);
+    const p2OtherDeductions = nonNegative(person2PayrollDeductions);
+    const p1Taxable = roundCurrency(Math.max(0, gross1 - p1Sacrifice));
+    const p2Taxable = roundCurrency(Math.max(0, gross2 - p2Sacrifice));
+    const p1RepaymentIncome = roundCurrency(p1Taxable + p1Sacrifice);
+    const p2RepaymentIncome = roundCurrency(p2Taxable + p2Sacrifice);
+    const helpBalance = nonNegative(helpDebt);
+    const explicitHelp1 = nonNegative(person1HelpDebt);
+    const explicitHelp2 = nonNegative(person2HelpDebt);
+    let p1HelpDebt = explicitHelp1;
+    let p2HelpDebt = explicitHelp2;
+    if (helpBalance > 0 && explicitHelp1 === 0 && explicitHelp2 === 0) {
+      if (p2RepaymentIncome > p1RepaymentIncome) p2HelpDebt = helpBalance;
+      else p1HelpDebt = helpBalance;
+    }
+    const p1Help = estimateHelpRepayment(p1RepaymentIncome, p1HelpDebt).annualRepayment;
+    const p2Help = estimateHelpRepayment(p2RepaymentIncome, p2HelpDebt).annualRepayment;
+    const buildPerson = (gross, taxableIncome, repaymentIncome, allocatedExtraSuper, otherPayrollDeductions, helpRepayment) => {
+      const tax = individualTaxBreakdown(taxableIncome);
+      return {
+        grossEmploymentIncome: roundCurrency(gross),
+        taxableIncome: roundCurrency(taxableIncome),
+        taxableEmploymentIncome: roundCurrency(taxableIncome),
+        repaymentIncome: roundCurrency(repaymentIncome),
+        incomeTax: tax.incomeTax,
+        medicareLevy: tax.medicareLevy,
+        helpRepayment: roundCurrency(helpRepayment),
+        allocatedExtraSuper: roundCurrency(allocatedExtraSuper),
+        salarySacrifice: roundCurrency(allocatedExtraSuper),
+        otherPayrollDeductions: roundCurrency(otherPayrollDeductions),
+        estimatedNetEmploymentIncome: roundCurrency(Math.max(0, gross - tax.incomeTax - tax.medicareLevy - helpRepayment - allocatedExtraSuper - otherPayrollDeductions)),
+      };
+    };
+    const person1 = buildPerson(gross1, p1Taxable, p1RepaymentIncome, p1Sacrifice, p1OtherDeductions, p1Help);
+    const person2 = buildPerson(gross2, p2Taxable, p2RepaymentIncome, p2Sacrifice, p2OtherDeductions, p2Help);
+    return {
+      person1,
+      person2,
+      household: {
+        grossEmploymentIncome: roundCurrency(gross1 + gross2),
+        incomeTax: roundCurrency(person1.incomeTax + person2.incomeTax),
+        medicareLevy: roundCurrency(person1.medicareLevy + person2.medicareLevy),
+        helpRepayment: roundCurrency(person1.helpRepayment + person2.helpRepayment),
+        allocatedExtraSuper: roundCurrency(person1.allocatedExtraSuper + person2.allocatedExtraSuper),
+        totalTax: roundCurrency(person1.incomeTax + person2.incomeTax),
+        totalMedicareLevy: roundCurrency(person1.medicareLevy + person2.medicareLevy),
+        totalHelpRepayments: roundCurrency(person1.helpRepayment + person2.helpRepayment),
+        totalSalarySacrifice: roundCurrency(person1.salarySacrifice + person2.salarySacrifice),
+        totalOtherPayrollDeductions: roundCurrency(person1.otherPayrollDeductions + person2.otherPayrollDeductions),
+        estimatedNetEmploymentIncome: roundCurrency(person1.estimatedNetEmploymentIncome + person2.estimatedNetEmploymentIncome),
+        note: "Estimated net employment income uses the app's 2026-27 income tax, Medicare levy and HELP repayment helpers. HELP ownership is estimated from the higher repayment income when only one household HELP balance is available.",
+      },
+    };
+  }
+
   function annualize(amount, frequency) {
     const value = number(amount);
     if (frequency === "weekly") return value * 52;
@@ -628,6 +704,18 @@
       extraConcessionalSuper: plan.investing.extraSuperContributions,
     });
     const helpRepaymentEstimate = estimateHelpRepayment(helpRepaymentIncome.estimatedRepaymentIncome, plan.liabilities.hecsHelpDebt);
+    const payrollEstimate = calculatePayrollEstimate({
+      person1Income: person1AnnualIncome,
+      person2Income: person2AnnualIncome,
+      extraConcessionalSuper: plan.investing.extraSuperContributions,
+      helpDebt: plan.liabilities.hecsHelpDebt,
+      person1HelpDebt: plan.liabilities.person1HecsHelpDebt,
+      person2HelpDebt: plan.liabilities.person2HecsHelpDebt,
+      person1SalarySacrifice: plan.investing.person1SalarySacrifice,
+      person2SalarySacrifice: plan.investing.person2SalarySacrifice,
+      person1PayrollDeductions: plan.income.person1PayrollDeductions,
+      person2PayrollDeductions: plan.income.person2PayrollDeductions,
+    });
     const expenseBreakdown = annualExpenseBreakdown(plan);
     const annualCoreLivingExpenses = expenseBreakdown.living;
     const annualOtherRegularExpenses = expenseBreakdown.otherRegular;
@@ -811,6 +899,8 @@
       superContributionsTaxPaid,
       superContributionsTaxRate: SUPER_CONTRIBUTIONS_TAX_RATE,
       taxEstimate,
+      payrollEstimates: payrollEstimate,
+      payrollEstimate,
       helpRepaymentEstimate,
       helpRepaymentIncome,
       financialFreedomScore,
@@ -843,6 +933,7 @@
     marginalTaxRate,
     estimateHelpRepayment,
     calculateHelpRepaymentIncome,
+    calculatePayrollEstimate,
     amortiseLoan,
     calculateOffsetBenefit,
     calculateLoanSummary,

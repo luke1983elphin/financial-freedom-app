@@ -145,7 +145,7 @@
       [blank(), blank(), blank()],
       [text("How to use this planner", STYLE.section), blank(STYLE.section), blank(STYLE.section)],
       [text("This workbook converts your Financial Freedom plan into a practical weekly money plan. Review each week, complete the planned transfers and update the spreadsheet when your income or expenses change.", STYLE.note), blank(), blank()],
-      [text("Salary and wage rows are estimated net amounts after tax and applicable payroll deductions based on the plan information.", STYLE.note), blank(), blank()],
+      [text("Estimated net pay is based on the income, tax, Medicare levy, HELP and salary-sacrifice information entered in the Financial Plan. Actual payroll amounts may differ.", STYLE.note), blank(), blank()],
       [text("Weekly amounts set aside", STYLE.section), blank(STYLE.section), blank(STYLE.section)],
       [text("Where exact bill dates are not entered, the planner uses an estimated amount set aside instead of pretending the bill is paid on a specific date.", STYLE.note), blank(), blank()],
       [text("Key assumptions", STYLE.section), blank(STYLE.section), blank(STYLE.section)],
