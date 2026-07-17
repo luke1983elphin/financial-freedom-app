@@ -129,6 +129,13 @@
     };
   }
 
+  function normaliseOpeningBalanceOverrides(value = {}) {
+    const source = value && typeof value === "object" ? value : {};
+    return Object.fromEntries(Object.entries(source)
+      .map(([weekNumber, amount]) => [String(Math.round(toNumber(weekNumber))), roundMoney(amount)])
+      .filter(([weekNumber, amount]) => weekNumber !== "0" && Number.isFinite(amount)));
+  }
+
   function defaultSettings(plan = {}, result = {}, overrides = {}) {
     const existing = overrides || {};
     const weeklyPlanner = plan.reportSettings?.weeklyPlanner || {};
@@ -153,6 +160,7 @@
       timingItems: Array.isArray(existing.timingItems) ? existing.timingItems.map(normaliseTimingItem) : [],
       oneOffItems: Array.isArray(existing.oneOffItems) ? existing.oneOffItems.map(normaliseTimingItem) : [],
       occurrenceOverrides: Array.isArray(existing.occurrenceOverrides) ? existing.occurrenceOverrides.map(normaliseOccurrenceOverride).filter(Boolean) : [],
+      openingBalanceOverrides: normaliseOpeningBalanceOverrides(existing.openingBalanceOverrides || existing.openingBalanceAdjustments || {}),
       notes: existing.notes || "",
       sourcePlanUpdatedAt: existing.sourcePlanUpdatedAt || "",
       timingSetupReviewed: Boolean(existing.timingSetupReviewed),
@@ -732,6 +740,10 @@
         opening = roundMoney(completedWeek.actual?.closingBalance ?? completedWeek.planned?.closingBalance ?? opening);
         return;
       }
+      const expectedOpeningBalance = roundMoney(opening);
+      const openingOverrideRaw = settings.openingBalanceOverrides?.[String(baseWeek.weekNumber)];
+      const hasOpeningOverride = openingOverrideRaw !== undefined && Number.isFinite(Number(openingOverrideRaw));
+      const effectiveOpeningBalance = hasOpeningOverride ? roundMoney(openingOverrideRaw) : expectedOpeningBalance;
       const income = itemValueAt(schedule.incomeItems, index);
       const billsDue = roundMoney(itemValueAt(schedule.billItems, index) + itemValueAt(schedule.requiredDebtItems, index));
       const amountSetAside = itemValueAt(schedule.provisionItems, index);
@@ -749,7 +761,7 @@
         .filter((item) => !["investment", "extraSuper", "extraDebt", "offset"].includes(item.transferType))
         .reduce((total, item) => total + toNumber(item.values?.[index]), 0));
       const totalTransfers = roundMoney(investment + extraSuper + extraDebt + offset + otherTransfers);
-      const closingBalance = roundMoney(opening + income - essentialCosts - amountSetAside - discretionaryAllowance - totalTransfers);
+      const closingBalance = roundMoney(effectiveOpeningBalance + income - essentialCosts - amountSetAside - discretionaryAllowance - totalTransfers);
       let adjustmentReason = "";
       if (closingBalance < settings.minimumCashBuffer) {
         adjustmentReason = closingBalance < 0
@@ -761,7 +773,11 @@
         ...baseWeek,
         isCompleted: false,
         planned: {
-          openingBalance: opening,
+          openingBalance: effectiveOpeningBalance,
+          expectedOpeningBalance,
+          actualOpeningBalance: hasOpeningOverride ? effectiveOpeningBalance : undefined,
+          openingBalanceDifference: hasOpeningOverride ? roundMoney(effectiveOpeningBalance - expectedOpeningBalance) : 0,
+          hasOpeningBalanceAdjustment: hasOpeningOverride,
           income,
           essentialCosts,
           billsDue,
@@ -848,6 +864,10 @@
       isCompleted: Boolean(week.isCompleted),
       planned: {
         openingBalance: roundMoney(week.planned?.openingBalance),
+        expectedOpeningBalance: roundMoney(week.planned?.expectedOpeningBalance ?? week.planned?.openingBalance),
+        actualOpeningBalance: week.planned?.actualOpeningBalance === undefined ? undefined : roundMoney(week.planned.actualOpeningBalance),
+        openingBalanceDifference: roundMoney(week.planned?.openingBalanceDifference),
+        hasOpeningBalanceAdjustment: Boolean(week.planned?.hasOpeningBalanceAdjustment),
         income: roundMoney(week.planned?.income),
         essentialCosts: roundMoney(week.planned?.essentialCosts),
         billsDue: roundMoney(week.planned?.billsDue),
@@ -866,6 +886,7 @@
         adjustmentReason: week.planned?.adjustmentReason || "",
       },
       actual: week.actual ? {
+        openingBalance: roundMoney(week.actual.openingBalance ?? week.planned?.openingBalance),
         income: roundMoney(week.actual.income),
         essentialCosts: roundMoney(week.actual.essentialCosts),
         discretionarySpending: roundMoney(week.actual.discretionarySpending),
@@ -903,6 +924,7 @@
         timingItems: Array.isArray(input.settings?.timingItems) ? input.settings.timingItems.map(normaliseTimingItem) : settings.timingItems,
         oneOffItems: Array.isArray(input.settings?.oneOffItems) ? input.settings.oneOffItems.map(normaliseTimingItem) : settings.oneOffItems,
         occurrenceOverrides: Array.isArray(input.settings?.occurrenceOverrides) ? input.settings.occurrenceOverrides.map(normaliseOccurrenceOverride).filter(Boolean) : settings.occurrenceOverrides,
+        openingBalanceOverrides: normaliseOpeningBalanceOverrides(input.settings?.openingBalanceOverrides || settings.openingBalanceOverrides),
       },
       sourceSnapshot: input.sourceSnapshot || {},
     };
@@ -919,6 +941,7 @@
     if (!week) return migrated;
     const previous = week.actual || {};
     week.actual = {
+      openingBalance: roundMoney(actual.openingBalance ?? previous.openingBalance ?? week.planned.openingBalance),
       income: roundMoney(actual.income ?? previous.income ?? week.planned.income),
       essentialCosts: roundMoney(actual.essentialCosts ?? previous.essentialCosts ?? week.planned.essentialCosts),
       discretionarySpending: roundMoney(actual.discretionarySpending ?? previous.discretionarySpending ?? week.planned.discretionaryAllowance),
@@ -952,6 +975,27 @@
     migrated.updatedAt = new Date().toISOString();
     migrated.progress = buildProgress(migrated.weeks, migrated.settings);
     return reforecast(plan, result, migrated);
+  }
+
+  function updateOpeningBalance(plan, result, weeklyPlan, weekNumber, openingBalance) {
+    const migrated = migrate(weeklyPlan);
+    if (!migrated) return null;
+    const targetWeekNumber = Number(weekNumber);
+    const amount = roundMoney(openingBalance);
+    const settings = { ...(migrated.settings || {}) };
+    const overrides = normaliseOpeningBalanceOverrides(settings.openingBalanceOverrides || {});
+    overrides[String(targetWeekNumber)] = amount;
+    settings.openingBalanceOverrides = overrides;
+    const week = migrated.weeks.find((item) => item.weekNumber === targetWeekNumber);
+    if (week) {
+      const previous = week.actual || {};
+      week.actual = {
+        ...previous,
+        openingBalance: amount,
+        checks: previous.checks && typeof previous.checks === "object" ? { ...previous.checks } : {},
+      };
+    }
+    return createFromPlan(plan, result, settings, migrated);
   }
 
   function updateSettings(plan, result, weeklyPlan, settingsPatch = {}) {
@@ -1090,6 +1134,7 @@
     updateActual,
     completeWeek,
     markWeekIncomplete,
+    updateOpeningBalance,
     currentCalendarWeekNumberFor,
     updateSettings,
     updateTimingItem,

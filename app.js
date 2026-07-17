@@ -6,7 +6,7 @@
   const SCENARIO_KEY = "ffs-scenarios-v3-mobile-dashboard-ux-test";
   const WEEKLY_PLAN_KEY = "ffs-weekly-plan-v1-v3-mobile-dashboard-ux-test";
   const APP_VERSION = "3.0-test-weekly-planner";
-  const WEEKLY_EDITOR_BUILD_ID = "2026-07-17-01";
+  const WEEKLY_EDITOR_BUILD_ID = "2026-07-17-02";
   const EXPORT_SCHEMA_VERSION = 1;
   console.info(`Weekly Plan editor build: ${WEEKLY_EDITOR_BUILD_ID}`);
   const frequencies = [
@@ -2739,30 +2739,39 @@
   function weeklyTimingRowsHtml() {
     const items = weeklyPlan?.settings?.timingItems || [];
     if (!items.length) return `<p class="weekly-muted">Create or rebuild the Weekly Plan to prefill income, bills, provisions and transfers from the current financial plan.</p>`;
+    const groups = [
+      ["Income", items.filter((item) => item.type === "money-in")],
+      ["Bills", items.filter((item) => item.type === "bill")],
+      ["Provisions", items.filter((item) => item.type === "provision")],
+      ["Planned transfers", items.filter((item) => item.type === "transfer")],
+    ].filter(([, groupItems]) => groupItems.length);
     return `
       <div class="weekly-timing-table" aria-label="Cashflow timing setup">
-        ${items.map((item) => {
-          const isEditing = editingTimingItemId === item.id;
-          return `
-            <article class="weekly-timing-row${isEditing ? " editing" : ""}">
-              <div class="weekly-timing-summary">
-                <div>
-                  <strong>${escapeHtml(item.description || "Cashflow item")}</strong>
-                  <span>${money(item.amount)} ${escapeHtml(weeklyTimingFrequencyText(item))}</span>
-                  <span>Next expected: ${plannerShortDate(weeklyTimingNextDate(item))}</span>
-                  ${item.isNetPay ? `<small>Estimated net pay</small>` : ""}
-                </div>
-                <div class="weekly-timing-summary-meta">
-                  <span>${escapeHtml(weeklyTimingTypeLabel(item.type))}</span>
-                  <span>${item.active !== false ? "Active" : "Inactive"}</span>
-                  ${isEditing ? `<span>Editing draft</span>` : ""}
-                  <button class="btn btn-small" type="button" data-weekly-action="begin-timing-edit" data-weekly-timing-id="${escapeHtml(item.id)}">${isEditing ? "Editing" : "Edit"}</button>
-                </div>
-              </div>
-              ${isEditing ? weeklyTimingEditorHtml(item) : ""}
-            </article>
-          `;
-        }).join("")}
+        ${groups.map(([label, groupItems]) => `
+          <section class="weekly-timing-group" aria-label="${escapeHtml(label)}">
+            <h4>${escapeHtml(label)}</h4>
+            ${groupItems.map((item) => {
+              const isEditing = editingTimingItemId === item.id;
+              return `
+                <article class="weekly-timing-row${isEditing ? " editing" : ""}">
+                  <div class="weekly-timing-summary">
+                    <div>
+                      <strong>${escapeHtml(item.description || "Cashflow item")}</strong>
+                      <span>${money(item.amount)} ${escapeHtml(weeklyTimingFrequencyText(item))} · Next ${plannerShortDate(weeklyTimingNextDate(item))}</span>
+                      ${item.isNetPay ? `<small>Estimated net pay</small>` : ""}
+                    </div>
+                    <div class="weekly-timing-summary-meta">
+                      ${item.active === false ? `<span>Inactive</span>` : ""}
+                      ${isEditing ? `<span>Editing draft</span>` : ""}
+                      <button class="btn btn-small" type="button" data-weekly-action="begin-timing-edit" data-weekly-timing-id="${escapeHtml(item.id)}">${isEditing ? "Editing" : "Edit"}</button>
+                    </div>
+                  </div>
+                  ${isEditing ? weeklyTimingEditorHtml(item) : ""}
+                </article>
+              `;
+            }).join("")}
+          </section>
+        `).join("")}
       </div>
     `;
   }
@@ -3138,6 +3147,90 @@
     `;
   }
 
+  function weeklyOpeningBalanceHtml(week, canAdjust) {
+    const planned = week.planned || {};
+    const expectedOpening = Number(planned.expectedOpeningBalance ?? planned.openingBalance) || 0;
+    const actualOpening = Number(week.actual?.openingBalance ?? planned.actualOpeningBalance ?? planned.openingBalance) || 0;
+    const difference = actualOpening - expectedOpening;
+    const differenceClass = difference < 0 ? "negative" : difference > 0 ? "positive" : "neutral";
+    const helper = canAdjust
+      ? "Update this amount if your actual bank balance differs from the previous week's expected closing balance."
+      : week.weekNumber > weeklyPlanCurrentCalendarWeekNumber()
+        ? "Future weeks inherit the prior week's projected closing balance."
+        : "Reopen this completed week to adjust the opening balance.";
+    return `
+      <article class="card weekly-opening-balance-card mt-4">
+        <div class="card-heading">
+          <div>
+            <h3>Opening everyday bank balance</h3>
+            <span>${escapeHtml(helper)}</span>
+          </div>
+        </div>
+        <div class="weekly-opening-lines mt-4">
+          <div><span>Expected from last week</span><strong>${money(expectedOpening)}</strong></div>
+          <div><span>Actual opening balance</span><strong>${money(actualOpening)}</strong></div>
+          <div><span>Difference</span><strong class="${differenceClass}">${money(difference)}</strong></div>
+        </div>
+        ${canAdjust ? `
+          <details class="weekly-setup-details mt-4">
+            <summary>Update opening balance</summary>
+            <div class="weekly-opening-adjustment mt-3">
+              <label>
+                <span class="field-label">Actual opening bank balance</span>
+                <input class="field-input" type="number" step="0.01" data-weekly-opening-balance="${week.weekNumber}" value="${weeklyInputValue(actualOpening)}">
+                <small class="field-help">This is a reconciliation adjustment only. It does not change last week or your long-term Financial Freedom plan.</small>
+              </label>
+              <button class="btn btn-primary" type="button" data-weekly-action="save-opening-balance" data-weekly-week="${week.weekNumber}">Save opening balance</button>
+            </div>
+          </details>
+        ` : ""}
+      </article>
+    `;
+  }
+
+  function weeklyCompletedWeekHtml(week) {
+    const planned = week.planned || {};
+    const actual = week.actual || {};
+    const plannedClosing = Number(planned.closingBalance) || 0;
+    const actualClosing = Number(actual.closingBalance ?? planned.closingBalance) || 0;
+    const difference = actualClosing - plannedClosing;
+    return `
+      <article class="card mt-4 weekly-completed-card">
+        <details class="weekly-completed-details">
+          <summary>
+            <div>
+              <span class="metric-label">Week ${week.weekNumber} · Completed</span>
+              <h3>${escapeHtml(weeklyDateLabel(week.startDate, week.endDate))}</h3>
+            </div>
+            <div class="weekly-completed-summary-grid">
+              <span>Planned closing balance <strong>${money(plannedClosing)}</strong></span>
+              <span>Actual closing balance <strong>${money(actualClosing)}</strong></span>
+              <span>Difference <strong class="${difference < 0 ? "negative" : difference > 0 ? "positive" : "neutral"}">${money(difference)}</strong></span>
+            </div>
+            <b>View</b>
+          </summary>
+          <div class="weekly-completed-body">
+            <div class="weekly-opening-lines mt-4">
+              <div><span>Actual opening balance</span><strong>${money(actual.openingBalance ?? planned.openingBalance)}</strong></div>
+              <div><span>Actual income received</span><strong>${money(actual.income)}</strong></div>
+              <div><span>Actual bills and essentials</span><strong>${money(actual.essentialCosts)}</strong></div>
+              <div><span>Actual spending</span><strong>${money(actual.discretionarySpending)}</strong></div>
+              <div><span>Actual invested</span><strong>${money(actual.investment)}</strong></div>
+              <div><span>Actual extra super</span><strong>${money(actual.extraSuper)}</strong></div>
+              <div><span>Actual extra debt repayment</span><strong>${money(actual.extraDebtRepayment)}</strong></div>
+            </div>
+            ${actual.notes ? `<p class="weekly-device-note mt-3">${escapeHtml(actual.notes)}</p>` : ""}
+            <div class="weekly-action-row mt-4">
+              ${weeklyPlan.settings.allowCompletedWeekEditing ? `<button class="btn" type="button" data-weekly-action="edit-week" data-weekly-week="${week.weekNumber}">Edit Completed Week</button>` : ""}
+              <button class="btn" type="button" data-weekly-action="mark-week-incomplete" data-weekly-week="${week.weekNumber}">Mark as incomplete</button>
+              ${week.weekNumber < weeklyPlan.weeks.length ? `<button class="btn" type="button" data-weekly-action="view-week" data-weekly-week="${week.weekNumber + 1}">View next week</button>` : ""}
+            </div>
+          </div>
+        </details>
+      </article>
+    `;
+  }
+
   function weeklyActualField(week, key, label, defaultValue, options = {}) {
     const actual = week.actual || {};
     const value = actual[key] ?? defaultValue ?? 0;
@@ -3207,6 +3300,8 @@
         </div>
       </article>
 
+      ${weeklyOpeningBalanceHtml(week, canEdit)}
+
       <div class="weekly-summary-grid mt-4">
         ${weeklySummaryCard("Net income received", money(planned.income))}
         ${weeklySummaryCard("Bills and spending", money(planned.essentialCosts))}
@@ -3229,7 +3324,7 @@
         ${weeklyDetailList("Lifestyle spending", week.detail?.discretionaryItems || [])}
       </div>
 
-      <article class="card mt-4">
+      ${completedReadOnly ? weeklyCompletedWeekHtml(week) : `<article class="card mt-4">
         <div class="card-heading">
           <div>
             <h3>${completedReadOnly ? "Completed week" : "Record what actually happened"}</h3>
@@ -3262,7 +3357,7 @@
           ${week.isCompleted && week.weekNumber < weeklyPlan.weeks.length ? `<button class="btn" type="button" data-weekly-action="view-week" data-weekly-week="${week.weekNumber + 1}">View next week</button>` : ""}
           ${isFutureWeek ? `<p class="weekly-warning">This week has not started yet.</p>` : ""}
         </div>
-      </article>
+      </article>`}
     `;
   }
 
@@ -3586,6 +3681,33 @@
     weeklyViewedWeekNumber = weekNumber;
     generatedWeeklyPlanner = null;
     saveWeeklyPlan(complete ? `Week ${weekNumber} has been marked complete.` : editingCompletedWeek ? `Week ${weekNumber} has been updated.` : "Weekly progress saved.");
+    renderAll();
+    showWorkspace("weeklyplan");
+  }
+
+  function saveWeeklyOpeningBalance(weekNumber) {
+    if (!weeklyPlan || !window.FFSWeeklyPlan?.updateOpeningBalance) return;
+    const result = CALC.calculatePlan(plan);
+    const week = weeklyPlan.weeks.find((item) => item.weekNumber === Number(weekNumber));
+    if (!week) return;
+    const isFutureWeek = !weeklyWeekHasStarted(week);
+    const isEditableCompleted = week.isCompleted && weeklyEditingWeek === week.weekNumber;
+    const canAdjust = (!week.isCompleted && !isFutureWeek) || isEditableCompleted;
+    if (!canAdjust) {
+      updateSaveStatus("Opening balance can only be updated for the current week, a past incomplete week or a reopened completed week.");
+      return;
+    }
+    const input = document.querySelector(`[data-weekly-opening-balance="${weekNumber}"]`);
+    const amount = Number(input?.value);
+    if (!Number.isFinite(amount)) {
+      updateSaveStatus("Enter a valid opening bank balance.");
+      return;
+    }
+    weeklyPlan = window.FFSWeeklyPlan.updateOpeningBalance(plan, result, weeklyPlan, weekNumber, amount);
+    weeklyViewedWeekNumber = weekNumber;
+    generatedWeeklyPlanner = null;
+    syncWeeklyPlanExportSettings();
+    saveWeeklyPlan("Opening balance updated.");
     renderAll();
     showWorkspace("weeklyplan");
   }
@@ -5389,6 +5511,7 @@
         }
         if (action === "save-week") saveWeekProgress(weekNumber, false);
         if (action === "complete-week") saveWeekProgress(weekNumber, true);
+        if (action === "save-opening-balance") saveWeeklyOpeningBalance(weekNumber);
         if (action === "edit-week") {
           if (!window.confirm("Editing a completed week may change the balances shown in later weeks.")) return;
           weeklyEditingWeek = weekNumber;

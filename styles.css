@@ -2073,6 +2073,46 @@ textarea.field-input {
   border-left: 5px solid #0f9f6e;
 }
 
+.weekly-downloads-details > summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  cursor: pointer;
+  list-style: none;
+}
+
+.weekly-downloads-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.weekly-downloads-details > summary h3 {
+  color: #0f2742;
+  font-size: 20px;
+  font-weight: 950;
+}
+
+.weekly-downloads-details > summary span:not(.metric-label) {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.weekly-downloads-details > summary b {
+  border-radius: 999px;
+  background: #f0f7ff;
+  padding: 9px 13px;
+  color: #0f2742;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.weekly-downloads-body {
+  margin-top: 18px;
+  border-top: 1px solid #dbe4ee;
+  padding-top: 18px;
+}
+
 .planner-setup-grid {
   display: grid;
   gap: 14px;
@@ -2466,7 +2506,18 @@ textarea.field-input {
 
 .weekly-timing-table {
   display: grid;
+  gap: 16px;
+}
+
+.weekly-timing-group {
+  display: grid;
   gap: 10px;
+}
+
+.weekly-timing-group h4 {
+  color: #0f2742;
+  font-size: 14px;
+  font-weight: 950;
 }
 
 .weekly-timing-row {
@@ -2788,6 +2839,84 @@ textarea.field-input {
   font-size: 12px;
   font-weight: 750;
   line-height: 1.45;
+}
+
+.weekly-opening-lines,
+.weekly-completed-summary-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.weekly-opening-lines div,
+.weekly-completed-summary-grid span {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #f8fafc;
+  padding: 10px 12px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.weekly-opening-lines strong,
+.weekly-completed-summary-grid strong {
+  color: #0f2742;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.weekly-opening-lines .positive,
+.weekly-completed-summary-grid .positive {
+  color: #0f9f6e;
+}
+
+.weekly-opening-lines .negative,
+.weekly-completed-summary-grid .negative {
+  color: #b42318;
+}
+
+.weekly-opening-adjustment {
+  display: grid;
+  gap: 12px;
+  align-items: end;
+}
+
+@media (min-width: 760px) {
+  .weekly-opening-lines,
+  .weekly-completed-summary-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .weekly-opening-adjustment {
+    grid-template-columns: minmax(240px, 1fr) auto;
+  }
+}
+
+.weekly-completed-details > summary {
+  display: grid;
+  gap: 14px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.weekly-completed-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.weekly-completed-details > summary b {
+  color: #0f9f6e;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.weekly-completed-body {
+  margin-top: 16px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 16px;
 }
 
 .weekly-detail-list {
