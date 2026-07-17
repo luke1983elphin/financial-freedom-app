@@ -6,7 +6,9 @@
   const SCENARIO_KEY = "ffs-scenarios-v3-mobile-dashboard-ux-test";
   const WEEKLY_PLAN_KEY = "ffs-weekly-plan-v1-v3-mobile-dashboard-ux-test";
   const APP_VERSION = "3.0-test-weekly-planner";
+  const WEEKLY_EDITOR_BUILD_ID = "2026-07-17-01";
   const EXPORT_SCHEMA_VERSION = 1;
+  console.info(`Weekly Plan editor build: ${WEEKLY_EDITOR_BUILD_ID}`);
   const frequencies = [
     ["weekly", "Weekly"],
     ["fortnightly", "Fortnightly"],
@@ -194,8 +196,12 @@
   let activeWeeklyPlanTab = restoredDraftUi.activeWeeklyPlanTab || "thisWeek";
   let weeklyEditingWeek = null;
   let weeklyViewedWeekNumber = null;
-  let weeklyTimingSetupExpanded = null;
-  let weeklyTimingDrafts = {};
+  const weeklyPlanUiState = {
+    isTimingSetupExpanded: null,
+  };
+  let editingTimingItemId = null;
+  let timingEditDraft = null;
+  let weeklyPlanRenderCount = 0;
 
   const currency = new Intl.NumberFormat("en-AU", {
     style: "currency",
@@ -891,8 +897,9 @@
     generatedWeeklyPlanner = null;
     weeklyEditingWeek = null;
     weeklyViewedWeekNumber = null;
-    weeklyTimingSetupExpanded = null;
-    weeklyTimingDrafts = {};
+    weeklyPlanUiState.isTimingSetupExpanded = null;
+    editingTimingItemId = null;
+    timingEditDraft = null;
     localStorage.removeItem(WEEKLY_PLAN_KEY);
     updateSaveStatus(message);
   }
@@ -2614,118 +2621,147 @@
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
   }
 
+  function weeklyTimingFrequencyText(item) {
+    const frequency = item.type === "money-in" && item.frequency === "weeklyProvision" ? "weekly" : item.frequency;
+    return (weeklyTimingFrequencyOptions.find(([value]) => value === frequency)?.[1] || frequency || "Weekly").toLowerCase();
+  }
+
+  function beginWeeklyTimingEdit(itemId) {
+    const item = (weeklyPlan?.settings?.timingItems || []).find((candidate) => candidate.id === itemId);
+    if (!item) return;
+    editingTimingItemId = item.id;
+    timingEditDraft = {
+      ...JSON.parse(JSON.stringify(item)),
+      amountInput: weeklyInputValue(item.amount),
+    };
+    weeklyPlanUiState.isTimingSetupExpanded = true;
+    renderOutputs();
+    window.setTimeout(() => {
+      const editor = [...document.querySelectorAll("[data-timing-editor]")].find((node) => node.dataset.weeklyTimingId === item.id);
+      editor?.querySelector('[data-key="amountInput"]')?.focus();
+    }, 50);
+  }
+
+  function weeklyTimingEditorHtml(item) {
+    const draft = editingTimingItemId === item.id && timingEditDraft ? timingEditDraft : { ...item, amountInput: weeklyInputValue(item.amount) };
+    const amountValue = draft.amountInput ?? weeklyInputValue(draft.amount);
+    return `
+      <div class="weekly-timing-editor" data-timing-editor data-weekly-timing-id="${escapeHtml(item.id)}">
+        <div class="weekly-setup-grid mt-3">
+          <label>
+            <span class="field-label">Description</span>
+            <input class="field-input" type="text" data-weekly-timing-draft="${escapeHtml(item.id)}" data-key="description" data-type="text" value="${escapeHtml(draft.description || "")}">
+            ${item.isNetPay ? `<small class="field-help">Estimated net pay is based on income, tax, Medicare levy, HELP and salary-sacrifice information entered in the Financial Plan.</small>` : ""}
+          </label>
+          <label>
+            <span class="field-label">Amount</span>
+            <input class="field-input" type="text" inputmode="decimal" data-weekly-timing-draft="${escapeHtml(item.id)}" data-key="amountInput" data-type="text" value="${escapeHtml(amountValue)}">
+          </label>
+          <label>
+            <span class="field-label">Frequency</span>
+            <select class="field-input" data-weekly-timing-draft="${escapeHtml(item.id)}" data-key="frequency" data-type="text">${optionList(weeklyTimingFrequencyOptions, draft.frequency)}</select>
+          </label>
+          <label>
+            <span class="field-label">First date</span>
+            <input class="field-input" type="date" data-weekly-timing-draft="${escapeHtml(item.id)}" data-key="firstDate" data-type="text" value="${escapeHtml(draft.firstDate || weeklyPlan.startDate)}">
+          </label>
+          <label>
+            <span class="field-label">End date</span>
+            <input class="field-input" type="date" data-weekly-timing-draft="${escapeHtml(item.id)}" data-key="endDate" data-type="text" value="${escapeHtml(draft.endDate || "")}">
+          </label>
+          <label>
+            <span class="field-label">Type</span>
+            <select class="field-input" data-weekly-timing-draft="${escapeHtml(item.id)}" data-key="type" data-type="text">${optionList(weeklyTimingTypeOptions, draft.type)}</select>
+          </label>
+          <label>
+            <span class="field-label">Treatment</span>
+            <select class="field-input" data-weekly-timing-draft="${escapeHtml(item.id)}" data-key="treatment" data-type="text"${draft.type === "money-in" ? " disabled" : ""}>
+              <option value="pay-on-date"${draft.treatment !== "set-aside" ? " selected" : ""}>Pay on due date</option>
+              <option value="set-aside"${draft.treatment === "set-aside" ? " selected" : ""}>Set aside progressively</option>
+            </select>
+          </label>
+          <label>
+            <span class="field-label">Transfer category</span>
+            <select class="field-input" data-weekly-timing-draft="${escapeHtml(item.id)}" data-key="transferType" data-type="text">
+              ${optionList([["", "Other"], ["offset", "Offset"], ["extraDebt", "Debt repayment"], ["investment", "Investing"], ["extraSuper", "Extra super"]], draft.transferType || "")}
+            </select>
+          </label>
+          <label class="weekly-active-toggle">
+            <span class="field-label">Active</span>
+            <input type="checkbox" data-weekly-timing-draft="${escapeHtml(item.id)}" data-key="active" data-type="boolean"${draft.active !== false ? " checked" : ""}>
+          </label>
+        </div>
+        <div class="weekly-action-row mt-3">
+          <button class="btn btn-primary" type="button" data-weekly-action="save-timing-item" data-weekly-timing-id="${escapeHtml(item.id)}">Save Changes</button>
+          <button class="btn" type="button" data-weekly-action="cancel-timing-item" data-weekly-timing-id="${escapeHtml(item.id)}">Cancel</button>
+        </div>
+        <div class="weekly-occurrence-editor mt-4">
+          <h4>Adjust a payment or receipt</h4>
+          <p class="weekly-muted mt-2">Move, skip or update one expected occurrence without rebuilding the whole plan.</p>
+          <div class="weekly-setup-grid mt-3">
+            <label>
+              <span class="field-label">Occurrence date</span>
+              <input class="field-input" type="date" data-weekly-occurrence-date value="${escapeHtml(item.firstDate || weeklyPlan.startDate)}">
+            </label>
+            <label>
+              <span class="field-label">New amount</span>
+              <input class="field-input" type="number" step="0.01" data-weekly-occurrence-amount placeholder="${weeklyInputValue(item.amount)}">
+            </label>
+            <label>
+              <span class="field-label">Move to date</span>
+              <input class="field-input" type="date" data-weekly-occurrence-new-date>
+            </label>
+            <label>
+              <span class="field-label">New frequency</span>
+              <select class="field-input" data-weekly-occurrence-frequency>
+                <option value="">Keep current frequency</option>
+                ${optionList(weeklyTimingFrequencyOptions, "")}
+              </select>
+            </label>
+            <label class="weekly-active-toggle weekly-skip-toggle">
+              <span class="field-label">Skip this occurrence</span>
+              <input type="checkbox" data-weekly-occurrence-skip>
+            </label>
+          </div>
+          <fieldset class="weekly-scope-options mt-3">
+            <legend>Apply this change to</legend>
+            <label><input type="radio" name="weekly-scope-${escapeHtml(item.id)}" value="this" data-weekly-occurrence-scope checked><span><strong>This occurrence only</strong>Change only this payment or receipt.</span></label>
+            <label><input type="radio" name="weekly-scope-${escapeHtml(item.id)}" value="future" data-weekly-occurrence-scope><span><strong>This and future occurrences</strong>Use the new timing or amount from this occurrence onward.</span></label>
+            <label><input type="radio" name="weekly-scope-${escapeHtml(item.id)}" value="all" data-weekly-occurrence-scope><span><strong>Every occurrence</strong>Replace the recurring setup across the whole planner period.</span></label>
+          </fieldset>
+          <p class="weekly-device-note mt-3">This updates your Weekly Plan only. If this is a permanent pay rise or ongoing lifestyle change, also update your main Financial Plan so your long-term projections remain accurate.</p>
+          <button class="btn mt-3" type="button" data-weekly-action="apply-occurrence-edit" data-weekly-timing-id="${escapeHtml(item.id)}">Apply timing change</button>
+        </div>
+      </div>
+    `;
+  }
+
   function weeklyTimingRowsHtml() {
     const items = weeklyPlan?.settings?.timingItems || [];
     if (!items.length) return `<p class="weekly-muted">Create or rebuild the Weekly Plan to prefill income, bills, provisions and transfers from the current financial plan.</p>`;
     return `
       <div class="weekly-timing-table" aria-label="Cashflow timing setup">
         ${items.map((item) => {
-          const draft = { ...item, ...(weeklyTimingDrafts[item.id] || {}) };
-          const hasDraft = Boolean(weeklyTimingDrafts[item.id]);
+          const isEditing = editingTimingItemId === item.id;
           return `
-          <details class="weekly-timing-row">
-            <summary class="weekly-timing-summary">
-              <div>
-                <strong>${escapeHtml(item.description || "Cashflow item")} - ${money(item.amount)} ${escapeHtml((weeklyTimingFrequencyOptions.find(([value]) => value === item.frequency)?.[1] || item.frequency || "Weekly").toLowerCase())}</strong>
-                <span>Next expected: ${plannerShortDate(weeklyTimingNextDate(item))}</span>
-                ${item.isNetPay ? `<small>Estimated net pay</small>` : ""}
-              </div>
-              <div class="weekly-timing-summary-meta">
-                <span>${escapeHtml(weeklyTimingTypeLabel(item.type))}</span>
-                <span>${item.active !== false ? "Active" : "Inactive"}</span>
-                ${hasDraft ? `<span>Unsaved changes</span>` : ""}
-                <b>Edit</b>
-              </div>
-            </summary>
-            <div class="weekly-timing-editor">
-              <div class="weekly-setup-grid mt-3">
-                <label>
-                  <span class="field-label">Description</span>
-                  <input class="field-input" type="text" data-weekly-timing-draft="${escapeHtml(item.id)}" data-key="description" data-type="text" value="${escapeHtml(draft.description || "")}">
-                  ${item.isNetPay ? `<small class="field-help">Estimated net pay is based on income, tax, Medicare levy, HELP and salary-sacrifice information entered in the Financial Plan.</small>` : ""}
-                </label>
-                <label>
-                  <span class="field-label">Amount</span>
-                  <input class="field-input" type="number" step="0.01" data-weekly-timing-draft="${escapeHtml(item.id)}" data-key="amount" value="${weeklyInputValue(draft.amount)}">
-                </label>
-                <label>
-                  <span class="field-label">Frequency</span>
-                  <select class="field-input" data-weekly-timing-draft="${escapeHtml(item.id)}" data-key="frequency" data-type="text">${optionList(weeklyTimingFrequencyOptions, draft.frequency)}</select>
-                </label>
-                <label>
-                  <span class="field-label">First date</span>
-                  <input class="field-input" type="date" data-weekly-timing-draft="${escapeHtml(item.id)}" data-key="firstDate" data-type="text" value="${escapeHtml(draft.firstDate || weeklyPlan.startDate)}">
-                </label>
-                <label>
-                  <span class="field-label">End date</span>
-                  <input class="field-input" type="date" data-weekly-timing-draft="${escapeHtml(item.id)}" data-key="endDate" data-type="text" value="${escapeHtml(draft.endDate || "")}">
-                </label>
-                <label>
-                  <span class="field-label">Type</span>
-                  <select class="field-input" data-weekly-timing-draft="${escapeHtml(item.id)}" data-key="type" data-type="text">${optionList(weeklyTimingTypeOptions, draft.type)}</select>
-                </label>
-                <label>
-                  <span class="field-label">Treatment</span>
-                  <select class="field-input" data-weekly-timing-draft="${escapeHtml(item.id)}" data-key="treatment" data-type="text">
-                    <option value="pay-on-date"${draft.treatment !== "set-aside" ? " selected" : ""}>Pay on due date</option>
-                    <option value="set-aside"${draft.treatment === "set-aside" ? " selected" : ""}>Set aside progressively</option>
-                  </select>
-                </label>
-                <label>
-                  <span class="field-label">Transfer category</span>
-                  <select class="field-input" data-weekly-timing-draft="${escapeHtml(item.id)}" data-key="transferType" data-type="text">
-                    ${optionList([["", "Other"], ["offset", "Offset"], ["extraDebt", "Debt repayment"], ["investment", "Investing"], ["extraSuper", "Extra super"]], draft.transferType || "")}
-                  </select>
-                </label>
-                <label class="weekly-active-toggle">
-                  <span class="field-label">Active</span>
-                  <input type="checkbox" data-weekly-timing-draft="${escapeHtml(item.id)}" data-key="active" data-type="boolean"${draft.active !== false ? " checked" : ""}>
-                </label>
-              </div>
-              <div class="weekly-action-row mt-3">
-                <button class="btn btn-primary" type="button" data-weekly-action="save-timing-item" data-weekly-timing-id="${escapeHtml(item.id)}">Save Changes</button>
-                <button class="btn" type="button" data-weekly-action="cancel-timing-item" data-weekly-timing-id="${escapeHtml(item.id)}"${hasDraft ? "" : " disabled"}>Cancel</button>
-              </div>
-              <div class="weekly-occurrence-editor mt-4">
-                <h4>Adjust a payment or receipt</h4>
-                <p class="weekly-muted mt-2">Move, skip or update one expected occurrence without rebuilding the whole plan.</p>
-                <div class="weekly-setup-grid mt-3">
-                  <label>
-                    <span class="field-label">Occurrence date</span>
-                    <input class="field-input" type="date" data-weekly-occurrence-date value="${escapeHtml(item.firstDate || weeklyPlan.startDate)}">
-                  </label>
-                  <label>
-                    <span class="field-label">New amount</span>
-                    <input class="field-input" type="number" step="0.01" data-weekly-occurrence-amount placeholder="${weeklyInputValue(item.amount)}">
-                  </label>
-                  <label>
-                    <span class="field-label">Move to date</span>
-                    <input class="field-input" type="date" data-weekly-occurrence-new-date>
-                  </label>
-                  <label>
-                    <span class="field-label">New frequency</span>
-                    <select class="field-input" data-weekly-occurrence-frequency>
-                      <option value="">Keep current frequency</option>
-                      ${optionList(weeklyTimingFrequencyOptions, "")}
-                    </select>
-                  </label>
-                  <label class="weekly-active-toggle weekly-skip-toggle">
-                    <span class="field-label">Skip this occurrence</span>
-                    <input type="checkbox" data-weekly-occurrence-skip>
-                  </label>
+            <article class="weekly-timing-row${isEditing ? " editing" : ""}">
+              <div class="weekly-timing-summary">
+                <div>
+                  <strong>${escapeHtml(item.description || "Cashflow item")}</strong>
+                  <span>${money(item.amount)} ${escapeHtml(weeklyTimingFrequencyText(item))}</span>
+                  <span>Next expected: ${plannerShortDate(weeklyTimingNextDate(item))}</span>
+                  ${item.isNetPay ? `<small>Estimated net pay</small>` : ""}
                 </div>
-                <fieldset class="weekly-scope-options mt-3">
-                  <legend>Apply this change to</legend>
-                  <label><input type="radio" name="weekly-scope-${escapeHtml(item.id)}" value="this" data-weekly-occurrence-scope checked><span><strong>This occurrence only</strong>Change only this payment or receipt.</span></label>
-                  <label><input type="radio" name="weekly-scope-${escapeHtml(item.id)}" value="future" data-weekly-occurrence-scope><span><strong>This and future occurrences</strong>Use the new timing or amount from this occurrence onward.</span></label>
-                  <label><input type="radio" name="weekly-scope-${escapeHtml(item.id)}" value="all" data-weekly-occurrence-scope><span><strong>Every occurrence</strong>Replace the recurring setup across the whole planner period.</span></label>
-                </fieldset>
-                <p class="weekly-device-note mt-3">This updates your Weekly Plan only. If this is a permanent pay rise or ongoing lifestyle change, also update your main Financial Plan so your long-term projections remain accurate.</p>
-                <button class="btn mt-3" type="button" data-weekly-action="apply-occurrence-edit" data-weekly-timing-id="${escapeHtml(item.id)}">Apply timing change</button>
+                <div class="weekly-timing-summary-meta">
+                  <span>${escapeHtml(weeklyTimingTypeLabel(item.type))}</span>
+                  <span>${item.active !== false ? "Active" : "Inactive"}</span>
+                  ${isEditing ? `<span>Editing draft</span>` : ""}
+                  <button class="btn btn-small" type="button" data-weekly-action="begin-timing-edit" data-weekly-timing-id="${escapeHtml(item.id)}">${isEditing ? "Editing" : "Edit"}</button>
+                </div>
               </div>
-            </div>
-          </details>
-        `;
+              ${isEditing ? weeklyTimingEditorHtml(item) : ""}
+            </article>
+          `;
         }).join("")}
       </div>
     `;
@@ -2810,7 +2846,7 @@
   function weeklyTimingStatusText(validation) {
     const settings = weeklyPlan?.settings || {};
     if (validation.blocking.length) return "Review required";
-    if (settings.timingSetupRequiresReview) return "Timing updated - review recommended";
+    if (settings.timingSetupNeedsReview || settings.timingSetupRequiresReview) return "Timing updated - review recommended";
     if (settings.timingSetupReviewed) return "Timing reviewed";
     return "Review timing";
   }
@@ -2818,10 +2854,12 @@
   function weeklyTimingSetupHtml() {
     const validation = weeklyTimingValidation();
     const settings = weeklyPlan?.settings || {};
-    const expanded = weeklyTimingSetupExpanded === null
-      ? (!settings.timingSetupReviewed || settings.timingSetupRequiresReview || validation.blocking.length > 0)
-      : weeklyTimingSetupExpanded;
-    const reviewedAt = settings.timingSetupReviewedAt ? `Last reviewed ${formatLastSaved(settings.timingSetupReviewedAt).toLowerCase()}` : "Not reviewed yet";
+    const needsReview = Boolean(settings.timingSetupNeedsReview || settings.timingSetupRequiresReview);
+    const expanded = weeklyPlanUiState.isTimingSetupExpanded === null
+      ? (!settings.timingSetupReviewed || needsReview || validation.blocking.length > 0)
+      : weeklyPlanUiState.isTimingSetupExpanded;
+    const lastReviewedAt = settings.timingSetupLastReviewedAt || settings.timingSetupReviewedAt;
+    const reviewedAt = lastReviewedAt ? `Last reviewed ${formatLastSaved(lastReviewedAt).toLowerCase()}` : "Not reviewed yet";
     if (!expanded) {
       return `
         <article class="card weekly-step-card weekly-timing-collapsed">
@@ -2988,8 +3026,9 @@
     activeWeeklyPlanTab = "thisWeek";
     weeklyEditingWeek = null;
     weeklyViewedWeekNumber = null;
-    weeklyTimingSetupExpanded = true;
-    weeklyTimingDrafts = {};
+    weeklyPlanUiState.isTimingSetupExpanded = true;
+    editingTimingItemId = null;
+    timingEditDraft = null;
     generatedWeeklyPlanner = null;
     syncWeeklyPlanExportSettings();
     saveWeeklyPlan("Weekly Plan created.");
@@ -3460,6 +3499,8 @@
   }
 
   function renderWeeklyPlan(result) {
+    weeklyPlanRenderCount += 1;
+    console.info(`Weekly Plan render count: ${weeklyPlanRenderCount}`);
     const root = document.getElementById("weeklyPlanRoot");
     const exportPanel = document.getElementById("weeklyPlanExportPrint");
     if (!root) return;
@@ -3626,31 +3667,50 @@
     renderOutputs();
   }
 
+  function parseWeeklyTimingAmountInput(value) {
+    const text = String(value ?? "").replace(/[$,\s]/g, "");
+    if (!text) return NaN;
+    return Number(text);
+  }
+
   function updateWeeklyTimingDraftFromInput(target) {
-    if (!weeklyPlan) return;
-    const itemId = target.dataset.weeklyTimingDraft;
+    if (!weeklyPlan || !timingEditDraft || editingTimingItemId !== target.dataset.weeklyTimingDraft) return;
     const key = target.dataset.key;
-    const value = target.dataset.type === "boolean" ? target.checked : target.dataset.type === "text" ? target.value : Number(target.value) || 0;
-    weeklyTimingDrafts[itemId] = { ...(weeklyTimingDrafts[itemId] || {}), [key]: value };
+    const value = target.dataset.type === "boolean" ? target.checked : target.value;
+    timingEditDraft = { ...timingEditDraft, [key]: value };
   }
 
   function markWeeklyTimingReviewRequired() {
     if (!weeklyPlan?.settings) return;
+    weeklyPlan.settings.timingSetupNeedsReview = true;
     weeklyPlan.settings.timingSetupRequiresReview = true;
     weeklyPlan.settings.timingSetupReviewed = Boolean(weeklyPlan.settings.timingSetupReviewed);
+    weeklyPlan.timingSetupReviewed = weeklyPlan.settings.timingSetupReviewed;
+    weeklyPlan.timingSetupNeedsReview = true;
+    weeklyPlan.timingSetupLastReviewedAt = weeklyPlan.settings.timingSetupLastReviewedAt || weeklyPlan.settings.timingSetupReviewedAt || "";
   }
 
   function saveWeeklyTimingDraft(itemId) {
-    if (!weeklyPlan) return;
-    const patch = weeklyTimingDrafts[itemId];
-    if (!patch) {
+    if (!weeklyPlan || !timingEditDraft || editingTimingItemId !== itemId) {
       updateSaveStatus("No timing changes to save.");
       return;
     }
+    const amount = parseWeeklyTimingAmountInput(timingEditDraft.amountInput ?? timingEditDraft.amount);
+    if (!Number.isFinite(amount) || amount < 0) {
+      updateSaveStatus("Enter a valid amount before saving this timing item.");
+      return;
+    }
+    const patch = { ...timingEditDraft, amount };
+    delete patch.amountInput;
+    if (patch.type === "money-in") {
+      patch.treatment = "pay-on-date";
+      if (patch.frequency === "weeklyProvision") patch.frequency = "weekly";
+    }
     weeklyPlan = window.FFSWeeklyPlan.updateTimingItem(plan, CALC.calculatePlan(plan), weeklyPlan, itemId, patch);
     markWeeklyTimingReviewRequired();
-    weeklyTimingSetupExpanded = true;
-    delete weeklyTimingDrafts[itemId];
+    weeklyPlanUiState.isTimingSetupExpanded = true;
+    editingTimingItemId = null;
+    timingEditDraft = null;
     generatedWeeklyPlanner = null;
     syncWeeklyPlanExportSettings();
     saveWeeklyPlan("Timing updated - review recommended.");
@@ -3659,28 +3719,39 @@
   }
 
   function cancelWeeklyTimingDraft(itemId) {
-    delete weeklyTimingDrafts[itemId];
+    if (editingTimingItemId !== itemId) return;
+    editingTimingItemId = null;
+    timingEditDraft = null;
     updateSaveStatus("Timing edit cancelled.");
     renderOutputs();
   }
 
   function savePendingWeeklyTimingDrafts() {
-    const draftIds = Object.keys(weeklyTimingDrafts);
-    if (!draftIds.length) return;
-    draftIds.forEach((itemId) => {
-      const patch = weeklyTimingDrafts[itemId];
-      if (patch) weeklyPlan = window.FFSWeeklyPlan.updateTimingItem(plan, CALC.calculatePlan(plan), weeklyPlan, itemId, patch);
-    });
-    weeklyTimingDrafts = {};
+    if (!editingTimingItemId || !timingEditDraft) return true;
+    const amount = parseWeeklyTimingAmountInput(timingEditDraft.amountInput ?? timingEditDraft.amount);
+    if (!Number.isFinite(amount) || amount < 0) {
+      updateSaveStatus("Enter a valid amount before finishing timing review.");
+      return false;
+    }
+    const patch = { ...timingEditDraft, amount };
+    delete patch.amountInput;
+    if (patch.type === "money-in") {
+      patch.treatment = "pay-on-date";
+      if (patch.frequency === "weeklyProvision") patch.frequency = "weekly";
+    }
+    weeklyPlan = window.FFSWeeklyPlan.updateTimingItem(plan, CALC.calculatePlan(plan), weeklyPlan, editingTimingItemId, patch);
+    editingTimingItemId = null;
+    timingEditDraft = null;
     generatedWeeklyPlanner = null;
     syncWeeklyPlanExportSettings();
+    return true;
   }
 
   function completeWeeklyTimingReview() {
     if (!weeklyPlan) return;
-    savePendingWeeklyTimingDrafts();
+    if (!savePendingWeeklyTimingDrafts()) return;
     let validation = weeklyTimingValidation();
-    weeklyTimingSetupExpanded = true;
+    weeklyPlanUiState.isTimingSetupExpanded = true;
     if (validation.blocking.length) {
       saveWeeklyPlan("Please correct the highlighted timing items before continuing.");
       renderOutputs();
@@ -3691,9 +3762,14 @@
       return;
     }
     weeklyPlan.settings.timingSetupReviewed = true;
+    weeklyPlan.settings.timingSetupNeedsReview = false;
     weeklyPlan.settings.timingSetupRequiresReview = false;
-    weeklyPlan.settings.timingSetupReviewedAt = new Date().toISOString();
-    weeklyTimingSetupExpanded = false;
+    weeklyPlan.settings.timingSetupLastReviewedAt = new Date().toISOString();
+    weeklyPlan.settings.timingSetupReviewedAt = weeklyPlan.settings.timingSetupLastReviewedAt;
+    weeklyPlan.timingSetupReviewed = true;
+    weeklyPlan.timingSetupNeedsReview = false;
+    weeklyPlan.timingSetupLastReviewedAt = weeklyPlan.settings.timingSetupLastReviewedAt;
+    weeklyPlanUiState.isTimingSetupExpanded = false;
     generatedWeeklyPlanner = null;
     saveWeeklyPlan("Timing setup reviewed.");
     renderAll();
@@ -3713,7 +3789,7 @@
     }
     weeklyPlan = window.FFSWeeklyPlan.addOneOffItem(plan, CALC.calculatePlan(plan), weeklyPlan, { description, amount, date, type });
     markWeeklyTimingReviewRequired();
-    weeklyTimingSetupExpanded = true;
+    weeklyPlanUiState.isTimingSetupExpanded = true;
     generatedWeeklyPlanner = null;
     syncWeeklyPlanExportSettings();
     saveWeeklyPlan("One-off item added to the Weekly Plan.");
@@ -3746,7 +3822,7 @@
     }
     weeklyPlan = window.FFSWeeklyPlan.applyOccurrenceEdit(plan, CALC.calculatePlan(plan), weeklyPlan, itemId, occurrenceDate, patch, scope);
     markWeeklyTimingReviewRequired();
-    weeklyTimingSetupExpanded = true;
+    weeklyPlanUiState.isTimingSetupExpanded = true;
     generatedWeeklyPlanner = null;
     syncWeeklyPlanExportSettings();
     saveWeeklyPlan("Weekly timing updated.");
@@ -3787,8 +3863,9 @@
         activeWeeklyPlanTab = "thisWeek";
         weeklyEditingWeek = null;
         weeklyViewedWeekNumber = null;
-        weeklyTimingSetupExpanded = null;
-        weeklyTimingDrafts = {};
+        weeklyPlanUiState.isTimingSetupExpanded = null;
+        editingTimingItemId = null;
+        timingEditDraft = null;
         saveWeeklyPlan("Weekly Plan backup imported.");
         renderAll();
         showWorkspace("weeklyplan");
@@ -5089,6 +5166,10 @@
   function bindEvents() {
     document.addEventListener("input", (event) => {
       const target = event.target;
+      if (target.closest("[data-timing-editor]")) {
+        updateWeeklyTimingDraftFromInput(target);
+        return;
+      }
       if (target.dataset.weeklySetup !== undefined) {
         ensurePlanSettings(plan);
         const current = plan.reportSettings.weeklyPlanSetup || {};
@@ -5135,10 +5216,6 @@
       }
       if (target.dataset.weeklyTiming !== undefined) {
         updateWeeklyTimingFromInput(target);
-        return;
-      }
-      if (target.dataset.weeklyTimingDraft !== undefined) {
-        updateWeeklyTimingDraftFromInput(target);
         return;
       }
       if (target.dataset.weeklyDate !== undefined) {
@@ -5207,6 +5284,13 @@
       }
       autosavePlan();
       renderOutputs();
+    });
+
+    document.addEventListener("change", (event) => {
+      const target = event.target;
+      if (target.closest("[data-timing-editor]")) {
+        updateWeeklyTimingDraftFromInput(target);
+      }
     });
 
     document.addEventListener("click", (event) => {
@@ -5283,11 +5367,13 @@
         if (action === "save-timing-item") saveWeeklyTimingDraft(weeklyAction.dataset.weeklyTimingId);
         if (action === "cancel-timing-item") cancelWeeklyTimingDraft(weeklyAction.dataset.weeklyTimingId);
         if (action === "toggle-timing-setup" && weeklyPlan) {
-          weeklyTimingSetupExpanded = !(weeklyTimingSetupExpanded === null
-            ? (!weeklyPlan.settings?.timingSetupReviewed || weeklyPlan.settings?.timingSetupRequiresReview)
-            : weeklyTimingSetupExpanded);
+          const needsReview = Boolean(weeklyPlan.settings?.timingSetupNeedsReview || weeklyPlan.settings?.timingSetupRequiresReview);
+          weeklyPlanUiState.isTimingSetupExpanded = !(weeklyPlanUiState.isTimingSetupExpanded === null
+            ? (!weeklyPlan.settings?.timingSetupReviewed || needsReview)
+            : weeklyPlanUiState.isTimingSetupExpanded);
           renderOutputs();
         }
+        if (action === "begin-timing-edit") beginWeeklyTimingEdit(weeklyAction.dataset.weeklyTimingId);
         if (action === "complete-timing-review") completeWeeklyTimingReview();
         if (action === "view-week" && weeklyPlan) {
           weeklyViewedWeekNumber = clampWeeklyWeekNumber(weekNumber);

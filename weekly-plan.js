@@ -156,8 +156,10 @@
       notes: existing.notes || "",
       sourcePlanUpdatedAt: existing.sourcePlanUpdatedAt || "",
       timingSetupReviewed: Boolean(existing.timingSetupReviewed),
-      timingSetupReviewedAt: existing.timingSetupReviewedAt || "",
-      timingSetupRequiresReview: Boolean(existing.timingSetupRequiresReview),
+      timingSetupLastReviewedAt: existing.timingSetupLastReviewedAt || existing.timingSetupReviewedAt || "",
+      timingSetupNeedsReview: Boolean(existing.timingSetupNeedsReview ?? existing.timingSetupRequiresReview),
+      timingSetupReviewedAt: existing.timingSetupLastReviewedAt || existing.timingSetupReviewedAt || "",
+      timingSetupRequiresReview: Boolean(existing.timingSetupNeedsReview ?? existing.timingSetupRequiresReview),
       todayIso: existing.todayIso || "",
     };
   }
@@ -804,6 +806,9 @@
       currentCalendarWeekNumber,
       currentWeekNumber: currentCalendarWeekNumber || 1,
       status: "active",
+      timingSetupReviewed: settings.timingSetupReviewed,
+      timingSetupNeedsReview: settings.timingSetupNeedsReview,
+      timingSetupLastReviewedAt: settings.timingSetupLastReviewedAt,
       minimumCashBuffer: settings.minimumCashBuffer,
       openingBankBalance: settings.openingBankBalance,
       allocationSettings,
@@ -830,7 +835,12 @@
 
   function migrate(input) {
     if (!input || typeof input !== "object") return null;
-    const settings = defaultSettings({}, {}, input.settings || {});
+    const settings = defaultSettings({}, {}, {
+      ...(input.settings || {}),
+      timingSetupReviewed: input.settings?.timingSetupReviewed ?? input.timingSetupReviewed,
+      timingSetupNeedsReview: input.settings?.timingSetupNeedsReview ?? input.settings?.timingSetupRequiresReview ?? input.timingSetupNeedsReview ?? input.timingSetupRequiresReview,
+      timingSetupLastReviewedAt: input.settings?.timingSetupLastReviewedAt || input.settings?.timingSetupReviewedAt || input.timingSetupLastReviewedAt || input.timingSetupReviewedAt,
+    });
     const weeks = Array.isArray(input.weeks) ? input.weeks.map((week, index) => ({
       weekNumber: Number(week.weekNumber) || index + 1,
       startDate: week.startDate || week.startDateIso || "",
@@ -880,6 +890,9 @@
       currentCalendarWeekNumber: currentCalendarWeekNumberFor(weeks, input.startDate || settings.startDate, settings.todayIso),
       currentWeekNumber: currentWeekNumberFor(weeks, input.startDate || settings.startDate, settings.todayIso),
       status: input.status || "active",
+      timingSetupReviewed: Boolean(input.timingSetupReviewed ?? settings.timingSetupReviewed),
+      timingSetupNeedsReview: Boolean(input.timingSetupNeedsReview ?? input.timingSetupRequiresReview ?? settings.timingSetupNeedsReview),
+      timingSetupLastReviewedAt: input.timingSetupLastReviewedAt || input.timingSetupReviewedAt || settings.timingSetupLastReviewedAt,
       minimumCashBuffer: roundMoney(input.minimumCashBuffer ?? settings.minimumCashBuffer),
       openingBankBalance: roundMoney(input.openingBankBalance ?? settings.openingBankBalance),
       allocationSettings: normaliseAllocationSettings(input.allocationSettings || settings.allocationSettings),
