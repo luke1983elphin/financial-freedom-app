@@ -85,7 +85,7 @@
   ];
   const goalInfoCopy = {
     annualLifestyleSpending: {
-      title: "Annual Lifestyle Spending",
+      title: "Annual Lifestyle Spending Needed for Financial Freedom",
       body: "This is how much you want your investments to fund each year. It is one of the most important numbers in your plan because it helps calculate your Financial Freedom Target.",
     },
     financialFreedomTarget: {
@@ -551,11 +551,94 @@
       + Math.max(-100000, metrics.annualCashflow) * 2;
   }
 
+  function personDisplayName(personNumber) {
+    const key = personNumber === 2 ? "person2Name" : "person1Name";
+    const name = String(plan.personal?.[key] || "").trim();
+    return name || `Person ${personNumber}`;
+  }
+
+  function superDisplayName(personNumber) {
+    return `${personDisplayName(personNumber)} Super`;
+  }
+
+  function isDefaultIncomeName(value, personNumber) {
+    const text = String(value || "").trim();
+    if (!text) return true;
+    return text === `Person ${personNumber} income` || text === `${personDisplayName(personNumber)} income`;
+  }
+
+  function syncDefaultPersonCollectionLabels() {
+    const firstIncome = plan.incomeItems?.find((item) => item.id === "income-person-1");
+    const secondIncome = plan.incomeItems?.find((item) => item.id === "income-person-2");
+    if (firstIncome && isDefaultIncomeName(firstIncome.name, 1)) firstIncome.name = `${personDisplayName(1)} income`;
+    if (secondIncome && isDefaultIncomeName(secondIncome.name, 2)) secondIncome.name = `${personDisplayName(2)} income`;
+
+    const firstSuper = plan.assetItems?.find((item) => item.id === "asset-super-1");
+    const secondSuper = plan.assetItems?.find((item) => item.id === "asset-super-2");
+    if (firstSuper) firstSuper.name = superDisplayName(1);
+    if (secondSuper) secondSuper.name = superDisplayName(2);
+  }
+
+  function hasFinancialPlanData(currentPlan = plan) {
+    const hasNumber = (value) => Number(value) > 0;
+    const hasCollectionValue = (items, amountKey = "amount") => Array.isArray(items) && items.some((item) => {
+      const hasAmount = hasNumber(item?.[amountKey] ?? item?.value ?? item?.balance);
+      const hasCustomName = String(item?.name || "").trim() && !/^New |^Other Income$/i.test(String(item.name));
+      return hasAmount || hasCustomName;
+    });
+    return Boolean(
+      String(currentPlan.personal?.person1Name || "").trim()
+      || String(currentPlan.personal?.person2Name || "").trim()
+      || hasNumber(currentPlan.personal?.person1Age)
+      || hasNumber(currentPlan.personal?.person2Age)
+      || hasNumber(currentPlan.personal?.targetAnnualSpending)
+      || hasCollectionValue(currentPlan.incomeItems)
+      || hasCollectionValue(currentPlan.assetItems, "value")
+      || hasCollectionValue(currentPlan.liabilityItems, "balance")
+      || hasCollectionValue(currentPlan.expenseItems)
+      || hasNumber(currentPlan.assets?.homeValue)
+      || hasNumber(currentPlan.assets?.sharesEtfs)
+      || hasNumber(currentPlan.assets?.superPerson1)
+      || hasNumber(currentPlan.assets?.superPerson2)
+      || hasNumber(currentPlan.liabilities?.homeLoanBalance)
+      || hasNumber(currentPlan.income?.person1Income)
+      || hasNumber(currentPlan.income?.person2Income)
+      || hasNumber(currentPlan.expenses?.livingCosts)
+    );
+  }
+
+  function updateSetupNavigationLabel() {
+    const button = document.getElementById("setupNavButton");
+    if (button) button.textContent = hasFinancialPlanData() ? "Financial Plan" : "Setup Wizard";
+  }
+
+  function updateFieldLabel(path, label) {
+    const input = document.querySelector(`[data-path="${path}"]`);
+    const labelElement = input?.closest("label")?.querySelector(".field-label");
+    if (labelElement) labelElement.textContent = label;
+  }
+
+  function updateCollectionItemDisplay(collection, id, name) {
+    document.querySelectorAll(`[data-collection="${collection}"][data-id="${id}"][data-key="name"]`).forEach((input) => {
+      if (document.activeElement !== input && input.value !== name) input.value = name;
+      const card = input.closest(".dynamic-item-card");
+      const heading = card?.querySelector(".item-card-title h4");
+      if (heading) heading.textContent = name;
+    });
+  }
+
+  function updatePersonDependentLabels() {
+    updateFieldLabel("assets.superPerson1", superDisplayName(1));
+    updateFieldLabel("assets.superPerson2", superDisplayName(2));
+    updateCollectionItemDisplay("assetItems", "asset-super-1", superDisplayName(1));
+    updateCollectionItemDisplay("assetItems", "asset-super-2", superDisplayName(2));
+  }
+
   function ensureCollectionData() {
     if (!Array.isArray(plan.incomeItems)) {
       plan.incomeItems = [
-        { id: "income-person-1", name: plan.income.person1IncomeName || "Person 1 income", amount: plan.income.person1Income || 0, frequency: plan.income.person1Frequency || "fortnightly" },
-        { id: "income-person-2", name: plan.income.person2IncomeName || "Person 2 income", amount: plan.income.person2Income || 0, frequency: plan.income.person2Frequency || "fortnightly" },
+        { id: "income-person-1", name: plan.income.person1IncomeName || `${personDisplayName(1)} income`, amount: plan.income.person1Income || 0, frequency: plan.income.person1Frequency || "fortnightly" },
+        { id: "income-person-2", name: plan.income.person2IncomeName || `${personDisplayName(2)} income`, amount: plan.income.person2Income || 0, frequency: plan.income.person2Frequency || "fortnightly" },
         { id: "income-other", name: plan.income.otherIncomeName || "Other Income", amount: plan.income.otherIncome || 0, frequency: plan.income.otherIncomeFrequency || "annually" },
       ];
     }
@@ -567,8 +650,8 @@
         { id: "asset-cash", name: "Cash", category: "cash", value: plan.assets.cash || 0 },
         { id: "asset-shares", name: "Shares / ETFs", category: "shares", value: plan.assets.sharesEtfs || 0 },
         { id: "asset-crypto", name: "Crypto", category: "crypto", value: plan.assets.crypto || 0 },
-        { id: "asset-super-1", name: "Super person 1", category: "super", value: plan.assets.superPerson1 || 0 },
-        { id: "asset-super-2", name: "Super person 2", category: "super", value: plan.assets.superPerson2 || 0 },
+        { id: "asset-super-1", name: superDisplayName(1), category: "super", value: plan.assets.superPerson1 || 0 },
+        { id: "asset-super-2", name: superDisplayName(2), category: "super", value: plan.assets.superPerson2 || 0 },
         { id: "asset-vehicles", name: "Vehicles / personal assets", category: "vehicle", value: plan.assets.vehiclesPersonalAssets || 0 },
       ];
     }
@@ -645,16 +728,26 @@
     plan.income.otherIncome = otherAnnualIncome;
     plan.income.otherIncomeFrequency = "annually";
 
+    syncDefaultPersonCollectionLabels();
     const assets = plan.assetItems;
-    const superTotal = sumBy(assets, "super");
+    const superItems = assets.filter((item) => item.category === "super");
+    const superPerson1Item = assets.find((item) => item.id === "asset-super-1")
+      || superItems.find((item) => item.id !== "asset-super-2")
+      || null;
+    const superPerson2Item = assets.find((item) => item.id === "asset-super-2")
+      || superItems.find((item) => item !== superPerson1Item)
+      || null;
+    const otherSuper = superItems
+      .filter((item) => item !== superPerson1Item && item !== superPerson2Item)
+      .reduce((total, item) => total + (Number(item.value) || 0), 0);
     plan.assets.homeValue = sumBy(assets, "home");
     plan.assets.otherPropertyValue = sumBy(assets, "otherProperty");
     plan.assets.offsetBalance = sumBy(assets, "offset");
     plan.assets.cash = sumBy(assets, "cash");
     plan.assets.sharesEtfs = sumBy(assets, "shares");
     plan.assets.crypto = sumBy(assets, "crypto");
-    plan.assets.superPerson1 = superTotal;
-    plan.assets.superPerson2 = 0;
+    plan.assets.superPerson1 = (Number(superPerson1Item?.value) || 0) + otherSuper;
+    plan.assets.superPerson2 = Number(superPerson2Item?.value) || 0;
     plan.assets.vehiclesPersonalAssets = sumBy(assets, "vehicle");
 
     const liabilities = plan.liabilityItems;
@@ -1073,6 +1166,13 @@
   }
 
   function setView(view) {
+    const viewAliases = {
+      cashflow: "setup",
+      assets: "setup",
+      loans: "setup",
+      forecast: "dashboard",
+    };
+    view = viewAliases[view] || view;
     activeView = view;
     document.body.dataset.activeView = view;
     document.querySelectorAll("[data-view-panel]").forEach((panel) => {
@@ -1411,7 +1511,7 @@
       { label: "Building Wealth target age", path: "personal.workOptionalAge", infoKey: "buildingWealthTargetAge" },
       { label: "Financial Independence target age", path: "personal.semiRetirementAge", infoKey: "financialIndependenceTargetAge" },
       { label: "Financial Freedom target age", path: "personal.fullRetirementAge", infoKey: "financialFreedomTargetAge" },
-      { label: "Annual Lifestyle Spending", path: "personal.targetAnnualSpending", step: "1000", infoKey: "annualLifestyleSpending" },
+      { label: "Annual Lifestyle Spending Needed for Financial Freedom", path: "personal.targetAnnualSpending", step: "1000", infoKey: "annualLifestyleSpending" },
       { label: "Annual investing target", path: "investing.annualInvestingTarget", step: "1000", infoKey: "annualInvestingTarget" },
       { label: "Employer super contributions", path: "investing.employerSuperContributions", step: "1000" },
       { label: "Extra super contributions", path: "investing.extraSuperContributions", step: "1000", infoKey: "extraSuperContributions" },
@@ -1445,8 +1545,8 @@
       { label: "Safe withdrawal rate (%)", path: "investing.safeWithdrawalRatePct", step: "0.1" },
     ]);
     renderForm("superForm", [
-      { label: "Super person 1", path: "assets.superPerson1", step: "1000" },
-      { label: "Super person 2", path: "assets.superPerson2", step: "1000" },
+      { label: superDisplayName(1), path: "assets.superPerson1", step: "1000" },
+      { label: superDisplayName(2), path: "assets.superPerson2", step: "1000" },
       { label: "Employer super contributions", path: "investing.employerSuperContributions", step: "1000" },
       { label: "Extra super contributions", path: "investing.extraSuperContributions", step: "1000", infoKey: "extraSuperContributions" },
       { label: "Expected super return (%)", path: "investing.expectedSuperReturnPct", step: "0.1" },
@@ -1951,7 +2051,7 @@
     container.innerHTML = [
       summaryTile("Target FI Capital", money(result.targetCapital), "", "targetFiCapital"),
       summaryTile("Current FI Assets", money(result.financialIndependenceAssets), "", "currentFiAssets"),
-      summaryTile("Annual Lifestyle Spending", money(plan.personal.targetAnnualSpending), "", "annualLifestyleSpending"),
+      summaryTile("Annual Lifestyle Spending Needed for Financial Freedom", money(plan.personal.targetAnnualSpending), "", "annualLifestyleSpending"),
     ].join("");
   }
 
@@ -2271,7 +2371,7 @@
   function plannerAssumptions(result) {
     return [
       { label: "Planner start date", value: plannerShortDate(plan.reportSettings.weeklyPlanner.startDate), note: "Beginning of Week 1." },
-      { label: "Annual Lifestyle Spending", value: money(plan.personal.targetAnnualSpending), note: "Used in the Financial Freedom target." },
+      { label: "Annual Lifestyle Spending Needed for Financial Freedom", value: money(plan.personal.targetAnnualSpending), note: "Used in the Financial Freedom target." },
       { label: "Investment return", value: `${Number(plan.investing.expectedInvestmentReturnPct || 0).toFixed(1)}%`, note: "Not applied to the weekly bank schedule." },
       { label: "Super return", value: `${Number(plan.investing.expectedSuperReturnPct || 0).toFixed(1)}%`, note: "Not applied to the weekly bank schedule." },
       { label: "Inflation", value: `${Number(plan.investing.inflationPct || 0).toFixed(1)}%`, note: "Shown as a plan assumption only." },
@@ -4563,7 +4663,7 @@
           ${reportExplainer("Super growth", `${Number(plan.investing.expectedSuperReturnPct || 0).toFixed(1)}%`, "Estimated average annual return for superannuation.")}
           ${reportExplainer("Retirement assumptions", `Age ${plan.personal.fullRetirementAge || "not set"}`, "Target age entered for long-term financial freedom planning.")}
           ${reportExplainer("Withdrawal assumptions", `${Number(plan.investing.safeWithdrawalRatePct || 0).toFixed(1)}%`, "Percentage of FI assets assumed to fund annual lifestyle spending.")}
-          ${reportExplainer("Annual lifestyle spending", money(plan.personal.targetAnnualSpending), "Annual spending target used to estimate required FI assets.")}
+          ${reportExplainer("Annual lifestyle spending needed for Financial Freedom", money(plan.personal.targetAnnualSpending), "Annual spending target used to estimate required FI assets.")}
           ${reportExplainer("Projection period", "30 years", "Long-term projection period currently shown by the app.")}
         </div>
       `, "report-page-break report-compact-section")}
@@ -4628,9 +4728,11 @@
       { label: "Current stage", value: stage.name },
       { label: "Accessible investments", value: money(result.accessibleInvestmentAssets) },
       { label: "Super from age 60", value: money(result.superannuationBalance) },
-      { label: "Gross income", value: money(result.annualGrossIncome) },
+      { label: "Annual Income", value: money(result.annualGrossIncome) },
       { label: "Net income after tax and HELP", value: money(result.netIncomeAfterTaxHelp) },
-      { label: "Annual living expenses", value: money(result.annualLivingExpenses) },
+      { label: "Annual Living Expenses", value: money(result.annualLivingExpenses) },
+      { label: "Annual Loan Repayments", value: money(result.annualDebtRepayments) },
+      { label: "Annual Surplus", value: money(result.cashSurplusBeforeInvesting) },
       {
         label: "Spare cashflow used to invest",
         value: money(result.annualInvestmentContributions),
@@ -5082,6 +5184,8 @@
     syncCollectionsToLegacy();
     const result = CALC.calculatePlan(plan);
     renderSamplePlanOptions();
+    updateSetupNavigationLabel();
+    updatePersonDependentLabels();
     updateSaveStatus();
     updatePreview(result);
     renderDashboard(result);
