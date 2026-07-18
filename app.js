@@ -541,6 +541,89 @@
     ].filter((item) => item.active);
   }
 
+  function sumWeeklyActual(weeks, selector) {
+    return weeks.reduce((total, week) => total + (Number(selector(week)) || 0), 0);
+  }
+
+  function plannedLoanRepaymentsForWeek(week) {
+    return (week.detail?.billItems || [])
+      .filter((item) => /loan|mortgage|debt|credit card/i.test(item.name || ""))
+      .reduce((total, item) => total + (Number(item.amount) || 0), 0);
+  }
+
+  function weeklyHealthCheckCard(result) {
+    const completed = (weeklyPlan?.weeks || []).filter((week) => week.isCompleted && week.actual);
+    if (!completed.length) {
+      return `
+        <article class="metric-card weekly-health-check-card">
+          <span>Financial Health Check</span>
+          <strong>Start weekly tracking</strong>
+          <p>Complete a week in the Weekly Plan to compare planned vs actual income, expenses and wealth-building actions.</p>
+        </article>
+      `;
+    }
+    const plannedIncome = sumWeeklyActual(completed, (week) => week.planned?.income);
+    const actualIncome = sumWeeklyActual(completed, (week) => week.actual?.income);
+    const plannedExpenses = sumWeeklyActual(completed, (week) => weeklyForecastExpenses(week.planned));
+    const actualExpenses = sumWeeklyActual(completed, (week) => weeklyActualExpenses(week.actual));
+    const plannedLoans = sumWeeklyActual(completed, plannedLoanRepaymentsForWeek);
+    const actualLoans = sumWeeklyActual(completed, (week) => week.actual?.checks?.billsPaid ? plannedLoanRepaymentsForWeek(week) : 0);
+    const plannedInvesting = sumWeeklyActual(completed, (week) => week.planned?.investment);
+    const actualInvesting = sumWeeklyActual(completed, (week) => week.actual?.investment);
+    const plannedSuper = sumWeeklyActual(completed, (week) => week.planned?.extraSuper);
+    const actualSuper = sumWeeklyActual(completed, (week) => week.actual?.extraSuper);
+    const plannedDebt = sumWeeklyActual(completed, (week) => week.planned?.extraDebtRepayment);
+    const actualDebt = sumWeeklyActual(completed, (week) => week.actual?.extraDebtRepayment);
+    const latest = completed.at(-1);
+    const cashBuffer = Number(weeklyPlan.minimumCashBuffer || 0);
+    const currentBank = Number(latest?.actual?.closingBalance || 0);
+    const expenseVariancePct = plannedExpenses > 0 ? ((actualExpenses - plannedExpenses) / plannedExpenses) * 100 : 0;
+    const missedInvestments = completed.filter((week) => (Number(week.planned?.investment) || 0) > 0 && (Number(week.actual?.investment) || 0) + 1 < (Number(week.planned?.investment) || 0)).length;
+    const incomeTrendPct = plannedIncome > 0 ? ((actualIncome - plannedIncome) / plannedIncome) * 100 : 0;
+    const healthTone = currentBank < cashBuffer || expenseVariancePct > 5 || missedInvestments >= 2 ? "status-amber" : "status-green";
+    const summary = expenseVariancePct < -1
+      ? `You're spending ${Math.abs(expenseVariancePct).toFixed(1)}% less than planned.`
+      : expenseVariancePct > 1
+        ? `You're spending ${expenseVariancePct.toFixed(1)}% more than planned.`
+        : "Your spending is close to plan.";
+    const recommendation = Math.abs(expenseVariancePct) >= 5
+      ? `Your actual spending trend differs from the Financial Plan. Review whether the strategic spending assumption should be updated.`
+      : Math.abs(incomeTrendPct) >= 5
+        ? `Your income trend differs from the Financial Plan. Review whether your strategic income assumption should be updated.`
+        : missedInvestments >= 2
+          ? `Investment contributions have been missed ${missedInvestments} times. Review whether the weekly transfer target is still realistic.`
+          : `You're still projected to achieve Financial Freedom at ${targetAgeOutcome(result).toLowerCase()}, based on the current Financial Plan assumptions.`;
+    const row = (label, plannedValue, actualValue, reverseGood = false) => {
+      const diff = Number(actualValue || 0) - Number(plannedValue || 0);
+      const toneDiff = reverseGood ? -diff : diff;
+      return `<div><span>${escapeHtml(label)}</span><strong>${money(actualValue)}</strong><small class="${weeklyDifferenceClass(toneDiff)}">${money(diff)} vs planned</small></div>`;
+    };
+    return `
+      <article class="metric-card weekly-health-check-card ${healthTone}">
+        <span>Financial Health Check</span>
+        <strong>${escapeHtml(summary)}</strong>
+        <div class="weekly-health-grid">
+          ${row("Income", plannedIncome, actualIncome)}
+          ${row("Living Expenses", plannedExpenses, actualExpenses, true)}
+          ${row("Loan Repayments", plannedLoans, actualLoans)}
+          ${row("Investment Contributions", plannedInvesting, actualInvesting)}
+          ${row("Super Contributions", plannedSuper, actualSuper)}
+          ${row("Mortgage Reduction", plannedDebt, actualDebt)}
+          ${row("Cash Buffer", cashBuffer, currentBank)}
+          <div><span>Emergency Fund</span><strong>${currentBank >= cashBuffer ? "On target" : "Below buffer"}</strong><small>${money(currentBank)} current bank balance</small></div>
+        </div>
+        <p>${escapeHtml(recommendation)}</p>
+        ${Math.abs(expenseVariancePct) >= 5 || Math.abs(incomeTrendPct) >= 5 ? `
+          <div class="weekly-health-actions">
+            <button class="btn btn-primary" type="button" data-weekly-health-action="update-plan">Update Plan</button>
+            <button class="btn" type="button" data-weekly-health-action="keep-plan">Keep Current Plan</button>
+            <button class="btn" type="button" data-weekly-health-action="remind-later">Remind Me Later</button>
+          </div>
+        ` : ""}
+      </article>
+    `;
+  }
+
   function scenarioScore(metrics) {
     return metrics.longTermNetWorth
       + metrics.oneYearNetWorth * 0.1
@@ -1861,6 +1944,7 @@
       metricCard("Annual Living Expenses", money(livingExpenses), "", "This is calculated from your recurring expense items and excludes investing and loan principal repayments."),
       metricCard("Accessible Investments", money(result.accessibleInvestmentAssets)),
       metricCard("Highest Priority", highestRecommendation(result)),
+      weeklyHealthCheckCard(result),
     ].join("");
     document.getElementById("celebrationGrid").innerHTML = celebrationItems(result).slice(0, 6).map((item) => `
       <span class="celebration-pill">${escapeHtml(item.label)}</span>
@@ -3247,16 +3331,147 @@
     `;
   }
 
+  function weeklyPlannedTransfers(planned = {}) {
+    return (Number(planned.investment) || 0)
+      + (Number(planned.extraSuper) || 0)
+      + (Number(planned.extraDebtRepayment) || 0)
+      + (Number(planned.offsetTransfer) || 0)
+      + (Number(planned.otherTransfers) || 0);
+  }
+
+  function weeklyActualTransfers(actual = {}) {
+    return (Number(actual.investment) || 0)
+      + (Number(actual.extraSuper) || 0)
+      + (Number(actual.extraDebtRepayment) || 0)
+      + (Number(actual.offsetTransfer) || 0)
+      + (Number(actual.otherTransfers) || 0);
+  }
+
+  function weeklyActualExpenses(actual = {}) {
+    return (Number(actual.essentialCosts) || 0)
+      + (Number(actual.amountSetAside ?? actual.provisions) || 0)
+      + (Number(actual.discretionarySpending) || 0);
+  }
+
+  function weeklyForecastExpenses(planned = {}) {
+    return (Number(planned.essentialCosts) || 0)
+      + (Number(planned.provisions || planned.amountSetAside) || 0)
+      + (Number(planned.discretionaryAllowance) || 0);
+  }
+
+  function weeklyDifferenceClass(value) {
+    return value < 0 ? "negative" : value > 0 ? "positive" : "neutral";
+  }
+
+  function weeklyVarianceRow(label, forecast, actual, options = {}) {
+    const difference = Number(actual || 0) - Number(forecast || 0);
+    const displayDifference = options.reverseGood ? -difference : difference;
+    return `
+      <div class="weekly-variance-row">
+        <span>${escapeHtml(label)}</span>
+        <strong>${money(forecast)}</strong>
+        <strong>${money(actual)}</strong>
+        <strong class="${weeklyDifferenceClass(displayDifference)}">${money(difference)}</strong>
+      </div>
+    `;
+  }
+
+  function weeklyForecastActualGrid(week) {
+    const planned = week.planned || {};
+    const actual = week.actual || {};
+    const forecastClosing = Number(planned.expectedClosingBalance ?? planned.forecastClosingBalance ?? planned.closingBalance) || 0;
+    const actualOpening = Number(actual.openingBalance ?? planned.openingBalance) || 0;
+    const actualIncome = Number(actual.income ?? planned.income) || 0;
+    const actualExpenses = weeklyActualExpenses(actual);
+    const actualTransferTotal = weeklyActualTransfers(actual);
+    const actualClosing = Number(actual.closingBalance ?? planned.closingBalance) || 0;
+    return `
+      <article class="card mt-4 weekly-variance-card">
+        <div class="card-heading">
+          <div>
+            <h3>Forecast vs Actual</h3>
+            <span>Forecast is your plan. Actual is what happened and drives future weekly balances.</span>
+          </div>
+        </div>
+        <div class="weekly-variance-table mt-4">
+          <div class="weekly-variance-row weekly-variance-header">
+            <span>Item</span><strong>Forecast</strong><strong>Actual</strong><strong>Difference</strong>
+          </div>
+          ${weeklyVarianceRow("Opening Balance", planned.expectedOpeningBalance ?? planned.openingBalance, actualOpening)}
+          ${weeklyVarianceRow("Income", planned.income, actualIncome)}
+          ${weeklyVarianceRow("Expenses", weeklyForecastExpenses(planned), actualExpenses, { reverseGood: true })}
+          ${weeklyVarianceRow("Savings & Transfers", weeklyPlannedTransfers(planned), actualTransferTotal)}
+          ${weeklyVarianceRow("Closing Balance", forecastClosing, actualClosing)}
+        </div>
+      </article>
+    `;
+  }
+
+  function weeklyWorkflowHtml(week) {
+    const actual = week.actual || {};
+    const complete = Boolean(week.isCompleted);
+    const hasIncome = actual.income !== undefined;
+    const hasExpenses = actual.essentialCosts !== undefined || actual.discretionarySpending !== undefined;
+    const hasTransfers = actual.investment !== undefined || actual.extraSuper !== undefined || actual.extraDebtRepayment !== undefined;
+    const steps = [
+      ["1", "Review Opening Balance", actual.openingBalance !== undefined],
+      ["2", "Review Income", hasIncome],
+      ["3", "Review Bills", hasExpenses],
+      ["4", "Review Savings / Transfers", hasTransfers],
+      ["5", "Complete Week", complete],
+    ];
+    return `
+      <div class="weekly-workflow-strip mt-4" aria-label="Weekly workflow">
+        ${steps.map(([number, label, done]) => `
+          <div class="${done ? "done" : ""}">
+            <span>${number}</span>
+            <strong>${escapeHtml(label)}</strong>
+          </div>
+        `).join("")}
+      </div>
+    `;
+  }
+
+  function weeklyVarianceSummaryHtml(week) {
+    if (!week?.actual) return "";
+    const planned = week.planned || {};
+    const actual = week.actual || {};
+    const incomeDiff = (Number(actual.income) || 0) - (Number(planned.income) || 0);
+    const expenseDiff = weeklyForecastExpenses(planned) - weeklyActualExpenses(actual);
+    const transferDiff = weeklyActualTransfers(actual) - weeklyPlannedTransfers(planned);
+    const closingDiff = (Number(actual.closingBalance) || 0) - (Number(planned.expectedClosingBalance ?? planned.forecastClosingBalance ?? planned.closingBalance) || 0);
+    const line = (label, diff, positiveText, negativeText, neutralText = "On target") => {
+      const text = Math.abs(diff) < 1 ? neutralText : diff > 0 ? positiveText(diff) : negativeText(Math.abs(diff));
+      return `<li><span>${escapeHtml(label)}</span><strong class="${weeklyDifferenceClass(diff)}">${escapeHtml(text)}</strong></li>`;
+    };
+    return `
+      <article class="card mt-4 weekly-complete-summary-card">
+        <div class="card-heading">
+          <div>
+            <h3>${week.isCompleted ? "Week Complete" : "Weekly Variance Summary"}</h3>
+            <span>Quick feedback from the actual amounts entered for this week.</span>
+          </div>
+        </div>
+        <ul class="weekly-variance-summary mt-4">
+          ${line("Income", incomeDiff, (d) => `${money(d)} above forecast`, (d) => `${money(d)} below forecast`)}
+          ${line("Living expenses", expenseDiff, (d) => `${money(d)} under budget`, (d) => `${money(d)} over budget`)}
+          ${line("Savings", transferDiff, (d) => `${money(d)} above target`, (d) => `${money(d)} below target`)}
+          ${line("Closing balance", closingDiff, (d) => `${money(d)} higher than forecast`, (d) => `${money(d)} lower than forecast`)}
+        </ul>
+      </article>
+    `;
+  }
+
   function weeklyOpeningBalanceHtml(week, canAdjust) {
     const planned = week.planned || {};
     const expectedOpening = Number(planned.expectedOpeningBalance ?? planned.openingBalance) || 0;
     const actualOpening = Number(week.actual?.openingBalance ?? planned.actualOpeningBalance ?? planned.openingBalance) || 0;
     const difference = actualOpening - expectedOpening;
-    const differenceClass = difference < 0 ? "negative" : difference > 0 ? "positive" : "neutral";
+    const differenceClass = weeklyDifferenceClass(difference);
     const helper = canAdjust
-      ? "Update this amount if your actual bank balance differs from the previous week's expected closing balance."
+      ? "Update this amount if your actual bank balance differs from the balance carried into this week."
       : week.weekNumber > weeklyPlanCurrentCalendarWeekNumber()
-        ? "Future weeks inherit the prior week's projected closing balance."
+        ? "Future weeks inherit the prior week's actual closing balance once available, otherwise the projected closing balance."
         : "Reopen this completed week to adjust the opening balance.";
     return `
       <article class="card weekly-opening-balance-card mt-4">
@@ -3267,9 +3482,9 @@
           </div>
         </div>
         <div class="weekly-opening-lines mt-4">
-          <div><span>Expected from last week</span><strong>${money(expectedOpening)}</strong></div>
+          <div><span>Expected opening balance</span><strong>${money(expectedOpening)}</strong></div>
           <div><span>Actual opening balance</span><strong>${money(actualOpening)}</strong></div>
-          <div><span>Difference</span><strong class="${differenceClass}">${money(difference)}</strong></div>
+          <div><span>Reconciliation Adjustment</span><strong class="${differenceClass}">${money(difference)}</strong></div>
         </div>
         ${canAdjust ? `
           <details class="weekly-setup-details mt-4">
@@ -3314,11 +3529,15 @@
               <div><span>Actual opening balance</span><strong>${money(actual.openingBalance ?? planned.openingBalance)}</strong></div>
               <div><span>Actual income received</span><strong>${money(actual.income)}</strong></div>
               <div><span>Actual bills and essentials</span><strong>${money(actual.essentialCosts)}</strong></div>
+              <div><span>Actual amount set aside</span><strong>${money(actual.amountSetAside ?? actual.provisions ?? 0)}</strong></div>
               <div><span>Actual spending</span><strong>${money(actual.discretionarySpending)}</strong></div>
               <div><span>Actual invested</span><strong>${money(actual.investment)}</strong></div>
               <div><span>Actual extra super</span><strong>${money(actual.extraSuper)}</strong></div>
               <div><span>Actual extra debt repayment</span><strong>${money(actual.extraDebtRepayment)}</strong></div>
+              <div><span>Actual offset transfer</span><strong>${money(actual.offsetTransfer || 0)}</strong></div>
+              <div><span>Other actual transfers</span><strong>${money(actual.otherTransfers || 0)}</strong></div>
             </div>
+            ${weeklyVarianceSummaryHtml(week)}
             ${actual.notes ? `<p class="weekly-device-note mt-3">${escapeHtml(actual.notes)}</p>` : ""}
             <div class="weekly-action-row mt-4">
               ${weeklyPlan.settings.allowCompletedWeekEditing ? `<button class="btn" type="button" data-weekly-action="edit-week" data-weekly-week="${week.weekNumber}">Edit Completed Week</button>` : ""}
@@ -3400,10 +3619,12 @@
         </div>
       </article>
 
+      ${weeklyWorkflowHtml(week)}
+
       ${weeklyOpeningBalanceHtml(week, canEdit)}
 
       <div class="weekly-summary-grid mt-4">
-        ${weeklySummaryCard("Net income received", money(planned.income))}
+        ${weeklySummaryCard("Expected net income", money(planned.income))}
         ${weeklySummaryCard("Bills and spending", money(planned.essentialCosts))}
         ${weeklySummaryCard("Provisions", money(planned.provisions || planned.amountSetAside), planned.amountSetAside ? `${money(planned.amountSetAside)} is being set aside for future bills.` : "")}
         ${weeklySummaryCard("Spending allowance", money(planned.discretionaryAllowance))}
@@ -3415,6 +3636,8 @@
         ${weeklySummaryCard("Expected bank balance", money(planned.closingBalance))}
         ${weeklySummaryCard("Minimum cash buffer", money(weeklyPlan.minimumCashBuffer))}
       </div>
+
+      ${weeklyForecastActualGrid(week)}
 
       <div class="weekly-week-detail-grid mt-4">
         ${weeklyDetailList("Net money in", week.detail?.incomeItems || [])}
@@ -3435,13 +3658,21 @@
         <div class="weekly-actual-grid mt-4 ${canEdit ? "" : "weekly-readonly"}">
           ${weeklyActualField(week, "income", "Actual income received", planned.income, { disabled: !canEdit })}
           ${weeklyActualField(week, "essentialCosts", "Actual bills and essential costs", planned.essentialCosts, { disabled: !canEdit })}
+          ${weeklyActualField(week, "amountSetAside", "Actual amount set aside", planned.provisions || planned.amountSetAside || 0, { disabled: !canEdit })}
           ${weeklyActualField(week, "discretionarySpending", "Actual discretionary spending", planned.discretionaryAllowance, { disabled: !canEdit })}
           ${weeklyActualField(week, "investment", "Actual amount invested", planned.investment, { disabled: !canEdit })}
           ${weeklyActualField(week, "extraSuper", "Actual amount contributed to super", planned.extraSuper, { disabled: !canEdit })}
           ${weeklyActualField(week, "extraDebtRepayment", "Actual extra debt repayment", planned.extraDebtRepayment, { disabled: !canEdit })}
-          ${weeklyActualField(week, "closingBalance", "Actual closing bank balance", planned.closingBalance, { disabled: !canEdit })}
+          ${weeklyActualField(week, "offsetTransfer", "Actual offset transfer", planned.offsetTransfer || 0, { disabled: !canEdit })}
+          ${weeklyActualField(week, "otherTransfers", "Other actual transfers", planned.otherTransfers || 0, { disabled: !canEdit })}
           ${weeklyActualField(week, "notes", "Optional notes", week.actual?.notes || "", { type: "text", disabled: !canEdit })}
         </div>
+        <div class="weekly-calculated-closing mt-4">
+          <span>Actual closing bank balance</span>
+          <strong data-weekly-actual-closing="${week.weekNumber}">${money(week.actual?.closingBalance ?? planned.closingBalance)}</strong>
+          <small>Calculated from actual opening balance, income, expenses and transfers.</small>
+        </div>
+        ${weeklyVarianceSummaryHtml(week)}
         <div class="weekly-check-grid mt-4">
           ${weeklyCheckbox(week, "incomeReceived", "Income received", { disabled: !canEdit })}
           ${weeklyCheckbox(week, "billsPaid", "Bills paid", { disabled: !canEdit })}
@@ -3759,6 +3990,12 @@
       actual.checks[input.dataset.weeklyActualCheck] = input.checked;
     });
     return actual;
+  }
+
+  function refreshWeeklyActualClosingDisplay(weekNumber) {
+    const week = weeklyPlan?.weeks?.find((item) => item.weekNumber === Number(weekNumber));
+    const target = document.querySelector(`[data-weekly-actual-closing="${weekNumber}"]`);
+    if (week && target) target.textContent = money(week.actual?.closingBalance ?? week.planned?.closingBalance ?? 0);
   }
 
   function saveWeekProgress(weekNumber, complete = false) {
@@ -5433,6 +5670,7 @@
           return;
         }
         weeklyPlan = window.FFSWeeklyPlan.updateActual(weeklyPlan, weekNumber, readWeekActual(weekNumber));
+        refreshWeeklyActualClosingDisplay(weekNumber);
         saveWeeklyPlan("Weekly progress autosaved.");
         return;
       }
@@ -5580,6 +5818,21 @@
         activeWeeklyPlanTab = weeklyTab.dataset.weeklyTab;
         saveDraft();
         renderOutputs();
+        return;
+      }
+
+      const weeklyHealthAction = event.target.closest("[data-weekly-health-action]");
+      if (weeklyHealthAction) {
+        const action = weeklyHealthAction.dataset.weeklyHealthAction;
+        if (action === "update-plan") {
+          activeWizardStep = 1;
+          showWorkspace("setup");
+          updateSaveStatus("Review the Financial Plan and update strategic assumptions only if you choose to.");
+        } else if (action === "keep-plan") {
+          updateSaveStatus("Financial Plan unchanged.");
+        } else {
+          updateSaveStatus("Reminder noted. Financial Plan unchanged.");
+        }
         return;
       }
 

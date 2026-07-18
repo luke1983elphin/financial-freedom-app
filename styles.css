@@ -2885,6 +2885,189 @@ textarea.field-input {
   align-items: end;
 }
 
+.weekly-variance-card,
+.weekly-complete-summary-card {
+  border-color: #dbeafe;
+  background: #f8fbff;
+}
+
+.weekly-variance-table {
+  display: grid;
+  gap: 8px;
+}
+
+.weekly-variance-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) repeat(3, minmax(86px, max-content));
+  gap: 12px;
+  align-items: center;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 10px 12px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.weekly-variance-header {
+  background: #eef6ff;
+  color: #0f2742;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 11px;
+}
+
+.weekly-variance-row strong {
+  color: #0f2742;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.weekly-variance-row .positive,
+.weekly-variance-summary .positive,
+.weekly-health-grid .positive {
+  color: #0f9f6e;
+}
+
+.weekly-variance-row .negative,
+.weekly-variance-summary .negative,
+.weekly-health-grid .negative {
+  color: #b42318;
+}
+
+.weekly-calculated-closing {
+  display: grid;
+  gap: 5px;
+  border: 1px solid #bdebd7;
+  border-radius: 18px;
+  background: #f0fdf7;
+  padding: 16px;
+}
+
+.weekly-calculated-closing span,
+.weekly-calculated-closing small {
+  color: #475569;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.weekly-calculated-closing strong {
+  color: #0f2742;
+  font-size: 24px;
+  font-weight: 950;
+}
+
+.weekly-workflow-strip {
+  display: grid;
+  gap: 10px;
+}
+
+.weekly-workflow-strip div {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 10px 12px;
+}
+
+.weekly-workflow-strip span {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: #eaf2fb;
+  color: #0f2742;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.weekly-workflow-strip strong {
+  color: #0f2742;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.weekly-workflow-strip .done {
+  border-color: #bdebd7;
+  background: #f0fdf7;
+}
+
+.weekly-workflow-strip .done span {
+  background: #0f9f6e;
+  color: #ffffff;
+}
+
+.weekly-variance-summary {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.weekly-variance-summary li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: 12px;
+  align-items: center;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 8px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.weekly-health-check-card {
+  grid-column: 1 / -1;
+}
+
+.weekly-health-check-card p {
+  color: #475569;
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.55;
+}
+
+.weekly-health-grid {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.weekly-health-grid div {
+  display: grid;
+  gap: 3px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 10px 12px;
+}
+
+.weekly-health-grid span,
+.weekly-health-grid small {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.weekly-health-grid strong {
+  color: #0f2742;
+  font-size: 18px;
+  font-weight: 950;
+}
+
+.weekly-health-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
 @media (min-width: 760px) {
   .weekly-opening-lines,
   .weekly-completed-summary-grid {
@@ -2893,6 +3076,33 @@ textarea.field-input {
 
   .weekly-opening-adjustment {
     grid-template-columns: minmax(240px, 1fr) auto;
+  }
+
+  .weekly-health-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .weekly-workflow-strip {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .weekly-workflow-strip div {
+    grid-template-columns: 1fr;
+    align-content: start;
+  }
+}
+
+@media (max-width: 640px) {
+  .weekly-variance-row {
+    grid-template-columns: 1fr;
+  }
+
+  .weekly-variance-row strong {
+    text-align: left;
+  }
+
+  .weekly-variance-header {
+    display: none;
   }
 }
 
