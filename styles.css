@@ -3016,6 +3016,175 @@ textarea.field-input {
   color: #ffffff;
 }
 
+.weekly-step-nav {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  scroll-margin-top: 150px;
+}
+
+.weekly-step-button {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  border: 1px solid #dbe4ee;
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 10px;
+  text-align: left;
+}
+
+.weekly-step-button span {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: #eaf2fb;
+  color: #0f2742;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.weekly-step-button strong,
+.weekly-step-button small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.weekly-step-button strong {
+  color: #0f2742;
+  font-size: 13px;
+  font-weight: 950;
+  line-height: 1.18;
+}
+
+.weekly-step-button small {
+  grid-column: 2;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.weekly-step-button.reviewed span {
+  background: #0f9f6e;
+  color: #ffffff;
+}
+
+.weekly-step-button.active {
+  border-color: #0f9f6e;
+  background: #effcf6;
+  box-shadow: 0 0 0 3px rgba(15, 159, 110, 0.12);
+}
+
+.weekly-step-section {
+  scroll-margin-top: 150px;
+}
+
+.weekly-step-table {
+  display: grid;
+  gap: 8px;
+}
+
+.weekly-step-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(2, minmax(90px, max-content)) minmax(116px, max-content);
+  gap: 12px;
+  align-items: center;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 10px 12px;
+}
+
+.weekly-step-row span,
+.weekly-step-row em {
+  min-width: 0;
+  color: #64748b;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 850;
+  overflow-wrap: anywhere;
+}
+
+.weekly-step-row strong {
+  color: #0f2742;
+  font-size: 13px;
+  font-weight: 950;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.weekly-step-row-header {
+  background: #eef6ff;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.weekly-step-subrows {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.weekly-step-subrows div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 9px 10px;
+}
+
+.weekly-step-subrows span {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.weekly-step-subrows strong {
+  color: #0f2742;
+  font-size: 13px;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.weekly-warning-panel {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #f3d08c;
+  border-radius: 18px;
+  background: #fff8e9;
+  padding: 14px;
+  color: #6f4c06;
+}
+
+.weekly-warning-panel strong {
+  color: #6f4c06;
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.weekly-warning-panel p,
+.weekly-warning-panel span,
+.weekly-warning-panel summary {
+  margin-top: 4px;
+  color: #6f4c06;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.weekly-warning-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .weekly-variance-summary {
   display: grid;
   gap: 8px;
@@ -3318,6 +3487,32 @@ textarea.field-input {
 }
 
 @media (max-width: 560px) {
+  html {
+    scroll-padding-top: 104px;
+  }
+
+  html,
+  body {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  #weeklyPlanRoot,
+  #weeklyPlanRoot *,
+  [data-view-panel="weeklyplan"],
+  [data-view-panel="weeklyplan"] * {
+    box-sizing: border-box;
+    min-width: 0;
+  }
+
+  .view-section,
+  .weekly-step-section,
+  .weekly-step-nav,
+  .weekly-live-balance-card,
+  .weekly-opening-balance-card {
+    scroll-margin-top: 104px;
+  }
+
   .weekly-plan-header,
   .weekly-hero,
   .weekly-summary-grid,
@@ -3341,7 +3536,24 @@ textarea.field-input {
   }
 
   .weekly-tabs {
-    margin-inline: -2px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-inline: 0;
+    overflow: visible;
+    padding-bottom: 0;
+  }
+
+  .weekly-plan-shell,
+  .weekly-tab-panel,
+  .weekly-step-section,
+  .weekly-live-balance-card,
+  .weekly-opening-balance-card,
+  .weekly-variance-card,
+  .weekly-complete-summary-card,
+  .weekly-completed-card {
+    min-width: 0;
+    max-width: 100%;
   }
 
   .weekly-tab,
@@ -3351,12 +3563,23 @@ textarea.field-input {
     width: 100%;
   }
 
+  .weekly-tab {
+    min-width: 0;
+  }
+
   .weekly-week-navigation {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .weekly-week-navigation-center {
+    grid-column: 1 / -1;
+    order: -1;
   }
 
   .weekly-week-navigation .btn {
+    min-width: 0;
     width: 100%;
+    padding-inline: 10px;
   }
 
   .weekly-accordion-toggle {
@@ -3370,6 +3593,77 @@ textarea.field-input {
   .weekly-upcoming-metrics span,
   .weekly-upcoming-metrics em {
     white-space: normal;
+  }
+
+  .weekly-step-nav {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 3px;
+    scrollbar-width: thin;
+  }
+
+  .weekly-step-button {
+    flex: 0 0 auto;
+    grid-template-columns: 24px minmax(72px, 96px);
+    max-width: 138px;
+    padding: 8px;
+  }
+
+  .weekly-step-button span {
+    width: 24px;
+    height: 24px;
+  }
+
+  .weekly-step-button strong {
+    font-size: 12px;
+  }
+
+  .weekly-step-button small {
+    font-size: 10px;
+  }
+
+  .weekly-opening-lines div,
+  .weekly-completed-summary-grid span,
+  .weekly-step-subrows div {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .weekly-opening-lines strong,
+  .weekly-completed-summary-grid strong,
+  .weekly-step-subrows strong,
+  .weekly-summary-card strong,
+  .weekly-progress-card strong,
+  .weekly-calculated-closing strong {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .weekly-step-row,
+  .weekly-variance-row {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+
+  .weekly-step-row strong,
+  .weekly-variance-row strong {
+    text-align: left;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .weekly-step-row-header,
+  .weekly-variance-header {
+    display: none;
+  }
+
+  .weekly-status-badge {
+    min-width: 0;
+  }
+
+  .weekly-warning-actions .btn {
+    width: 100%;
   }
 }
 

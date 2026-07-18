@@ -60,6 +60,12 @@
     return { value: "", style, type: "blank" };
   }
 
+  function numberOrText(value, style = STYLE.currency, emptyText = "Not recorded") {
+    return value === null || value === undefined || value === ""
+      ? text(emptyText, STYLE.note)
+      : number(value, style);
+  }
+
   function moneyValue(value) {
     return asNumber(value).toLocaleString("en-AU", {
       style: "currency",
@@ -235,6 +241,18 @@
         return formula(`${col}${openingRow}+${col}${addReceiptsRow}-${col}${lessEssentialRow}-${col}${lessDiscretionaryRow}-${col}${lessTransfersRow}-${col}${lessFreedomTransfersRow}`, STYLE.totalCurrency);
       }),
     ]);
+    rows.push([blank(), blank(), ...weeks.map(() => blank())]);
+    rows.push([text("Actuals and reconciliation", STYLE.section), blank(STYLE.section), ...weeks.map(() => blank(STYLE.section))]);
+    rows.push([text("Week status"), text("Recorded"), ...weeks.map((week) => text(week.statusLabel || (week.isCompleted ? "Completed" : "Forecast")))]); 
+    rows.push([text("Actual opening balance"), text("Recorded"), ...weeks.map((week) => numberOrText(week.actualOpeningBalance))]);
+    rows.push([text("Actual money in"), text("Recorded"), ...weeks.map((week) => numberOrText(week.actualReceiptsTotal))]);
+    rows.push([text("Actual bills"), text("Recorded"), ...weeks.map((week) => numberOrText(week.actualEssentialTotal))]);
+    rows.push([text("Actual provisions"), text("Recorded"), ...weeks.map((week) => numberOrText(week.actualProvisionsTotal))]);
+    rows.push([text("Actual lifestyle spending"), text("Recorded"), ...weeks.map((week) => numberOrText(week.actualDiscretionaryTotal))]);
+    rows.push([text("Actual transfers out"), text("Recorded"), ...weeks.map((week) => numberOrText(week.actualTransfersTotal))]);
+    rows.push([text("Calculated actual closing balance"), text("Calculated"), ...weeks.map((week) => numberOrText(week.actualClosingBalance))]);
+    rows.push([text("Bank balance entered by user"), text("Recorded"), ...weeks.map((week) => numberOrText(week.enteredBankBalance))]);
+    rows.push([text("Reconciliation difference"), text("Calculated"), ...weeks.map((week) => numberOrText(week.reconciliationDifference, Math.abs(asNumber(week.reconciliationDifference)) > 0.01 ? STYLE.warningCurrency : STYLE.currency, "Not entered"))]);
     meta.openingRow = openingRow;
     meta.closingRow = closingRow;
     meta.addReceiptsRow = addReceiptsRow;
@@ -303,25 +321,18 @@
   }
 
   function buildWealthSnapshot(planner, weeklyMeta) {
-    const weeks = planner.weeks;
-    const lastWeekCol = colName(2 + weeks.length);
-    const endingBankFormula = `'Weekly Planner'!${lastWeekCol}${weeklyMeta.closingRow}`;
-    const investmentTransferRow = planner.lookupRows.investmentTransferRow;
-    const superTransferRow = planner.lookupRows.superTransferRow;
-    const debtTransferRow = planner.lookupRows.debtTransferRow;
-    const offsetTransferRow = planner.lookupRows.offsetTransferRow;
-    const sumRow = (row) => row ? `SUM('Weekly Planner'!C${row}:${lastWeekCol}${row})` : "0";
+    const snapshot = planner.snapshot || {};
     const rows = [
       [text("Wealth Snapshot", STYLE.title), blank(), blank(), blank(), blank()],
       [text("Item", STYLE.header), text("Starting balance", STYLE.header), text("Planned change", STYLE.header), text("Estimated ending balance", STYLE.header), text("Notes", STYLE.header)],
-      [text("Everyday bank account"), number(planner.startingBalance, STYLE.currency), formula(`${endingBankFormula}-B3`, STYLE.currency), formula(endingBankFormula, STYLE.currency), text("Flows from the Weekly Plan.")],
-      [text("Offset account"), number(planner.snapshot.offsetBalance, STYLE.currency), formula(sumRow(offsetTransferRow), STYLE.currency), formula(`B4+C4`, STYLE.currency), text("Only planned offset transfers are added.")],
-      [text("Cash savings"), number(planner.snapshot.cashSavings, STYLE.currency), number(0, STYLE.currency), formula("B5+C5", STYLE.currency), text("Existing cash entered in the plan.")],
-      [text("Shares and investments"), number(planner.snapshot.investmentBalance, STYLE.currency), formula(sumRow(investmentTransferRow), STYLE.currency), formula("B6+C6", STYLE.currency), text("Does not add assumed market growth.")],
-      [text("Superannuation"), number(planner.snapshot.superBalance, STYLE.currency), formula(sumRow(superTransferRow), STYLE.currency), formula("B7+C7", STYLE.currency), text("Additional super contributions only; no growth included here.")],
+      [text("Everyday bank account"), number(planner.startingBalance, STYLE.currency), number(asNumber(snapshot.endingBankBalance) - asNumber(planner.startingBalance), STYLE.currency), number(snapshot.endingBankBalance, STYLE.currency), text("Reconciles to the final planner week.")],
+      [text("Offset account"), number(snapshot.offsetBalance, STYLE.currency), number(snapshot.offsetChange, STYLE.currency), formula("B4+C4", STYLE.currency), text("Includes planned or completed offset transfers.")],
+      [text("Cash savings"), number(snapshot.cashSavings, STYLE.currency), number(0, STYLE.currency), formula("B5+C5", STYLE.currency), text("Existing cash entered in the plan.")],
+      [text("Shares and investments"), number(snapshot.investmentBalance, STYLE.currency), number(snapshot.investmentChange, STYLE.currency), formula("B6+C6", STYLE.currency), text("Includes investment transfers; no market growth is assumed.")],
+      [text("Superannuation"), number(snapshot.superBalance, STYLE.currency), number(snapshot.superChange, STYLE.currency), formula("B7+C7", STYLE.currency), text("Includes additional super contributions only; no growth included here.")],
       [text("Total financial assets", STYLE.header), formula("SUM(B3:B7)", STYLE.totalCurrency), formula("SUM(C3:C7)", STYLE.totalCurrency), formula("SUM(D3:D7)", STYLE.totalCurrency), blank()],
       [blank(), blank(), blank(), blank(), blank()],
-      [text("Total liabilities"), number(planner.snapshot.totalDebtBalance, STYLE.currency), formula(`-${sumRow(debtTransferRow)}`, STYLE.currency), formula("MAX(0,B10+C10)", STYLE.currency), text("Debt change uses planned extra debt transfers where entered.")],
+      [text("Total liabilities"), number(snapshot.totalDebtBalance, STYLE.currency), number(-asNumber(snapshot.debtChange), STYLE.currency), formula("MAX(0,B10+C10)", STYLE.currency), text("Debt change uses additional debt repayments where entered.")],
       [text("Net financial position", STYLE.header), formula("B8-B10", STYLE.totalCurrency), formula("C8+C10", STYLE.totalCurrency), formula("D8-D10", STYLE.totalCurrency), text("Estimated change during the planner period.")],
     ];
     return {
@@ -331,25 +342,23 @@
   }
 
   function buildAnnualSummary(planner, weeklyMeta) {
-    const weeks = planner.weeks;
-    const lastWeekCol = colName(2 + weeks.length);
-    const rangeFor = (row) => `'Weekly Planner'!C${row}:${lastWeekCol}${row}`;
-    const lookup = planner.lookupRows || {};
+    const summary = planner.summary || {};
     const rows = [
       [text("Annual Summary", STYLE.title), blank(), blank()],
       [text("Measure", STYLE.header), text("Amount", STYLE.header), text("Notes", STYLE.header)],
-      [text("Total expected income"), formula(`SUM(${rangeFor(weeklyMeta.receiptsTotalRow)})`, STYLE.currency), text("All scheduled money coming in during the planner period.")],
-      [text("Total essential spending"), formula(`SUM(${rangeFor(weeklyMeta.essentialTotalRow)})`, STYLE.currency), text("Bills, essentials and amounts set aside.")],
-      [text("Total lifestyle spending"), formula(`SUM(${rangeFor(weeklyMeta.discretionaryTotalRow)})`, STYLE.currency), text("Lifestyle and discretionary spending.")],
-      [text("Total planned offset savings"), formula(lookup.offsetTransferRow ? `SUM(${rangeFor(lookup.offsetTransferRow)})` : "0", STYLE.currency), text("Only if an offset transfer was available in the plan.")],
-      [text("Total additional debt repayments"), formula(lookup.debtTransferRow ? `SUM(${rangeFor(lookup.debtTransferRow)})` : "0", STYLE.currency), text("Additional debt transfers only.")],
-      [text("Total investing"), formula(lookup.investmentTransferRow ? `SUM(${rangeFor(lookup.investmentTransferRow)})` : "0", STYLE.currency), text("Planned investment contributions.")],
-      [text("Total additional super contributions"), formula(lookup.superTransferRow ? `SUM(${rangeFor(lookup.superTransferRow)})` : "0", STYLE.currency), text("Gross extra super contributions entered in the plan.")],
-      [text("Expected starting cash position"), number(planner.startingBalance, STYLE.currency), text("Opening everyday bank balance entered before generating.")],
-      [text("Expected ending cash position"), formula(`'Weekly Planner'!${lastWeekCol}${weeklyMeta.closingRow}`, STYLE.currency), text("Final expected bank balance in the planner.")],
-      [text("Estimated improvement in net financial position"), formula("B11-B10+B6+B7+B8+B9", STYLE.totalCurrency), text("Cash movement plus planned wealth-building transfers.")],
-      [text("Average weekly savings rate"), formula("IF(B3=0,0,(B6+B7+B8+B9)/B3)", STYLE.percent), text("Planned transfers divided by expected income.")],
-      [text("Weeks with negative projected closing balance"), formula(`COUNTIF(${rangeFor(weeklyMeta.closingRow)}, "<0")`, STYLE.warningCurrency), text("Review any affected week before relying on the schedule.")],
+      [text("Total expected income"), number(summary.totalIncome, STYLE.currency), text("Money in during the planner period, using completed actuals where available.")],
+      [text("Total essential spending"), number(summary.totalEssential, STYLE.currency), text("Bills and essential spending.")],
+      [text("Total provisions"), number(summary.totalProvisions, STYLE.currency), text("Amounts set aside for future bills.")],
+      [text("Total lifestyle spending"), number(summary.totalLifestyle, STYLE.currency), text("Lifestyle and discretionary spending.")],
+      [text("Total planned offset savings"), number(summary.totalOffset, STYLE.currency), text("Offset transfers included in the weekly schedule.")],
+      [text("Total additional debt repayments"), number(summary.totalDebt, STYLE.currency), text("Additional debt repayments included in the weekly schedule.")],
+      [text("Total investing"), number(summary.totalInvesting, STYLE.currency), text("Investment transfers included in the weekly schedule.")],
+      [text("Total additional super contributions"), number(summary.totalSuper, STYLE.currency), text("Additional super contributions included in the weekly schedule.")],
+      [text("Expected starting cash position"), number(summary.startingCash, STYLE.currency), text("Opening bank balance entered before generating.")],
+      [text("Expected ending cash position"), number(summary.endingCash, STYLE.currency), text("Final bank balance in the planner.")],
+      [text("Estimated improvement in net financial position"), number(summary.estimatedImprovement, STYLE.totalCurrency), text("Cash movement plus planned or completed wealth-building transfers.")],
+      [text("Average weekly savings rate"), number(summary.savingsRate, STYLE.percent), text("Transfers divided by expected income.")],
+      [text("Weeks with negative projected closing balance"), number(summary.weeksNegative, summary.weeksNegative ? STYLE.warningCurrency : STYLE.normal), text("Review any affected week before relying on the schedule.")],
     ];
     return {
       name: "Annual Summary",

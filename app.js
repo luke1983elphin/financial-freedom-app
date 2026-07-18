@@ -196,6 +196,7 @@
   let activeWeeklyPlanTab = restoredDraftUi.activeWeeklyPlanTab || "thisWeek";
   let weeklyEditingWeek = null;
   let weeklyViewedWeekNumber = null;
+  let activeWeeklyStep = "opening";
   const weeklyPlanUiState = {
     isTimingSetupExpanded: null,
   };
@@ -2481,20 +2482,28 @@
     let opening = plannerRound(settings.startingBalance);
     weeks.forEach((week, index) => {
       const activeWeek = weeklyPlan?.weeks?.[index];
-      const receiptsTotal = activeWeek?.planned ? activeWeek.planned.income : plannerSectionTotal(sections.receipts, index);
-      const essentialTotal = activeWeek?.planned ? activeWeek.planned.essentialCosts : plannerSectionTotal(sections.essential, index);
-      const provisionsTotal = activeWeek?.planned ? (activeWeek.planned.provisions || activeWeek.planned.amountSetAside || 0) : plannerSectionTotal(sections.provisions || [], index);
-      const discretionaryTotal = activeWeek?.planned ? activeWeek.planned.discretionaryAllowance : plannerSectionTotal(sections.discretionary, index);
-      const transfersTotal = activeWeek?.planned
-        ? activeWeek.planned.investment + activeWeek.planned.extraSuper + activeWeek.planned.extraDebtRepayment + (activeWeek.planned.offsetTransfer || 0) + (activeWeek.planned.otherTransfers || 0)
+      const planned = activeWeek?.planned || {};
+      const actualData = activeWeek ? weeklyActualClosingData(activeWeek) : null;
+      const useActualForBalance = Boolean(activeWeek?.isCompleted && activeWeek.actual);
+      const receiptsTotal = useActualForBalance ? plannerRound(actualData.income + actualData.transfersIn) : activeWeek?.planned ? planned.income : plannerSectionTotal(sections.receipts, index);
+      const essentialTotal = useActualForBalance ? weeklyActualValue(activeWeek.actual, "essentialCosts", planned.essentialCosts) : activeWeek?.planned ? planned.essentialCosts : plannerSectionTotal(sections.essential, index);
+      const provisionsTotal = useActualForBalance ? weeklyActualSetAside(activeWeek.actual, planned) : activeWeek?.planned ? (planned.provisions || planned.amountSetAside || 0) : plannerSectionTotal(sections.provisions || [], index);
+      const discretionaryTotal = useActualForBalance ? weeklyActualValue(activeWeek.actual, "discretionarySpending", planned.discretionaryAllowance) : activeWeek?.planned ? planned.discretionaryAllowance : plannerSectionTotal(sections.discretionary, index);
+      const transfersTotal = useActualForBalance
+        ? actualData.transfersOut
+        : activeWeek?.planned
+          ? planned.investment + planned.extraSuper + planned.extraDebtRepayment + (planned.offsetTransfer || 0) + (planned.otherTransfers || 0)
         : plannerSectionTotal(sections.transfers, index);
-      const investmentTransferTotal = plannerTransferTotal(sections.transfers, "investmentTransfer", index);
-      const superTransferTotal = plannerTransferTotal(sections.transfers, "superTransfer", index);
-      const debtTransferTotal = plannerTransferTotal(sections.transfers, "debtTransfer", index);
-      const offsetTransferTotal = plannerTransferTotal(sections.transfers, "offsetTransfer", index);
-      const closingBalance = activeWeek?.planned ? activeWeek.planned.closingBalance : plannerRound(opening + receiptsTotal - essentialTotal - provisionsTotal - discretionaryTotal - transfersTotal);
+      const investmentTransferTotal = useActualForBalance ? weeklyActualValue(activeWeek.actual, "investment", planned.investment) : plannerTransferTotal(sections.transfers, "investmentTransfer", index);
+      const superTransferTotal = useActualForBalance ? weeklyActualValue(activeWeek.actual, "extraSuper", planned.extraSuper) : plannerTransferTotal(sections.transfers, "superTransfer", index);
+      const debtTransferTotal = useActualForBalance ? weeklyActualValue(activeWeek.actual, "extraDebtRepayment", planned.extraDebtRepayment) : plannerTransferTotal(sections.transfers, "debtTransfer", index);
+      const offsetTransferTotal = useActualForBalance ? weeklyActualValue(activeWeek.actual, "offsetTransfer", planned.offsetTransfer) : plannerTransferTotal(sections.transfers, "offsetTransfer", index);
+      const closingBalance = useActualForBalance ? actualData.calculatedClosing : activeWeek?.planned ? planned.closingBalance : plannerRound(opening + receiptsTotal - essentialTotal - provisionsTotal - discretionaryTotal - transfersTotal);
+      const actual = activeWeek?.actual || null;
       Object.assign(week, {
-        openingBalance: activeWeek?.planned ? activeWeek.planned.openingBalance : opening,
+        openingBalance: useActualForBalance ? actualData.opening : activeWeek?.planned ? planned.openingBalance : opening,
+        plannedOpeningBalance: activeWeek?.planned ? planned.expectedOpeningBalance ?? planned.openingBalance : opening,
+        plannedClosingBalance: activeWeek?.planned ? planned.expectedClosingBalance ?? planned.forecastClosingBalance ?? planned.closingBalance : closingBalance,
         receiptsTotal,
         essentialTotal,
         provisionsTotal,
@@ -2505,10 +2514,36 @@
         debtTransferTotal,
         offsetTransferTotal,
         closingBalance,
+        isCompleted: Boolean(activeWeek?.isCompleted),
+        actualOpeningBalance: actual && weeklyHasActualAmount(actual, "openingBalance") ? actual.openingBalance : null,
+        actualReceiptsTotal: actual ? plannerRound(weeklyActualValue(actual, "income", planned.income) + weeklyActualValue(actual, "transfersIn", 0)) : null,
+        actualEssentialTotal: actual && weeklyHasActualAmount(actual, "essentialCosts") ? actual.essentialCosts : null,
+        actualProvisionsTotal: actual && (weeklyHasActualAmount(actual, "amountSetAside") || weeklyHasActualAmount(actual, "provisions")) ? weeklyActualSetAside(actual, planned) : null,
+        actualDiscretionaryTotal: actual && weeklyHasActualAmount(actual, "discretionarySpending") ? actual.discretionarySpending : null,
+        actualTransfersTotal: actual ? weeklyActualTransfers(actual, planned) : null,
+        actualClosingBalance: actual ? actualData.calculatedClosing : null,
+        enteredBankBalance: actual && weeklyHasActualAmount(actual, "enteredBankBalance") ? actual.enteredBankBalance : null,
+        reconciliationDifference: actual && weeklyHasActualAmount(actual, "enteredBankBalance") ? plannerRound(actual.enteredBankBalance - actualData.calculatedClosing) : null,
+        statusLabel: activeWeek?.isCompleted ? "Completed" : activeWeek ? weeklyCalendarStatusText(activeWeek) : "Forecast",
       });
       week.priority = weeklyPriority(week);
       opening = closingBalance;
     });
+    const summary = {
+      totalIncome: plannerRound(weeks.reduce((total, week) => total + week.receiptsTotal, 0)),
+      totalEssential: plannerRound(weeks.reduce((total, week) => total + week.essentialTotal, 0)),
+      totalProvisions: plannerRound(weeks.reduce((total, week) => total + (week.provisionsTotal || 0), 0)),
+      totalLifestyle: plannerRound(weeks.reduce((total, week) => total + week.discretionaryTotal, 0)),
+      totalOffset: plannerRound(weeks.reduce((total, week) => total + week.offsetTransferTotal, 0)),
+      totalDebt: plannerRound(weeks.reduce((total, week) => total + week.debtTransferTotal, 0)),
+      totalInvesting: plannerRound(weeks.reduce((total, week) => total + week.investmentTransferTotal, 0)),
+      totalSuper: plannerRound(weeks.reduce((total, week) => total + week.superTransferTotal, 0)),
+      startingCash: plannerRound(settings.startingBalance),
+      endingCash: plannerRound(weeks.at(-1)?.closingBalance || 0),
+      weeksNegative: weeks.filter((week) => week.closingBalance < 0).length,
+    };
+    summary.estimatedImprovement = plannerRound((summary.endingCash - summary.startingCash) + summary.totalOffset + summary.totalDebt + summary.totalInvesting + summary.totalSuper);
+    summary.savingsRate = summary.totalIncome > 0 ? plannerRound((summary.totalOffset + summary.totalDebt + summary.totalInvesting + summary.totalSuper) / summary.totalIncome) : 0;
     return {
       appVersion: APP_VERSION,
       householdName: [plan.personal.person1Name, plan.personal.person2Name].filter(Boolean).join(" and ") || "Current plan",
@@ -2519,6 +2554,7 @@
       weeks,
       sections,
       lookupRows: {},
+      summary,
       assumptions: plannerAssumptions(result),
       snapshot: {
         offsetBalance: Number(plan.assets.offsetBalance) || 0,
@@ -2526,6 +2562,11 @@
         investmentBalance: (Number(plan.assets.sharesEtfs) || 0) + (Number(plan.assets.crypto) || 0),
         superBalance: result.superannuationBalance || 0,
         totalDebtBalance: result.totalLiabilities || 0,
+        endingBankBalance: summary.endingCash,
+        offsetChange: summary.totalOffset,
+        investmentChange: summary.totalInvesting,
+        superChange: summary.totalSuper,
+        debtChange: summary.totalDebt,
       },
       negativeWeeks: weeks.filter((week) => week.closingBalance < 0).map((week) => week.week),
     };
@@ -3512,25 +3553,101 @@
     `;
   }
 
-  function weeklyWorkflowHtml(week) {
+  const weeklyStepOrder = ["opening", "income", "bills", "transfers", "complete"];
+  const weeklyStepLabels = {
+    opening: "Opening Balance",
+    income: "Income",
+    bills: "Bills",
+    transfers: "Savings & Transfers",
+    complete: "Complete Week",
+  };
+
+  function weeklyStepReviewed(week, step) {
     const actual = week.actual || {};
-    const complete = Boolean(week.isCompleted);
-    const hasIncome = actual.income !== undefined;
-    const hasExpenses = actual.essentialCosts !== undefined || actual.discretionarySpending !== undefined;
-    const hasTransfers = actual.investment !== undefined || actual.extraSuper !== undefined || actual.extraDebtRepayment !== undefined;
-    const steps = [
-      ["1", "Review Opening Balance", actual.openingBalance !== undefined],
-      ["2", "Review Income", hasIncome],
-      ["3", "Review Bills", hasExpenses],
-      ["4", "Review Savings / Transfers", hasTransfers],
-      ["5", "Complete Week", complete],
-    ];
+    if (step === "opening") return weeklyHasActualAmount(actual, "openingBalance");
+    if (step === "income") return weeklyHasActualAmount(actual, "income") || weeklyHasActualAmount(actual, "transfersIn");
+    if (step === "bills") return weeklyHasActualAmount(actual, "essentialCosts") || weeklyHasActualAmount(actual, "amountSetAside") || weeklyHasActualAmount(actual, "discretionarySpending");
+    if (step === "transfers") return ["investment", "extraSuper", "extraDebtRepayment", "offsetTransfer", "otherTransfers"].some((key) => weeklyHasActualAmount(actual, key));
+    if (step === "complete") return Boolean(week.isCompleted);
+    return false;
+  }
+
+  function weeklyStepStateText(week, step, isActive) {
+    if (week.isCompleted && step === "complete") return "Completed";
+    if (isActive) return "Current";
+    if (weeklyStepReviewed(week, step)) return "Reviewed";
+    return "Not reviewed";
+  }
+
+  function weeklyWorkflowHtml(week) {
+    if (!weeklyStepOrder.includes(activeWeeklyStep)) activeWeeklyStep = "opening";
     return `
-      <div class="weekly-workflow-strip mt-4" aria-label="Weekly workflow">
-        ${steps.map(([number, label, done]) => `
-          <div class="${done ? "done" : ""}">
-            <span>${number}</span>
-            <strong>${escapeHtml(label)}</strong>
+      <div class="weekly-step-nav mt-4" role="tablist" aria-label="Weekly steps">
+        ${weeklyStepOrder.map((step, index) => {
+          const reviewed = weeklyStepReviewed(week, step);
+          const active = activeWeeklyStep === step;
+          const stateText = weeklyStepStateText(week, step, active);
+          return `
+          <button
+            class="weekly-step-button${active ? " active" : ""}${reviewed ? " reviewed" : ""}"
+            type="button"
+            role="tab"
+            aria-selected="${active}"
+            ${active ? "aria-current=\"step\"" : ""}
+            data-weekly-step-button="${step}">
+            <span>${reviewed ? "✓" : index + 1}</span>
+            <strong>${escapeHtml(weeklyStepLabels[step])}</strong>
+            <small>${escapeHtml(stateText)}</small>
+          </button>
+        `;
+        }).join("")}
+      </div>
+    `;
+  }
+
+  function weeklyWarningPanelHtml(week) {
+    const planned = week?.planned || {};
+    if (!planned.adjustmentReason) return "";
+    return `
+      <article class="weekly-warning-panel mt-4">
+        <div>
+          <strong>Action needed</strong>
+          <p>This week falls below your minimum cash buffer. Review bills, income or planned transfers.</p>
+          <details>
+            <summary>More detail</summary>
+            <span>${escapeHtml(planned.adjustmentReason)}</span>
+          </details>
+        </div>
+        <div class="weekly-warning-actions">
+          <button class="btn" type="button" data-weekly-step-button="bills">Review bills</button>
+          <button class="btn" type="button" data-weekly-step-button="transfers">Review transfers</button>
+          <button class="btn" type="button" data-weekly-action="toggle-timing-setup">Review timing</button>
+        </div>
+      </article>
+    `;
+  }
+
+  function weeklyStepRow(label, plannedValue, actualValue, options = {}) {
+    const hasActual = actualValue !== null && actualValue !== undefined && actualValue !== "";
+    const status = hasActual ? "Recorded" : "Using planned estimate";
+    return `
+      <div class="weekly-step-row">
+        <span>${escapeHtml(label)}</span>
+        <strong>${money(plannedValue)}</strong>
+        <strong>${hasActual ? money(actualValue) : "Not recorded"}</strong>
+        <em>${escapeHtml(options.status || status)}</em>
+      </div>
+    `;
+  }
+
+  function weeklyStepDetailRows(title, items) {
+    if (!items?.length) return `<p class="weekly-muted">No ${escapeHtml(title.toLowerCase())} scheduled this week.</p>`;
+    return `
+      <div class="weekly-step-subrows">
+        ${items.map((item) => `
+          <div>
+            <span>${escapeHtml(item.name)}${item.timing === "set-aside" ? " (set aside)" : ""}</span>
+            <strong>${money(item.amount)}</strong>
           </div>
         `).join("")}
       </div>
@@ -3579,10 +3696,10 @@
         ? "Future weeks inherit the prior week's actual closing balance once available, otherwise the projected closing balance."
         : "Reopen this completed week to adjust the opening balance.";
     return `
-      <article class="card weekly-opening-balance-card mt-4">
+      <article class="card weekly-opening-balance-card weekly-step-section mt-4" id="weekly-step-opening" data-weekly-step-section="opening">
         <div class="card-heading">
           <div>
-            <h3>Opening everyday bank balance</h3>
+            <h3>Opening bank balance</h3>
             <span>${escapeHtml(helper)}</span>
           </div>
         </div>
@@ -3674,6 +3791,153 @@
     `;
   }
 
+  function weeklyOpeningStepHtml(week, canEdit) {
+    return weeklyOpeningBalanceHtml(week, canEdit);
+  }
+
+  function weeklyIncomeStepHtml(week, canEdit) {
+    const planned = week.planned || {};
+    const actual = weeklyActualWithDraft(week);
+    return `
+      <article class="card weekly-step-section" id="weekly-step-income" data-weekly-step-section="income">
+        <div class="card-heading">
+          <div>
+            <h3>Money in</h3>
+            <span>Record income received this week. Planned amounts stay visible for comparison.</span>
+          </div>
+        </div>
+        <div class="weekly-step-table mt-4">
+          <div class="weekly-step-row weekly-step-row-header"><span>Item</span><strong>Planned</strong><strong>Recorded</strong><em>Status</em></div>
+          ${weeklyStepRow("Total money in", planned.income, weeklyHasActualAmount(actual, "income") ? actual.income : null)}
+          ${weeklyStepRow("Other money in / transfers in", 0, weeklyHasActualAmount(actual, "transfersIn") ? actual.transfersIn : null)}
+        </div>
+        <details class="weekly-setup-details mt-4">
+          <summary>Scheduled income details</summary>
+          ${weeklyStepDetailRows("Income", week.detail?.incomeItems || [])}
+        </details>
+        <div class="weekly-actual-grid mt-4 ${canEdit ? "" : "weekly-readonly"}">
+          ${weeklyActualField(week, "income", "Money in", planned.income, { disabled: !canEdit })}
+          ${weeklyActualField(week, "transfersIn", "Other money in / transfers in", 0, { disabled: !canEdit })}
+        </div>
+      </article>
+    `;
+  }
+
+  function weeklyBillsStepHtml(week, canEdit) {
+    const planned = week.planned || {};
+    const actual = weeklyActualWithDraft(week);
+    return `
+      <article class="card weekly-step-section" id="weekly-step-bills" data-weekly-step-section="bills">
+        <div class="card-heading">
+          <div>
+            <h3>Bills</h3>
+            <span>Record bills, spending and amounts set aside for future bills.</span>
+          </div>
+        </div>
+        <div class="weekly-step-table mt-4">
+          <div class="weekly-step-row weekly-step-row-header"><span>Item</span><strong>Planned</strong><strong>Recorded</strong><em>Status</em></div>
+          ${weeklyStepRow("Bills and spending", planned.essentialCosts, weeklyHasActualAmount(actual, "essentialCosts") ? actual.essentialCosts : null)}
+          ${weeklyStepRow("Amounts set aside", planned.provisions || planned.amountSetAside || 0, weeklyHasActualAmount(actual, "amountSetAside") ? actual.amountSetAside : null)}
+          ${weeklyStepRow("Lifestyle spending", planned.discretionaryAllowance, weeklyHasActualAmount(actual, "discretionarySpending") ? actual.discretionarySpending : null)}
+        </div>
+        <details class="weekly-setup-details mt-4">
+          <summary>Bill and provision details</summary>
+          ${weeklyStepDetailRows("Bills", week.detail?.billItems || [])}
+          ${weeklyStepDetailRows("Provisions", week.detail?.provisionItems || week.detail?.setAsideItems || [])}
+        </details>
+        <div class="weekly-actual-grid mt-4 ${canEdit ? "" : "weekly-readonly"}">
+          ${weeklyActualField(week, "essentialCosts", "Bills and spending", planned.essentialCosts, { disabled: !canEdit })}
+          ${weeklyActualField(week, "amountSetAside", "Amounts set aside", planned.provisions || planned.amountSetAside || 0, { disabled: !canEdit })}
+          ${weeklyActualField(week, "discretionarySpending", "Lifestyle spending", planned.discretionaryAllowance, { disabled: !canEdit })}
+        </div>
+      </article>
+    `;
+  }
+
+  function weeklyTransfersStepHtml(week, canEdit) {
+    const planned = week.planned || {};
+    const actual = weeklyActualWithDraft(week);
+    return `
+      <article class="card weekly-step-section" id="weekly-step-transfers" data-weekly-step-section="transfers">
+        <div class="card-heading">
+          <div>
+            <h3>Savings and transfers</h3>
+            <span>Keep wealth-building transfers separate from ordinary bills.</span>
+          </div>
+        </div>
+        <div class="weekly-step-table mt-4">
+          <div class="weekly-step-row weekly-step-row-header"><span>Item</span><strong>Planned</strong><strong>Recorded</strong><em>Status</em></div>
+          ${weeklyStepRow("Offset transfer", planned.offsetTransfer || 0, weeklyHasActualAmount(actual, "offsetTransfer") ? actual.offsetTransfer : null)}
+          ${weeklyStepRow("Investing", planned.investment, weeklyHasActualAmount(actual, "investment") ? actual.investment : null)}
+          ${weeklyStepRow("Extra debt repayment", planned.extraDebtRepayment, weeklyHasActualAmount(actual, "extraDebtRepayment") ? actual.extraDebtRepayment : null)}
+          ${weeklyStepRow("Additional super", planned.extraSuper, weeklyHasActualAmount(actual, "extraSuper") ? actual.extraSuper : null)}
+          ${weeklyStepRow("Other transfers", planned.otherTransfers || 0, weeklyHasActualAmount(actual, "otherTransfers") ? actual.otherTransfers : null)}
+        </div>
+        <details class="weekly-setup-details mt-4">
+          <summary>Transfer details</summary>
+          ${weeklyStepDetailRows("Transfers", week.detail?.transferItems || [])}
+        </details>
+        <div class="weekly-actual-grid mt-4 ${canEdit ? "" : "weekly-readonly"}">
+          ${weeklyActualField(week, "offsetTransfer", "Offset transfer", planned.offsetTransfer || 0, { disabled: !canEdit })}
+          ${weeklyActualField(week, "investment", "Investing", planned.investment, { disabled: !canEdit })}
+          ${weeklyActualField(week, "extraDebtRepayment", "Extra debt repayment", planned.extraDebtRepayment, { disabled: !canEdit })}
+          ${weeklyActualField(week, "extraSuper", "Additional super", planned.extraSuper, { disabled: !canEdit })}
+          ${weeklyActualField(week, "otherTransfers", "Other transfers", planned.otherTransfers || 0, { disabled: !canEdit })}
+        </div>
+      </article>
+    `;
+  }
+
+  function weeklyCompleteStepHtml(week, canEdit, isEditableCompleted, completedReadOnly, isFutureWeek) {
+    const planned = week.planned || {};
+    return `
+      <article class="card weekly-step-section" id="weekly-step-complete" data-weekly-step-section="complete">
+        <div class="card-heading">
+          <div>
+            <h3>Complete week</h3>
+            <span>Check the closing balance, reconcile the bank balance and save the week.</span>
+          </div>
+        </div>
+        ${weeklyLiveBalanceSummaryHtml(week, "complete")}
+        <div class="weekly-actual-grid mt-4 ${canEdit ? "" : "weekly-readonly"}">
+          ${weeklyActualField(week, "enteredBankBalance", "Bank balance entered by user", "", { disabled: !canEdit })}
+          ${weeklyActualField(week, "notes", "Notes", week.actual?.notes || "", { type: "text", disabled: !canEdit })}
+        </div>
+        <div class="weekly-calculated-closing mt-4">
+          <span data-weekly-actual-closing-label="${week.weekNumber}">${escapeHtml(weeklyActualClosingData(week).label)}</span>
+          <strong data-weekly-actual-closing="${week.weekNumber}">${money(weeklyActualClosingData(week).calculatedClosing)}</strong>
+          <small>Calculated from opening balance, money in, bills and transfers.</small>
+        </div>
+        ${weeklyForecastActualGrid(week)}
+        ${weeklyVarianceSummaryHtml(week)}
+        <div class="weekly-check-grid mt-4">
+          ${weeklyCheckbox(week, "incomeReceived", "Income received", { disabled: !canEdit })}
+          ${weeklyCheckbox(week, "billsPaid", "Bills paid", { disabled: !canEdit })}
+          ${weeklyCheckbox(week, "investmentCompleted", "Investing completed", { disabled: !canEdit })}
+          ${weeklyCheckbox(week, "superCompleted", "Super completed", { disabled: !canEdit })}
+          ${weeklyCheckbox(week, "debtCompleted", "Debt repayment completed", { disabled: !canEdit })}
+        </div>
+        <div class="weekly-action-row mt-4">
+          ${canEdit && !isEditableCompleted ? `<button class="btn btn-primary" type="button" data-weekly-action="complete-week" data-weekly-week="${week.weekNumber}">Complete Week</button>` : ""}
+          ${canEdit ? `<button class="btn" type="button" data-weekly-action="save-week" data-weekly-week="${week.weekNumber}">${isEditableCompleted ? "Save completed week" : "Save Progress"}</button>` : ""}
+          ${isEditableCompleted ? `<button class="btn" type="button" data-weekly-action="cancel-week-edit" data-weekly-week="${week.weekNumber}">Cancel</button>` : ""}
+          ${completedReadOnly ? `<button class="btn" type="button" data-weekly-action="mark-week-incomplete" data-weekly-week="${week.weekNumber}">Mark as incomplete</button>` : ""}
+          ${week.isCompleted && week.weekNumber < weeklyPlan.weeks.length ? `<button class="btn" type="button" data-weekly-action="view-week" data-weekly-week="${week.weekNumber + 1}">View next week</button>` : ""}
+          ${isFutureWeek ? `<p class="weekly-warning">This week has not started yet.</p>` : ""}
+        </div>
+      </article>
+    `;
+  }
+
+  function weeklyActiveStepSectionHtml(week, canEdit, isEditableCompleted, completedReadOnly, isFutureWeek) {
+    if (!weeklyStepOrder.includes(activeWeeklyStep)) activeWeeklyStep = "opening";
+    if (activeWeeklyStep === "income") return weeklyIncomeStepHtml(week, canEdit);
+    if (activeWeeklyStep === "bills") return weeklyBillsStepHtml(week, canEdit);
+    if (activeWeeklyStep === "transfers") return weeklyTransfersStepHtml(week, canEdit);
+    if (activeWeeklyStep === "complete") return weeklyCompleteStepHtml(week, canEdit, isEditableCompleted, completedReadOnly, isFutureWeek);
+    return weeklyOpeningStepHtml(week, canEdit);
+  }
+
   function weeklyCheckbox(week, key, label, options = {}) {
     const checked = week.actual?.checks?.[key] ? " checked" : "";
     const disabled = options.disabled ? " disabled" : "";
@@ -3708,13 +3972,6 @@
     const isEditableCompleted = week.isCompleted && weeklyEditingWeek === week.weekNumber;
     const canEdit = (!week.isCompleted && !isFutureWeek) || isEditableCompleted;
     const completedReadOnly = week.isCompleted && !isEditableCompleted;
-    const actualIntro = isFutureWeek
-      ? "This week has not started yet. You can preview it, but completion is disabled."
-      : completedReadOnly
-        ? "Actual results are saved. Reopen this week if you need to correct them."
-        : isEditableCompleted
-          ? "Editing a completed week may change balances shown in later weeks."
-          : "These fields autosave as you enter them.";
     return `
       ${weeklyNavigationHtml(week)}
       <article class="weekly-hero card ${statusClass}">
@@ -3722,8 +3979,7 @@
           <span class="metric-label">${week.weekNumber === weeklyPlanCurrentCalendarWeekNumber() ? "This Week's Money Plan" : "Weekly Money Plan"}</span>
           <h3>Week ${week.weekNumber}: ${escapeHtml(weeklyDateLabel(week.startDate, week.endDate))}</h3>
           <p><strong>${escapeHtml(weeklyCalendarStatusText(week))}</strong></p>
-          <p>${escapeHtml(planned.statusMessage)}</p>
-          ${planned.adjustmentReason ? `<p class="weekly-adjustment">${escapeHtml(planned.adjustmentReason)}</p>` : ""}
+          <p>${escapeHtml(week.isCompleted ? "This completed week is saved. Open a step to review details or edit if needed." : planned.statusMessage)}</p>
         </div>
         <div class="weekly-status-badge">
           <span>Current status</span>
@@ -3731,81 +3987,15 @@
         </div>
       </article>
 
-      ${weeklyWorkflowHtml(week)}
-
-      ${weeklyOpeningBalanceHtml(week, canEdit)}
-
       ${weeklyLiveBalanceSummaryHtml(week, "top")}
 
-      <div class="weekly-summary-grid mt-4">
-        ${weeklySummaryCard("Expected net income", money(planned.income))}
-        ${weeklySummaryCard("Bills and spending", money(planned.essentialCosts))}
-        ${weeklySummaryCard("Provisions", money(planned.provisions || planned.amountSetAside), planned.amountSetAside ? `${money(planned.amountSetAside)} is being set aside for future bills.` : "")}
-        ${weeklySummaryCard("Spending allowance", money(planned.discretionaryAllowance))}
-        ${weeklySummaryCard("Offset transfer", money(planned.offsetTransfer || 0))}
-        ${weeklySummaryCard("Invest", money(planned.investment))}
-        ${weeklySummaryCard("Add to super", money(planned.extraSuper))}
-        ${weeklySummaryCard("Pay extra off debt", money(planned.extraDebtRepayment))}
-        ${weeklySummaryCard("Other transfers", money(planned.otherTransfers || 0))}
-        ${weeklySummaryCard("Expected bank balance", money(planned.closingBalance))}
-        ${weeklySummaryCard("Minimum cash buffer", money(weeklyPlan.minimumCashBuffer))}
-      </div>
+      ${weeklyWarningPanelHtml(week)}
 
-      ${weeklyForecastActualGrid(week)}
+      ${completedReadOnly ? weeklyCompletedWeekHtml(week) : ""}
 
-      <div class="weekly-week-detail-grid mt-4">
-        ${weeklyDetailList("Net money in", week.detail?.incomeItems || [])}
-        ${weeklyDetailList("Bills and spending", week.detail?.billItems || [])}
-        ${weeklyDetailList("Provisions", week.detail?.provisionItems || week.detail?.setAsideItems || [])}
-        ${weeklyDetailList("Financial Freedom transfers", week.detail?.transferItems || [])}
-        ${weeklyDetailList("Lifestyle spending", week.detail?.discretionaryItems || [])}
-      </div>
+      ${weeklyWorkflowHtml(week)}
 
-      ${completedReadOnly ? weeklyCompletedWeekHtml(week) : `<article class="card mt-4">
-        <div class="card-heading">
-          <div>
-            <h3>${completedReadOnly ? "Completed week" : "Record what actually happened"}</h3>
-            <span>${escapeHtml(actualIntro)}</span>
-          </div>
-          ${completedReadOnly && weeklyPlan.settings.allowCompletedWeekEditing ? `<button class="btn" type="button" data-weekly-action="edit-week" data-weekly-week="${week.weekNumber}">Edit Completed Week</button>` : ""}
-        </div>
-        <div class="weekly-actual-grid mt-4 ${canEdit ? "" : "weekly-readonly"}">
-          ${weeklyActualField(week, "income", "Actual income received", planned.income, { disabled: !canEdit })}
-          ${weeklyActualField(week, "transfersIn", "Other money in / transfers in", 0, { disabled: !canEdit })}
-          ${weeklyActualField(week, "essentialCosts", "Actual bills and essential costs", planned.essentialCosts, { disabled: !canEdit })}
-          ${weeklyActualField(week, "amountSetAside", "Actual amount set aside", planned.provisions || planned.amountSetAside || 0, { disabled: !canEdit })}
-          ${weeklyActualField(week, "discretionarySpending", "Actual discretionary spending", planned.discretionaryAllowance, { disabled: !canEdit })}
-          ${weeklyActualField(week, "investment", "Actual amount invested", planned.investment, { disabled: !canEdit })}
-          ${weeklyActualField(week, "extraSuper", "Actual amount contributed to super", planned.extraSuper, { disabled: !canEdit })}
-          ${weeklyActualField(week, "extraDebtRepayment", "Actual extra debt repayment", planned.extraDebtRepayment, { disabled: !canEdit })}
-          ${weeklyActualField(week, "offsetTransfer", "Actual offset transfer", planned.offsetTransfer || 0, { disabled: !canEdit })}
-          ${weeklyActualField(week, "otherTransfers", "Other actual transfers", planned.otherTransfers || 0, { disabled: !canEdit })}
-          ${weeklyActualField(week, "enteredBankBalance", "Bank balance entered by user", "", { disabled: !canEdit })}
-          ${weeklyActualField(week, "notes", "Optional notes", week.actual?.notes || "", { type: "text", disabled: !canEdit })}
-        </div>
-        <div class="weekly-calculated-closing mt-4">
-          <span data-weekly-actual-closing-label="${week.weekNumber}">${escapeHtml(weeklyActualClosingData(week).label)}</span>
-          <strong data-weekly-actual-closing="${week.weekNumber}">${money(weeklyActualClosingData(week).calculatedClosing)}</strong>
-          <small>Calculated from actual opening balance, income, expenses and transfers.</small>
-        </div>
-        ${weeklyLiveBalanceSummaryHtml(week, "bottom")}
-        ${weeklyVarianceSummaryHtml(week)}
-        <div class="weekly-check-grid mt-4">
-          ${weeklyCheckbox(week, "incomeReceived", "Income received", { disabled: !canEdit })}
-          ${weeklyCheckbox(week, "billsPaid", "Bills paid", { disabled: !canEdit })}
-          ${weeklyCheckbox(week, "investmentCompleted", "Investment completed", { disabled: !canEdit })}
-          ${weeklyCheckbox(week, "superCompleted", "Super contribution completed", { disabled: !canEdit })}
-          ${weeklyCheckbox(week, "debtCompleted", "Debt repayment completed", { disabled: !canEdit })}
-        </div>
-        <div class="weekly-action-row mt-4">
-          ${canEdit && !isEditableCompleted ? `<button class="btn btn-primary" type="button" data-weekly-action="complete-week" data-weekly-week="${week.weekNumber}">Complete Week</button>` : ""}
-          ${canEdit ? `<button class="btn" type="button" data-weekly-action="save-week" data-weekly-week="${week.weekNumber}">${isEditableCompleted ? "Save completed week" : "Save Progress"}</button>` : ""}
-          ${isEditableCompleted ? `<button class="btn" type="button" data-weekly-action="cancel-week-edit" data-weekly-week="${week.weekNumber}">Cancel</button>` : ""}
-          ${completedReadOnly ? `<button class="btn" type="button" data-weekly-action="mark-week-incomplete" data-weekly-week="${week.weekNumber}">Mark as incomplete</button>` : ""}
-          ${week.isCompleted && week.weekNumber < weeklyPlan.weeks.length ? `<button class="btn" type="button" data-weekly-action="view-week" data-weekly-week="${week.weekNumber + 1}">View next week</button>` : ""}
-          ${isFutureWeek ? `<p class="weekly-warning">This week has not started yet.</p>` : ""}
-        </div>
-      </article>`}
+      ${weeklyActiveStepSectionHtml(week, canEdit, isEditableCompleted, completedReadOnly, isFutureWeek)}
     `;
   }
 
@@ -4235,6 +4425,16 @@
     saveWeeklyPlan(`Week ${weekNumber} has been marked incomplete.`);
     renderAll();
     showWorkspace("weeklyplan");
+  }
+
+  function setActiveWeeklyStep(step) {
+    if (!weeklyStepOrder.includes(step)) return;
+    activeWeeklyStep = step;
+    renderOutputs();
+    window.requestAnimationFrame(() => {
+      const section = document.querySelector(`[data-weekly-step-section="${step}"]`);
+      section?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   }
 
   function updateWeeklySettingFromInput(target) {
@@ -6023,6 +6223,13 @@
         } else {
           updateSaveStatus("Reminder noted. Financial Plan unchanged.");
         }
+        return;
+      }
+
+      const weeklyStepButton = event.target.closest("[data-weekly-step-button]");
+      if (weeklyStepButton) {
+        event.preventDefault();
+        setActiveWeeklyStep(weeklyStepButton.dataset.weeklyStepButton);
         return;
       }
 
