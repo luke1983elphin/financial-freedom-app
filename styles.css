@@ -2879,10 +2879,24 @@ textarea.field-input {
   color: #b42318;
 }
 
+.weekly-opening-lines .neutral,
+.weekly-completed-summary-grid .neutral {
+  color: #475569;
+}
+
 .weekly-opening-adjustment {
   display: grid;
   gap: 12px;
   align-items: end;
+}
+
+.weekly-live-balance-card {
+  border-color: #dbeafe;
+  background: #f8fbff;
+}
+
+.weekly-live-balance-card-bottom {
+  background: #ffffff;
 }
 
 .weekly-variance-card,

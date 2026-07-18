@@ -33,6 +33,17 @@
     return Math.round((toNumber(value) + Number.EPSILON) * 100) / 100;
   }
 
+  function optionalMoney(value) {
+    if (value === null || value === undefined || value === "") return null;
+    const number = Number(value);
+    return Number.isFinite(number) ? roundMoney(number) : null;
+  }
+
+  function amountOrFallback(value, fallback) {
+    const amount = optionalMoney(value);
+    return amount === null ? roundMoney(fallback) : amount;
+  }
+
   function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
   }
@@ -669,6 +680,20 @@
     return map;
   }
 
+  function actualStoredAmount(actual = {}, key, previous = {}) {
+    if (Object.prototype.hasOwnProperty.call(actual, key)) return optionalMoney(actual[key]);
+    if (Object.prototype.hasOwnProperty.call(previous, key)) return optionalMoney(previous[key]);
+    return null;
+  }
+
+  function actualStoredSetAside(actual = {}, previous = {}) {
+    if (Object.prototype.hasOwnProperty.call(actual, "amountSetAside")) return optionalMoney(actual.amountSetAside);
+    if (Object.prototype.hasOwnProperty.call(actual, "provisions")) return optionalMoney(actual.provisions);
+    if (Object.prototype.hasOwnProperty.call(previous, "amountSetAside")) return optionalMoney(previous.amountSetAside);
+    if (Object.prototype.hasOwnProperty.call(previous, "provisions")) return optionalMoney(previous.provisions);
+    return null;
+  }
+
   function actualTransfers(actual = {}) {
     return roundMoney(
       toNumber(actual.investment)
@@ -681,33 +706,64 @@
 
   function calculatedActualClosingBalance(week, actual = {}) {
     const planned = week?.planned || {};
-    const openingBalance = roundMoney(actual.openingBalance ?? planned.openingBalance);
-    const income = roundMoney(actual.income ?? planned.income);
-    const essentialCosts = roundMoney(actual.essentialCosts ?? planned.essentialCosts);
-    const amountSetAside = roundMoney(actual.amountSetAside ?? actual.provisions ?? planned.amountSetAside ?? planned.provisions);
-    const discretionarySpending = roundMoney(actual.discretionarySpending ?? planned.discretionaryAllowance);
-    return roundMoney(openingBalance + income - essentialCosts - amountSetAside - discretionarySpending - actualTransfers(actual));
+    const openingBalance = amountOrFallback(actual.openingBalance, planned.openingBalance);
+    const income = amountOrFallback(actual.income, planned.income);
+    const transfersIn = amountOrFallback(actual.transfersIn, 0);
+    const essentialCosts = amountOrFallback(actual.essentialCosts, planned.essentialCosts);
+    const amountSetAside = amountOrFallback(actual.amountSetAside ?? actual.provisions, planned.amountSetAside ?? planned.provisions);
+    const discretionarySpending = amountOrFallback(actual.discretionarySpending, planned.discretionaryAllowance);
+    const investment = amountOrFallback(actual.investment, planned.investment);
+    const extraSuper = amountOrFallback(actual.extraSuper, planned.extraSuper);
+    const extraDebtRepayment = amountOrFallback(actual.extraDebtRepayment, planned.extraDebtRepayment);
+    const offsetTransfer = amountOrFallback(actual.offsetTransfer, planned.offsetTransfer);
+    const otherTransfers = amountOrFallback(actual.otherTransfers, planned.otherTransfers);
+    const transfersOut = roundMoney(investment + extraSuper + extraDebtRepayment + offsetTransfer + otherTransfers);
+    return roundMoney(openingBalance + income + transfersIn - essentialCosts - amountSetAside - discretionarySpending - transfersOut);
   }
 
-  function normaliseActualForWeek(week, actual = {}, previous = {}) {
+  function materialiseActualForCompletion(week, actual) {
     const planned = week?.planned || {};
-    const amountSetAside = roundMoney(actual.amountSetAside ?? actual.provisions ?? previous.amountSetAside ?? previous.provisions ?? planned.amountSetAside ?? planned.provisions);
+    const completed = {
+      ...actual,
+      openingBalance: amountOrFallback(actual.openingBalance, planned.openingBalance),
+      income: amountOrFallback(actual.income, planned.income),
+      transfersIn: amountOrFallback(actual.transfersIn, 0),
+      essentialCosts: amountOrFallback(actual.essentialCosts, planned.essentialCosts),
+      amountSetAside: amountOrFallback(actual.amountSetAside ?? actual.provisions, planned.amountSetAside ?? planned.provisions),
+      discretionarySpending: amountOrFallback(actual.discretionarySpending, planned.discretionaryAllowance),
+      investment: Math.max(0, amountOrFallback(actual.investment, planned.investment)),
+      extraSuper: Math.max(0, amountOrFallback(actual.extraSuper, planned.extraSuper)),
+      extraDebtRepayment: Math.max(0, amountOrFallback(actual.extraDebtRepayment, planned.extraDebtRepayment)),
+      offsetTransfer: Math.max(0, amountOrFallback(actual.offsetTransfer, planned.offsetTransfer)),
+      otherTransfers: Math.max(0, amountOrFallback(actual.otherTransfers, planned.otherTransfers)),
+      enteredBankBalance: optionalMoney(actual.enteredBankBalance),
+    };
+    completed.provisions = completed.amountSetAside;
+    completed.closingBalance = calculatedActualClosingBalance(week, completed);
+    return completed;
+  }
+
+  function normaliseActualForWeek(week, actual = {}, previous = {}, options = {}) {
+    const amountSetAside = actualStoredSetAside(actual, previous);
     const next = {
-      openingBalance: roundMoney(actual.openingBalance ?? previous.openingBalance ?? planned.openingBalance),
-      income: roundMoney(actual.income ?? previous.income ?? planned.income),
-      essentialCosts: roundMoney(actual.essentialCosts ?? previous.essentialCosts ?? planned.essentialCosts),
+      openingBalance: actualStoredAmount(actual, "openingBalance", previous),
+      income: actualStoredAmount(actual, "income", previous),
+      transfersIn: actualStoredAmount(actual, "transfersIn", previous),
+      essentialCosts: actualStoredAmount(actual, "essentialCosts", previous),
       amountSetAside,
       provisions: amountSetAside,
-      discretionarySpending: roundMoney(actual.discretionarySpending ?? previous.discretionarySpending ?? planned.discretionaryAllowance),
-      investment: Math.max(0, roundMoney(actual.investment ?? previous.investment ?? planned.investment)),
-      extraSuper: Math.max(0, roundMoney(actual.extraSuper ?? previous.extraSuper ?? planned.extraSuper)),
-      extraDebtRepayment: Math.max(0, roundMoney(actual.extraDebtRepayment ?? previous.extraDebtRepayment ?? planned.extraDebtRepayment)),
-      offsetTransfer: Math.max(0, roundMoney(actual.offsetTransfer ?? previous.offsetTransfer ?? planned.offsetTransfer)),
-      otherTransfers: Math.max(0, roundMoney(actual.otherTransfers ?? previous.otherTransfers ?? planned.otherTransfers)),
+      discretionarySpending: actualStoredAmount(actual, "discretionarySpending", previous),
+      investment: actualStoredAmount(actual, "investment", previous),
+      extraSuper: actualStoredAmount(actual, "extraSuper", previous),
+      extraDebtRepayment: actualStoredAmount(actual, "extraDebtRepayment", previous),
+      offsetTransfer: actualStoredAmount(actual, "offsetTransfer", previous),
+      otherTransfers: actualStoredAmount(actual, "otherTransfers", previous),
+      enteredBankBalance: actualStoredAmount(actual, "enteredBankBalance", previous),
       notes: String(actual.notes ?? previous.notes ?? ""),
       completedAt: actual.completedAt ?? previous.completedAt ?? "",
       checks: actual.checks && typeof actual.checks === "object" ? { ...(previous.checks || {}), ...actual.checks } : previous.checks || {},
     };
+    if (options.complete) return materialiseActualForCompletion(week, next);
     next.closingBalance = calculatedActualClosingBalance(week, next);
     return next;
   }
@@ -937,17 +993,19 @@
         adjustmentReason: week.planned?.adjustmentReason || "",
       },
       actual: week.actual ? {
-        openingBalance: roundMoney(week.actual.openingBalance ?? week.planned?.openingBalance),
-        income: roundMoney(week.actual.income),
-        essentialCosts: roundMoney(week.actual.essentialCosts),
-        amountSetAside: roundMoney(week.actual.amountSetAside ?? week.actual.provisions ?? week.planned?.amountSetAside),
-        provisions: roundMoney(week.actual.provisions ?? week.actual.amountSetAside ?? week.planned?.provisions ?? week.planned?.amountSetAside),
-        discretionarySpending: roundMoney(week.actual.discretionarySpending),
-        investment: Math.max(0, roundMoney(week.actual.investment)),
-        extraSuper: Math.max(0, roundMoney(week.actual.extraSuper)),
-        extraDebtRepayment: Math.max(0, roundMoney(week.actual.extraDebtRepayment)),
-        offsetTransfer: Math.max(0, roundMoney(week.actual.offsetTransfer)),
-        otherTransfers: Math.max(0, roundMoney(week.actual.otherTransfers)),
+        openingBalance: optionalMoney(week.actual.openingBalance),
+        income: optionalMoney(week.actual.income),
+        transfersIn: optionalMoney(week.actual.transfersIn),
+        essentialCosts: optionalMoney(week.actual.essentialCosts),
+        amountSetAside: optionalMoney(week.actual.amountSetAside ?? week.actual.provisions),
+        provisions: optionalMoney(week.actual.provisions ?? week.actual.amountSetAside),
+        discretionarySpending: optionalMoney(week.actual.discretionarySpending),
+        investment: optionalMoney(week.actual.investment),
+        extraSuper: optionalMoney(week.actual.extraSuper),
+        extraDebtRepayment: optionalMoney(week.actual.extraDebtRepayment),
+        offsetTransfer: optionalMoney(week.actual.offsetTransfer),
+        otherTransfers: optionalMoney(week.actual.otherTransfers),
+        enteredBankBalance: optionalMoney(week.actual.enteredBankBalance),
         closingBalance: roundMoney(week.actual.closingBalance),
         notes: week.actual.notes || "",
         completedAt: week.actual.completedAt || "",
@@ -998,7 +1056,7 @@
     week.actual = normaliseActualForWeek(week, {
       ...actual,
       completedAt: options.complete ? new Date().toISOString() : previous.completedAt || "",
-    }, previous);
+    }, previous, { complete: options.complete });
     if (options.complete) week.isCompleted = true;
     migrated.updatedAt = new Date().toISOString();
     migrated.progress = buildProgress(migrated.weeks, migrated.settings);
