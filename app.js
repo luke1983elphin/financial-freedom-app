@@ -5,6 +5,7 @@
   const LAST_SAVED_KEY = "ffs-current-plan-last-saved-v3-mobile-dashboard-ux-test";
   const SCENARIO_KEY = "ffs-scenarios-v3-mobile-dashboard-ux-test";
   const WEEKLY_PLAN_KEY = "ffs-weekly-plan-v1-v3-mobile-dashboard-ux-test";
+  const USER_STATE_KEY = "ffs-user-state-v3-mobile-dashboard-ux-test";
   const APP_VERSION = "3.0-test-weekly-planner";
   const WEEKLY_EDITOR_BUILD_ID = "2026-07-17-02";
   const EXPORT_SCHEMA_VERSION = 1;
@@ -185,6 +186,7 @@
   let restoredDraftUi = {};
   let saveStatusTimer = null;
   const savedDraft = loadDraft();
+  let userState = loadUserState(savedDraft);
   let plan = CALC.clonePlan(savedDraft || CALC.emptyPlan());
   let activeView = restoredDraftUi.activeView || "dashboard";
   let activeWizardStep = normaliseWizardStep(restoredDraftUi.activeWizardStep);
@@ -942,6 +944,7 @@
       activeWizardStep,
       activeWeeklyPlanTab,
       hasOpenedWorkspace,
+      hasCreatedPersonalPlan: Boolean(userState.hasCreatedPersonalPlan),
       scenarioName: document.getElementById("scenarioName")?.value ?? restoredDraftUi.scenarioName ?? "",
       scenarioNotes: document.getElementById("scenarioNotes")?.value ?? restoredDraftUi.scenarioNotes ?? "",
     };
@@ -952,6 +955,108 @@
     const notesInput = document.getElementById("scenarioNotes");
     if (nameInput && restoredDraftUi.scenarioName !== undefined) nameInput.value = restoredDraftUi.scenarioName || "";
     if (notesInput && restoredDraftUi.scenarioNotes !== undefined) notesInput.value = restoredDraftUi.scenarioNotes || "";
+  }
+
+  function stablePlanJson(planData) {
+    try {
+      return JSON.stringify(migratePlanData(planData));
+    } catch {
+      return "";
+    }
+  }
+
+  function isBundledSamplePlan(planData) {
+    if (!planData) return false;
+    const current = stablePlanJson(planData);
+    if (!current) return false;
+    return (DATA.samplePlans || [])
+      .some((sample) => stablePlanJson(sample.plan) === current);
+  }
+
+  function hasMeaningfulPersonalPlanData(planData) {
+    if (!planData || isBundledSamplePlan(planData)) return false;
+    const personal = planData.personal || {};
+    const personalEntered = [
+      personal.person1Name,
+      personal.person2Name,
+      personal.person1Age,
+      personal.person2Age,
+    ].some((value) => String(value || "").trim() && Number(value) !== 0);
+    const collectionHasValues = (items, amountKeys) => Array.isArray(items) && items.some((item) => (
+      String(item?.name || "").trim() && amountKeys.some((key) => Number(item?.[key]) > 0)
+    ));
+    return Boolean(
+      personalEntered ||
+      collectionHasValues(planData.incomeItems, ["amount"]) ||
+      collectionHasValues(planData.assetItems, ["value"]) ||
+      collectionHasValues(planData.liabilityItems, ["balance", "repaymentAmount"]) ||
+      collectionHasValues(planData.expenseItems, ["amount"]) ||
+      collectionHasValues(planData.goalItems, ["targetAmount"]) ||
+      Number(planData.goals?.annualLifestyleSpending || planData.goals?.targetAnnualSpending) > 0 ||
+      Number(planData.investments?.annualContribution || planData.investments?.annualInvestingTarget) > 0 ||
+      Number(planData.super?.person1Balance || planData.super?.person2Balance || planData.super?.extraContributions) > 0
+    );
+  }
+
+  function hasUserSavedScenario() {
+    try {
+      const raw = localStorage.getItem(SCENARIO_KEY);
+      if (!raw) return false;
+      return migrateScenarioList(JSON.parse(raw)).some((scenario) => (
+        scenario.source !== "sample" && hasMeaningfulPersonalPlanData(scenario.plan)
+      ));
+    } catch {
+      return false;
+    }
+  }
+
+  function inferHasCreatedPersonalPlan(savedPlan) {
+    return Boolean(
+      restoredDraftUi.hasCreatedPersonalPlan ||
+      hasMeaningfulPersonalPlanData(savedPlan) ||
+      hasUserSavedScenario()
+    );
+  }
+
+  function loadUserState(savedPlan) {
+    let loaded = {};
+    try {
+      const raw = localStorage.getItem(USER_STATE_KEY);
+      loaded = raw ? JSON.parse(raw) : {};
+    } catch {
+      loaded = {};
+    }
+    const hasCreatedPersonalPlan = Boolean(loaded.hasCreatedPersonalPlan || inferHasCreatedPersonalPlan(savedPlan));
+    const state = {
+      version: 1,
+      hasCreatedPersonalPlan,
+      createdAt: loaded.createdAt || (hasCreatedPersonalPlan ? new Date().toISOString() : ""),
+      updatedAt: loaded.updatedAt || "",
+    };
+    if (hasCreatedPersonalPlan !== Boolean(loaded.hasCreatedPersonalPlan)) persistUserState(state);
+    return state;
+  }
+
+  function persistUserState(nextState = userState) {
+    try {
+      localStorage.setItem(USER_STATE_KEY, JSON.stringify({
+        version: 1,
+        ...nextState,
+        updatedAt: new Date().toISOString(),
+      }));
+    } catch {
+      // The app can still run without browser storage; the intro simply behaves like a first visit.
+    }
+  }
+
+  function markPersonalPlanCreated() {
+    if (userState.hasCreatedPersonalPlan) return;
+    userState = {
+      ...userState,
+      hasCreatedPersonalPlan: true,
+      createdAt: userState.createdAt || new Date().toISOString(),
+    };
+    persistUserState();
   }
 
   function hasSavedDraft() {
@@ -1003,8 +1108,10 @@
   }
 
   function autosavePlan() {
+    markPersonalPlanCreated();
     updateSaveStatus("Saving...");
     persistDraft();
+    renderSamplePlanOptions();
     window.clearTimeout(saveStatusTimer);
     saveStatusTimer = window.setTimeout(() => {
       updateSaveStatus("All changes saved");
@@ -1121,11 +1228,13 @@
         draft: DRAFT_KEY,
         scenarios: SCENARIO_KEY,
         weeklyPlan: WEEKLY_PLAN_KEY,
+        userState: USER_STATE_KEY,
       },
       plan: migratePlanData(plan),
       scenarios: loadScenarios(),
       weeklyPlan: weeklyPlan ? window.FFSWeeklyPlan.migrate(weeklyPlan) : null,
       ui: collectDraftUi(),
+      userState,
     };
     const json = JSON.stringify(payload, null, 2);
     const blob = new Blob([json], { type: "application/json" });
@@ -1142,6 +1251,7 @@
       scenarios: migrateScenarioList(payload.scenarios || []),
       weeklyPlan: payload.weeklyPlan ? window.FFSWeeklyPlan.migrate(payload.weeklyPlan) : null,
       ui: payload.ui && typeof payload.ui === "object" ? payload.ui : {},
+      userState: payload.userState && typeof payload.userState === "object" ? payload.userState : {},
       exportedAt: payload.exportedAt || "",
     };
   }
@@ -1163,6 +1273,9 @@
     generatedWeeklyPlanner = null;
     weeklyPlan = imported.weeklyPlan;
     restoredDraftUi = imported.ui || {};
+    if (imported.userState?.hasCreatedPersonalPlan || restoredDraftUi.hasCreatedPersonalPlan || !isBundledSamplePlan(imported.plan)) {
+      markPersonalPlanCreated();
+    }
     saveScenarios(imported.scenarios);
     if (weeklyPlan) saveWeeklyPlan();
     else localStorage.removeItem(WEEKLY_PLAN_KEY);
@@ -1214,6 +1327,8 @@
     const summary = document.getElementById("samplePlanSummary");
     const sample = selectedSamplePlan();
     if (summary) summary.textContent = sample?.description || "Explore realistic examples before creating your own plan.";
+    const introSampleActions = document.getElementById("introSampleActions");
+    if (introSampleActions) introSampleActions.classList.toggle("hidden", Boolean(userState.hasCreatedPersonalPlan));
     const continuePanel = document.getElementById("continuePanel");
     if (continuePanel) continuePanel.classList.toggle("hidden", !hasSavedDraft());
   }
@@ -5659,6 +5774,7 @@
 
     const name = scenarioName || fallbackName;
     const planSnapshot = CALC.clonePlan(plan);
+    if (!isBundledSamplePlan(planSnapshot)) markPersonalPlanCreated();
     const resultSnapshot = CALC.calculatePlan(planSnapshot);
     const scenario = {
       id: `scenario-${Date.now()}`,
@@ -5944,6 +6060,7 @@
     syncCollectionsToLegacy();
     const scenarios = loadScenarios();
     const planSnapshot = CALC.clonePlan(plan);
+    if (!isBundledSamplePlan(planSnapshot)) markPersonalPlanCreated();
     const scenario = {
       id: `scenario-${Date.now()}`,
       name: `Copy ${scenarios.length + 1}`,
@@ -6407,6 +6524,10 @@
     document.getElementById("wizardNextButton").addEventListener("click", () => {
       saveDraft();
       if (activeWizardStep >= wizardSteps.length - 1) {
+        if (!isBundledSamplePlan(plan)) {
+          markPersonalPlanCreated();
+          saveDraft();
+        }
         showWorkspace("dashboard");
         return;
       }
