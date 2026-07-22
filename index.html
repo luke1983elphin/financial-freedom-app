@@ -1,942 +1,697 @@
-(function attachCalculator(global) {
-  const MONTHS_PER_YEAR = 12;
-  const CHECKPOINT_YEARS = [5, 10, 20, 30];
-  const SUPER_ACCESS_AGE = 60;
-  const SUPER_CONTRIBUTIONS_TAX_RATE = 0.15;
-  const MEDICARE_LEVY_RATE = 0.02;
-  const TAX_YEAR = "2026-27";
-  const HELP_THRESHOLD = 69528;
-  const TAX_BRACKETS_2026_27 = [
-    { threshold: 0, rate: 0 },
-    { threshold: 18200, rate: 0.15 },
-    { threshold: 45000, rate: 0.30 },
-    { threshold: 135000, rate: 0.37 },
-    { threshold: 190000, rate: 0.45 },
-  ];
-  const HELP_REPAYMENT_BRACKETS_2026_27 = [
-    { threshold: 69528, upper: 129717, baseRepayment: 0, marginalRate: 0.15 },
-    { threshold: 129717, upper: 186050, baseRepayment: 9028.5, marginalRate: 0.17 },
-    { threshold: 186050, totalIncomeRate: 0.10 },
-  ];
-  const STATUS = { GREEN: "green", AMBER: "amber", RED: "red" };
-
-  function number(value) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
-
-  function nonNegative(value) {
-    return Math.max(0, number(value));
-  }
-
-  function roundCurrency(value) {
-    return Math.round((number(value) + Number.EPSILON) * 100) / 100;
-  }
-
-  function roundRatio(value) {
-    return Math.round((number(value) + Number.EPSILON) * 10000) / 10000;
-  }
-
-  function annualRate(percentValue) {
-    return number(percentValue) / 100;
-  }
-
-  function netConcessionalSuperContribution(value) {
-    return roundCurrency(nonNegative(value) * (1 - SUPER_CONTRIBUTIONS_TAX_RATE));
-  }
-
-  function taxBeforeMedicare(taxableIncome) {
-    const income = nonNegative(taxableIncome);
-    return roundCurrency(TAX_BRACKETS_2026_27.reduce((tax, bracket, index) => {
-      const next = TAX_BRACKETS_2026_27[index + 1]?.threshold ?? Infinity;
-      const taxableInBand = Math.max(0, Math.min(income, next) - bracket.threshold);
-      return tax + taxableInBand * bracket.rate;
-    }, 0));
-  }
-
-  function individualTaxEstimate(taxableIncome, includeMedicare = true) {
-    const income = nonNegative(taxableIncome);
-    const baseTax = taxBeforeMedicare(income);
-    const medicareLevy = includeMedicare ? roundCurrency(income * MEDICARE_LEVY_RATE) : 0;
-    return roundCurrency(baseTax + medicareLevy);
-  }
-
-  function individualTaxBreakdown(taxableIncome) {
-    const income = nonNegative(taxableIncome);
-    const incomeTax = taxBeforeMedicare(income);
-    const medicareLevy = roundCurrency(income * MEDICARE_LEVY_RATE);
-    return {
-      incomeTax,
-      medicareLevy,
-      totalTax: roundCurrency(incomeTax + medicareLevy),
-    };
-  }
-
-  function marginalTaxRate(taxableIncome, includeMedicare = true) {
-    const income = nonNegative(taxableIncome);
-    const bracket = [...TAX_BRACKETS_2026_27].reverse().find((item) => income > item.threshold) || TAX_BRACKETS_2026_27[0];
-    return roundRatio(bracket.rate + (includeMedicare ? MEDICARE_LEVY_RATE : 0));
-  }
-
-  function splitAdditionalContribution(amount, person1Income, person2Income) {
-    const gross = nonNegative(amount);
-    const p1Capacity = nonNegative(person1Income);
-    const p2Capacity = nonNegative(person2Income);
-    const totalCapacity = p1Capacity + p2Capacity;
-    if (gross === 0 || totalCapacity === 0) return { person1: 0, person2: 0 };
-    const person1 = roundCurrency(Math.min(p1Capacity, gross * (p1Capacity / totalCapacity)));
-    const person2 = roundCurrency(Math.min(p2Capacity, gross - person1));
-    return { person1, person2 };
-  }
-
-  function estimateHelpRepayment(repaymentIncome, balance) {
-    const income = nonNegative(repaymentIncome);
-    const currentBalance = nonNegative(balance);
-    let calculatedRepayment = 0;
-    let marginalRate = 0;
-
-    if (income > HELP_REPAYMENT_BRACKETS_2026_27[2].threshold) {
-      calculatedRepayment = income * HELP_REPAYMENT_BRACKETS_2026_27[2].totalIncomeRate;
-      marginalRate = HELP_REPAYMENT_BRACKETS_2026_27[2].totalIncomeRate;
-    } else if (income > HELP_REPAYMENT_BRACKETS_2026_27[1].threshold) {
-      const band = HELP_REPAYMENT_BRACKETS_2026_27[1];
-      calculatedRepayment = band.baseRepayment + (income - band.threshold) * band.marginalRate;
-      marginalRate = band.marginalRate;
-    } else if (income > HELP_THRESHOLD) {
-      const band = HELP_REPAYMENT_BRACKETS_2026_27[0];
-      calculatedRepayment = band.baseRepayment + (income - band.threshold) * band.marginalRate;
-      marginalRate = band.marginalRate;
-    }
-
-    const annualRepayment = roundCurrency(Math.min(currentBalance, Math.max(0, calculatedRepayment)));
-    const effectiveRate = income > 0 ? roundRatio(annualRepayment / income) : 0;
-    return {
-      balance: currentBalance,
-      repaymentIncome: income,
-      rate: effectiveRate,
-      marginalRate,
-      annualRepayment,
-      monthlyRepayment: roundCurrency(annualRepayment / MONTHS_PER_YEAR),
-      estimatedYearsToRepay: annualRepayment > 0 ? roundRatio(currentBalance / annualRepayment) : null,
-      note: "Estimate only. HELP repayments use repayment income, marginal 2026-27 rates and are capped at the current balance.",
-    };
-  }
-
-  function calculateHelpRepaymentIncome({ person1Income, person2Income, otherIncome, extraConcessionalSuper }) {
-    const sharedOtherIncome = nonNegative(otherIncome) / 2;
-    const person1Before = roundCurrency(nonNegative(person1Income) + sharedOtherIncome);
-    const person2Before = roundCurrency(nonNegative(person2Income) + sharedOtherIncome);
-    const split = splitAdditionalContribution(extraConcessionalSuper, person1Before, person2Before);
-    const person1TaxableAfter = roundCurrency(Math.max(0, person1Before - split.person1));
-    const person2TaxableAfter = roundCurrency(Math.max(0, person2Before - split.person2));
-    const person1RepaymentIncome = roundCurrency(person1TaxableAfter + split.person1);
-    const person2RepaymentIncome = roundCurrency(person2TaxableAfter + split.person2);
-    return {
-      person1RepaymentIncome,
-      person2RepaymentIncome,
-      estimatedRepaymentIncome: roundCurrency(Math.max(person1RepaymentIncome, person2RepaymentIncome)),
-      note: "Concessional contributions are added back for this simple HELP repayment-income estimate where applicable.",
-    };
-  }
-
-  function calculatePayrollEstimate({
-    person1Income,
-    person2Income,
-    extraConcessionalSuper,
-    helpDebt,
-    person1HelpDebt,
-    person2HelpDebt,
-    person1SalarySacrifice,
-    person2SalarySacrifice,
-    person1PayrollDeductions,
-    person2PayrollDeductions,
-  }) {
-    const gross1 = nonNegative(person1Income);
-    const gross2 = nonNegative(person2Income);
-    const explicitSacrifice1 = nonNegative(person1SalarySacrifice);
-    const explicitSacrifice2 = nonNegative(person2SalarySacrifice);
-    const split = explicitSacrifice1 || explicitSacrifice2
-      ? { person1: Math.min(gross1, explicitSacrifice1), person2: Math.min(gross2, explicitSacrifice2) }
-      : splitAdditionalContribution(extraConcessionalSuper, gross1, gross2);
-    const p1Sacrifice = roundCurrency(Math.min(gross1, split.person1));
-    const p2Sacrifice = roundCurrency(Math.min(gross2, split.person2));
-    const p1OtherDeductions = nonNegative(person1PayrollDeductions);
-    const p2OtherDeductions = nonNegative(person2PayrollDeductions);
-    const p1Taxable = roundCurrency(Math.max(0, gross1 - p1Sacrifice));
-    const p2Taxable = roundCurrency(Math.max(0, gross2 - p2Sacrifice));
-    const p1RepaymentIncome = roundCurrency(p1Taxable + p1Sacrifice);
-    const p2RepaymentIncome = roundCurrency(p2Taxable + p2Sacrifice);
-    const helpBalance = nonNegative(helpDebt);
-    const explicitHelp1 = nonNegative(person1HelpDebt);
-    const explicitHelp2 = nonNegative(person2HelpDebt);
-    let p1HelpDebt = explicitHelp1;
-    let p2HelpDebt = explicitHelp2;
-    if (helpBalance > 0 && explicitHelp1 === 0 && explicitHelp2 === 0) {
-      if (p2RepaymentIncome > p1RepaymentIncome) p2HelpDebt = helpBalance;
-      else p1HelpDebt = helpBalance;
-    }
-    const p1Help = estimateHelpRepayment(p1RepaymentIncome, p1HelpDebt).annualRepayment;
-    const p2Help = estimateHelpRepayment(p2RepaymentIncome, p2HelpDebt).annualRepayment;
-    const buildPerson = (gross, taxableIncome, repaymentIncome, allocatedExtraSuper, otherPayrollDeductions, helpRepayment) => {
-      const tax = individualTaxBreakdown(taxableIncome);
-      return {
-        grossEmploymentIncome: roundCurrency(gross),
-        taxableIncome: roundCurrency(taxableIncome),
-        taxableEmploymentIncome: roundCurrency(taxableIncome),
-        repaymentIncome: roundCurrency(repaymentIncome),
-        incomeTax: tax.incomeTax,
-        medicareLevy: tax.medicareLevy,
-        helpRepayment: roundCurrency(helpRepayment),
-        allocatedExtraSuper: roundCurrency(allocatedExtraSuper),
-        salarySacrifice: roundCurrency(allocatedExtraSuper),
-        otherPayrollDeductions: roundCurrency(otherPayrollDeductions),
-        estimatedNetEmploymentIncome: roundCurrency(Math.max(0, gross - tax.incomeTax - tax.medicareLevy - helpRepayment - allocatedExtraSuper - otherPayrollDeductions)),
-      };
-    };
-    const person1 = buildPerson(gross1, p1Taxable, p1RepaymentIncome, p1Sacrifice, p1OtherDeductions, p1Help);
-    const person2 = buildPerson(gross2, p2Taxable, p2RepaymentIncome, p2Sacrifice, p2OtherDeductions, p2Help);
-    return {
-      person1,
-      person2,
-      household: {
-        grossEmploymentIncome: roundCurrency(gross1 + gross2),
-        incomeTax: roundCurrency(person1.incomeTax + person2.incomeTax),
-        medicareLevy: roundCurrency(person1.medicareLevy + person2.medicareLevy),
-        helpRepayment: roundCurrency(person1.helpRepayment + person2.helpRepayment),
-        allocatedExtraSuper: roundCurrency(person1.allocatedExtraSuper + person2.allocatedExtraSuper),
-        totalTax: roundCurrency(person1.incomeTax + person2.incomeTax),
-        totalMedicareLevy: roundCurrency(person1.medicareLevy + person2.medicareLevy),
-        totalHelpRepayments: roundCurrency(person1.helpRepayment + person2.helpRepayment),
-        totalSalarySacrifice: roundCurrency(person1.salarySacrifice + person2.salarySacrifice),
-        totalOtherPayrollDeductions: roundCurrency(person1.otherPayrollDeductions + person2.otherPayrollDeductions),
-        estimatedNetEmploymentIncome: roundCurrency(person1.estimatedNetEmploymentIncome + person2.estimatedNetEmploymentIncome),
-        note: "Estimated net employment income uses the app's 2026-27 income tax, Medicare levy and HELP repayment helpers. HELP ownership is estimated from the higher repayment income when only one household HELP balance is available.",
-      },
-    };
-  }
-
-  function annualize(amount, frequency) {
-    const value = number(amount);
-    if (frequency === "weekly") return value * 52;
-    if (frequency === "fortnightly") return value * 26;
-    if (frequency === "monthly") return value * 12;
-    if (frequency === "quarterly") return value * 4;
-    return value;
-  }
-
-  function annualRecurringExpenses(plan) {
-    return annualExpenseBreakdown(plan).total;
-  }
-
-  function annualExpenseBreakdown(plan) {
-    const coreCategories = new Set(["living", "food", "utilities", "insurance", "schoolChildren", "ratesPropertyCosts"]);
-    if (Array.isArray(plan.expenseItems) && plan.expenseItems.length) {
-      return plan.expenseItems.reduce((breakdown, item) => {
-        const amount = annualize(item.amount, item.frequency);
-        if (coreCategories.has(item.category)) {
-          breakdown.living = roundCurrency(breakdown.living + amount);
-        } else {
-          breakdown.otherRegular = roundCurrency(breakdown.otherRegular + amount);
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Financial Freedom</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              navy: "#0f2742",
+              ink: "#172033",
+              mist: "#f5f8fb",
+              line: "#e2e8f0",
+              success: "#0f9f6e",
+              caution: "#d99121",
+              danger: "#dc4c3e"
+            },
+            boxShadow: {
+              soft: "0 18px 50px rgba(15, 39, 66, 0.08)"
+            }
+          }
         }
-        breakdown.total = roundCurrency(breakdown.living + breakdown.otherRegular);
-        return breakdown;
-      }, { living: 0, otherRegular: 0, total: 0 });
-    }
-    const living = roundCurrency(
-      annualize(plan.expenses.livingCosts, plan.expenses.livingFrequency)
-      + annualize(plan.expenses.food, plan.expenses.foodFrequency)
-      + annualize(plan.expenses.utilities, plan.expenses.utilitiesFrequency)
-      + annualize(plan.expenses.insurance, plan.expenses.insuranceFrequency)
-      + annualize(plan.expenses.schoolChildren, plan.expenses.schoolChildrenFrequency)
-      + annualize(plan.expenses.ratesPropertyCosts, plan.expenses.ratesPropertyCostsFrequency)
-    );
-    const otherRegular = roundCurrency(annualize(plan.expenses.otherExpenses, plan.expenses.otherFrequency));
-    return { living, otherRegular, total: roundCurrency(living + otherRegular) };
-  }
-
-  function emptyPlan() {
-    return {
-      personal: {
-        person1Name: "",
-        person2Name: "",
-        person1Age: 0,
-        person2Age: 0,
-        workOptionalAge: 50,
-        semiRetirementAge: 55,
-        fullRetirementAge: 60,
-        targetAnnualSpending: 0,
-      },
-      assets: {
-        homeValue: 0,
-        otherPropertyValue: 0,
-        offsetBalance: 0,
-        cash: 0,
-        sharesEtfs: 0,
-        crypto: 0,
-        superPerson1: 0,
-        superPerson2: 0,
-        vehiclesPersonalAssets: 0,
-      },
-      liabilities: {
-        homeLoanBalance: 0,
-        homeLoanInterestRatePct: 0,
-        monthlyRepayment: 0,
-        remainingLoanTermYears: 0,
-        hecsHelpDebt: 0,
-        otherDebts: 0,
-        creditCardBalance: 0,
-        creditCardInterestRatePct: 19.99,
-        creditCardMonthlyRepayment: 0,
-        creditCardLimit: 0,
-      },
-      income: {
-        person1IncomeName: "",
-        person1Income: 0,
-        person1Frequency: "fortnightly",
-        person2IncomeName: "",
-        person2Income: 0,
-        person2Frequency: "fortnightly",
-        otherIncomeName: "",
-        otherIncome: 0,
-        otherIncomeFrequency: "annually",
-      },
-      expenses: {
-        livingName: "",
-        livingCosts: 0,
-        livingFrequency: "monthly",
-        mortgageRepayments: 0,
-        foodName: "",
-        food: 0,
-        foodFrequency: "weekly",
-        utilitiesName: "",
-        utilities: 0,
-        utilitiesFrequency: "annually",
-        insuranceName: "",
-        insurance: 0,
-        insuranceFrequency: "annually",
-        schoolChildrenName: "",
-        schoolChildren: 0,
-        schoolChildrenFrequency: "annually",
-        ratesPropertyCostsName: "",
-        ratesPropertyCosts: 0,
-        ratesPropertyCostsFrequency: "annually",
-        otherExpensesName: "",
-        otherExpenses: 0,
-        otherFrequency: "monthly",
-      },
-      investing: {
-        annualInvestingTarget: 0,
-        employerSuperContributions: 0,
-        extraSuperContributions: 0,
-        expectedInvestmentReturnPct: 7,
-        expectedSuperReturnPct: 6.5,
-        inflationPct: 2.5,
-        wageGrowthPct: 3,
-        safeWithdrawalRatePct: 4,
-      },
-      downsizing: {
-        enabled: false,
-        currentResidenceValue: 0,
-        futurePropertyValue: 0,
-        sellingCosts: 0,
-        buyingCosts: 0,
-        releasedForInvestment: 0,
-      },
-    };
-  }
-
-  function clonePlan(plan) {
-    const base = emptyPlan();
-    const source = JSON.parse(JSON.stringify(plan || {}));
-    const merged = {
-      ...base,
-      ...source,
-      personal: { ...base.personal, ...(source.personal || {}) },
-      assets: { ...base.assets, ...(source.assets || {}) },
-      liabilities: { ...base.liabilities, ...(source.liabilities || {}) },
-      income: { ...base.income, ...(source.income || {}) },
-      expenses: { ...base.expenses, ...(source.expenses || {}) },
-      investing: { ...base.investing, ...(source.investing || {}) },
-      downsizing: { ...base.downsizing, ...(source.downsizing || {}) },
-    };
-    if (source.income && source.income.bonusIncome && !source.income.otherIncome) {
-      merged.income.otherIncome = source.income.bonusIncome;
-      merged.income.otherIncomeFrequency = "annually";
-      merged.income.otherIncomeName = source.income.otherIncomeName || "Other Income";
-    }
-    return merged;
-  }
-
-  function calculateOffsetBenefit({ principal, annualInterestRate, offsetBalance }) {
-    const grossLoanBalance = nonNegative(principal);
-    const offset = Math.min(nonNegative(offsetBalance), grossLoanBalance);
-    const effectiveLoanBalance = roundCurrency(Math.max(grossLoanBalance - offset, 0));
-    const annualInterestSaved = roundCurrency(offset * number(annualInterestRate));
-
-    return {
-      grossLoanBalance,
-      offsetBalance: offset,
-      effectiveLoanBalance,
-      annualInterestSaved,
-      taxFreeEquivalentReturn: offset > 0 ? roundRatio(annualInterestSaved / offset) : 0,
-    };
-  }
-
-  function amortiseLoan({ principal, annualInterestRate, monthlyRepayment, termYears, offsetBalance = 0 }) {
-    const termMonths = Math.max(0, Math.floor(number(termYears) * MONTHS_PER_YEAR));
-    const repayment = nonNegative(monthlyRepayment);
-    const monthlyRate = number(annualInterestRate) / MONTHS_PER_YEAR;
-    const offset = nonNegative(offsetBalance);
-    const schedule = [];
-    const warnings = [];
-    let balance = roundCurrency(nonNegative(principal));
-
-    if (balance === 0 || termMonths === 0) {
-      return { schedule, warnings };
-    }
-
-    const firstInterest = roundCurrency(Math.max(balance - offset, 0) * monthlyRate);
-    if (repayment <= firstInterest) {
-      warnings.push({
-        code: "REPAYMENT_TOO_LOW",
-        message: "Repayment too low: monthly repayment does not cover monthly interest.",
-      });
-    }
-
-    for (let month = 1; month <= termMonths && balance > 0; month += 1) {
-      const openingBalance = balance;
-      const effectiveLoanBalance = roundCurrency(Math.max(openingBalance - offset, 0));
-      const interestCharged = roundCurrency(effectiveLoanBalance * monthlyRate);
-      let principalRepaid = roundCurrency(repayment - interestCharged);
-      let actualRepayment = repayment;
-
-      if (principalRepaid > openingBalance) {
-        principalRepaid = openingBalance;
-        actualRepayment = roundCurrency(interestCharged + principalRepaid);
-      }
-
-      balance = roundCurrency(Math.max(0, openingBalance - principalRepaid));
-      schedule.push({
-        month,
-        openingBalance,
-        interestCharged,
-        principalRepaid,
-        repayment: actualRepayment,
-        closingBalance: balance,
-        grossLoanBalance: openingBalance,
-        offsetBalance: offset,
-        effectiveLoanBalance,
-      });
-    }
-
-    if (balance > 0) {
-      warnings.push({
-        code: "LOAN_NOT_REPAID_WITHIN_TERM",
-        message: "Loan balance remains after the entered loan term.",
-      });
-    }
-
-    return { schedule, warnings };
-  }
-
-  function balanceAtMonth(schedule, finalBalance, month) {
-    if (month <= 0) return schedule[0]?.openingBalance || finalBalance;
-    return schedule[month - 1]?.closingBalance ?? finalBalance;
-  }
-
-  function calculateLoanSummary(plan) {
-    const principal = nonNegative(plan.liabilities.homeLoanBalance);
-    const annualInterestRate = annualRate(plan.liabilities.homeLoanInterestRatePct);
-    const monthlyRepayment = nonNegative(plan.liabilities.monthlyRepayment || plan.expenses.mortgageRepayments);
-    const termYears = nonNegative(plan.liabilities.remainingLoanTermYears);
-    const offsetBalance = nonNegative(plan.assets.offsetBalance);
-    const amortisation = amortiseLoan({ principal, annualInterestRate, monthlyRepayment, termYears, offsetBalance });
-    const finalBalance = amortisation.schedule.at(-1)?.closingBalance ?? principal;
-    const totalInterestPaid = roundCurrency(amortisation.schedule.reduce((total, row) => total + row.interestCharged, 0));
-    const totalPrincipalRepaid = roundCurrency(amortisation.schedule.reduce((total, row) => total + Math.max(0, row.principalRepaid), 0));
-    const totalRepayments = roundCurrency(amortisation.schedule.reduce((total, row) => total + row.repayment, 0));
-    const monthsToRepay = finalBalance === 0 ? amortisation.schedule.length : null;
-    const balanceAtYears = {};
-    CHECKPOINT_YEARS.forEach((year) => {
-      balanceAtYears[year] = roundCurrency(balanceAtMonth(amortisation.schedule, finalBalance, year * MONTHS_PER_YEAR));
-    });
-
-    return {
-      schedule: amortisation.schedule,
-      warnings: amortisation.warnings,
-      offsetBenefit: calculateOffsetBenefit({ principal, annualInterestRate, offsetBalance }),
-      payoffMonth: monthsToRepay,
-      yearsToRepay: monthsToRepay === null ? null : roundRatio(monthsToRepay / MONTHS_PER_YEAR),
-      totalInterestPaid,
-      totalPrincipalRepaid,
-      totalRepayments,
-      finalBalance,
-      balanceAtYears,
-    };
-  }
-
-  function projectBalance({ startingBalance, annualContribution, expectedReturn, years, currentAge, safeWithdrawalRate, extraMonthlyContributions = [] }) {
-    const monthlyReturn = number(expectedReturn) / MONTHS_PER_YEAR;
-    const rows = [];
-    let balance = roundCurrency(nonNegative(startingBalance));
-
-    for (let year = 1; year <= years; year += 1) {
-      const openingBalance = balance;
-      let contributions = 0;
-      let growth = 0;
-      for (let month = 1; month <= MONTHS_PER_YEAR; month += 1) {
-        const absoluteMonth = (year - 1) * MONTHS_PER_YEAR + month;
-        const contribution = nonNegative(annualContribution) / MONTHS_PER_YEAR + nonNegative(extraMonthlyContributions[absoluteMonth - 1]);
-        balance = roundCurrency(balance + contribution);
-        contributions = roundCurrency(contributions + contribution);
-        const monthGrowth = roundCurrency(balance * monthlyReturn);
-        balance = roundCurrency(balance + monthGrowth);
-        growth = roundCurrency(growth + monthGrowth);
-      }
-      rows.push({
-        year,
-        age: nonNegative(currentAge) + year,
-        openingBalance,
-        annualContribution: contributions,
-        investmentGrowth: growth,
-        closingBalance: balance,
-        passiveIncome: roundCurrency(balance * number(safeWithdrawalRate)),
-      });
-    }
-    return rows;
-  }
-
-  function milestoneStatus(projected, required) {
-    if (required <= 0) return STATUS.AMBER;
-    if (projected >= required) return STATUS.GREEN;
-    if (projected >= required * 0.8) return STATUS.AMBER;
-    return STATUS.RED;
-  }
-
-  function rowAtAge(rows, age) {
-    return rows.find((row) => row.age >= age) || rows.at(-1) || { closingBalance: 0, passiveIncome: 0, age };
-  }
-
-  function downsizingInvestmentBoost(plan) {
-    const strategy = plan.downsizing || {};
-    if (!strategy.enabled) return 0;
-    const manualRelease = nonNegative(strategy.releasedForInvestment);
-    if (manualRelease > 0) return manualRelease;
-    return roundCurrency(Math.max(
-      0,
-      nonNegative(strategy.currentResidenceValue)
-        - nonNegative(strategy.futurePropertyValue)
-        - nonNegative(strategy.sellingCosts)
-        - nonNegative(strategy.buyingCosts),
-    ));
-  }
-
-  function simulateRetirement({ label, startingAge, startingBalance, expectedReturn, inflation, firstYearDraw }) {
-    let balance = roundCurrency(nonNegative(startingBalance));
-    const balances = { 60: roundCurrency(balance), 70: 0, 80: 0, 90: 0 };
-    let moneyLasts = true;
-    for (let age = startingAge + 1; age <= 90; age += 1) {
-      const draw = roundCurrency(nonNegative(firstYearDraw) * Math.pow(1 + number(inflation), age - startingAge - 1));
-      balance = roundCurrency((balance - draw) * (1 + number(expectedReturn)));
-      if (balance < 0) {
-        moneyLasts = false;
-        balance = 0;
-      }
-      if (age === 70 || age === 80 || age === 90) balances[age] = balance;
-    }
-    return { label, startingAge, annualIncomeDrawn: roundCurrency(firstYearDraw), moneyLasts, balances };
-  }
-
-  function maximumLifestyleDraw(startingBalance, expectedReturn, inflation) {
-    const realReturn = ((1 + number(expectedReturn)) / (1 + number(inflation))) - 1;
-    const years = 30;
-    const targetEndingBalance = nonNegative(startingBalance) * 0.25;
-    if (realReturn === 0) return roundCurrency((startingBalance - targetEndingBalance) / years);
-    const annuityFactor = (1 - Math.pow(1 + realReturn, -years)) / realReturn;
-    const targetPresentValue = targetEndingBalance / Math.pow(1 + realReturn, years);
-    return roundCurrency((startingBalance - targetPresentValue) / annuityFactor);
-  }
-
-  function householdTaxEstimate({ person1Income, person2Income, otherIncome, extraConcessionalSuper }) {
-    const sharedOtherIncome = nonNegative(otherIncome) / 2;
-    const person1TaxableBefore = roundCurrency(nonNegative(person1Income) + sharedOtherIncome);
-    const person2TaxableBefore = roundCurrency(nonNegative(person2Income) + sharedOtherIncome);
-    const split = splitAdditionalContribution(extraConcessionalSuper, person1TaxableBefore, person2TaxableBefore);
-    const person1TaxableAfter = roundCurrency(Math.max(0, person1TaxableBefore - split.person1));
-    const person2TaxableAfter = roundCurrency(Math.max(0, person2TaxableBefore - split.person2));
-    const person1TaxBefore = individualTaxBreakdown(person1TaxableBefore);
-    const person2TaxBefore = individualTaxBreakdown(person2TaxableBefore);
-    const person1TaxAfter = individualTaxBreakdown(person1TaxableAfter);
-    const person2TaxAfter = individualTaxBreakdown(person2TaxableAfter);
-    const totalTaxBefore = roundCurrency(person1TaxBefore.totalTax + person2TaxBefore.totalTax);
-    const totalTaxAfter = roundCurrency(person1TaxAfter.totalTax + person2TaxAfter.totalTax);
-    const incomeTax = roundCurrency(person1TaxAfter.incomeTax + person2TaxAfter.incomeTax);
-    const medicareLevy = roundCurrency(person1TaxAfter.medicareLevy + person2TaxAfter.medicareLevy);
-    const grossContribution = nonNegative(extraConcessionalSuper);
-    const contributionsTax = roundCurrency(grossContribution * SUPER_CONTRIBUTIONS_TAX_RATE);
-    const netInvested = roundCurrency(grossContribution - contributionsTax);
-    const personalTaxSaving = roundCurrency(Math.max(0, totalTaxBefore - totalTaxAfter));
-    const afterTaxCashflowCost = roundCurrency(Math.max(0, grossContribution - personalTaxSaving));
-    const marginalRate = Math.max(marginalTaxRate(person1TaxableBefore), marginalTaxRate(person2TaxableBefore));
-    return {
-      taxYear: TAX_YEAR,
-      person1TaxableBefore,
-      person2TaxableBefore,
-      person1TaxableAfter,
-      person2TaxableAfter,
-      taxableIncomeBeforeExtraSuper: roundCurrency(person1TaxableBefore + person2TaxableBefore),
-      taxableIncomeAfterExtraSuper: roundCurrency(person1TaxableAfter + person2TaxableAfter),
-      totalTaxBefore,
-      totalTaxAfter,
-      totalTax: totalTaxAfter,
-      incomeTax,
-      medicareLevy,
-      marginalTaxRate: marginalRate,
-      medicareLevyRate: MEDICARE_LEVY_RATE,
-      extraSuper: {
-        grossContribution,
-        estimatedPersonalTaxSaving: personalTaxSaving,
-        contributionsTax,
-        netAmountInvested: netInvested,
-        afterTaxCashflowCost,
-      },
-    };
-  }
-
-  function rankDecisionOptions({ mortgageRate, expectedInvestmentReturn, expectedSuperReturn, taxRate, liquidityPreference }) {
-    const liquidity = liquidityPreference === "high" ? 1 : liquidityPreference === "low" ? 0 : 0.5;
-    const superTaxSavingRate = Math.max(0, number(taxRate) - SUPER_CONTRIBUTIONS_TAX_RATE);
-    const etfAfterTaxReturn = Math.max(0, number(expectedInvestmentReturn) * (1 - number(taxRate) * 0.5));
-    const options = [
-      {
-        label: "Extra super",
-        score: roundRatio(number(expectedSuperReturn) + superTaxSavingRate * 0.35 - liquidity * 0.025),
-        afterTaxBenefit: roundRatio(number(expectedSuperReturn) + superTaxSavingRate),
-        cashflowImpact: roundRatio(1 - superTaxSavingRate),
-        taxSaving: roundRatio(superTaxSavingRate),
-        explanation: "May reduce personal tax now and invest the net amount in super after 15% contributions tax. Access is from age 60 in this model.",
-      },
-      {
-        label: "Offset account",
-        score: roundRatio(mortgageRate + liquidity * 0.01),
-        afterTaxBenefit: roundRatio(mortgageRate),
-        cashflowImpact: 1,
-        taxSaving: 0,
-        explanation: "Saves mortgage interest, remains accessible, and the interest saving is not taxed.",
-      },
-      {
-        label: "ETF/share investing",
-        score: roundRatio(etfAfterTaxReturn - 0.01 + liquidity * 0.004),
-        afterTaxBenefit: roundRatio(etfAfterTaxReturn),
-        cashflowImpact: 1,
-        taxSaving: 0,
-        explanation: "Keeps money accessible and uses the expected return after a simple marginal-tax adjustment.",
-      },
-      {
-        label: "Extra mortgage repayment",
-        score: roundRatio(mortgageRate - liquidity * 0.015),
-        afterTaxBenefit: roundRatio(mortgageRate),
-        cashflowImpact: 1,
-        taxSaving: 0,
-        explanation: "Saves mortgage interest, but the money is less flexible than keeping it in offset.",
-      },
-    ];
-    return options.sort((a, b) => b.score - a.score);
-  }
-
-  function calculatePlan(planInput) {
-    const plan = clonePlan(planInput);
-    const loan = calculateLoanSummary(plan);
-    const currentAge = nonNegative(plan.personal.person1Age);
-    const downsizingBoost = downsizingInvestmentBoost(plan);
-    const totalAssets = roundCurrency(
-      nonNegative(plan.assets.homeValue)
-      + nonNegative(plan.assets.otherPropertyValue)
-      + nonNegative(plan.assets.offsetBalance)
-      + nonNegative(plan.assets.cash)
-      + nonNegative(plan.assets.sharesEtfs)
-      + nonNegative(plan.assets.crypto)
-      + nonNegative(plan.assets.superPerson1)
-      + nonNegative(plan.assets.superPerson2)
-      + nonNegative(plan.assets.vehiclesPersonalAssets),
-    );
-    const creditCardBalance = nonNegative(plan.liabilities.creditCardBalance);
-    const totalLiabilities = roundCurrency(
-      nonNegative(plan.liabilities.homeLoanBalance)
-      + nonNegative(plan.liabilities.hecsHelpDebt)
-      + nonNegative(plan.liabilities.otherDebts)
-      + creditCardBalance,
-    );
-    const currentNetWorth = roundCurrency(totalAssets - totalLiabilities);
-    const superannuationBalance = roundCurrency(
-      nonNegative(plan.assets.superPerson1)
-      + nonNegative(plan.assets.superPerson2),
-    );
-    const accessibleInvestmentAssets = roundCurrency(
-      nonNegative(plan.assets.offsetBalance)
-      + nonNegative(plan.assets.cash)
-      + nonNegative(plan.assets.sharesEtfs)
-      + nonNegative(plan.assets.crypto)
-      + downsizingBoost,
-    );
-    const investmentBalance = roundCurrency(
-      nonNegative(plan.assets.cash)
-      + nonNegative(plan.assets.sharesEtfs)
-      + nonNegative(plan.assets.crypto)
-      + downsizingBoost,
-    );
-    const superAccessibleToday = currentAge >= SUPER_ACCESS_AGE ? superannuationBalance : 0;
-    const financialIndependenceAssets = roundCurrency(accessibleInvestmentAssets + superAccessibleToday);
-    const person1AnnualIncome = roundCurrency(annualize(plan.income.person1Income, plan.income.person1Frequency));
-    const person2AnnualIncome = roundCurrency(annualize(plan.income.person2Income, plan.income.person2Frequency));
-    const otherAnnualIncome = roundCurrency(annualize(plan.income.otherIncome, plan.income.otherIncomeFrequency));
-    const annualGrossIncome = roundCurrency(person1AnnualIncome + person2AnnualIncome + otherAnnualIncome);
-    const taxEstimate = householdTaxEstimate({
-      person1Income: person1AnnualIncome,
-      person2Income: person2AnnualIncome,
-      otherIncome: otherAnnualIncome,
-      extraConcessionalSuper: plan.investing.extraSuperContributions,
-    });
-    const helpRepaymentIncome = calculateHelpRepaymentIncome({
-      person1Income: person1AnnualIncome,
-      person2Income: person2AnnualIncome,
-      otherIncome: otherAnnualIncome,
-      extraConcessionalSuper: plan.investing.extraSuperContributions,
-    });
-    const helpRepaymentEstimate = estimateHelpRepayment(helpRepaymentIncome.estimatedRepaymentIncome, plan.liabilities.hecsHelpDebt);
-    const payrollEstimate = calculatePayrollEstimate({
-      person1Income: person1AnnualIncome,
-      person2Income: person2AnnualIncome,
-      extraConcessionalSuper: plan.investing.extraSuperContributions,
-      helpDebt: plan.liabilities.hecsHelpDebt,
-      person1HelpDebt: plan.liabilities.person1HecsHelpDebt,
-      person2HelpDebt: plan.liabilities.person2HecsHelpDebt,
-      person1SalarySacrifice: plan.investing.person1SalarySacrifice,
-      person2SalarySacrifice: plan.investing.person2SalarySacrifice,
-      person1PayrollDeductions: plan.income.person1PayrollDeductions,
-      person2PayrollDeductions: plan.income.person2PayrollDeductions,
-    });
-    const expenseBreakdown = annualExpenseBreakdown(plan);
-    const annualCoreLivingExpenses = expenseBreakdown.living;
-    const annualOtherRegularExpenses = expenseBreakdown.otherRegular;
-    const annualExpenses = expenseBreakdown.total;
-    const annualLivingExpenses = annualExpenses;
-    const annualMortgageRepayments = roundCurrency(nonNegative(plan.liabilities.monthlyRepayment || plan.expenses.mortgageRepayments) * MONTHS_PER_YEAR);
-    const annualCreditCardRepayments = roundCurrency(nonNegative(plan.liabilities.creditCardMonthlyRepayment) * MONTHS_PER_YEAR);
-    const annualDebtRepayments = roundCurrency(annualMortgageRepayments + annualCreditCardRepayments);
-    const estimatedTaxAndHelp = roundCurrency(taxEstimate.totalTax + helpRepaymentEstimate.annualRepayment);
-    const netIncomeAfterTaxHelp = roundCurrency(annualGrossIncome - taxEstimate.incomeTax - taxEstimate.medicareLevy - helpRepaymentEstimate.annualRepayment);
-    const annualInvestmentContributions = roundCurrency(nonNegative(plan.investing.annualInvestingTarget));
-    const annualExtraSuperContributions = roundCurrency(nonNegative(plan.investing.extraSuperContributions));
-    const cashSurplusBeforeInvesting = roundCurrency(netIncomeAfterTaxHelp - annualCoreLivingExpenses - annualDebtRepayments - annualOtherRegularExpenses);
-    const cashSurplusAfterInvesting = roundCurrency(cashSurplusBeforeInvesting - annualInvestmentContributions - annualExtraSuperContributions);
-    const finalProjectedCashSurplus = cashSurplusAfterInvesting;
-    const cashSurplusAfterTaxHelpAndInvesting = finalProjectedCashSurplus;
-    const firstYearMortgagePrincipalReduction = roundCurrency(loan.schedule.slice(0, 12).reduce((total, row) => total + Math.max(0, row.principalRepaid), 0));
-    const grossEmployerSuperContributions = nonNegative(plan.investing.employerSuperContributions);
-    const grossExtraSuperContributions = nonNegative(plan.investing.extraSuperContributions);
-    const grossConcessionalSuperContributions = roundCurrency(grossEmployerSuperContributions + grossExtraSuperContributions);
-    const netEmployerSuperContributions = netConcessionalSuperContribution(grossEmployerSuperContributions);
-    const netExtraSuperContributions = netConcessionalSuperContribution(grossExtraSuperContributions);
-    const netConcessionalSuperContributions = roundCurrency(netEmployerSuperContributions + netExtraSuperContributions);
-    const superContributionsTaxPaid = roundCurrency(grossConcessionalSuperContributions - netConcessionalSuperContributions);
-    const wealthCreationRate = roundCurrency(
-      nonNegative(plan.investing.annualInvestingTarget)
-      + netEmployerSuperContributions
-      + netExtraSuperContributions
-      + firstYearMortgagePrincipalReduction,
-    );
-    const safeWithdrawalRate = annualRate(plan.investing.safeWithdrawalRatePct);
-    const expectedInvestmentReturn = annualRate(plan.investing.expectedInvestmentReturnPct);
-    const expectedSuperReturn = annualRate(plan.investing.expectedSuperReturnPct);
-    const inflation = annualRate(plan.investing.inflationPct);
-    const freedMonthlyRepayments = Array.from({ length: 360 }, (_, monthIndex) => {
-      if (!loan.payoffMonth) return 0;
-      return monthIndex + 1 > loan.payoffMonth ? nonNegative(plan.liabilities.monthlyRepayment || plan.expenses.mortgageRepayments) : 0;
-    });
-    const investmentProjection = projectBalance({
-      startingBalance: nonNegative(plan.assets.cash) + nonNegative(plan.assets.sharesEtfs) + nonNegative(plan.assets.crypto) + downsizingBoost,
-      annualContribution: plan.investing.annualInvestingTarget,
-      expectedReturn: expectedInvestmentReturn,
-      years: 30,
-      currentAge,
-      safeWithdrawalRate,
-      extraMonthlyContributions: freedMonthlyRepayments,
-    });
-    const superProjection = projectBalance({
-      startingBalance: superannuationBalance,
-      annualContribution: netConcessionalSuperContributions,
-      expectedReturn: expectedSuperReturn,
-      years: 30,
-      currentAge,
-      safeWithdrawalRate,
-    });
-    const targetCapital = safeWithdrawalRate > 0 ? nonNegative(plan.personal.targetAnnualSpending) / safeWithdrawalRate : 0;
-    const milestones = [
-      {
-        label: "Building Wealth",
-        description: "Your investments are beginning to benefit from compounding and are creating long-term momentum.",
-        age: nonNegative(plan.personal.workOptionalAge),
-        coverage: 0.5,
-      },
-      {
-        label: "Financial Independence",
-        description: "Your investments are projected to cover a significant portion of your future lifestyle costs.",
-        age: nonNegative(plan.personal.semiRetirementAge),
-        coverage: 0.75,
-      },
-      {
-        label: "Financial Freedom",
-        description: "Your investments are projected to fully support your chosen lifestyle over the long term.",
-        age: nonNegative(plan.personal.fullRetirementAge),
-        coverage: 1,
-      },
-    ].map((item) => {
-      const investment = rowAtAge(investmentProjection, item.age);
-      const superRow = rowAtAge(superProjection, item.age);
-      const superAccessible = item.age >= SUPER_ACCESS_AGE ? superRow.closingBalance : 0;
-      const projectedFiAssets = roundCurrency(investment.closingBalance + superAccessible);
-      const requiredCapital = roundCurrency(targetCapital * item.coverage);
-      return {
-        ...item,
-        projectedFiAssets,
-        requiredCapital,
-        passiveIncomeEstimate: roundCurrency(projectedFiAssets * safeWithdrawalRate),
-        status: milestoneStatus(projectedFiAssets, requiredCapital),
       };
-    });
-    const fullRetirementAge = nonNegative(plan.personal.fullRetirementAge) || 60;
-    const sustainabilityStartAge = Math.max(fullRetirementAge, SUPER_ACCESS_AGE);
-    const retirementInvestments = rowAtAge(investmentProjection, sustainabilityStartAge);
-    const retirementSuper = rowAtAge(superProjection, sustainabilityStartAge);
-    const totalRetirementAssets = roundCurrency(retirementInvestments.closingBalance + retirementSuper.closingBalance);
-    const retirementSustainability = [
-      simulateRetirement({
-        label: "Capital preserved",
-        startingAge: fullRetirementAge,
-        startingBalance: totalRetirementAssets,
-        expectedReturn: expectedInvestmentReturn,
-        inflation,
-        firstYearDraw: totalRetirementAssets * safeWithdrawalRate,
-      }),
-      simulateRetirement({
-        label: "Capital slowly declines",
-        startingAge: fullRetirementAge,
-        startingBalance: totalRetirementAssets,
-        expectedReturn: expectedInvestmentReturn,
-        inflation,
-        firstYearDraw: plan.personal.targetAnnualSpending,
-      }),
-      simulateRetirement({
-        label: "Maximum lifestyle",
-        startingAge: fullRetirementAge,
-        startingBalance: totalRetirementAssets,
-        expectedReturn: expectedInvestmentReturn,
-        inflation,
-        firstYearDraw: maximumLifestyleDraw(totalRetirementAssets, expectedInvestmentReturn, inflation),
-      }),
-    ];
-    const financialFreedomScore = targetCapital > 0 ? Math.min(100, roundRatio(financialIndependenceAssets / targetCapital * 100)) : 0;
-    const netWorthProjection = investmentProjection.map((row, index) => {
-      const year = index + 1;
-      const residenceValue = plan.downsizing?.enabled && nonNegative(plan.downsizing.futurePropertyValue) > 0
-        ? nonNegative(plan.downsizing.futurePropertyValue)
-        : nonNegative(plan.assets.homeValue);
-      const homeValue = (residenceValue + nonNegative(plan.assets.otherPropertyValue)) * Math.pow(1 + 0.03, year);
-      const loanBalance = balanceAtMonth(loan.schedule, loan.finalBalance, year * MONTHS_PER_YEAR);
-      const closingBalance = roundCurrency(homeValue + nonNegative(plan.assets.vehiclesPersonalAssets) + nonNegative(plan.assets.offsetBalance) + row.closingBalance + superProjection[index].closingBalance - loanBalance - nonNegative(plan.liabilities.hecsHelpDebt) - nonNegative(plan.liabilities.otherDebts) - creditCardBalance);
-      return { year, age: currentAge + year, closingBalance };
-    });
-    const financialFreedomProgressProjection = investmentProjection.map((row, index) => {
-      const superAccessible = row.age >= SUPER_ACCESS_AGE ? superProjection[index].closingBalance : 0;
-      const projectedAssets = roundCurrency(row.closingBalance + nonNegative(plan.assets.offsetBalance) + superAccessible);
-      return {
-        year: row.year,
-        age: row.age,
-        progress: targetCapital > 0 ? Math.min(200, roundRatio(projectedAssets / targetCapital * 100)) : 0,
-      };
-    });
+    </script>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body class="bg-white text-ink antialiased">
+    <div class="min-h-screen">
+      <header class="sticky top-0 z-30 border-b border-line bg-white/90 backdrop-blur">
+        <div class="app-header-shell mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
+          <div class="header-brand">
+            <p class="brand-kicker text-xs font-bold uppercase text-success">Financial Freedom</p>
+            <h1 class="text-xl font-bold text-navy">Plan. Test. Build Wealth.</h1>
+            <p class="text-xs font-bold text-slate-500" id="lastSavedLabel">Last Saved: Not saved yet</p>
+          </div>
+          <div class="toolbar-actions flex flex-wrap gap-2">
+            <details class="sample-plan-menu" id="headerSamplePlanMenu">
+              <summary class="btn btn-primary" id="demoButton">Load Sample Plan</summary>
+              <div class="sample-plan-menu-panel" data-sample-plan-menu aria-label="Choose sample plan"></div>
+            </details>
+            <button class="btn" type="button" id="enterDataButton">Enter My Data</button>
+            <span class="save-status-pill" id="headerSaveStatus" aria-live="polite">Last saved: Not saved yet</span>
+            <details class="plan-menu" id="planMenu">
+              <summary class="btn plan-menu-trigger">Plan</summary>
+              <div class="plan-menu-panel">
+                <button type="button" id="planNewButton">New Plan</button>
+                <button type="button" id="planSaveButton">Save Plan</button>
+                <button type="button" id="planLoadButton">Load Plan</button>
+                <button type="button" id="planDuplicateButton">Duplicate Plan</button>
+                <button type="button" id="planExportJsonButton">Export Plan</button>
+                <button type="button" id="planImportJsonButton">Import Plan</button>
+                <button type="button" id="planClearSavedButton">Clear Saved Plan</button>
+              </div>
+            </details>
+            <button class="btn" type="button" id="exportButton">Print / Export</button>
+          </div>
+          <details class="mobile-action-menu" id="mobileActionMenu">
+            <summary class="btn mobile-action-trigger" aria-label="Open planner actions">
+              <span aria-hidden="true">☰</span>
+              <span>Actions</span>
+            </summary>
+            <div class="mobile-action-sheet" role="menu" aria-label="Planner actions">
+              <button type="button" role="menuitem" data-mobile-action="load-sample">Load Sample Plan</button>
+              <button type="button" role="menuitem" data-mobile-action="enter-data">Enter My Data</button>
+              <details class="mobile-plan-group" id="mobilePlanGroup">
+                <summary role="button">Plan</summary>
+                <div>
+                  <button type="button" role="menuitem" data-mobile-action="new-plan">New Plan</button>
+                  <button type="button" role="menuitem" data-mobile-action="save-plan">Save Plan</button>
+                  <button type="button" role="menuitem" data-mobile-action="load-plan">Load Plan</button>
+                  <button type="button" role="menuitem" data-mobile-action="duplicate-plan">Duplicate Plan</button>
+                  <button type="button" role="menuitem" data-mobile-action="export-plan-json">Export Plan</button>
+                  <button type="button" role="menuitem" data-mobile-action="import-plan-json">Import Plan</button>
+                  <button type="button" role="menuitem" data-mobile-action="clear-saved-plan">Clear Saved Plan</button>
+                </div>
+              </details>
+              <button type="button" role="menuitem" data-mobile-action="export">Print / Export</button>
+            </div>
+          </details>
+          <input class="hidden" id="planImportJsonInput" type="file" accept="application/json,.json">
+        </div>
+      </header>
 
-    return {
-      plan,
-      loan,
-      totalAssets,
-      totalLiabilities,
-      currentNetWorth,
-      investmentBalance,
-      accessibleInvestmentAssets,
-      superannuationBalance,
-      superAccessibleToday,
-      superAccessAge: SUPER_ACCESS_AGE,
-      financialIndependenceAssets,
-      effectiveMortgageBalance: loan.offsetBenefit.effectiveLoanBalance,
-      annualGrossIncome,
-      annualNetIncome: annualGrossIncome,
-      person1AnnualIncome,
-      person2AnnualIncome,
-      otherAnnualIncome,
-      annualExpenses,
-      annualLivingExpenses,
-      annualCoreLivingExpenses,
-      annualOtherRegularExpenses,
-      annualMortgageRepayments,
-      annualCreditCardRepayments,
-      annualDebtRepayments,
-      annualInvestmentContributions,
-      annualExtraSuperContributions,
-      netIncomeAfterTaxHelp,
-      cashSurplusBeforeInvesting,
-      cashSurplusAfterInvesting,
-      finalProjectedCashSurplus,
-      estimatedTaxAndHelp,
-      cashSurplusAfterTaxHelpAndInvesting,
-      firstYearMortgagePrincipalReduction,
-      wealthCreationRate,
-      grossConcessionalSuperContributions,
-      netConcessionalSuperContributions,
-      netEmployerSuperContributions,
-      netExtraSuperContributions,
-      superContributionsTaxPaid,
-      superContributionsTaxRate: SUPER_CONTRIBUTIONS_TAX_RATE,
-      taxEstimate,
-      payrollEstimates: payrollEstimate,
-      payrollEstimate,
-      helpRepaymentEstimate,
-      helpRepaymentIncome,
-      financialFreedomScore,
-      investmentProjection,
-      superProjection,
-      milestones,
-      retirementSustainability,
-      totalRetirementAssets,
-      sustainabilityStartAge,
-      targetCapital,
-      downsizingInvestmentBoost: downsizingBoost,
-      decisionOptions: rankDecisionOptions({
-        mortgageRate: annualRate(plan.liabilities.homeLoanInterestRatePct),
-        expectedInvestmentReturn,
-        expectedSuperReturn,
-        taxRate: taxEstimate.marginalTaxRate,
-        liquidityPreference: "medium",
-      }),
-      netWorthProjection,
-      financialFreedomProgressProjection,
-    };
-  }
+      <main>
+        <section id="homeView" class="homepage mx-auto max-w-7xl px-4 py-8 lg:py-14">
+          <div class="home-hero">
+            <div class="hero-copy">
+              <p class="brand-kicker text-sm font-bold uppercase text-success">Financial Freedom</p>
+              <h2 class="mt-4 max-w-4xl text-4xl font-black text-navy sm:text-6xl">Plan. Test. Build Wealth.</h2>
+              <p class="mt-5 max-w-2xl text-lg leading-8 text-slate-600">See how today's decisions shape tomorrow's financial freedom.</p>
+              <div id="introSampleActions">
+                <p class="mt-3 max-w-2xl text-sm font-semibold leading-6 text-slate-500" id="samplePlanSummary">Explore realistic examples to see how the Financial Freedom Planner works before creating your own plan.</p>
+                <div class="hero-mobile-sample-select mt-5 flex w-full max-w-xl flex-col gap-3 sm:flex-row">
+                  <select class="sample-plan-select flex-1" id="heroSamplePlanSelect" data-sample-plan-select aria-label="Choose sample plan"></select>
+                </div>
+                <div class="mt-8 flex flex-wrap gap-3">
+                  <details class="sample-plan-menu hero-sample-plan-menu" id="heroSamplePlanMenu">
+                    <summary class="btn btn-primary btn-large">Load Sample Plan</summary>
+                    <div class="sample-plan-menu-panel" data-sample-plan-menu aria-label="Choose sample plan"></div>
+                  </details>
+                  <button class="btn btn-primary btn-large hero-mobile-sample-button" type="button" id="heroDemoButton">Load Sample Plan</button>
+                  <button class="btn btn-large" type="button" id="heroStartButton">Start My Plan</button>
+                </div>
+              </div>
+              <div class="continue-panel hidden mt-6" id="continuePanel">
+                <span class="metric-label">Continue Your Plan</span>
+                <p>Your saved plan is available on this device.</p>
+                <div class="flex flex-wrap gap-2">
+                  <button class="btn btn-primary" type="button" id="continuePlanButton">Continue</button>
+                  <button class="btn" type="button" id="continueNewPlanButton">Start New Plan</button>
+                  <button class="btn" type="button" id="continueSampleButton">Load Sample Plan</button>
+                </div>
+              </div>
+            </div>
 
-  global.FFSCalculator = {
-    emptyPlan,
-    clonePlan,
-    annualize,
-    annualRecurringExpenses,
-    individualTaxEstimate,
-    marginalTaxRate,
-    estimateHelpRepayment,
-    calculateHelpRepaymentIncome,
-    calculatePayrollEstimate,
-    amortiseLoan,
-    calculateOffsetBenefit,
-    calculateLoanSummary,
-    calculatePlan,
-  };
-})(globalThis);
+            <div class="home-snapshot-heading">
+              <span class="metric-label">Home Dashboard Snapshot</span>
+              <h3>Know where you stand at a glance.</h3>
+            </div>
+
+            <div class="hero-card-grid home-snapshot-grid" aria-label="Home dashboard snapshot">
+              <article class="preview-card">
+                <span>Net Worth</span>
+                <strong id="previewNetWorth">$0</strong>
+              </article>
+              <article class="preview-card">
+                <span>Monthly Surplus</span>
+                <strong id="previewMonthlySurplus">$0</strong>
+              </article>
+              <article class="preview-card">
+                <span>Current Stage</span>
+                <strong id="previewStage">Building the Foundation</strong>
+              </article>
+              <article class="preview-card">
+                <span>Target Lifestyle Funded</span>
+                <strong id="previewScore">0%</strong>
+              </article>
+              <article class="preview-card">
+                <span>Next Stage Focus</span>
+                <strong id="previewNextMilestone">Set target</strong>
+              </article>
+              <article class="preview-card preview-card-wide">
+                <span>Highest Priority Recommendation</span>
+                <strong id="previewRecommendation">Load a sample plan or start your own plan.</strong>
+              </article>
+            </div>
+          </div>
+
+          <div class="steps-grid mt-12 grid gap-4 md:grid-cols-4">
+            <article class="step-card clickable-step" role="button" tabindex="0" data-home-step="setup">
+              <span>1</span>
+              <h3>Build Your Plan</h3>
+              <p>Enter income, expenses, assets, liabilities and goals.</p>
+            </article>
+            <article class="step-card clickable-step" role="button" tabindex="0" data-home-step="dashboard">
+              <span>2</span>
+              <h3>See Your Future</h3>
+              <p>View forecasts, financial milestones and projected wealth growth.</p>
+            </article>
+            <article class="step-card clickable-step" role="button" tabindex="0" data-home-step="reports">
+              <span>3</span>
+              <h3>Review Your Strategy</h3>
+              <p>Review reports, recommendations and saved scenario comparisons.</p>
+            </article>
+            <article class="step-card clickable-step step-card-featured" role="button" tabindex="0" data-home-step="weeklyplan">
+              <span>4</span>
+              <h3>Follow Your Weekly Plan</h3>
+              <p>Turn the strategy into weekly actions, record actual results and stay on track.</p>
+              <button class="btn btn-primary mt-4" type="button" data-home-step-button="weeklyplan">Open Weekly Plan</button>
+            </article>
+            <article class="step-card ai-insights-card hidden" id="aiInsightsHomeCard" data-ai-insights-card aria-disabled="true">
+              <span class="ai-beta-label">Private Beta</span>
+              <h3>AI Financial Freedom Insights</h3>
+              <p>Receive a personalised explanation of your financial position, identify your biggest opportunities and explore strategies that may help you reach financial freedom sooner.</p>
+              <button class="btn btn-primary mt-4" type="button" disabled>Complete your plan</button>
+            </article>
+          </div>
+        </section>
+
+        <section id="appWorkspace" class="hidden border-t border-line bg-mist">
+          <div class="mx-auto grid max-w-7xl gap-6 px-4 py-6 lg:grid-cols-[250px_1fr]">
+            <nav class="workspace-nav rounded-3xl border border-line bg-white p-3 shadow-soft lg:sticky lg:top-24 lg:h-fit">
+              <p class="nav-title">Plan workspace</p>
+              <div class="grid gap-1" id="sideNav">
+                <button class="nav-button" type="button" data-view="setup" id="setupNavButton">Setup Wizard</button>
+                <button class="nav-button active" type="button" data-view="dashboard">Dashboard</button>
+                <button class="nav-button" type="button" data-view="investments">Investments</button>
+                <button class="nav-button" type="button" data-view="super">Super</button>
+                <button class="nav-button" type="button" data-view="goals">Goals</button>
+                <button class="nav-button" type="button" data-view="decision">Decision Engine</button>
+                <button class="nav-button" type="button" data-view="reports">Reports</button>
+                <button class="nav-button" type="button" data-view="scenarios">Saved Scenarios</button>
+              </div>
+            </nav>
+
+            <div class="grid gap-6">
+              <section class="view-section hidden" data-view-panel="setup">
+                <div class="wizard-shell">
+                  <div class="wizard-progress">
+                    <div>
+                      <span id="wizardStepLabel">Step 1 of 7</span>
+                      <strong id="wizardStepTitle">About You</strong>
+                    </div>
+                    <span id="wizardPercent">14% Complete</span>
+                  </div>
+                  <div class="progress-track" aria-hidden="true"><span id="wizardProgressBar"></span></div>
+                  <div class="wizard-step-chips" id="wizardStepChips"></div>
+
+                  <div class="wizard-content-grid">
+                    <div class="wizard-card">
+                      <div class="section-heading">
+                        <h2 id="wizardHeading">About You</h2>
+                        <p id="wizardInstruction">Start with the household names, ages and basic context for the plan.</p>
+                      </div>
+
+                      <div class="wizard-panel" data-wizard-panel="0">
+                        <div id="wizardAboutForm" class="input-grid"></div>
+                      </div>
+                      <div class="wizard-panel hidden" data-wizard-panel="1">
+                        <div id="wizardIncomeForm" class="setup-list"></div>
+                      </div>
+                      <div class="wizard-panel hidden" data-wizard-panel="2">
+                        <div id="wizardAssetsForm" class="setup-list"></div>
+                      </div>
+                      <div class="wizard-panel hidden" data-wizard-panel="3">
+                        <div id="wizardLoansForm" class="setup-list"></div>
+                      </div>
+                      <div class="wizard-panel hidden" data-wizard-panel="4">
+                        <div id="wizardExpensesForm" class="setup-list"></div>
+                      </div>
+                      <div class="wizard-panel hidden" data-wizard-panel="5">
+                        <div id="wizardGoalsForm" class="input-grid"></div>
+                        <div id="wizardGoalExamples" class="setup-list mt-6"></div>
+                        <div class="mt-6">
+                          <div class="card-subheading">
+                            <h3>Downsizing Strategy</h3>
+                            <p>Optional: model releasing home equity and investing the surplus toward financial freedom.</p>
+                          </div>
+                          <div id="wizardDownsizingForm" class="input-grid mt-4"></div>
+                        </div>
+                      </div>
+                      <div class="wizard-panel hidden" data-wizard-panel="6">
+                        <div class="card-subheading">
+                          <h3>Assumptions Review</h3>
+                          <p>Review these editable assumptions before reports or results generate.</p>
+                        </div>
+                        <div id="wizardAssumptionsReview" class="input-grid mt-4"></div>
+                        <div id="wizardHelpReview" class="summary-grid mt-4"></div>
+                      </div>
+                      <div class="wizard-panel hidden" data-wizard-panel="7">
+                        <div id="wizardResultsSummary" class="wizard-results"></div>
+                      </div>
+                    </div>
+
+                    <aside class="setup-summary-card">
+                      <span class="metric-label">Live Summary</span>
+                      <div id="setupSummary" class="setup-summary-list"></div>
+                    </aside>
+                  </div>
+
+                  <div class="wizard-actions">
+                    <button class="btn" type="button" id="wizardPrevButton">Previous</button>
+                    <span id="wizardSaveStatus">Saved on this device as you type.</span>
+                    <button class="btn btn-primary" type="button" id="wizardNextButton">Next</button>
+                  </div>
+                </div>
+              </section>
+
+              <section class="view-section" data-view-panel="dashboard">
+                <div class="premium-hero dashboard-hero">
+                  <div>
+                    <p class="brand-kicker text-sm font-bold uppercase text-success">Financial Freedom</p>
+                    <h2 id="dashboardTitle" class="mt-2 text-3xl font-black text-navy sm:text-4xl">Start a plan or load a sample plan.</h2>
+                    <p id="dashboardSubtitle" class="mt-3 text-slate-600">Your progress dashboard will update as you enter data.</p>
+                  </div>
+                  <div class="score-ring">
+                    <span>Lifestyle funded</span>
+                    <strong id="heroScore">0%</strong>
+                  </div>
+                </div>
+
+                <div class="freedom-progress-section mt-6">
+                  <article class="freedom-stage-card">
+                    <div>
+                      <span class="metric-label">Your current financial stage</span>
+                      <strong id="freedomStageLabel">Building the Foundation</strong>
+                    </div>
+                    <p id="freedomStageText">Enter your plan to see your current financial freedom stage.</p>
+                    <div class="progress-track progress-track-large" aria-hidden="true"><span id="freedomProgressBar"></span></div>
+                    <p id="freedomPassiveText" class="progress-caption">Your investments currently fund 0% of your annual lifestyle.</p>
+                  </article>
+                  <article class="next-milestone-card">
+                    <span class="metric-label">Progress toward Building Wealth</span>
+                    <strong id="nextMilestoneAmount">Set your target spending</strong>
+                    <p id="nextMilestoneText">Add your annual lifestyle target to calculate the next stage.</p>
+                  </article>
+                </div>
+
+                <div id="dashboardMilestones" class="milestone-grid mt-6"></div>
+
+                <div class="dashboard-hero-metrics mt-6" id="dashboardHeroMetrics"></div>
+
+                <div class="celebration-grid mt-4" id="celebrationGrid"></div>
+
+                <article class="downsizing-boost-card mt-4 hidden" id="downsizingBoostCard">
+                  <span class="metric-label">Downsizing Investment Boost</span>
+                  <strong id="downsizingBoostValue">$0</strong>
+                  <p id="downsizingBoostText">By downsizing your home, you could release money to invest toward financial freedom.</p>
+                </article>
+
+                <div class="dashboard-card-grid dashboard-card-grid-secondary mt-6" id="secondMetricGrid"></div>
+
+                <div class="dashboard-chart-grid mt-6 grid gap-4 xl:grid-cols-2">
+                  <article class="card">
+                    <div class="card-heading">
+                      <h3>Net worth over time</h3>
+                      <span id="netWorthNote"></span>
+                    </div>
+                    <svg id="netWorthChart" class="chart" viewBox="0 0 760 300" role="img" aria-label="Net worth over time"></svg>
+                  </article>
+                  <article class="card">
+                    <div class="card-heading">
+                      <h3>Investment growth</h3>
+                      <span>Non-super</span>
+                    </div>
+                    <svg id="dashboardInvestmentChart" class="chart" viewBox="0 0 760 300" role="img" aria-label="Investment growth"></svg>
+                  </article>
+                  <article class="card">
+                    <div class="card-heading">
+                      <h3>Debt reduction</h3>
+                      <span>Home loan and debts</span>
+                    </div>
+                    <svg id="dashboardDebtChart" class="chart" viewBox="0 0 760 300" role="img" aria-label="Debt reduction"></svg>
+                  </article>
+                  <article class="card">
+                    <div class="card-heading">
+                      <h3>Super growth</h3>
+                      <span>Age 60 access</span>
+                    </div>
+                    <svg id="dashboardSuperChart" class="chart" viewBox="0 0 760 300" role="img" aria-label="Super growth"></svg>
+                  </article>
+                  <article class="card">
+                    <div class="card-heading">
+                      <h3>Financial Freedom Progress</h3>
+                      <span>Modelled progress</span>
+                    </div>
+                    <svg id="dashboardProgressChart" class="chart" viewBox="0 0 760 300" role="img" aria-label="Financial Freedom Progress"></svg>
+                  </article>
+                </div>
+
+                <details class="card assumptions-panel mt-6">
+                  <summary>Assumptions</summary>
+                  <p class="mt-2 text-sm text-slate-500">These are starting assumptions only. You can change them at any time.</p>
+                  <div id="assumptionsList" class="summary-grid mt-4"></div>
+                </details>
+              </section>
+
+              <section class="view-section hidden" data-view-panel="cashflow">
+                <div class="section-heading">
+                  <h2>Cashflow</h2>
+                  <p>Start with gross income before tax, then estimate tax, HELP, living costs, loan repayments, investing and final surplus.</p>
+                </div>
+                <div class="grid gap-6 xl:grid-cols-[1fr_1.1fr]">
+                  <div class="card"><div id="incomeExpenseForm" class="setup-list"></div></div>
+                  <div class="card"><div id="cashflowTable" class="table-list"></div></div>
+                </div>
+              </section>
+
+              <section class="view-section hidden" data-view-panel="assets">
+                <div class="section-heading">
+                  <h2>Assets & Liabilities</h2>
+                  <p>Enter what the household owns and owes.</p>
+                </div>
+                <div class="grid gap-6 xl:grid-cols-2">
+                  <div class="card"><h3 class="mb-4 text-lg font-bold text-navy">Assets</h3><div id="assetsForm" class="setup-list"></div></div>
+                  <div class="card"><h3 class="mb-4 text-lg font-bold text-navy">Other liabilities</h3><div id="liabilitiesForm" class="setup-list"></div></div>
+                </div>
+              </section>
+
+              <section class="view-section hidden" data-view-panel="loans">
+                <div class="section-heading">
+                  <h2>Loans & Offset</h2>
+                  <p>Model monthly loan amortisation and offset interest benefits.</p>
+                </div>
+                <div class="grid gap-6 xl:grid-cols-[1fr_1.15fr]">
+                  <div class="card"><div id="loanForm" class="setup-list"></div></div>
+                  <div class="card">
+                    <div id="loanSummary" class="summary-grid"></div>
+                    <div id="helpEstimateSummary" class="tax-note mt-4"></div>
+                    <svg id="loanChart" class="chart mt-4" viewBox="0 0 760 260" role="img" aria-label="Loan balance reducing"></svg>
+                  </div>
+                </div>
+              </section>
+
+              <section class="view-section hidden" data-view-panel="investments">
+                <div class="section-heading">
+                  <h2>Investments</h2>
+                  <p>Project non-super investments and passive income.</p>
+                </div>
+                <div class="grid gap-6 xl:grid-cols-[1fr_1.1fr]">
+                  <div class="card"><div id="investingForm" class="input-grid"></div></div>
+                  <div class="card">
+                    <div id="investmentCards" class="mini-grid"></div>
+                    <svg id="investmentChart" class="chart mt-4" viewBox="0 0 760 260" role="img" aria-label="Investment growth"></svg>
+                  </div>
+                </div>
+              </section>
+
+              <section class="view-section hidden" data-view-panel="super">
+                <div class="section-heading">
+                  <h2>Super</h2>
+                  <p>Track employer super, extra contributions and balances available from age 60.</p>
+                </div>
+                <div class="grid gap-6 xl:grid-cols-[1fr_1.1fr]">
+                  <div class="card"><div id="superForm" class="input-grid"></div></div>
+                  <div class="card"><div id="superCards" class="mini-grid"></div><div id="superSummary" class="mt-4 rounded-2xl bg-blue-50 p-4"></div></div>
+                </div>
+              </section>
+
+              <section class="view-section hidden" data-view-panel="goals">
+                <div class="section-heading">
+                  <h2>Goals</h2>
+                  <p>Set personal details, progress ages and target lifestyle spending.</p>
+                </div>
+                <div class="card">
+                  <div id="personalForm" class="input-grid"></div>
+                  <div id="goalsFiSummary" class="summary-grid mt-4"></div>
+                </div>
+                <div id="goalExamples" class="setup-list mt-6"></div>
+                <div class="card mt-6">
+                  <div class="card-subheading">
+                    <h3>Downsizing Strategy</h3>
+                    <p>Optional: release equity from the principal residence and model it as investable money.</p>
+                  </div>
+                  <div id="downsizingForm" class="input-grid mt-4"></div>
+                </div>
+              </section>
+
+              <section class="view-section hidden" data-view-panel="forecast">
+                <div class="section-heading">
+                  <h2>Forecast</h2>
+                  <p>See the long-term projections produced by the current plan.</p>
+                </div>
+                <div id="forecastMilestones" class="milestone-grid mt-6"></div>
+                <div class="grid gap-4 xl:grid-cols-3" id="forecastCards"></div>
+              </section>
+
+              <section class="view-section hidden" data-view-panel="decision">
+                <div class="section-heading">
+                  <h2>Decision Engine</h2>
+                  <p>Compare where the next dollar may have the strongest modelled impact.</p>
+                </div>
+                <div id="decisionList" class="grid gap-4 lg:grid-cols-2"></div>
+                <article class="card mt-6">
+                  <div class="card-heading">
+                    <div>
+                      <h3>What If?</h3>
+                      <span>One-click scenario simulations. These do not overwrite your saved plan.</span>
+                    </div>
+                  </div>
+                  <div class="what-if-actions mt-4" id="whatIfActions"></div>
+                  <div id="whatIfResult" class="summary-grid mt-4"></div>
+                </article>
+                <article class="card mt-6">
+                  <div class="card-heading">
+                    <div>
+                      <h3>Quick Scenario Test</h3>
+                      <span>Temporary estimates only. These changes do not overwrite your saved plan unless you save or duplicate the plan.</span>
+                    </div>
+                  </div>
+                  <div class="comparison-grid">
+                    <label>
+                      <span class="field-label">Income change per year</span>
+                      <input class="field-input" type="number" step="1000" data-comparison="incomeChange" value="0">
+                      <small class="field-help">Use a positive or negative number.</small>
+                    </label>
+                    <label>
+                      <span class="field-label">Expense change per year</span>
+                      <input class="field-input" type="number" step="1000" data-comparison="expenseChange" value="0">
+                    </label>
+                    <label>
+                      <span class="field-label">Loan repayment change per month</span>
+                      <input class="field-input" type="number" step="100" data-comparison="loanRepaymentChangeMonthly" value="0">
+                    </label>
+                    <label>
+                      <span class="field-label">Loan interest rate change (%)</span>
+                      <input class="field-input" type="number" step="0.1" data-comparison="loanInterestRateChangePct" value="0">
+                    </label>
+                    <label>
+                      <span class="field-label">Investment contribution change per year</span>
+                      <input class="field-input" type="number" step="1000" data-comparison="investmentContributionChange" value="0">
+                    </label>
+                    <label>
+                      <span class="field-label">Investment return change (%)</span>
+                      <input class="field-input" type="number" step="0.1" data-comparison="investmentReturnChangePct" value="0">
+                    </label>
+                    <label>
+                      <span class="field-label">Employer super contribution change</span>
+                      <input class="field-input" type="number" step="1000" data-comparison="superContributionChange" value="0">
+                    </label>
+                    <label>
+                      <span class="field-label">Additional concessional super</span>
+                      <input class="field-input" type="number" step="1000" data-comparison="extraConcessionalSuperChange" value="0">
+                      <small class="field-help">Estimate only. It applies the modelled tax saving and 15% contributions tax.</small>
+                    </label>
+                    <label>
+                      <span class="field-label">HELP balance change</span>
+                      <input class="field-input" type="number" step="1000" data-comparison="helpBalanceChange" value="0">
+                    </label>
+                    <label>
+                      <span class="field-label">Major one-off costs</span>
+                      <input class="field-input" type="number" step="1000" data-comparison="oneOffCosts" value="0">
+                    </label>
+                    <label>
+                      <span class="field-label">Major one-off savings</span>
+                      <input class="field-input" type="number" step="1000" data-comparison="oneOffSavings" value="0">
+                    </label>
+                  </div>
+                  <div class="quick-surplus-panel mt-4">
+                    <div class="card-subheading">
+                      <h3>Direct Available Surplus</h3>
+                      <p>Temporarily test whether spare cashflow is directed to investments or debt repayment.</p>
+                    </div>
+                    <div class="comparison-grid mt-4">
+                      <label>
+                        <span class="field-label">Direct surplus toward</span>
+                        <select class="field-input" data-comparison="surplusAllocationTarget" data-type="text">
+                          <option value="none">Do not allocate surplus</option>
+                          <option value="investments">Investments</option>
+                          <option value="debt">Debt repayment</option>
+                        </select>
+                      </label>
+                      <label>
+                        <span class="field-label">Surplus amount</span>
+                        <input class="field-input" type="number" step="100" data-comparison="surplusAllocationAmount" value="0">
+                      </label>
+                      <label>
+                        <span class="field-label">Surplus frequency</span>
+                        <select class="field-input" data-comparison="surplusAllocationFrequency" data-type="text">
+                          <option value="weekly">Weekly</option>
+                          <option value="fortnightly">Fortnightly</option>
+                          <option value="monthly">Monthly</option>
+                          <option value="quarterly">Quarterly</option>
+                          <option value="annually">Annually</option>
+                        </select>
+                      </label>
+                      <label class="toggle-field">
+                        <span>
+                          <span class="field-label">Use full available surplus</span>
+                          <small class="field-help">Uses the current final projected annual surplus if it is positive.</small>
+                        </span>
+                        <input class="toggle-input" type="checkbox" data-comparison="surplusAllocationUseFull" data-type="boolean">
+                      </label>
+                    </div>
+                  </div>
+                  <div id="comparisonSummary" class="summary-grid mt-4"></div>
+                </article>
+              </section>
+
+              <section class="view-section hidden" data-view-panel="scenarios">
+                <div class="section-heading">
+                  <h2>Saved Scenarios</h2>
+                  <p>Save plans here, then choose exactly which saved scenario to load later.</p>
+                </div>
+                <div class="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+                  <div class="card">
+                    <label class="field-label" for="scenarioName">Scenario name</label>
+                    <input class="field-input" id="scenarioName" type="text" placeholder="e.g. Base case">
+                    <label class="field-label mt-4" for="scenarioNotes">Notes</label>
+                    <textarea class="field-input min-h-28" id="scenarioNotes" placeholder="Optional notes"></textarea>
+                    <button class="btn btn-primary mt-4 w-full justify-center" type="button" id="saveScenarioPanelButton">Save Plan to Saved Scenarios</button>
+                  </div>
+                  <div class="card">
+                    <div class="mb-4 flex items-center justify-between gap-3">
+                      <h3 class="text-lg font-bold text-navy">Saved Scenarios</h3>
+                      <span id="scenarioCount" class="text-sm text-slate-500">0 saved</span>
+                    </div>
+                    <div id="scenarioList" class="grid gap-3"></div>
+                  </div>
+                </div>
+                <div id="scenarioComparisonReport" class="card mt-6"></div>
+              </section>
+
+              <section class="view-section hidden" data-view-panel="weeklyplan">
+                <div class="section-heading">
+                  <h2>Weekly Plan</h2>
+                  <p>Turn the financial strategy into simple weekly actions, record what happened and update the weeks ahead.</p>
+                </div>
+                <div id="weeklyPlanRoot"></div>
+
+                <div class="planner-export-panel card mt-6 hidden" id="weeklyPlanExportPrint">
+                  <details class="weekly-downloads-details">
+                    <summary>
+                      <div>
+                        <span class="metric-label">Downloads</span>
+                        <h3>Download or save</h3>
+                        <span>Download Excel, print the Weekly Plan or save a backup.</span>
+                      </div>
+                      <b>Open</b>
+                    </summary>
+                    <div class="weekly-downloads-body">
+                  <div class="card-heading">
+                    <div>
+                      <span class="metric-label">Export and Print</span>
+                      <h3>Step 3 — Download or save</h3>
+                      <span>Download the editable planner, print a concise Weekly Plan or save a backup for later.</span>
+                    </div>
+                  </div>
+                  <div class="planner-setup-grid mt-4">
+                    <label>
+                      <span class="field-label">Planner start date</span>
+                      <input class="field-input" id="plannerStartDate" type="date">
+                      <small class="field-help">This is the beginning of Week 1. It defaults to the next Monday.</small>
+                    </label>
+                    <label>
+                      <span class="field-label">Starting everyday bank balance</span>
+                      <input class="field-input" id="plannerStartingBalance" type="number" step="100">
+                      <small class="field-help">Opening balance of the main account used to receive income and pay normal expenses.</small>
+                    </label>
+                    <label>
+                      <span class="field-label">Planner period</span>
+                      <select class="field-input" id="plannerPeriod">
+                        <option value="12">12 weeks</option>
+                        <option value="26">26 weeks</option>
+                        <option value="52" selected>52 weeks</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div class="planner-actions mt-4">
+                    <button class="btn btn-primary" type="button" id="plannerGenerateButton">Generate Weekly Plan</button>
+                    <button class="btn" type="button" id="plannerDownloadExcelButton" disabled>Download Excel</button>
+                    <button class="btn" type="button" id="plannerDownloadPdfButton" disabled>Print Weekly Plan</button>
+                  </div>
+                  <details class="weekly-setup-details mt-4">
+                    <summary>More options</summary>
+                    <p class="weekly-muted mt-2">Save a backup of your editable weekly plan so it can be restored later or moved to another device.</p>
+                    <div class="planner-actions mt-3">
+                      <button class="btn" type="button" id="plannerRegenerateButton">Regenerate files</button>
+                      <button class="btn" type="button" id="weeklyPlanBackupExportButton">Export backup</button>
+                      <button class="btn" type="button" id="weeklyPlanBackupImportButton">Import backup</button>
+                    </div>
+                  </details>
+                  <div id="plannerWarning" class="planner-warning hidden mt-4" role="status" aria-live="polite"></div>
+                  <div id="weeklyPlannerPreview" class="weekly-planner-preview mt-4"></div>
+                    </div>
+                  </details>
+                </div>
+                <input class="hidden" id="weeklyPlanImportInput" type="file" accept="application/json,.json">
+              </section>
+
+              <section class="view-section hidden" data-view-panel="reports">
+                <div class="section-heading">
+                  <h2>Reports</h2>
+                  <p>Print or export the planning report for discussion. This is not financial advice.</p>
+                </div>
+                <div class="report-toolbar card">
+                  <div>
+                    <span class="metric-label">Financial Reports</span>
+                    <h3>Financial Freedom Report</h3>
+                    <p>Generated from the current plan and saved scenarios.</p>
+                  </div>
+                  <button class="btn btn-primary" type="button" id="reportPrintButton">Print / Export</button>
+                </div>
+
+                <div id="financialReportBody" class="report-document"></div>
+
+                <div class="card mt-6 report-section report-editor-only">
+                  <div class="card-heading">
+                    <div>
+                      <h3>Assumptions Review</h3>
+                      <span>Edit these before printing or exporting reports.</span>
+                    </div>
+                  </div>
+                  <div id="reportAssumptionsForm" class="input-grid"></div>
+                  <div id="reportHelpSummary" class="summary-grid mt-4"></div>
+                </div>
+                <div id="reportScenarioComparison" class="card mt-6"></div>
+              </section>
+
+              <p class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-800" id="disclaimer"></p>
+              <p class="mt-3 text-xs font-bold text-slate-400" id="testBuildIdentifier">Test build 2026-07-17-02</p>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="v2-data.js"></script>
+    <script src="calculator.js"></script>
+    <script src="weekly-plan.js"></script>
+    <script src="weekly-planner-export.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

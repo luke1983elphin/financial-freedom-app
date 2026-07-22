@@ -1,1253 +1,619 @@
-(function attachWeeklyPlanEngine(global) {
-  const WEEKLY_PLAN_VERSION = 1;
-  const DAY_MS = 24 * 60 * 60 * 1000;
-  const frequencyLabels = {
-    weekly: "Weekly",
-    fortnightly: "Fortnightly",
-    monthly: "Monthly",
-    quarterly: "Quarterly",
-    annually: "Annually",
-    oneOff: "One-off",
-    weeklyProvision: "Weekly provision",
-  };
-  const essentialExpenseCategories = new Set([
-    "living",
-    "food",
-    "utilities",
-    "insurance",
-    "schoolChildren",
-    "ratesPropertyCosts",
-    "phoneInternet",
-    "privateHealth",
-    "petrol",
-    "vehicleCosts",
-    "petCosts",
-  ]);
+(function attachWeeklyPlannerExport(global) {
+  const XML_HEADER = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+  const MIME_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
-  function toNumber(value) {
+  const STYLE = {
+    normal: 0,
+    title: 1,
+    section: 2,
+    header: 3,
+    currency: 4,
+    totalCurrency: 5,
+    warningCurrency: 6,
+    note: 7,
+    date: 8,
+    percent: 9,
+  };
+
+  function escapeXml(value) {
+    return String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&apos;");
+  }
+
+  function colName(index) {
+    let n = index;
+    let name = "";
+    while (n > 0) {
+      const remainder = (n - 1) % 26;
+      name = String.fromCharCode(65 + remainder) + name;
+      n = Math.floor((n - 1) / 26);
+    }
+    return name;
+  }
+
+  function cellRef(row, col) {
+    return `${colName(col)}${row}`;
+  }
+
+  function asNumber(value) {
     const number = Number(value);
     return Number.isFinite(number) ? number : 0;
   }
 
-  function roundMoney(value) {
-    return Math.round((toNumber(value) + Number.EPSILON) * 100) / 100;
+  function text(value, style = STYLE.normal) {
+    return { value: String(value ?? ""), style, type: "string" };
   }
 
-  function optionalMoney(value) {
-    if (value === null || value === undefined || value === "") return null;
-    const number = Number(value);
-    return Number.isFinite(number) ? roundMoney(number) : null;
+  function number(value, style = STYLE.normal) {
+    return { value: asNumber(value), style, type: "number" };
   }
 
-  function amountOrFallback(value, fallback) {
-    const amount = optionalMoney(value);
-    return amount === null ? roundMoney(fallback) : amount;
+  function formula(value, style = STYLE.normal) {
+    return { formula: String(value || "0").replace(/^=/, ""), style };
   }
 
-  function clamp(value, min, max) {
-    return Math.max(min, Math.min(max, value));
+  function blank(style = STYLE.normal) {
+    return { value: "", style, type: "blank" };
   }
 
-  function annualize(amount, frequency = "annually") {
-    const value = toNumber(amount);
-    if (frequency === "weekly" || frequency === "weeklyProvision") return value * 52;
-    if (frequency === "fortnightly") return value * 26;
-    if (frequency === "monthly") return value * 12;
-    if (frequency === "quarterly") return value * 4;
-    if (frequency === "oneOff") return value;
-    return value;
+  function numberOrText(value, style = STYLE.currency, emptyText = "Not recorded") {
+    return value === null || value === undefined || value === ""
+      ? text(emptyText, STYLE.note)
+      : number(value, style);
   }
 
-  function dateFromIso(value) {
+  function moneyValue(value) {
+    return asNumber(value).toLocaleString("en-AU", {
+      style: "currency",
+      currency: "AUD",
+      maximumFractionDigits: 0,
+    });
+  }
+
+  function shortDate(value) {
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ""));
-    if (match) return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? new Date() : date;
+    const date = match
+      ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+      : new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value || "");
+    return date.toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" });
   }
 
-  function dateIso(date) {
-    const local = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    return `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, "0")}-${String(local.getDate()).padStart(2, "0")}`;
+  function weekHeading(week) {
+    return `Week ${week.week}\n${shortDate(week.startDateIso)}`;
   }
 
-  function addDays(date, days) {
-    const copy = new Date(date);
-    copy.setDate(copy.getDate() + days);
-    return copy;
-  }
-
-  function addMonths(date, months) {
-    const copy = new Date(date);
-    copy.setMonth(copy.getMonth() + months);
-    return copy;
-  }
-
-  function addMonthsClamped(date, months, anchorDay = date.getDate()) {
-    const target = new Date(date.getFullYear(), date.getMonth() + months, 1);
-    const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
-    target.setDate(Math.min(anchorDay, lastDay));
-    return target;
-  }
-
-  function nextMondayIso(today = new Date()) {
-    const date = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const day = date.getDay();
-    const daysUntilMonday = (8 - day) % 7 || 7;
-    date.setDate(date.getDate() + daysUntilMonday);
-    return dateIso(date);
-  }
-
-  function weekIndexForDate(date, startDate, weeksCount) {
-    const index = Math.floor((date.getTime() - startDate.getTime()) / (7 * DAY_MS));
-    return index >= 0 && index < weeksCount ? index : -1;
-  }
-
-  function createWeeks(startDateIso, durationWeeks) {
-    const start = dateFromIso(startDateIso);
-    return Array.from({ length: durationWeeks }, (_, index) => ({
-      weekNumber: index + 1,
-      startDate: dateIso(addDays(start, index * 7)),
-      endDate: dateIso(addDays(start, index * 7 + 6)),
-    }));
-  }
-
-  function normaliseDuration(value) {
-    const duration = Math.round(toNumber(value));
-    if ([12, 26, 52].includes(duration)) return duration;
-    return clamp(duration || 52, 1, 104);
-  }
-
-  function normaliseAllocationSettings(settings = {}) {
-    const mode = ["priority", "split", "cash"].includes(settings.mode) ? settings.mode : "priority";
-    const priority = Array.isArray(settings.priority) && settings.priority.length
-      ? settings.priority.filter((item) => ["extraDebt", "investment", "extraSuper"].includes(item))
-      : ["extraDebt", "investment", "extraSuper"];
-    const uniquePriority = [...new Set(priority)];
-    ["extraDebt", "investment", "extraSuper"].forEach((item) => {
-      if (!uniquePriority.includes(item)) uniquePriority.push(item);
+  function makeRows(width, rows) {
+    return rows.map((row) => {
+      const copy = row.slice();
+      while (copy.length < width) copy.push(null);
+      return copy;
     });
-    const split = {
-      investment: toNumber(settings.split?.investment ?? 60),
-      extraDebt: toNumber(settings.split?.extraDebt ?? 30),
-      extraSuper: toNumber(settings.split?.extraSuper ?? 10),
-    };
-    const total = split.investment + split.extraDebt + split.extraSuper;
-    return {
-      mode,
-      priority: uniquePriority,
-      split,
-      splitIsValid: mode !== "split" || Math.round(total) === 100,
-    };
   }
 
-  function normaliseOpeningBalanceOverrides(value = {}) {
-    const source = value && typeof value === "object" ? value : {};
-    return Object.fromEntries(Object.entries(source)
-      .map(([weekNumber, amount]) => [String(Math.round(toNumber(weekNumber))), roundMoney(amount)])
-      .filter(([weekNumber, amount]) => weekNumber !== "0" && Number.isFinite(amount)));
-  }
-
-  function defaultSettings(plan = {}, result = {}, overrides = {}) {
-    const existing = overrides || {};
-    const weeklyPlanner = plan.reportSettings?.weeklyPlanner || {};
-    const cash = toNumber(plan.assets?.cash);
-    const targetSpending = toNumber(plan.personal?.targetAnnualSpending || result.annualLivingExpenses);
-    return {
-      planName: existing.planName || householdName(plan) || "Weekly Plan",
-      startDate: existing.startDate || weeklyPlanner.startDate || nextMondayIso(),
-      durationWeeks: normaliseDuration(existing.durationWeeks || weeklyPlanner.periodWeeks || 52),
-      minimumCashBuffer: roundMoney(existing.minimumCashBuffer ?? Math.max(1000, Math.min(5000, cash || targetSpending / 26 || 1000))),
-      openingBankBalance: roundMoney(existing.openingBankBalance ?? weeklyPlanner.startingBalance ?? cash),
-      weeklyDiscretionaryLimit: roundMoney(existing.weeklyDiscretionaryLimit ?? discretionaryWeeklyEstimate(plan, result)),
-      investmentTarget: roundMoney(existing.investmentTarget ?? plan.investing?.annualInvestingTarget ?? 0),
-      extraSuperTarget: roundMoney(existing.extraSuperTarget ?? plan.investing?.extraSuperContributions ?? 0),
-      extraDebtRepaymentTarget: roundMoney(existing.extraDebtRepaymentTarget ?? weeklyPlanner.extraDebtRepaymentTarget ?? 0),
-      missedTransferTreatment: existing.missedTransferTreatment || "carry-forward",
-      allocationSettings: normaliseAllocationSettings(existing.allocationSettings),
-      allowCompletedWeekEditing: existing.allowCompletedWeekEditing !== false,
-      showInAppReminders: existing.showInAppReminders !== false,
-      payDates: existing.payDates && typeof existing.payDates === "object" ? { ...existing.payDates } : {},
-      billDates: existing.billDates && typeof existing.billDates === "object" ? { ...existing.billDates } : {},
-      timingItems: Array.isArray(existing.timingItems) ? existing.timingItems.map(normaliseTimingItem) : [],
-      oneOffItems: Array.isArray(existing.oneOffItems) ? existing.oneOffItems.map(normaliseTimingItem) : [],
-      occurrenceOverrides: Array.isArray(existing.occurrenceOverrides) ? existing.occurrenceOverrides.map(normaliseOccurrenceOverride).filter(Boolean) : [],
-      openingBalanceOverrides: normaliseOpeningBalanceOverrides(existing.openingBalanceOverrides || existing.openingBalanceAdjustments || {}),
-      notes: existing.notes || "",
-      sourcePlanUpdatedAt: existing.sourcePlanUpdatedAt || "",
-      timingSetupReviewed: Boolean(existing.timingSetupReviewed),
-      timingSetupLastReviewedAt: existing.timingSetupLastReviewedAt || existing.timingSetupReviewedAt || "",
-      timingSetupNeedsReview: Boolean(existing.timingSetupNeedsReview ?? existing.timingSetupRequiresReview),
-      timingSetupReviewedAt: existing.timingSetupLastReviewedAt || existing.timingSetupReviewedAt || "",
-      timingSetupRequiresReview: Boolean(existing.timingSetupNeedsReview ?? existing.timingSetupRequiresReview),
-      todayIso: existing.todayIso || "",
-    };
-  }
-
-  function householdName(plan = {}) {
-    return [plan.personal?.person1Name, plan.personal?.person2Name]
-      .map((name) => String(name || "").trim())
-      .filter(Boolean)
-      .join(" and ");
-  }
-
-  function discretionaryWeeklyEstimate(plan = {}, result = {}) {
-    const discretionary = (plan.expenseItems || [])
-      .filter((item) => !essentialExpenseCategories.has(item.category))
-      .reduce((total, item) => total + annualize(item.amount, item.frequency), 0);
-    if (discretionary > 0) return discretionary / 52;
-    return Math.max(0, (toNumber(result.annualOtherRegularExpenses) || 0) / 52);
-  }
-
-  function occurrenceCount(frequency) {
-    if (frequency === "weekly" || frequency === "weeklyProvision") return 52;
-    if (frequency === "fortnightly") return 26;
-    if (frequency === "monthly") return 12;
-    if (frequency === "quarterly") return 4;
-    return 1;
-  }
-
-  function amountFromAnnual(annualAmount, frequency) {
-    return roundMoney(toNumber(annualAmount) / occurrenceCount(frequency || "annually"));
-  }
-
-  function firstDateFor(settings, id, fallback) {
-    return settings.payDates?.[id] || settings.billDates?.[id] || fallback || settings.startDate;
-  }
-
-  function normaliseType(value, fallback = "bill") {
-    if (["money-in", "bill", "provision", "transfer"].includes(value)) return value;
-    return fallback;
-  }
-
-  function normaliseFrequency(value, fallback = "weekly") {
-    if (["weekly", "fortnightly", "monthly", "quarterly", "annually", "oneOff", "weeklyProvision"].includes(value)) return value;
-    return fallback;
-  }
-
-  function normaliseTimingItem(item = {}) {
-    const type = normaliseType(item.type, "bill");
-    const frequency = normaliseFrequency(item.frequency, type === "provision" ? "weeklyProvision" : "weekly");
-    return {
-      id: String(item.id || `timing-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`),
-      parentSeriesId: String(item.parentSeriesId || item.parentId || item.rootId || ""),
-      replacementSeriesId: String(item.replacementSeriesId || ""),
-      sourceId: String(item.sourceId || item.id || ""),
-      description: String(item.description || item.name || "Cashflow item"),
-      amount: roundMoney(item.amount),
-      frequency,
-      firstDate: item.firstDate || item.date || "",
-      endDate: item.endDate || "",
-      type,
-      transferType: item.transferType || "",
-      treatment: item.treatment || (type === "provision" || frequency === "weeklyProvision" ? "set-aside" : "pay-on-date"),
-      active: item.active !== false,
-      note: item.note || "",
-      estimated: Boolean(item.estimated),
-      isNetPay: Boolean(item.isNetPay),
-      supersedesFrom: item.supersedesFrom || item.splitFrom || "",
-      splitFrom: item.supersedesFrom || item.splitFrom || "",
-    };
-  }
-
-  function normaliseOccurrenceOverride(override = {}) {
-    if (!override.itemId || !override.occurrenceDate) return null;
-    return {
-      itemId: String(override.itemId),
-      id: String(override.id || `override-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`),
-      occurrenceDate: override.occurrenceDate,
-      amount: override.amount === undefined ? undefined : roundMoney(override.amount),
-      date: override.date || "",
-      active: override.active !== false,
-      note: override.note || "",
-    };
-  }
-
-  function estimatedNetIncomeAnnuals(plan = {}, result = {}) {
-    const person1Annual = toNumber(result.person1AnnualIncome ?? annualize(plan.income?.person1Income, plan.income?.person1Frequency));
-    const person2Annual = toNumber(result.person2AnnualIncome ?? annualize(plan.income?.person2Income, plan.income?.person2Frequency));
-    const otherAnnual = toNumber(result.otherAnnualIncome ?? annualize(plan.income?.otherIncome, plan.income?.otherIncomeFrequency));
-    const payrollEstimates = result.payrollEstimates || result.payrollEstimate;
-    if (payrollEstimates?.person1 || payrollEstimates?.person2) {
-      return {
-        person1Annual,
-        person2Annual,
-        otherAnnual,
-        person1Net: roundMoney(payrollEstimates?.person1?.estimatedNetEmploymentIncome ?? person1Annual),
-        person2Net: roundMoney(payrollEstimates?.person2?.estimatedNetEmploymentIncome ?? person2Annual),
-        otherNet: otherAnnual,
-        household: payrollEstimates?.household || {},
-        method: "person-level-payroll-estimate",
-      };
+  function cellXml(cell, rowIndex, colIndex) {
+    if (!cell) return "";
+    const reference = cellRef(rowIndex, colIndex);
+    const style = Number.isInteger(cell.style) ? ` s="${cell.style}"` : "";
+    if (cell.formula !== undefined) {
+      const cachedValue = cell.cachedValue !== undefined ? `<v>${escapeXml(cell.cachedValue)}</v>` : "";
+      return `<c r="${reference}"${style}><f>${escapeXml(cell.formula)}</f>${cachedValue}</c>`;
     }
-    return fallbackProportionalNetIncomeAnnuals(plan, result, person1Annual, person2Annual, otherAnnual);
+    if (cell.type === "blank") return `<c r="${reference}"${style}/>`;
+    if (cell.type === "number") return `<c r="${reference}"${style}><v>${asNumber(cell.value)}</v></c>`;
+    return `<c r="${reference}"${style} t="inlineStr"><is><t xml:space="preserve">${escapeXml(cell.value)}</t></is></c>`;
   }
 
-  function fallbackProportionalNetIncomeAnnuals(plan = {}, result = {}, person1Annual = 0, person2Annual = 0, otherAnnual = 0) {
-    const gross = toNumber(result.annualGrossIncome) || person1Annual + person2Annual + otherAnnual;
-    const net = toNumber(result.netIncomeAfterTaxHelp);
-    let deductions = Math.max(0, gross - (net || gross));
-    const employmentGross = person1Annual + person2Annual;
-    let person1Net = person1Annual;
-    let person2Net = person2Annual;
-    let otherNet = otherAnnual;
-    if (employmentGross > 0 && deductions > 0) {
-      const employmentDeduction = Math.min(deductions, employmentGross);
-      person1Net = Math.max(0, roundMoney(person1Annual - employmentDeduction * (person1Annual / employmentGross)));
-      person2Net = Math.max(0, roundMoney(person2Annual - employmentDeduction * (person2Annual / employmentGross)));
-      deductions = roundMoney(deductions - employmentDeduction);
-    }
-    if (otherNet > 0 && deductions > 0) otherNet = Math.max(0, roundMoney(otherNet - deductions));
-    return { person1Annual, person2Annual, otherAnnual, person1Net, person2Net, otherNet, household: {}, method: "fallback-proportional-household-net-income" };
+  function rowsXml(rows) {
+    return rows.map((row, rowIndex) => {
+      const rowNumber = rowIndex + 1;
+      return `<row r="${rowNumber}">${row.map((cell, colIndex) => cellXml(cell, rowNumber, colIndex + 1)).join("")}</row>`;
+    }).join("");
   }
 
-  function defaultIncomeName(plan, key, fallback) {
-    const name = key === "person1"
-      ? (plan.income?.person1IncomeName || plan.personal?.person1Name && `${plan.personal.person1Name} salary`)
-      : key === "person2"
-        ? (plan.income?.person2IncomeName || plan.personal?.person2Name && `${plan.personal.person2Name} salary`)
-        : plan.income?.otherIncomeName;
-    return String(name || fallback).trim();
+  function sheetXml(rows, options = {}) {
+    const width = Math.max(...rows.map((row) => row.length), 1);
+    const height = rows.length || 1;
+    const dimensions = `A1:${cellRef(height, width)}`;
+    const cols = options.cols || [];
+    const colsXml = cols.length
+      ? `<cols>${cols.map((col, index) => `<col min="${index + 1}" max="${index + 1}" width="${col}" customWidth="1"/>`).join("")}</cols>`
+      : "";
+    const panes = options.freeze
+      ? `<sheetViews><sheetView workbookViewId="0"><pane xSplit="${options.freeze.cols || 0}" ySplit="${options.freeze.rows || 0}" topLeftCell="${options.freeze.topLeftCell || "A1"}" activePane="bottomRight" state="frozen"/><selection pane="bottomRight"/></sheetView></sheetViews>`
+      : '<sheetViews><sheetView workbookViewId="0"/></sheetViews>';
+    const conditional = options.conditionalFormatting || "";
+    return `${XML_HEADER}
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <dimension ref="${dimensions}"/>
+  ${panes}
+  ${colsXml}
+  <sheetData>${rowsXml(rows)}</sheetData>
+  ${conditional}
+  <pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.2" footer="0.2"/>
+  <pageSetup orientation="${options.orientation || "landscape"}" fitToWidth="1" fitToHeight="0"/>
+</worksheet>`;
   }
 
-  function buildDefaultTimingItems(plan = {}, result = {}, settings = {}) {
-    const items = [];
-    const netIncome = estimatedNetIncomeAnnuals(plan, result);
-    const salarySacrificeAlreadyDeducted = toNumber(netIncome.household?.allocatedExtraSuper ?? netIncome.household?.totalSalarySacrifice);
-    const addItem = (item) => {
-      const normalised = normaliseTimingItem(item);
-      if (normalised.amount > 0) items.push(normalised);
+  function buildStartHere(planner) {
+    const assumptions = planner.assumptions || [];
+    const rows = [
+      [text("Financial Freedom Weekly Money Plan", STYLE.title), blank(), blank()],
+      [blank(), blank(), blank()],
+      [text("Household", STYLE.header), text(planner.householdName || "Current plan"), blank()],
+      [text("Planner start date", STYLE.header), text(shortDate(planner.startDateIso)), blank()],
+      [text("Planner duration", STYLE.header), text(`${planner.weeks.length} weeks`), blank()],
+      [text("Generated", STYLE.header), text(shortDate(planner.generatedAtIso)), blank()],
+      [blank(), blank(), blank()],
+      [text("How to use this planner", STYLE.section), blank(STYLE.section), blank(STYLE.section)],
+      [text("This workbook converts your Financial Freedom plan into a practical weekly money plan. Review each week, complete the planned transfers and update the spreadsheet when your income or expenses change.", STYLE.note), blank(), blank()],
+      [text("Estimated net pay is based on the income, tax, Medicare levy, HELP and salary-sacrifice information entered in the Financial Plan. Actual payroll amounts may differ.", STYLE.note), blank(), blank()],
+      [text("Weekly amounts set aside", STYLE.section), blank(STYLE.section), blank(STYLE.section)],
+      [text("Where exact bill dates are not entered, the planner uses an estimated amount set aside instead of pretending the bill is paid on a specific date.", STYLE.note), blank(), blank()],
+      [text("Key assumptions", STYLE.section), blank(STYLE.section), blank(STYLE.section)],
+      [text("Assumption", STYLE.header), text("Value", STYLE.header), text("Notes", STYLE.header)],
+      ...assumptions.map((item) => [text(item.label), text(item.value), text(item.note || "")]),
+      [blank(), blank(), blank()],
+      [text("Disclaimer", STYLE.section), blank(STYLE.section), blank(STYLE.section)],
+      [text("This planner is a guide based on the information entered by the user. Actual income, expenses, interest rates, investment returns and payment dates may differ. Users should review and update the planner for their own circumstances.", STYLE.note), blank(), blank()],
+    ];
+    return {
+      name: "Start Here",
+      xml: sheetXml(makeRows(3, rows), { cols: [28, 28, 64], orientation: "portrait" }),
     };
-    const p1Frequency = normaliseFrequency(plan.income?.person1Frequency, "fortnightly");
-    const p2Frequency = normaliseFrequency(plan.income?.person2Frequency, "fortnightly");
-    const otherFrequency = normaliseFrequency(plan.income?.otherIncomeFrequency, "annually");
-    addItem({
-      id: "timing-income-person-1",
-      sourceId: "income-person-1",
-      description: `${defaultIncomeName(plan, "person1", "Salary")} - estimated net pay`,
-      amount: amountFromAnnual(netIncome.person1Net, p1Frequency),
-      frequency: p1Frequency,
-      firstDate: firstDateFor(settings, "income-person-1", settings.startDate),
-      type: "money-in",
-      active: netIncome.person1Annual > 0,
-      isNetPay: true,
-      estimated: true,
-      note: "Estimated net amount after tax, Medicare and HELP based on the information entered in the plan.",
-    });
-    addItem({
-      id: "timing-income-person-2",
-      sourceId: "income-person-2",
-      description: `${defaultIncomeName(plan, "person2", "Partner salary")} - estimated net pay`,
-      amount: amountFromAnnual(netIncome.person2Net, p2Frequency),
-      frequency: p2Frequency,
-      firstDate: firstDateFor(settings, "income-person-2", settings.startDate),
-      type: "money-in",
-      active: netIncome.person2Annual > 0,
-      isNetPay: true,
-      estimated: true,
-      note: "Estimated net amount after tax, Medicare and HELP based on the information entered in the plan.",
-    });
-    addItem({
-      id: "timing-income-other",
-      sourceId: "income-other",
-      description: defaultIncomeName(plan, "other", "Other income"),
-      amount: amountFromAnnual(netIncome.otherNet, otherFrequency),
-      frequency: otherFrequency,
-      firstDate: firstDateFor(settings, "income-other", settings.startDate),
-      type: "money-in",
-      active: netIncome.otherAnnual > 0,
-      estimated: true,
-    });
+  }
 
-    (plan.expenseItems || []).forEach((item) => {
-      const frequency = normaliseFrequency(item.frequency, "monthly");
-      const exactDate = settings.billDates?.[item.id] || "";
-      const annualAmount = annualize(item.amount, frequency);
-      const useProvision = !exactDate && frequency === "annually";
-      addItem({
-        id: `timing-expense-${item.id}`,
-        sourceId: item.id,
-        description: useProvision ? `${displayName(item, "Annual cost")} provision` : `${displayName(item, "Expense")} bill`,
-        amount: useProvision ? amountFromAnnual(annualAmount, "weeklyProvision") : roundMoney(item.amount),
-        frequency: useProvision ? "weeklyProvision" : frequency,
-        firstDate: exactDate || settings.startDate,
-        type: useProvision ? "provision" : "bill",
-        treatment: useProvision ? "set-aside" : "pay-on-date",
-        active: true,
-        estimated: !exactDate,
+  function buildWeeklyPlanner(planner) {
+    const weeks = planner.weeks;
+    const width = 2 + weeks.length;
+    planner.lookupRows = planner.lookupRows || {};
+    const rows = [
+      [text("Weekly Planner", STYLE.title), blank(), ...weeks.map((week) => text(weekHeading(week), STYLE.header))],
+      [text("Money item", STYLE.header), text("Frequency", STYLE.header), ...weeks.map((week) => text(shortDate(week.startDateIso), STYLE.header))],
+    ];
+    const meta = {};
+
+    function addSection(key, label, items) {
+      rows.push([text(label, STYLE.section), blank(STYLE.section), ...weeks.map(() => blank(STYLE.section))]);
+      const firstRow = rows.length + 1;
+      items.forEach((item) => {
+        const rowNumber = rows.length + 1;
+        if (item.rowKey) planner.lookupRows[`${item.rowKey}Row`] = rowNumber;
+        rows.push([
+          text(item.name),
+          text(item.frequencyLabel || item.frequency || ""),
+          ...weeks.map((_, index) => number(item.values[index] || 0, STYLE.currency)),
+        ]);
       });
-    });
-
-    (plan.liabilityItems || []).forEach((item) => {
-      if (item.type === "hecsHelp") return;
-      const frequency = normaliseFrequency(item.repaymentFrequency, "monthly");
-      addItem({
-        id: `timing-liability-${item.id}`,
-        sourceId: item.id,
-        description: `${displayName(item, "Debt")} repayment`,
-        amount: roundMoney(item.repayment),
-        frequency,
-        firstDate: firstDateFor(settings, item.id, settings.startDate),
-        type: "bill",
-        treatment: "pay-on-date",
-        active: true,
-      });
-    });
-
-    addItem({
-      id: "timing-transfer-investment",
-      sourceId: "annual-investing-target",
-      description: "Investment contribution",
-      amount: amountFromAnnual(settings.investmentTarget ?? plan.investing?.annualInvestingTarget, "weeklyProvision"),
-      frequency: "weeklyProvision",
-      firstDate: settings.startDate,
-      type: "transfer",
-      transferType: "investment",
-      active: true,
-    });
-    addItem({
-      id: "timing-transfer-super",
-      sourceId: "extra-super-target",
-      description: "Additional super contribution",
-      amount: amountFromAnnual(Math.max(0, toNumber(settings.extraSuperTarget ?? plan.investing?.extraSuperContributions) - salarySacrificeAlreadyDeducted), "weeklyProvision"),
-      frequency: "weeklyProvision",
-      firstDate: settings.startDate,
-      type: "transfer",
-      transferType: "extraSuper",
-      active: true,
-    });
-    addItem({
-      id: "timing-transfer-extra-debt",
-      sourceId: "extra-debt-target",
-      description: "Extra debt repayment",
-      amount: amountFromAnnual(settings.extraDebtRepaymentTarget, "weeklyProvision"),
-      frequency: "weeklyProvision",
-      firstDate: settings.startDate,
-      type: "transfer",
-      transferType: "extraDebt",
-      active: true,
-    });
-    return items;
-  }
-
-  function displayName(options, fallback) {
-    return String(options?.name || options?.label || fallback || "").trim();
-  }
-
-  function intervalForFrequency(frequency) {
-    if (frequency === "weekly" || frequency === "weeklyProvision") return { days: 7 };
-    if (frequency === "fortnightly") return { days: 14 };
-    if (frequency === "monthly") return { months: 1 };
-    if (frequency === "quarterly") return { months: 3 };
-    if (frequency === "annually") return { months: 12 };
-    if (frequency === "oneOff") return null;
-    return null;
-  }
-
-  function advanceDate(date, interval, anchorDay = date.getDate()) {
-    if (interval?.days) return addDays(date, interval.days);
-    if (interval?.months) return addMonthsClamped(date, interval.months, anchorDay);
-    return addDays(date, 7);
-  }
-
-  function scheduleRecurring(amount, frequency, weeks, startDate, exactDateIso = "", options = {}) {
-    const value = roundMoney(amount);
-    const values = Array.from({ length: weeks.length }, () => 0);
-    if (value <= 0) return values;
-    const plannerStart = startDate;
-    const plannerEnd = addDays(plannerStart, weeks.length * 7);
-    const interval = intervalForFrequency(frequency);
-    if (frequency === "oneOff") {
-      const date = dateFromIso(exactDateIso || options.firstDate || dateIso(plannerStart));
-      const index = weekIndexForDate(date, plannerStart, weeks.length);
-      if (index >= 0) values[index] = value;
-      return values;
-    }
-    if (exactDateIso && interval) {
-      let date = dateFromIso(exactDateIso);
-      const anchorDay = date.getDate();
-      let guard = 0;
-      while (date < plannerStart && guard < 160) {
-        date = advanceDate(date, interval, anchorDay);
-        guard += 1;
-      }
-      while (date < plannerEnd && guard < 320) {
-        const index = weekIndexForDate(date, plannerStart, weeks.length);
-        if (index >= 0) values[index] = roundMoney(values[index] + value);
-        date = advanceDate(date, interval, anchorDay);
-        guard += 1;
-      }
-      return values;
-    }
-    if (frequency === "weekly" || frequency === "weeklyProvision") return values.map(() => value);
-    if (frequency === "fortnightly") return values.map((_, index) => (index % 2 === 0 ? value : 0));
-    if (frequency === "monthly") {
-      for (let month = 0; month < Math.ceil(weeks.length / 4) + 1; month += 1) {
-        const index = weekIndexForDate(addMonthsClamped(plannerStart, month), plannerStart, weeks.length);
-        if (index >= 0) values[index] = roundMoney(values[index] + value);
-      }
-      return values;
-    }
-    if (frequency === "quarterly") {
-      for (let month = 0; month < Math.ceil(weeks.length / 4) + 3; month += 3) {
-        const index = weekIndexForDate(addMonthsClamped(plannerStart, month), plannerStart, weeks.length);
-        if (index >= 0) values[index] = roundMoney(values[index] + value);
-      }
-      return values;
-    }
-    if (frequency === "annually" && options.assignAnnualToFirstWeek) {
-      values[0] = value;
-      return values;
-    }
-    const weekly = roundMoney(annualize(value, frequency || "annually") / 52);
-    return values.map(() => weekly);
-  }
-
-  function addScheduledItem(collection, item) {
-    const values = (item.values || []).map(roundMoney);
-    if (values.reduce((total, value) => total + value, 0) <= 0) return;
-    collection.push({
-      id: item.id || "",
-      name: item.name,
-      frequency: item.frequency || "annually",
-      frequencyLabel: item.frequencyLabel || frequencyLabels[item.frequency] || "Estimate",
-      timing: item.timing || "estimated",
-      type: item.type || "",
-      transferType: item.transferType || "",
-      values,
-    });
-  }
-
-  function itemValueAt(items, index) {
-    return roundMoney((items || []).reduce((total, item) => total + toNumber(item.values?.[index]), 0));
-  }
-
-  function applyOccurrenceOverrides(values, item, weeks, startDate, overrides = []) {
-    const updated = [...values];
-    overrides
-      .filter((override) => override.itemId === item.id)
-      .forEach((override) => {
-        const originalDate = dateFromIso(override.occurrenceDate);
-        const originalIndex = weekIndexForDate(originalDate, startDate, weeks.length);
-        if (originalIndex >= 0) updated[originalIndex] = 0;
-        if (override.active === false) return;
-        const newDate = dateFromIso(override.date || override.occurrenceDate);
-        const newIndex = weekIndexForDate(newDate, startDate, weeks.length);
-        if (newIndex >= 0) updated[newIndex] = roundMoney(updated[newIndex] + (override.amount ?? item.amount));
-      });
-    return updated;
-  }
-
-  function scheduleTimingItem(item, weeks, startDate, overrides) {
-    if (!item.active) return Array.from({ length: weeks.length }, () => 0);
-    const values = scheduleRecurring(item.amount, item.frequency, weeks, startDate, item.firstDate, { firstDate: item.firstDate });
-    const endDate = item.endDate ? dateFromIso(item.endDate) : null;
-    const trimmed = endDate
-      ? values.map((value, index) => dateFromIso(weeks[index].startDate) > endDate ? 0 : value)
-      : values;
-    return applyOccurrenceOverrides(trimmed, item, weeks, startDate, overrides);
-  }
-
-  function buildScheduleItems(plan, result, settings, weeks) {
-    const startDate = dateFromIso(settings.startDate);
-    const incomeItems = [];
-    const billItems = [];
-    const provisionItems = [];
-    const discretionaryItems = [];
-    const requiredDebtItems = [];
-    const transferItems = [];
-    const timingItems = (settings.timingItems && settings.timingItems.length ? settings.timingItems : buildDefaultTimingItems(plan, result, settings)).map(normaliseTimingItem);
-    const oneOffItems = (settings.oneOffItems || []).map(normaliseTimingItem);
-    const allItems = [...timingItems, ...oneOffItems];
-
-    allItems.forEach((item) => {
-      const values = scheduleTimingItem(item, weeks, startDate, settings.occurrenceOverrides || []);
-      const scheduled = {
-        id: item.id,
-        name: item.description,
-        frequency: item.frequency,
-        frequencyLabel: `${frequencyLabels[item.frequency] || item.frequency}${item.isNetPay ? " - estimated net pay" : ""}`,
-        timing: item.treatment === "set-aside" || item.type === "provision" ? "set-aside" : item.estimated ? "estimated" : "dated",
-        type: item.type,
-        transferType: item.transferType,
-        values,
-      };
-      if (item.type === "money-in") addScheduledItem(incomeItems, scheduled);
-      else if (item.type === "provision") addScheduledItem(provisionItems, scheduled);
-      else if (item.type === "transfer") addScheduledItem(transferItems, scheduled);
-      else if (essentialExpenseCategories.has(item.category)) addScheduledItem(billItems, scheduled);
-      else addScheduledItem(billItems, scheduled);
-    });
-
-    return { incomeItems, billItems, provisionItems, setAsideItems: provisionItems, discretionaryItems, requiredDebtItems, transferItems, timingItems, oneOffItems };
-  }
-
-  function desiredTransfers(settings, weekIndex, remainingWeeks, carryForward) {
-    const treatment = settings.missedTransferTreatment || "carry-forward";
-    const base = {
-      investment: roundMoney(toNumber(settings.investmentTarget) / 52),
-      extraSuper: roundMoney(toNumber(settings.extraSuperTarget) / 52),
-      extraDebt: roundMoney(toNumber(settings.extraDebtRepaymentTarget) / 52),
-    };
-    if (treatment === "carry-forward") {
-      return {
-        investment: roundMoney(base.investment + carryForward.investment),
-        extraSuper: roundMoney(base.extraSuper + carryForward.extraSuper),
-        extraDebt: roundMoney(base.extraDebt + carryForward.extraDebt),
-      };
-    }
-    if (treatment === "spread") {
-      const divisor = Math.max(1, remainingWeeks);
-      return {
-        investment: roundMoney(base.investment + carryForward.investment / divisor),
-        extraSuper: roundMoney(base.extraSuper + carryForward.extraSuper / divisor),
-        extraDebt: roundMoney(base.extraDebt + carryForward.extraDebt / divisor),
-      };
-    }
-    return base;
-  }
-
-  function allocateOptionalTransfers(available, desired, allocationSettings) {
-    const allocated = { investment: 0, extraSuper: 0, extraDebt: 0 };
-    const safeAvailable = Math.max(0, roundMoney(available));
-    if (safeAvailable <= 0 || allocationSettings.mode === "cash") return allocated;
-    const desiredTotal = roundMoney(desired.investment + desired.extraSuper + desired.extraDebt);
-    let remaining = Math.min(safeAvailable, desiredTotal);
-
-    if (allocationSettings.mode === "split" && allocationSettings.splitIsValid) {
-      const order = ["investment", "extraDebt", "extraSuper"];
-      order.forEach((key) => {
-        const target = roundMoney(Math.min(desired[key], remaining * (toNumber(allocationSettings.split[key]) / 100)));
-        allocated[key] = target;
-      });
-      remaining = roundMoney(Math.min(safeAvailable, desiredTotal) - allocated.investment - allocated.extraDebt - allocated.extraSuper);
-      order.forEach((key) => {
-        if (remaining <= 0) return;
-        const topUp = Math.min(remaining, desired[key] - allocated[key]);
-        allocated[key] = roundMoney(allocated[key] + topUp);
-        remaining = roundMoney(remaining - topUp);
-      });
-      return allocated;
+      const lastRow = rows.length;
+      const totalRow = rows.length + 1;
+      rows.push([
+        text(`Total ${label.toLowerCase()}`, STYLE.header),
+        blank(STYLE.header),
+        ...weeks.map((_, index) => {
+          const col = colName(index + 3);
+          return firstRow <= lastRow
+            ? formula(`SUM(${col}${firstRow}:${col}${lastRow})`, STYLE.totalCurrency)
+            : number(0, STYLE.totalCurrency);
+        }),
+      ]);
+      meta[`${key}StartRow`] = firstRow;
+      meta[`${key}EndRow`] = lastRow;
+      meta[`${key}TotalRow`] = totalRow;
+      return totalRow;
     }
 
-    allocationSettings.priority.forEach((key) => {
-      if (remaining <= 0) return;
-      const amount = Math.min(remaining, desired[key] || 0);
-      allocated[key] = roundMoney(amount);
-      remaining = roundMoney(remaining - amount);
-    });
-    return allocated;
-  }
+    addSection("receipts", "Money coming in", planner.sections.receipts);
+    addSection("essential", "Bills and spending", planner.sections.essential);
+    addSection("provisions", "Provisions", planner.sections.provisions || []);
+    addSection("discretionary", "Lifestyle spending", planner.sections.discretionary);
+    addSection("transfers", "Financial Freedom transfers", planner.sections.transfers);
 
-  function weekStatus(closingBalance, minimumCashBuffer, adjustmentReason) {
-    const closing = roundMoney(closingBalance);
-    const buffer = roundMoney(minimumCashBuffer);
-    if (closing < 0 || closing < buffer) {
-      return {
-        status: "action-needed",
-        label: "Action needed",
-        message: closing < 0
-          ? "Your expected bank balance is negative this week. Review upcoming bills or add funds before they are due."
-          : "Your expected bank balance falls below the minimum buffer this week. Review bills, spending or optional transfers.",
-      };
-    }
-    if (adjustmentReason || closing <= buffer + Math.max(250, buffer * 0.15)) {
-      return {
-        status: "tight",
-        label: "Tight week",
-        message: adjustmentReason || "This is a tighter week because the expected closing balance is close to your minimum cash buffer.",
-      };
-    }
+    rows.push([text("Weekly balance", STYLE.section), blank(STYLE.section), ...weeks.map(() => blank(STYLE.section))]);
+    const openingRow = rows.length + 1;
+    rows.push([
+      text("Opening everyday bank balance"),
+      text("Calculated"),
+      ...weeks.map((_, index) => index === 0
+        ? number(planner.startingBalance, STYLE.currency)
+        : formula(`${colName(index + 2)}${meta.closingRow || openingRow + 5}`, STYLE.currency)),
+    ]);
+    const addReceiptsRow = rows.length + 1;
+    rows.push([text("Add money coming in"), text("Calculated"), ...weeks.map((_, index) => formula(`${colName(index + 3)}${meta.receiptsTotalRow}`, STYLE.currency))]);
+    const lessEssentialRow = rows.length + 1;
+    rows.push([text("Less bills and spending"), text("Calculated"), ...weeks.map((_, index) => formula(`${colName(index + 3)}${meta.essentialTotalRow}`, STYLE.currency))]);
+    const lessDiscretionaryRow = rows.length + 1;
+    rows.push([text("Less provisions"), text("Calculated"), ...weeks.map((_, index) => formula(`${colName(index + 3)}${meta.provisionsTotalRow}`, STYLE.currency))]);
+    const lessTransfersRow = rows.length + 1;
+    rows.push([text("Less lifestyle spending"), text("Calculated"), ...weeks.map((_, index) => formula(`${colName(index + 3)}${meta.discretionaryTotalRow}`, STYLE.currency))]);
+    const lessFreedomTransfersRow = rows.length + 1;
+    rows.push([text("Less Financial Freedom transfers"), text("Calculated"), ...weeks.map((_, index) => formula(`${colName(index + 3)}${meta.transfersTotalRow}`, STYLE.currency))]);
+    const closingRow = rows.length + 1;
+    rows.push([
+      text("Expected closing everyday bank balance", STYLE.header),
+      text("Calculated", STYLE.header),
+      ...weeks.map((_, index) => {
+        const col = colName(index + 3);
+        return formula(`${col}${openingRow}+${col}${addReceiptsRow}-${col}${lessEssentialRow}-${col}${lessDiscretionaryRow}-${col}${lessTransfersRow}-${col}${lessFreedomTransfersRow}`, STYLE.totalCurrency);
+      }),
+    ]);
+    rows.push([blank(), blank(), ...weeks.map(() => blank())]);
+    rows.push([text("Actuals and reconciliation", STYLE.section), blank(STYLE.section), ...weeks.map(() => blank(STYLE.section))]);
+    rows.push([text("Week status"), text("Recorded"), ...weeks.map((week) => text(week.statusLabel || (week.isCompleted ? "Completed" : "Forecast")))]); 
+    rows.push([text("Actual opening balance"), text("Recorded"), ...weeks.map((week) => numberOrText(week.actualOpeningBalance))]);
+    rows.push([text("Actual money in"), text("Recorded"), ...weeks.map((week) => numberOrText(week.actualReceiptsTotal))]);
+    rows.push([text("Actual bills"), text("Recorded"), ...weeks.map((week) => numberOrText(week.actualEssentialTotal))]);
+    rows.push([text("Actual provisions"), text("Recorded"), ...weeks.map((week) => numberOrText(week.actualProvisionsTotal))]);
+    rows.push([text("Actual lifestyle spending"), text("Recorded"), ...weeks.map((week) => numberOrText(week.actualDiscretionaryTotal))]);
+    rows.push([text("Actual transfers out"), text("Recorded"), ...weeks.map((week) => numberOrText(week.actualTransfersTotal))]);
+    rows.push([text("Calculated actual closing balance"), text("Calculated"), ...weeks.map((week) => numberOrText(week.actualClosingBalance))]);
+    rows.push([text("Bank balance entered by user"), text("Recorded"), ...weeks.map((week) => numberOrText(week.enteredBankBalance))]);
+    rows.push([text("Reconciliation difference"), text("Calculated"), ...weeks.map((week) => numberOrText(week.reconciliationDifference, Math.abs(asNumber(week.reconciliationDifference)) > 0.01 ? STYLE.warningCurrency : STYLE.currency, "Not entered"))]);
+    meta.openingRow = openingRow;
+    meta.closingRow = closingRow;
+    meta.addReceiptsRow = addReceiptsRow;
+    meta.lessEssentialRow = lessEssentialRow;
+    meta.lessDiscretionaryRow = lessDiscretionaryRow;
+    meta.lessTransfersRow = lessTransfersRow;
+    meta.lessFreedomTransfersRow = lessFreedomTransfersRow;
+
+    const lastCol = colName(width);
+    const conditionalFormatting = `<conditionalFormatting sqref="C${closingRow}:${lastCol}${closingRow}"><cfRule type="cellIs" dxfId="0" priority="1" operator="lessThan"><formula>0</formula></cfRule></conditionalFormatting>`;
+
     return {
-      status: "on-track",
-      label: "On track",
-      message: "You are on track this week. After bills, spending and planned transfers, your bank balance is expected to remain above your minimum buffer.",
+      name: "Weekly Planner",
+      meta,
+      xml: sheetXml(makeRows(width, rows), {
+        cols: [34, 20, ...weeks.map(() => 14)],
+        freeze: { rows: 2, cols: 2, topLeftCell: "C3" },
+        conditionalFormatting,
+      }),
     };
   }
 
-  function completedWeekMap(existingPlan) {
-    const map = new Map();
-    (existingPlan?.weeks || []).forEach((week) => {
-      if (week?.isCompleted) map.set(week.weekNumber, week);
-    });
-    return map;
-  }
-
-  function actualWeekMap(existingPlan) {
-    const map = new Map();
-    (existingPlan?.weeks || []).forEach((week) => {
-      if (week?.actual) map.set(week.weekNumber, week.actual);
-    });
-    return map;
-  }
-
-  function actualStoredAmount(actual = {}, key, previous = {}) {
-    if (Object.prototype.hasOwnProperty.call(actual, key)) return optionalMoney(actual[key]);
-    if (Object.prototype.hasOwnProperty.call(previous, key)) return optionalMoney(previous[key]);
-    return null;
-  }
-
-  function actualStoredSetAside(actual = {}, previous = {}) {
-    if (Object.prototype.hasOwnProperty.call(actual, "amountSetAside")) return optionalMoney(actual.amountSetAside);
-    if (Object.prototype.hasOwnProperty.call(actual, "provisions")) return optionalMoney(actual.provisions);
-    if (Object.prototype.hasOwnProperty.call(previous, "amountSetAside")) return optionalMoney(previous.amountSetAside);
-    if (Object.prototype.hasOwnProperty.call(previous, "provisions")) return optionalMoney(previous.provisions);
-    return null;
-  }
-
-  function actualTransfers(actual = {}) {
-    return roundMoney(
-      toNumber(actual.investment)
-      + toNumber(actual.extraSuper)
-      + toNumber(actual.extraDebtRepayment)
-      + toNumber(actual.offsetTransfer)
-      + toNumber(actual.otherTransfers)
-    );
-  }
-
-  function calculatedActualClosingBalance(week, actual = {}) {
-    const planned = week?.planned || {};
-    const openingBalance = amountOrFallback(actual.openingBalance, planned.openingBalance);
-    const income = amountOrFallback(actual.income, planned.income);
-    const transfersIn = amountOrFallback(actual.transfersIn, 0);
-    const essentialCosts = amountOrFallback(actual.essentialCosts, planned.essentialCosts);
-    const amountSetAside = amountOrFallback(actual.amountSetAside ?? actual.provisions, planned.amountSetAside ?? planned.provisions);
-    const discretionarySpending = amountOrFallback(actual.discretionarySpending, planned.discretionaryAllowance);
-    const investment = amountOrFallback(actual.investment, planned.investment);
-    const extraSuper = amountOrFallback(actual.extraSuper, planned.extraSuper);
-    const extraDebtRepayment = amountOrFallback(actual.extraDebtRepayment, planned.extraDebtRepayment);
-    const offsetTransfer = amountOrFallback(actual.offsetTransfer, planned.offsetTransfer);
-    const otherTransfers = amountOrFallback(actual.otherTransfers, planned.otherTransfers);
-    const transfersOut = roundMoney(investment + extraSuper + extraDebtRepayment + offsetTransfer + otherTransfers);
-    return roundMoney(openingBalance + income + transfersIn - essentialCosts - amountSetAside - discretionarySpending - transfersOut);
-  }
-
-  function materialiseActualForCompletion(week, actual) {
-    const planned = week?.planned || {};
-    const completed = {
-      ...actual,
-      openingBalance: amountOrFallback(actual.openingBalance, planned.openingBalance),
-      income: amountOrFallback(actual.income, planned.income),
-      transfersIn: amountOrFallback(actual.transfersIn, 0),
-      essentialCosts: amountOrFallback(actual.essentialCosts, planned.essentialCosts),
-      amountSetAside: amountOrFallback(actual.amountSetAside ?? actual.provisions, planned.amountSetAside ?? planned.provisions),
-      discretionarySpending: amountOrFallback(actual.discretionarySpending, planned.discretionaryAllowance),
-      investment: Math.max(0, amountOrFallback(actual.investment, planned.investment)),
-      extraSuper: Math.max(0, amountOrFallback(actual.extraSuper, planned.extraSuper)),
-      extraDebtRepayment: Math.max(0, amountOrFallback(actual.extraDebtRepayment, planned.extraDebtRepayment)),
-      offsetTransfer: Math.max(0, amountOrFallback(actual.offsetTransfer, planned.offsetTransfer)),
-      otherTransfers: Math.max(0, amountOrFallback(actual.otherTransfers, planned.otherTransfers)),
-      enteredBankBalance: optionalMoney(actual.enteredBankBalance),
-    };
-    completed.provisions = completed.amountSetAside;
-    completed.closingBalance = calculatedActualClosingBalance(week, completed);
-    return completed;
-  }
-
-  function normaliseActualForWeek(week, actual = {}, previous = {}, options = {}) {
-    const amountSetAside = actualStoredSetAside(actual, previous);
-    const next = {
-      openingBalance: actualStoredAmount(actual, "openingBalance", previous),
-      income: actualStoredAmount(actual, "income", previous),
-      transfersIn: actualStoredAmount(actual, "transfersIn", previous),
-      essentialCosts: actualStoredAmount(actual, "essentialCosts", previous),
-      amountSetAside,
-      provisions: amountSetAside,
-      discretionarySpending: actualStoredAmount(actual, "discretionarySpending", previous),
-      investment: actualStoredAmount(actual, "investment", previous),
-      extraSuper: actualStoredAmount(actual, "extraSuper", previous),
-      extraDebtRepayment: actualStoredAmount(actual, "extraDebtRepayment", previous),
-      offsetTransfer: actualStoredAmount(actual, "offsetTransfer", previous),
-      otherTransfers: actualStoredAmount(actual, "otherTransfers", previous),
-      enteredBankBalance: actualStoredAmount(actual, "enteredBankBalance", previous),
-      notes: String(actual.notes ?? previous.notes ?? ""),
-      completedAt: actual.completedAt ?? previous.completedAt ?? "",
-      checks: actual.checks && typeof actual.checks === "object" ? { ...(previous.checks || {}), ...actual.checks } : previous.checks || {},
-    };
-    if (options.complete) return materialiseActualForCompletion(week, next);
-    next.closingBalance = calculatedActualClosingBalance(week, next);
-    return next;
-  }
-
-  function buildProgress(weeks, settings) {
-    const completed = weeks.filter((week) => week.isCompleted);
-    const remaining = weeks.filter((week) => !week.isCompleted);
-    const sumActual = (key) => roundMoney(completed.reduce((total, week) => total + toNumber(week.actual?.[key]), 0));
-    const sumPlanned = (key) => roundMoney(remaining.reduce((total, week) => total + toNumber(week.planned?.[key]), 0));
-    const incomeReceived = sumActual("income");
-    const actualInvestment = sumActual("investment");
-    const actualSuper = sumActual("extraSuper");
-    const actualDebt = sumActual("extraDebtRepayment");
-    const closingSource = [...weeks].reverse().find((week) => week.isCompleted ? week.actual?.closingBalance !== undefined : week.planned?.closingBalance !== undefined);
-    const currentBankBalance = roundMoney(closingSource?.isCompleted ? closingSource.actual?.closingBalance : closingSource?.planned?.closingBalance);
-    const plannedIncome = sumPlanned("income");
+  function buildWeeklyActionPlan(planner) {
+    const rows = [
+      [text("Weekly Money Plan", STYLE.title), blank(), blank(), blank(), blank(), blank(), blank(), blank(), blank(), blank(), blank(), blank(), blank(), blank()],
+      [
+        text("Week", STYLE.header),
+        text("Week commencing", STYLE.header),
+        text("Estimated net money in", STYLE.header),
+        text("Bills and spending", STYLE.header),
+        text("Provisions", STYLE.header),
+        text("Transfer to offset", STYLE.header),
+        text("Invest", STYLE.header),
+        text("Contribute to super", STYLE.header),
+        text("Expected closing bank balance", STYLE.header),
+        text("Weekly priority", STYLE.header),
+        text("Income received", STYLE.header),
+        text("Bills paid", STYLE.header),
+        text("Investing done", STYLE.header),
+        text("Super done", STYLE.header),
+      ],
+      ...planner.weeks.map((week) => [
+        number(week.week),
+        text(shortDate(week.startDateIso), STYLE.date),
+        number(week.receiptsTotal, STYLE.currency),
+        number(week.essentialTotal + week.discretionaryTotal, STYLE.currency),
+        number(week.provisionsTotal || 0, STYLE.currency),
+        number(week.offsetTransferTotal, STYLE.currency),
+        number(week.investmentTransferTotal, STYLE.currency),
+        number(week.superTransferTotal, STYLE.currency),
+        number(week.closingBalance, week.closingBalance < 0 ? STYLE.warningCurrency : STYLE.currency),
+        text(week.priority, STYLE.note),
+        text("\u2610"),
+        text("\u2610"),
+        text("\u2610"),
+        text("\u2610"),
+      ]),
+    ];
     return {
-      weeksCompleted: completed.length,
-      incomeReceived,
-      essentialCostsPaid: sumActual("essentialCosts"),
-      averageWeeklyDiscretionarySpending: completed.length ? roundMoney(sumActual("discretionarySpending") / completed.length) : 0,
-      amountInvested: actualInvestment,
-      extraSuperContributed: actualSuper,
-      extraDebtRepaid: actualDebt,
-      currentCashBuffer: settings.minimumCashBuffer,
-      currentBankBalance,
-      annualSavingsRate: incomeReceived > 0 ? roundMoney((actualInvestment + actualSuper + actualDebt) / incomeReceived * 100) : 0,
-      plannedWealthTransfersRemaining: roundMoney(sumPlanned("investment") + sumPlanned("extraSuper") + sumPlanned("extraDebtRepayment")),
-      estimatedImprovementInFinancialPosition: roundMoney(actualInvestment + actualSuper + actualDebt + sumPlanned("investment") + sumPlanned("extraSuper") + sumPlanned("extraDebtRepayment")),
-      plannedInvestmentRemaining: sumPlanned("investment"),
-      plannedExtraSuperRemaining: sumPlanned("extraSuper"),
-      plannedExtraDebtRemaining: sumPlanned("extraDebtRepayment"),
-      investmentTarget: toNumber(settings.investmentTarget),
-      extraSuperTarget: toNumber(settings.extraSuperTarget),
-      extraDebtRepaymentTarget: toNumber(settings.extraDebtRepaymentTarget),
-      estimatedEndOfYearIncome: roundMoney(incomeReceived + plannedIncome),
-      weeksBelowBuffer: weeks.filter((week) => (week.isCompleted ? toNumber(week.actual?.closingBalance) : toNumber(week.planned?.closingBalance)) < settings.minimumCashBuffer).length,
+      name: "Weekly Money Plan",
+      xml: sheetXml(makeRows(14, rows), {
+        cols: [10, 18, 16, 16, 18, 16, 14, 17, 19, 58, 15, 12, 14, 12],
+        freeze: { rows: 2, cols: 2, topLeftCell: "C3" },
+      }),
     };
   }
 
-  function currentCalendarWeekNumberFor(weeks, startDateIso, todayIso = "") {
-    if (!Array.isArray(weeks) || !weeks.length) return 0;
-    const todaySource = todayIso ? dateFromIso(todayIso) : new Date();
-    const today = new Date(todaySource.getFullYear(), todaySource.getMonth(), todaySource.getDate());
-    const start = dateFromIso(startDateIso);
-    const todayIndex = weekIndexForDate(today, start, weeks.length);
-    if (todayIndex >= 0) return todayIndex + 1;
-    const finalWeekEnd = dateFromIso(weeks[weeks.length - 1]?.endDate);
-    if (today > finalWeekEnd) return weeks.length;
-    return 0;
-  }
-
-  function currentWeekNumberFor(weeks, startDateIso, todayIso = "") {
-    return currentCalendarWeekNumberFor(weeks, startDateIso, todayIso) || 1;
-  }
-
-  function createFromPlan(plan = {}, result = {}, options = {}, existingPlan = null) {
-    const now = new Date().toISOString();
-    const settings = defaultSettings(plan, result, existingPlan?.settings ? { ...existingPlan.settings, ...options } : options);
-    const weeksBase = createWeeks(settings.startDate, settings.durationWeeks);
-    if (!settings.timingItems.length) settings.timingItems = buildDefaultTimingItems(plan, result, settings);
-    const schedule = buildScheduleItems(plan, result, settings, weeksBase);
-    const completed = completedWeekMap(existingPlan);
-    const actuals = actualWeekMap(existingPlan);
-    const weeks = [];
-    let opening = roundMoney(settings.openingBankBalance);
-    let forecastOpening = roundMoney(settings.openingBankBalance);
-    const allocationSettings = normaliseAllocationSettings(settings.allocationSettings);
-
-    weeksBase.forEach((baseWeek, index) => {
-      const completedWeek = completed.get(baseWeek.weekNumber);
-      if (completedWeek) {
-        weeks.push(completedWeek);
-        opening = roundMoney(completedWeek.actual?.closingBalance ?? completedWeek.planned?.closingBalance ?? opening);
-        forecastOpening = roundMoney(completedWeek.planned?.forecastClosingBalance ?? completedWeek.planned?.expectedClosingBalance ?? completedWeek.planned?.closingBalance ?? forecastOpening);
-        return;
-      }
-      const expectedOpeningBalance = roundMoney(forecastOpening);
-      const openingOverrideRaw = settings.openingBalanceOverrides?.[String(baseWeek.weekNumber)];
-      const hasOpeningOverride = openingOverrideRaw !== undefined && Number.isFinite(Number(openingOverrideRaw));
-      const effectiveOpeningBalance = hasOpeningOverride ? roundMoney(openingOverrideRaw) : roundMoney(opening);
-      const income = itemValueAt(schedule.incomeItems, index);
-      const billsDue = roundMoney(itemValueAt(schedule.billItems, index) + itemValueAt(schedule.requiredDebtItems, index));
-      const amountSetAside = itemValueAt(schedule.provisionItems, index);
-      const essentialCosts = roundMoney(billsDue);
-      const discretionaryFromItems = itemValueAt(schedule.discretionaryItems, index);
-      const discretionaryAllowance = roundMoney(discretionaryFromItems || 0);
-      const transferTotal = (transferType) => roundMoney((schedule.transferItems || [])
-        .filter((item) => item.transferType === transferType)
-        .reduce((total, item) => total + toNumber(item.values?.[index]), 0));
-      const investment = transferTotal("investment");
-      const extraSuper = transferTotal("extraSuper");
-      const extraDebt = transferTotal("extraDebt");
-      const offset = transferTotal("offset");
-      const otherTransfers = roundMoney((schedule.transferItems || [])
-        .filter((item) => !["investment", "extraSuper", "extraDebt", "offset"].includes(item.transferType))
-        .reduce((total, item) => total + toNumber(item.values?.[index]), 0));
-      const totalTransfers = roundMoney(investment + extraSuper + extraDebt + offset + otherTransfers);
-      const forecastClosingBalance = roundMoney(expectedOpeningBalance + income - essentialCosts - amountSetAside - discretionaryAllowance - totalTransfers);
-      const closingBalance = roundMoney(effectiveOpeningBalance + income - essentialCosts - amountSetAside - discretionaryAllowance - totalTransfers);
-      let adjustmentReason = "";
-      if (closingBalance < settings.minimumCashBuffer) {
-        adjustmentReason = closingBalance < 0
-          ? "Warning: this schedule creates a negative projected bank balance this week. Review timing, bills, income or planned transfers before relying on the plan."
-          : "Warning: this schedule falls below the minimum cash buffer this week. Review timing, bills, income or planned transfers.";
-      }
-      const status = weekStatus(closingBalance, settings.minimumCashBuffer, adjustmentReason);
-      const week = {
-        ...baseWeek,
-        isCompleted: false,
-        planned: {
-          openingBalance: effectiveOpeningBalance,
-          expectedOpeningBalance,
-          expectedClosingBalance: forecastClosingBalance,
-          forecastClosingBalance,
-          actualOpeningBalance: hasOpeningOverride ? effectiveOpeningBalance : undefined,
-          openingBalanceDifference: hasOpeningOverride ? roundMoney(effectiveOpeningBalance - expectedOpeningBalance) : 0,
-          hasOpeningBalanceAdjustment: hasOpeningOverride,
-          income,
-          essentialCosts,
-          billsDue,
-          amountSetAside,
-          provisions: amountSetAside,
-          discretionaryAllowance,
-          investment,
-          extraSuper,
-          extraDebtRepayment: extraDebt,
-          offsetTransfer: offset,
-          otherTransfers,
-          closingBalance,
-          status: status.status,
-          statusLabel: status.label,
-          statusMessage: status.message,
-          adjustmentReason,
-        },
-        detail: {
-          incomeItems: valuesForWeek(schedule.incomeItems, index),
-          billItems: valuesForWeek([...schedule.billItems, ...schedule.requiredDebtItems], index),
-          provisionItems: valuesForWeek(schedule.provisionItems, index),
-          setAsideItems: valuesForWeek(schedule.provisionItems, index),
-          discretionaryItems: valuesForWeek(schedule.discretionaryItems, index),
-          transferItems: valuesForWeek(schedule.transferItems, index),
-        },
-      };
-      if (actuals.has(baseWeek.weekNumber)) week.actual = normaliseActualForWeek(week, actuals.get(baseWeek.weekNumber));
-      weeks.push(week);
-      opening = week.actual?.closingBalance !== undefined ? roundMoney(week.actual.closingBalance) : closingBalance;
-      forecastOpening = forecastClosingBalance;
-    });
-
-    const migrated = migrate(existingPlan);
-    const currentCalendarWeekNumber = currentCalendarWeekNumberFor(weeks, settings.startDate, settings.todayIso);
-    const weeklyPlan = {
-      version: WEEKLY_PLAN_VERSION,
-      id: migrated?.id || `weekly-plan-${Date.now()}`,
-      planName: settings.planName || householdName(plan) || "Weekly Plan",
-      createdAt: migrated?.createdAt || now,
-      updatedAt: now,
-      startDate: settings.startDate,
-      durationWeeks: settings.durationWeeks,
-      currentCalendarWeekNumber,
-      currentWeekNumber: currentCalendarWeekNumber || 1,
-      status: "active",
-      timingSetupReviewed: settings.timingSetupReviewed,
-      timingSetupNeedsReview: settings.timingSetupNeedsReview,
-      timingSetupLastReviewedAt: settings.timingSetupLastReviewedAt,
-      minimumCashBuffer: settings.minimumCashBuffer,
-      openingBankBalance: settings.openingBankBalance,
-      allocationSettings,
-      weeks,
-      progress: buildProgress(weeks, settings),
-      settings: { ...settings, allocationSettings },
-      sourceSnapshot: {
-        householdName: householdName(plan),
-        cash: toNumber(plan.assets?.cash),
-        offset: toNumber(plan.assets?.offsetBalance),
-        investments: toNumber(plan.assets?.sharesEtfs) + toNumber(plan.assets?.crypto),
-        super: toNumber(result.superannuationBalance),
-        liabilities: toNumber(result.totalLiabilities),
-      },
-    };
-    return weeklyPlan;
-  }
-
-  function valuesForWeek(items, index) {
-    return (items || [])
-      .map((item) => ({ id: item.id, name: item.name, amount: roundMoney(item.values?.[index] || 0), frequencyLabel: item.frequencyLabel, timing: item.timing, type: item.type, transferType: item.transferType }))
-      .filter((item) => item.amount > 0);
-  }
-
-  function migrate(input) {
-    if (!input || typeof input !== "object") return null;
-    const settings = defaultSettings({}, {}, {
-      ...(input.settings || {}),
-      timingSetupReviewed: input.settings?.timingSetupReviewed ?? input.timingSetupReviewed,
-      timingSetupNeedsReview: input.settings?.timingSetupNeedsReview ?? input.settings?.timingSetupRequiresReview ?? input.timingSetupNeedsReview ?? input.timingSetupRequiresReview,
-      timingSetupLastReviewedAt: input.settings?.timingSetupLastReviewedAt || input.settings?.timingSetupReviewedAt || input.timingSetupLastReviewedAt || input.timingSetupReviewedAt,
-    });
-    const weeks = Array.isArray(input.weeks) ? input.weeks.map((week, index) => ({
-      weekNumber: Number(week.weekNumber) || index + 1,
-      startDate: week.startDate || week.startDateIso || "",
-      endDate: week.endDate || "",
-      isCompleted: Boolean(week.isCompleted),
-      planned: {
-        openingBalance: roundMoney(week.planned?.openingBalance),
-        expectedOpeningBalance: roundMoney(week.planned?.expectedOpeningBalance ?? week.planned?.openingBalance),
-        expectedClosingBalance: roundMoney(week.planned?.expectedClosingBalance ?? week.planned?.forecastClosingBalance ?? week.planned?.closingBalance),
-        forecastClosingBalance: roundMoney(week.planned?.forecastClosingBalance ?? week.planned?.expectedClosingBalance ?? week.planned?.closingBalance),
-        actualOpeningBalance: week.planned?.actualOpeningBalance === undefined ? undefined : roundMoney(week.planned.actualOpeningBalance),
-        openingBalanceDifference: roundMoney(week.planned?.openingBalanceDifference),
-        hasOpeningBalanceAdjustment: Boolean(week.planned?.hasOpeningBalanceAdjustment),
-        income: roundMoney(week.planned?.income),
-        essentialCosts: roundMoney(week.planned?.essentialCosts),
-        billsDue: roundMoney(week.planned?.billsDue),
-        amountSetAside: roundMoney(week.planned?.amountSetAside),
-        provisions: roundMoney(week.planned?.provisions ?? week.planned?.amountSetAside),
-        discretionaryAllowance: roundMoney(week.planned?.discretionaryAllowance),
-        investment: Math.max(0, roundMoney(week.planned?.investment)),
-        extraSuper: Math.max(0, roundMoney(week.planned?.extraSuper)),
-        extraDebtRepayment: Math.max(0, roundMoney(week.planned?.extraDebtRepayment)),
-        offsetTransfer: Math.max(0, roundMoney(week.planned?.offsetTransfer)),
-        otherTransfers: Math.max(0, roundMoney(week.planned?.otherTransfers)),
-        closingBalance: roundMoney(week.planned?.closingBalance),
-        status: week.planned?.status || "on-track",
-        statusLabel: week.planned?.statusLabel || "",
-        statusMessage: week.planned?.statusMessage || "",
-        adjustmentReason: week.planned?.adjustmentReason || "",
-      },
-      actual: week.actual ? {
-        openingBalance: optionalMoney(week.actual.openingBalance),
-        income: optionalMoney(week.actual.income),
-        transfersIn: optionalMoney(week.actual.transfersIn),
-        essentialCosts: optionalMoney(week.actual.essentialCosts),
-        amountSetAside: optionalMoney(week.actual.amountSetAside ?? week.actual.provisions),
-        provisions: optionalMoney(week.actual.provisions ?? week.actual.amountSetAside),
-        discretionarySpending: optionalMoney(week.actual.discretionarySpending),
-        investment: optionalMoney(week.actual.investment),
-        extraSuper: optionalMoney(week.actual.extraSuper),
-        extraDebtRepayment: optionalMoney(week.actual.extraDebtRepayment),
-        offsetTransfer: optionalMoney(week.actual.offsetTransfer),
-        otherTransfers: optionalMoney(week.actual.otherTransfers),
-        enteredBankBalance: optionalMoney(week.actual.enteredBankBalance),
-        closingBalance: roundMoney(week.actual.closingBalance),
-        notes: week.actual.notes || "",
-        completedAt: week.actual.completedAt || "",
-        checks: week.actual.checks && typeof week.actual.checks === "object" ? { ...week.actual.checks } : {},
-      } : undefined,
-      detail: week.detail || { incomeItems: [], billItems: [], provisionItems: [], setAsideItems: [], discretionaryItems: [], transferItems: [] },
-    })) : [];
+  function buildWealthSnapshot(planner, weeklyMeta) {
+    const snapshot = planner.snapshot || {};
+    const rows = [
+      [text("Wealth Snapshot", STYLE.title), blank(), blank(), blank(), blank()],
+      [text("Item", STYLE.header), text("Starting balance", STYLE.header), text("Planned change", STYLE.header), text("Estimated ending balance", STYLE.header), text("Notes", STYLE.header)],
+      [text("Everyday bank account"), number(planner.startingBalance, STYLE.currency), number(asNumber(snapshot.endingBankBalance) - asNumber(planner.startingBalance), STYLE.currency), number(snapshot.endingBankBalance, STYLE.currency), text("Reconciles to the final planner week.")],
+      [text("Offset account"), number(snapshot.offsetBalance, STYLE.currency), number(snapshot.offsetChange, STYLE.currency), formula("B4+C4", STYLE.currency), text("Includes planned or completed offset transfers.")],
+      [text("Cash savings"), number(snapshot.cashSavings, STYLE.currency), number(0, STYLE.currency), formula("B5+C5", STYLE.currency), text("Existing cash entered in the plan.")],
+      [text("Shares and investments"), number(snapshot.investmentBalance, STYLE.currency), number(snapshot.investmentChange, STYLE.currency), formula("B6+C6", STYLE.currency), text("Includes investment transfers; no market growth is assumed.")],
+      [text("Superannuation"), number(snapshot.superBalance, STYLE.currency), number(snapshot.superChange, STYLE.currency), formula("B7+C7", STYLE.currency), text("Includes additional super contributions only; no growth included here.")],
+      [text("Total financial assets", STYLE.header), formula("SUM(B3:B7)", STYLE.totalCurrency), formula("SUM(C3:C7)", STYLE.totalCurrency), formula("SUM(D3:D7)", STYLE.totalCurrency), blank()],
+      [blank(), blank(), blank(), blank(), blank()],
+      [text("Total liabilities"), number(snapshot.totalDebtBalance, STYLE.currency), number(-asNumber(snapshot.debtChange), STYLE.currency), formula("MAX(0,B10+C10)", STYLE.currency), text("Debt change uses additional debt repayments where entered.")],
+      [text("Net financial position", STYLE.header), formula("B8-B10", STYLE.totalCurrency), formula("C8+C10", STYLE.totalCurrency), formula("D8-D10", STYLE.totalCurrency), text("Estimated change during the planner period.")],
+    ];
     return {
-      version: WEEKLY_PLAN_VERSION,
-      id: input.id || `weekly-plan-${Date.now()}`,
-      planName: input.planName || settings.planName || "Weekly Plan",
-      createdAt: input.createdAt || new Date().toISOString(),
-      updatedAt: input.updatedAt || new Date().toISOString(),
-      startDate: input.startDate || settings.startDate,
-      durationWeeks: normaliseDuration(input.durationWeeks || settings.durationWeeks),
-      currentCalendarWeekNumber: currentCalendarWeekNumberFor(weeks, input.startDate || settings.startDate, settings.todayIso),
-      currentWeekNumber: currentWeekNumberFor(weeks, input.startDate || settings.startDate, settings.todayIso),
-      status: input.status || "active",
-      timingSetupReviewed: Boolean(input.timingSetupReviewed ?? settings.timingSetupReviewed),
-      timingSetupNeedsReview: Boolean(input.timingSetupNeedsReview ?? input.timingSetupRequiresReview ?? settings.timingSetupNeedsReview),
-      timingSetupLastReviewedAt: input.timingSetupLastReviewedAt || input.timingSetupReviewedAt || settings.timingSetupLastReviewedAt,
-      minimumCashBuffer: roundMoney(input.minimumCashBuffer ?? settings.minimumCashBuffer),
-      openingBankBalance: roundMoney(input.openingBankBalance ?? settings.openingBankBalance),
-      allocationSettings: normaliseAllocationSettings(input.allocationSettings || settings.allocationSettings),
-      weeks,
-      progress: input.progress && typeof input.progress === "object" ? input.progress : buildProgress(weeks, settings),
-      settings: {
-        ...settings,
-        timingItems: Array.isArray(input.settings?.timingItems) ? input.settings.timingItems.map(normaliseTimingItem) : settings.timingItems,
-        oneOffItems: Array.isArray(input.settings?.oneOffItems) ? input.settings.oneOffItems.map(normaliseTimingItem) : settings.oneOffItems,
-        occurrenceOverrides: Array.isArray(input.settings?.occurrenceOverrides) ? input.settings.occurrenceOverrides.map(normaliseOccurrenceOverride).filter(Boolean) : settings.occurrenceOverrides,
-        openingBalanceOverrides: normaliseOpeningBalanceOverrides(input.settings?.openingBalanceOverrides || settings.openingBalanceOverrides),
-      },
-      sourceSnapshot: input.sourceSnapshot || {},
+      name: "Wealth Snapshot",
+      xml: sheetXml(makeRows(5, rows), { cols: [30, 20, 20, 24, 58], orientation: "portrait" }),
     };
   }
 
-  function reforecast(plan, result, weeklyPlan) {
-    return createFromPlan(plan, result, weeklyPlan?.settings || {}, weeklyPlan);
+  function buildAnnualSummary(planner, weeklyMeta) {
+    const summary = planner.summary || {};
+    const rows = [
+      [text("Annual Summary", STYLE.title), blank(), blank()],
+      [text("Measure", STYLE.header), text("Amount", STYLE.header), text("Notes", STYLE.header)],
+      [text("Total expected income"), number(summary.totalIncome, STYLE.currency), text("Money in during the planner period, using completed actuals where available.")],
+      [text("Total essential spending"), number(summary.totalEssential, STYLE.currency), text("Bills and essential spending.")],
+      [text("Total provisions"), number(summary.totalProvisions, STYLE.currency), text("Amounts set aside for future bills.")],
+      [text("Total lifestyle spending"), number(summary.totalLifestyle, STYLE.currency), text("Lifestyle and discretionary spending.")],
+      [text("Total planned offset savings"), number(summary.totalOffset, STYLE.currency), text("Offset transfers included in the weekly schedule.")],
+      [text("Total additional debt repayments"), number(summary.totalDebt, STYLE.currency), text("Additional debt repayments included in the weekly schedule.")],
+      [text("Total investing"), number(summary.totalInvesting, STYLE.currency), text("Investment transfers included in the weekly schedule.")],
+      [text("Total additional super contributions"), number(summary.totalSuper, STYLE.currency), text("Additional super contributions included in the weekly schedule.")],
+      [text("Expected starting cash position"), number(summary.startingCash, STYLE.currency), text("Opening bank balance entered before generating.")],
+      [text("Expected ending cash position"), number(summary.endingCash, STYLE.currency), text("Final bank balance in the planner.")],
+      [text("Estimated improvement in net financial position"), number(summary.estimatedImprovement, STYLE.totalCurrency), text("Cash movement plus planned or completed wealth-building transfers.")],
+      [text("Average weekly savings rate"), number(summary.savingsRate, STYLE.percent), text("Transfers divided by expected income.")],
+      [text("Weeks with negative projected closing balance"), number(summary.weeksNegative, summary.weeksNegative ? STYLE.warningCurrency : STYLE.normal), text("Review any affected week before relying on the schedule.")],
+    ];
+    return {
+      name: "Annual Summary",
+      xml: sheetXml(makeRows(3, rows), { cols: [38, 20, 62], orientation: "portrait" }),
+    };
   }
 
-  function updateActual(weeklyPlan, weekNumber, actual = {}, options = {}) {
-    const migrated = migrate(weeklyPlan);
-    if (!migrated) return null;
-    const week = migrated.weeks.find((item) => item.weekNumber === Number(weekNumber));
-    if (!week) return migrated;
-    const previous = week.actual || {};
-    week.actual = normaliseActualForWeek(week, {
-      ...actual,
-      completedAt: options.complete ? new Date().toISOString() : previous.completedAt || "",
-    }, previous, { complete: options.complete });
-    if (options.complete) week.isCompleted = true;
-    migrated.updatedAt = new Date().toISOString();
-    migrated.progress = buildProgress(migrated.weeks, migrated.settings);
-    migrated.currentCalendarWeekNumber = currentCalendarWeekNumberFor(migrated.weeks, migrated.startDate, migrated.settings?.todayIso);
-    migrated.currentWeekNumber = migrated.currentCalendarWeekNumber || 1;
-    return migrated;
+  function buildStylesXml() {
+    return `${XML_HEADER}
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <numFmts count="3">
+    <numFmt numFmtId="164" formatCode="&quot;$&quot;#,##0;[Red]-&quot;$&quot;#,##0"/>
+    <numFmt numFmtId="165" formatCode="yyyy-mm-dd"/>
+    <numFmt numFmtId="166" formatCode="0.0%"/>
+  </numFmts>
+  <fonts count="4">
+    <font><sz val="11"/><color rgb="FF172033"/><name val="Arial"/></font>
+    <font><b/><sz val="16"/><color rgb="FF0F2742"/><name val="Arial"/></font>
+    <font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Arial"/></font>
+    <font><b/><sz val="11"/><color rgb="FF0F2742"/><name val="Arial"/></font>
+  </fonts>
+  <fills count="6">
+    <fill><patternFill patternType="none"/></fill>
+    <fill><patternFill patternType="gray125"/></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FF0F2742"/><bgColor indexed="64"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFEEF6FF"/><bgColor indexed="64"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFEFFCF6"/><bgColor indexed="64"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFFFE0DC"/><bgColor indexed="64"/></patternFill></fill>
+  </fills>
+  <borders count="2">
+    <border><left/><right/><top/><bottom/><diagonal/></border>
+    <border><left style="thin"><color rgb="FFE2E8F0"/></left><right style="thin"><color rgb="FFE2E8F0"/></right><top style="thin"><color rgb="FFE2E8F0"/></top><bottom style="thin"><color rgb="FFE2E8F0"/></bottom><diagonal/></border>
+  </borders>
+  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+  <cellXfs count="10">
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"/>
+    <xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>
+    <xf numFmtId="0" fontId="2" fillId="2" borderId="1" xfId="0" applyFill="1" applyFont="1" applyBorder="1"/>
+    <xf numFmtId="0" fontId="3" fillId="3" borderId="1" xfId="0" applyFill="1" applyFont="1" applyBorder="1"/>
+    <xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/>
+    <xf numFmtId="164" fontId="3" fillId="4" borderId="1" xfId="0" applyNumberFormat="1" applyFill="1" applyFont="1" applyBorder="1"/>
+    <xf numFmtId="164" fontId="3" fillId="5" borderId="1" xfId="0" applyNumberFormat="1" applyFill="1" applyFont="1" applyBorder="1"/>
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyAlignment="1" applyBorder="1"><alignment wrapText="1" vertical="top"/></xf>
+    <xf numFmtId="165" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/>
+    <xf numFmtId="166" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/>
+  </cellXfs>
+  <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+  <dxfs count="1"><dxf><font><color rgb="FFBC3427"/></font><fill><patternFill patternType="solid"><fgColor rgb="FFFFE0DC"/><bgColor indexed="64"/></patternFill></fill></dxf></dxfs>
+  <tableStyles count="0" defaultTableStyle="TableStyleMedium2" defaultPivotStyle="PivotStyleLight16"/>
+</styleSheet>`;
   }
 
-  function completeWeek(plan, result, weeklyPlan, weekNumber, actual = {}) {
-    const updated = updateActual(weeklyPlan, weekNumber, actual, { complete: true });
-    return reforecast(plan, result, updated);
+  function workbookXml(sheets) {
+    return `${XML_HEADER}
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets>
+    ${sheets.map((sheet, index) => `<sheet name="${escapeXml(sheet.name)}" sheetId="${index + 1}" r:id="rId${index + 1}"/>`).join("")}
+  </sheets>
+  <calcPr calcMode="auto"/>
+</workbook>`;
   }
 
-  function markWeekIncomplete(plan, result, weeklyPlan, weekNumber) {
-    const migrated = migrate(weeklyPlan);
-    if (!migrated) return null;
-    const week = migrated.weeks.find((item) => item.weekNumber === Number(weekNumber));
-    if (!week) return migrated;
-    week.isCompleted = false;
-    migrated.updatedAt = new Date().toISOString();
-    migrated.progress = buildProgress(migrated.weeks, migrated.settings);
-    return reforecast(plan, result, migrated);
+  function workbookRelsXml(sheets) {
+    return `${XML_HEADER}
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  ${sheets.map((_, index) => `<Relationship Id="rId${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index + 1}.xml"/>`).join("")}
+  <Relationship Id="rId${sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`;
   }
 
-  function updateOpeningBalance(plan, result, weeklyPlan, weekNumber, openingBalance) {
-    const migrated = migrate(weeklyPlan);
-    if (!migrated) return null;
-    const targetWeekNumber = Number(weekNumber);
-    const amount = roundMoney(openingBalance);
-    const settings = { ...(migrated.settings || {}) };
-    const overrides = normaliseOpeningBalanceOverrides(settings.openingBalanceOverrides || {});
-    overrides[String(targetWeekNumber)] = amount;
-    settings.openingBalanceOverrides = overrides;
-    const week = migrated.weeks.find((item) => item.weekNumber === targetWeekNumber);
-    if (week) {
-      const previous = week.actual || {};
-      week.actual = {
-        ...normaliseActualForWeek(week, { ...previous, openingBalance: amount }, previous),
-        checks: previous.checks && typeof previous.checks === "object" ? { ...previous.checks } : {},
-      };
+  function rootRelsXml() {
+    return `${XML_HEADER}
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
+  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
+</Relationships>`;
+  }
+
+  function contentTypesXml(sheets) {
+    return `${XML_HEADER}
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+  ${sheets.map((_, index) => `<Override PartName="/xl/worksheets/sheet${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")}
+  <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
+  <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
+</Types>`;
+  }
+
+  function corePropsXml(planner) {
+    return `${XML_HEADER}
+<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <dc:title>Financial Freedom Weekly Money Plan</dc:title>
+  <dc:creator>Financial Freedom</dc:creator>
+  <cp:lastModifiedBy>Financial Freedom</cp:lastModifiedBy>
+  <dcterms:created xsi:type="dcterms:W3CDTF">${escapeXml(planner.generatedAtIso)}</dcterms:created>
+  <dcterms:modified xsi:type="dcterms:W3CDTF">${escapeXml(planner.generatedAtIso)}</dcterms:modified>
+</cp:coreProperties>`;
+  }
+
+  function appPropsXml(sheets) {
+    return `${XML_HEADER}
+<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
+  <Application>Financial Freedom</Application>
+  <DocSecurity>0</DocSecurity>
+  <ScaleCrop>false</ScaleCrop>
+  <HeadingPairs><vt:vector size="2" baseType="variant"><vt:variant><vt:lpstr>Worksheets</vt:lpstr></vt:variant><vt:variant><vt:i4>${sheets.length}</vt:i4></vt:variant></vt:vector></HeadingPairs>
+  <TitlesOfParts><vt:vector size="${sheets.length}" baseType="lpstr">${sheets.map((sheet) => `<vt:lpstr>${escapeXml(sheet.name)}</vt:lpstr>`).join("")}</vt:vector></TitlesOfParts>
+</Properties>`;
+  }
+
+  function buildWorkbookFiles(planner) {
+    planner.lookupRows = planner.lookupRows || {};
+    const weekly = buildWeeklyPlanner(planner);
+    const sheets = [
+      buildStartHere(planner),
+      weekly,
+      buildWeeklyActionPlan(planner),
+      buildWealthSnapshot(planner, weekly.meta),
+      buildAnnualSummary(planner, weekly.meta),
+    ];
+    return [
+      { name: "[Content_Types].xml", content: contentTypesXml(sheets) },
+      { name: "_rels/.rels", content: rootRelsXml() },
+      { name: "docProps/core.xml", content: corePropsXml(planner) },
+      { name: "docProps/app.xml", content: appPropsXml(sheets) },
+      { name: "xl/workbook.xml", content: workbookXml(sheets) },
+      { name: "xl/_rels/workbook.xml.rels", content: workbookRelsXml(sheets) },
+      { name: "xl/styles.xml", content: buildStylesXml() },
+      ...sheets.map((sheet, index) => ({ name: `xl/worksheets/sheet${index + 1}.xml`, content: sheet.xml })),
+    ];
+  }
+
+  const crcTable = (() => {
+    const table = new Uint32Array(256);
+    for (let i = 0; i < 256; i += 1) {
+      let c = i;
+      for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+      table[i] = c >>> 0;
     }
-    return createFromPlan(plan, result, settings, migrated);
+    return table;
+  })();
+
+  function crc32(bytes) {
+    let crc = 0xffffffff;
+    for (let i = 0; i < bytes.length; i += 1) crc = crcTable[(crc ^ bytes[i]) & 0xff] ^ (crc >>> 8);
+    return (crc ^ 0xffffffff) >>> 0;
   }
 
-  function updateSettings(plan, result, weeklyPlan, settingsPatch = {}) {
-    const migrated = migrate(weeklyPlan);
-    const settings = defaultSettings(plan, result, { ...migrated?.settings, ...settingsPatch });
-    return createFromPlan(plan, result, settings, migrated);
+  function dosDateTime(date = new Date()) {
+    const year = Math.max(1980, date.getFullYear());
+    const dosTime = (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2);
+    const dosDate = ((year - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate();
+    return { dosTime, dosDate };
   }
 
-  function updateTimingItem(plan, result, weeklyPlan, itemId, patch = {}) {
-    const migrated = migrate(weeklyPlan);
-    if (!migrated) return null;
-    const settings = { ...(migrated.settings || {}) };
-    const timingItems = (settings.timingItems || []).map(normaliseTimingItem);
-    const index = timingItems.findIndex((item) => item.id === itemId);
-    if (index >= 0) timingItems[index] = normaliseTimingItem({ ...timingItems[index], ...patch, id: timingItems[index].id });
-    settings.timingItems = timingItems;
-    return createFromPlan(plan, result, settings, migrated);
+  function writeUInt16(buffer, offset, value) {
+    buffer[offset] = value & 0xff;
+    buffer[offset + 1] = (value >>> 8) & 0xff;
   }
 
-  function addOneOffItem(plan, result, weeklyPlan, item = {}) {
-    const migrated = migrate(weeklyPlan);
-    if (!migrated) return null;
-    const settings = { ...(migrated.settings || {}) };
-    const oneOffItems = (settings.oneOffItems || []).map(normaliseTimingItem);
-    oneOffItems.push(normaliseTimingItem({
-      id: item.id || `one-off-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      description: item.description || "One-off item",
-      amount: item.amount,
-      frequency: "oneOff",
-      firstDate: item.date || item.firstDate || settings.startDate,
-      type: normaliseType(item.type, "bill"),
-      transferType: item.transferType || "",
-      treatment: "pay-on-date",
-      active: item.active !== false,
-      note: item.note || "",
-    }));
-    settings.oneOffItems = oneOffItems;
-    return createFromPlan(plan, result, settings, migrated);
+  function writeUInt32(buffer, offset, value) {
+    buffer[offset] = value & 0xff;
+    buffer[offset + 1] = (value >>> 8) & 0xff;
+    buffer[offset + 2] = (value >>> 16) & 0xff;
+    buffer[offset + 3] = (value >>> 24) & 0xff;
   }
 
-  function applyOccurrenceEdit(plan, result, weeklyPlan, itemId, occurrenceDate, patch = {}, scope = "this") {
-    const migrated = migrate(weeklyPlan);
-    if (!migrated) return null;
-    const settings = { ...(migrated.settings || {}) };
-    let timingItems = (settings.timingItems || []).map(normaliseTimingItem);
-    let index = timingItems.findIndex((item) => item.id === itemId);
-    if (index < 0) return migrated;
-    const item = timingItems[index];
-    if (scope === "all") {
-      const allPatch = { ...patch };
-      if (allPatch.date) {
-        allPatch.firstDate = allPatch.date;
-        delete allPatch.date;
-      }
-      timingItems[index] = normaliseTimingItem({ ...item, ...allPatch, id: item.id });
-    } else if (scope === "future") {
-      const selectedOccurrenceDate = occurrenceDate;
-      const replacementStartDate = patch.date || selectedOccurrenceDate;
-      const selectedDate = dateFromIso(selectedOccurrenceDate);
-      const parentSeriesId = item.parentSeriesId || item.id;
-      const replacementSeriesId = `${parentSeriesId}-future-${selectedOccurrenceDate.replaceAll("-", "")}`;
-      timingItems = timingItems.filter((candidate, candidateIndex) => {
-        if (candidateIndex === index) return true;
-        const candidateParent = candidate.parentSeriesId || candidate.id;
-        if (candidateParent !== parentSeriesId) return true;
-        if (candidate.id === replacementSeriesId || candidate.replacementSeriesId === replacementSeriesId) return false;
-        const candidateSupersedesFrom = candidate.supersedesFrom || candidate.splitFrom || candidate.firstDate || selectedOccurrenceDate;
-        return dateFromIso(candidateSupersedesFrom) < selectedDate;
-      });
-      index = timingItems.findIndex((candidate) => candidate.id === itemId);
-      const originalSeriesEndDate = dateIso(addDays(dateFromIso(selectedOccurrenceDate), -1));
-      timingItems[index] = normaliseTimingItem({ ...item, endDate: originalSeriesEndDate, id: item.id, parentSeriesId: item.parentSeriesId });
-      timingItems.push(normaliseTimingItem({
-        ...item,
-        ...patch,
-        id: replacementSeriesId,
-        parentSeriesId,
-        replacementSeriesId,
-        sourceId: item.sourceId,
-        firstDate: replacementStartDate,
-        endDate: "",
-        supersedesFrom: selectedOccurrenceDate,
-      }));
-      const remainingOverrides = (settings.occurrenceOverrides || [])
-        .map(normaliseOccurrenceOverride)
-        .filter((override) => override && !(override.itemId === item.id && dateFromIso(override.occurrenceDate) >= selectedDate));
-      remainingOverrides.push(normaliseOccurrenceOverride({
-        id: `override-${item.id}-${selectedOccurrenceDate}`,
-        itemId: item.id,
-        occurrenceDate: selectedOccurrenceDate,
-        active: false,
-        note: "Original occurrence removed by future series split.",
-      }));
-      settings.occurrenceOverrides = remainingOverrides;
-    } else {
-      const overrides = (settings.occurrenceOverrides || []).map(normaliseOccurrenceOverride).filter(Boolean);
-      overrides.push(normaliseOccurrenceOverride({
-        itemId,
-        occurrenceDate,
-        amount: patch.amount,
-        date: patch.date,
-        active: patch.active !== false,
-        note: patch.note || "",
-      }));
-      settings.occurrenceOverrides = overrides;
-    }
-    settings.timingItems = timingItems;
-    return createFromPlan(plan, result, settings, migrated);
+  function concatBytes(parts) {
+    const length = parts.reduce((total, part) => total + part.length, 0);
+    const output = new Uint8Array(length);
+    let offset = 0;
+    parts.forEach((part) => {
+      output.set(part, offset);
+      offset += part.length;
+    });
+    return output;
   }
 
-  function exportPayload(weeklyPlan) {
-    return {
-      app: "Financial Freedom",
-      type: "financial-freedom-weekly-plan-backup",
-      schemaVersion: WEEKLY_PLAN_VERSION,
-      exportedAt: new Date().toISOString(),
-      weeklyPlan: migrate(weeklyPlan),
-    };
+  function zipFiles(files) {
+    const encoder = new TextEncoder();
+    const { dosTime, dosDate } = dosDateTime();
+    const localParts = [];
+    const centralParts = [];
+    let localOffset = 0;
+
+    files.forEach((file) => {
+      const nameBytes = encoder.encode(file.name);
+      const contentBytes = typeof file.content === "string" ? encoder.encode(file.content) : file.content;
+      const crc = crc32(contentBytes);
+      const localHeader = new Uint8Array(30 + nameBytes.length);
+      writeUInt32(localHeader, 0, 0x04034b50);
+      writeUInt16(localHeader, 4, 20);
+      writeUInt16(localHeader, 6, 0x0800);
+      writeUInt16(localHeader, 8, 0);
+      writeUInt16(localHeader, 10, dosTime);
+      writeUInt16(localHeader, 12, dosDate);
+      writeUInt32(localHeader, 14, crc);
+      writeUInt32(localHeader, 18, contentBytes.length);
+      writeUInt32(localHeader, 22, contentBytes.length);
+      writeUInt16(localHeader, 26, nameBytes.length);
+      writeUInt16(localHeader, 28, 0);
+      localHeader.set(nameBytes, 30);
+      localParts.push(localHeader, contentBytes);
+
+      const centralHeader = new Uint8Array(46 + nameBytes.length);
+      writeUInt32(centralHeader, 0, 0x02014b50);
+      writeUInt16(centralHeader, 4, 20);
+      writeUInt16(centralHeader, 6, 20);
+      writeUInt16(centralHeader, 8, 0x0800);
+      writeUInt16(centralHeader, 10, 0);
+      writeUInt16(centralHeader, 12, dosTime);
+      writeUInt16(centralHeader, 14, dosDate);
+      writeUInt32(centralHeader, 16, crc);
+      writeUInt32(centralHeader, 20, contentBytes.length);
+      writeUInt32(centralHeader, 24, contentBytes.length);
+      writeUInt16(centralHeader, 28, nameBytes.length);
+      writeUInt16(centralHeader, 30, 0);
+      writeUInt16(centralHeader, 32, 0);
+      writeUInt16(centralHeader, 34, 0);
+      writeUInt16(centralHeader, 36, 0);
+      writeUInt32(centralHeader, 38, 0);
+      writeUInt32(centralHeader, 42, localOffset);
+      centralHeader.set(nameBytes, 46);
+      centralParts.push(centralHeader);
+
+      localOffset += localHeader.length + contentBytes.length;
+    });
+
+    const centralDirectory = concatBytes(centralParts);
+    const centralOffset = localOffset;
+    const end = new Uint8Array(22);
+    writeUInt32(end, 0, 0x06054b50);
+    writeUInt16(end, 4, 0);
+    writeUInt16(end, 6, 0);
+    writeUInt16(end, 8, files.length);
+    writeUInt16(end, 10, files.length);
+    writeUInt32(end, 12, centralDirectory.length);
+    writeUInt32(end, 16, centralOffset);
+    writeUInt16(end, 20, 0);
+    return concatBytes([...localParts, centralDirectory, end]);
   }
 
-  function importPayload(payload) {
-    if (!payload || typeof payload !== "object") throw new Error("The selected file is not a valid Weekly Plan backup.");
-    const raw = payload.weeklyPlan || payload;
-    const migrated = migrate(raw);
-    if (!migrated || !Array.isArray(migrated.weeks)) throw new Error("No Weekly Plan data was found in the selected file.");
-    return migrated;
+  function createWorkbookBytes(planner) {
+    return zipFiles(buildWorkbookFiles(planner));
   }
 
-  const api = {
-    VERSION: WEEKLY_PLAN_VERSION,
-    annualize,
-    nextMondayIso,
-    defaultSettings,
-    createFromPlan,
-    reforecast,
-    updateActual,
-    completeWeek,
-    markWeekIncomplete,
-    updateOpeningBalance,
-    currentCalendarWeekNumberFor,
-    updateSettings,
-    updateTimingItem,
-    addOneOffItem,
-    applyOccurrenceEdit,
-    migrate,
-    exportPayload,
-    importPayload,
-    roundMoney,
-  };
+  function createWorkbookBlob(planner) {
+    return new Blob([createWorkbookBytes(planner)], { type: MIME_XLSX });
+  }
+
+  const api = { createWorkbookBytes, createWorkbookBlob, moneyValue };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
-  global.FFSWeeklyPlan = api;
+  global.FFSWeeklyPlannerExport = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);
