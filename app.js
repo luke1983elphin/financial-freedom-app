@@ -9,6 +9,9 @@
   const APP_VERSION = "3.0-test-weekly-planner";
   const WEEKLY_EDITOR_BUILD_ID = "2026-07-17-02";
   const EXPORT_SCHEMA_VERSION = 1;
+  const AI_INSIGHTS_ENDPOINT = "/api/ai-insights";
+  const AI_INSIGHTS_DEFAULT_MAX_GENERATIONS = 5;
+  const AI_INSIGHTS_DEFAULT_COOLDOWN_MS = 60000;
   console.info(`Weekly Plan editor build: ${WEEKLY_EDITOR_BUILD_ID}`);
   const frequencies = [
     ["weekly", "Weekly"],
@@ -206,6 +209,18 @@
   let timingEditDraft = null;
   let weeklyPlanRenderCount = 0;
   const weeklyActualDrafts = new Map();
+  let aiInsightsConfig = {
+    enabled: Boolean(window.FFS_ENABLE_AI_INSIGHTS),
+    configLoaded: Boolean(window.FFS_ENABLE_AI_INSIGHTS),
+    maxGenerations: AI_INSIGHTS_DEFAULT_MAX_GENERATIONS,
+    cooldownMs: AI_INSIGHTS_DEFAULT_COOLDOWN_MS,
+  };
+  const aiInsightsUi = {
+    isOpen: false,
+    consentAccepted: false,
+    isLoading: false,
+    error: "",
+  };
 
   const currency = new Intl.NumberFormat("en-AU", {
     style: "currency",
@@ -913,6 +928,20 @@
     if (!targetPlan.reportSettings.weeklyPlanner || typeof targetPlan.reportSettings.weeklyPlanner !== "object") {
       targetPlan.reportSettings.weeklyPlanner = {};
     }
+    if (!targetPlan.reportSettings.aiInsights || typeof targetPlan.reportSettings.aiInsights !== "object") {
+      targetPlan.reportSettings.aiInsights = {
+        report: null,
+        generatedAt: "",
+        planHash: "",
+        usage: {
+          count: 0,
+          lastGeneratedAt: "",
+        },
+      };
+    }
+    if (!targetPlan.reportSettings.aiInsights.usage || typeof targetPlan.reportSettings.aiInsights.usage !== "object") {
+      targetPlan.reportSettings.aiInsights.usage = { count: 0, lastGeneratedAt: "" };
+    }
     return targetPlan.reportSettings.weeklyPlanner;
   }
 
@@ -1047,6 +1076,290 @@
     } catch {
       // The app can still run without browser storage; the intro simply behaves like a first visit.
     }
+  }
+
+  function numberValue(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : 0;
+  }
+
+  function positiveNumber(value) {
+    return numberValue(value) > 0;
+  }
+
+  function nonEmptyText(value) {
+    return String(value || "").trim().length > 0;
+  }
+
+  function collectionTotal(items, amountKey = "amount") {
+    return Array.isArray(items)
+      ? items.reduce((total, item) => total + numberValue(item?.[amountKey]), 0)
+      : 0;
+  }
+
+  function annualCollectionTotal(items, amountKey = "amount") {
+    return Array.isArray(items)
+      ? items.reduce((total, item) => total + annualValue(item?.[amountKey], item?.frequency || item?.repaymentFrequency || "annually"), 0)
+      : 0;
+  }
+
+  function categoryTotal(items, categories, amountKey = "value") {
+    const categorySet = new Set(categories);
+    return Array.isArray(items)
+      ? items.reduce((total, item) => total + (categorySet.has(item?.category || item?.type) ? numberValue(item?.[amountKey]) : 0), 0)
+      : 0;
+  }
+
+  function hasCollectionValue(items, keys = ["amount"]) {
+    return Array.isArray(items) && items.some((item) => keys.some((key) => positiveNumber(item?.[key])));
+  }
+
+  function firstProjectedAgeAtProgress(result, threshold) {
+    const row = (result.financialFreedomProgressProjection || []).find((item) => numberValue(item.progress) >= threshold);
+    return row?.age ? `Age ${row.age}` : "Not yet projected by the app";
+  }
+
+  function isFinancialPlanComplete(planData, resultInput) {
+    const planCandidate = migratePlanData(planData || plan);
+    const result = resultInput || CALC.calculatePlan(planCandidate);
+    const personal = planCandidate.personal || {};
+    const investing = planCandidate.investing || {};
+    const assets = planCandidate.assets || {};
+    const liabilities = planCandidate.liabilities || {};
+    const hasAnyAge = positiveNumber(personal.person1Age) || positiveNumber(personal.person2Age);
+    const hasTargetAge = positiveNumber(personal.fullRetirementAge) || positiveNumber(personal.semiRetirementAge) || positiveNumber(personal.workOptionalAge);
+    const hasIncome = hasCollectionValue(planCandidate.incomeItems, ["amount"]) || positiveNumber(result.annualGrossIncome);
+    const hasExpenses = hasCollectionValue(planCandidate.expenseItems, ["amount"]) || positiveNumber(result.annualLivingExpenses);
+    const hasDebtData = hasCollectionValue(planCandidate.liabilityItems, ["balance", "repaymentAmount", "repayment"])
+      || positiveNumber(liabilities.homeLoanBalance)
+      || positiveNumber(liabilities.monthlyRepayment)
+      || positiveNumber(liabilities.otherDebts)
+      || positiveNumber(liabilities.creditCardBalance)
+      || positiveNumber(liabilities.hecsHelpDebt)
+      || positiveNumber(result.annualDebtRepayments);
+    const hasAssets = hasCollectionValue(planCandidate.assetItems, ["value"]) || positiveNumber(result.totalAssets);
+    const hasCashOrOffset = categoryTotal(planCandidate.assetItems, ["cash", "offset"]) > 0
+      || positiveNumber(assets.cash)
+      || positiveNumber(assets.offsetBalance);
+    const hasInvestmentsOutsideSuper = categoryTotal(planCandidate.assetItems, ["shares", "crypto", "other"], "value") > 0
+      || positiveNumber(assets.sharesEtfs)
+      || positiveNumber(assets.crypto)
+      || positiveNumber(result.investmentBalance);
+    const hasSuper = categoryTotal(planCandidate.assetItems, ["super"]) > 0
+      || positiveNumber(assets.superPerson1)
+      || positiveNumber(assets.superPerson2)
+      || positiveNumber(result.superannuationBalance);
+    const hasProjections = positiveNumber(result.targetCapital)
+      && Array.isArray(result.netWorthProjection)
+      && result.netWorthProjection.length > 0
+      && Array.isArray(result.financialFreedomProgressProjection)
+      && result.financialFreedomProgressProjection.length > 0;
+    const hasAssumptions = positiveNumber(investing.expectedInvestmentReturnPct)
+      && positiveNumber(investing.expectedSuperReturnPct)
+      && positiveNumber(investing.inflationPct)
+      && positiveNumber(investing.safeWithdrawalRatePct);
+    const checks = [
+      { label: "Household ages", complete: hasAnyAge, message: "Add at least one household age." },
+      { label: "Financial Freedom target age", complete: hasTargetAge, message: "Add your target Financial Freedom age." },
+      { label: "Annual lifestyle spending", complete: positiveNumber(personal.targetAnnualSpending), message: "Add the annual lifestyle spending needed for Financial Freedom." },
+      { label: "Income", complete: hasIncome, message: "Add household income." },
+      { label: "Lifestyle expenses", complete: hasExpenses, message: "Add lifestyle expenses." },
+      { label: "Mortgage and debt repayments", complete: hasDebtData, message: "Add mortgage, debt or repayment details." },
+      { label: "Assets", complete: hasAssets, message: "Add current assets." },
+      { label: "Liabilities", complete: hasDebtData, message: "Confirm liabilities and debts, even if they are low." },
+      { label: "Cash or offset balances", complete: hasCashOrOffset, message: "Add cash or offset balances." },
+      { label: "Investments outside super", complete: hasInvestmentsOutsideSuper, message: "Add investments outside super." },
+      { label: "Superannuation", complete: hasSuper, message: "Add superannuation balances." },
+      { label: "Current projections", complete: hasProjections, message: "Complete enough plan details for projections to calculate." },
+      { label: "Investment and inflation assumptions", complete: hasAssumptions, message: "Review investment, super, inflation and withdrawal-rate assumptions." },
+    ];
+    const missing = checks.filter((item) => !item.complete);
+    return {
+      complete: missing.length === 0,
+      missingSections: missing.map((item) => item.label),
+      message: missing.length
+        ? `Complete these sections to unlock AI Insights: ${missing.map((item) => item.label).join(", ")}.`
+        : "Your plan has enough information to generate AI Insights.",
+      missingMessages: missing.map((item) => item.message),
+    };
+  }
+
+  function buildFinancialPlanSummary(planData) {
+    const planCandidate = migratePlanData(planData || plan);
+    const result = CALC.calculatePlan(planCandidate);
+    const personal = planCandidate.personal || {};
+    const incomeItems = Array.isArray(planCandidate.incomeItems) ? planCandidate.incomeItems : [];
+    const expenseItems = Array.isArray(planCandidate.expenseItems) ? planCandidate.expenseItems : [];
+    const assetItems = Array.isArray(planCandidate.assetItems) ? planCandidate.assetItems : [];
+    const liabilityItems = Array.isArray(planCandidate.liabilityItems) ? planCandidate.liabilityItems : [];
+    const assets = planCandidate.assets || {};
+    const liabilities = planCandidate.liabilities || {};
+    const investing = planCandidate.investing || {};
+    const homeLoan = liabilityItems.find((item) => item.type === "homeLoan") || {};
+    const creditCard = liabilityItems.find((item) => item.type === "creditCard") || {};
+    const otherDebtsFromCollections = liabilityItems
+      .filter((item) => !["homeLoan", "creditCard", "hecsHelp"].includes(item.type))
+      .reduce((total, item) => total + numberValue(item.balance), 0);
+    const cashAndOffsets = numberValue(assets.cash)
+      + numberValue(assets.offsetBalance)
+      + categoryTotal(assetItems, ["cash", "offset"]);
+    const investmentsOutsideSuper = numberValue(assets.sharesEtfs)
+      + numberValue(assets.crypto)
+      + categoryTotal(assetItems, ["shares", "crypto", "other"]);
+    const superannuation = numberValue(assets.superPerson1)
+      + numberValue(assets.superPerson2)
+      + categoryTotal(assetItems, ["super"]);
+    const estimatedFreedomAge = targetAgeOutcome(result);
+    return {
+      version: 1,
+      appVersion: APP_VERSION,
+      household: {
+        source: "user-entered",
+        person1Age: numberValue(personal.person1Age),
+        person2Age: numberValue(personal.person2Age),
+        numberOfDependants: numberValue(personal.dependants || personal.children || 0),
+      },
+      goals: {
+        source: "user-entered and app-calculated",
+        targetFinancialFreedomAge: numberValue(personal.fullRetirementAge || personal.semiRetirementAge || personal.workOptionalAge),
+        targetAnnualRetirementSpending: numberValue(personal.targetAnnualSpending),
+        emergencyFundTarget: numberValue((planCandidate.goalItems || []).find((item) => /emergency/i.test(item.name || ""))?.targetAmount || result.annualLivingExpenses / 4 || 0),
+        primaryGoal: "Financial Freedom",
+        targetFiCapitalCalculatedByApp: numberValue(result.targetCapital),
+      },
+      income: {
+        source: "user-entered income, app-calculated tax and cashflow",
+        combinedGrossIncome: numberValue(result.annualGrossIncome || annualCollectionTotal(incomeItems)),
+        estimatedCombinedNetIncomeAfterTaxAndHelp: numberValue(result.netIncomeAfterTaxHelp),
+        expectedIncomeGrowth: numberValue(investing.incomeGrowthPct || 0),
+      },
+      expenses: {
+        source: "user-entered expenses and app-calculated annual cashflow",
+        annualLifestyleExpenses: numberValue(result.annualLivingExpenses || annualCollectionTotal(expenseItems)),
+        mortgageRepayments: numberValue(result.annualMortgageRepayments),
+        otherDebtRepayments: numberValue(result.annualDebtRepayments - result.annualMortgageRepayments),
+        calculatedAnnualSurplusBeforeInvesting: numberValue(result.cashSurplusBeforeInvesting),
+        calculatedFinalAnnualSurplus: numberValue(result.finalProjectedCashSurplus),
+      },
+      assets: {
+        source: "user-entered",
+        home: numberValue(assets.homeValue || categoryTotal(assetItems, ["home"])),
+        otherProperty: numberValue(assets.otherPropertyValue || categoryTotal(assetItems, ["otherProperty"])),
+        cashAndOffsets,
+        investmentsOutsideSuper,
+        superannuation,
+        totalAssetsCalculatedByApp: numberValue(result.totalAssets),
+      },
+      liabilities: {
+        source: "user-entered and app-calculated",
+        homeLoan: numberValue(liabilities.homeLoanBalance || homeLoan.balance),
+        otherDebts: numberValue(liabilities.otherDebts) + otherDebtsFromCollections,
+        creditCardDebt: numberValue(liabilities.creditCardBalance || creditCard.balance),
+        hecsHelpDebt: numberValue(liabilities.hecsHelpDebt),
+        totalLiabilitiesCalculatedByApp: numberValue(result.totalLiabilities),
+        homeLoanInterestRatePct: numberValue(liabilities.homeLoanInterestRatePct || homeLoan.interestRatePct),
+        homeLoanRemainingTermYears: numberValue(liabilities.loanTermYears || homeLoan.termYears),
+      },
+      currentProjections: {
+        source: "app-calculated",
+        currentNetWorth: numberValue(result.currentNetWorth),
+        currentFinancialIndependenceAssets: numberValue(result.financialIndependenceAssets),
+        accessibleInvestmentAssets: numberValue(result.accessibleInvestmentAssets),
+        estimatedAnnualPassiveIncome: numberValue(result.financialIndependenceAssets * (numberValue(investing.safeWithdrawalRatePct) / 100)),
+        financialFreedomProgressPct: numberValue(result.financialFreedomScore),
+        estimatedFinancialIndependenceAge: firstProjectedAgeAtProgress(result, 75),
+        estimatedFinancialFreedomAge: estimatedFreedomAge,
+        projectedRetirementAssets: numberValue(result.totalRetirementAssets),
+        emergencyFundCoverageMonths: result.annualLivingExpenses ? Math.round((cashAndOffsets / result.annualLivingExpenses) * 12) : 0,
+      },
+      assumptions: {
+        source: "user-entered assumptions and app tax assumptions",
+        investmentReturnPct: numberValue(investing.expectedInvestmentReturnPct),
+        inflationPct: numberValue(investing.inflationPct),
+        superReturnPct: numberValue(investing.expectedSuperReturnPct),
+        employerSuperContributions: numberValue(investing.employerSuperContributions),
+        safeWithdrawalRatePct: numberValue(investing.safeWithdrawalRatePct),
+        taxYear: "2026-27",
+        medicareLevyPct: 2,
+        concessionalSuperContributionsTaxPct: 15,
+      },
+    };
+  }
+
+  function stableStringify(value) {
+    if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+    if (value && typeof value === "object") {
+      return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(",")}}`;
+    }
+    return JSON.stringify(value);
+  }
+
+  function simpleHash(value) {
+    const input = typeof value === "string" ? value : stableStringify(value);
+    let hash = 0;
+    for (let index = 0; index < input.length; index += 1) {
+      hash = ((hash << 5) - hash + input.charCodeAt(index)) | 0;
+    }
+    return Math.abs(hash).toString(36);
+  }
+
+  function currentAiInsightsSettings() {
+    ensurePlanSettings(plan);
+    return plan.reportSettings.aiInsights;
+  }
+
+  function currentPlanInsightsHash() {
+    return simpleHash(buildFinancialPlanSummary(plan));
+  }
+
+  function validateAiInsightsReport(report) {
+    if (!report || typeof report !== "object") return null;
+    const allowedRatings = new Set(["Strong", "Stable", "Needs Attention", "Insufficient Information"]);
+    const normaliseList = (items, mapper) => Array.isArray(items) ? items.map(mapper).filter(Boolean).slice(0, 8) : [];
+    const stringList = (items) => Array.isArray(items) ? items.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 8) : [];
+    const strengths = normaliseList(report.strengths, (item) => ({
+      title: String(item?.title || "").trim(),
+      explanation: String(item?.explanation || "").trim(),
+    })).filter((item) => item.title && item.explanation);
+    const pressurePoints = normaliseList(report.pressurePoints, (item) => ({
+      title: String(item?.title || "").trim(),
+      explanation: String(item?.explanation || "").trim(),
+      importance: ["High", "Medium", "Low"].includes(item?.importance) ? item.importance : "Medium",
+    })).filter((item) => item.title && item.explanation);
+    const rankedOpportunities = normaliseList(report.rankedOpportunities, (item, index) => ({
+      rank: Number(item?.rank) || index + 1,
+      title: String(item?.title || "").trim(),
+      explanation: String(item?.explanation || "").trim(),
+      potentialImpact: ["High", "Medium", "Low"].includes(item?.potentialImpact) ? item.potentialImpact : "Medium",
+      complexity: ["Low", "Medium", "High"].includes(item?.complexity) ? item.complexity : "Medium",
+      tradeOffs: stringList(item?.tradeOffs),
+    })).filter((item) => item.title && item.explanation);
+    const suggestedScenarios = normaliseList(report.suggestedScenarios, (item) => ({
+      title: String(item?.title || "").trim(),
+      reason: String(item?.reason || "").trim(),
+      scenarioInputs: stringList(item?.scenarioInputs),
+      disclaimer: String(item?.disclaimer || "").trim(),
+    })).filter((item) => item.title && item.reason);
+    const actionPlan = {
+      next30Days: stringList(report.actionPlan?.next30Days),
+      next12Months: stringList(report.actionPlan?.next12Months),
+      longerTerm: stringList(report.actionPlan?.longerTerm),
+    };
+    const rating = allowedRatings.has(report.overallPosition?.rating) ? report.overallPosition.rating : "Stable";
+    const summary = String(report.overallPosition?.summary || "").trim();
+    if (!summary) return null;
+    return {
+      generatedAt: report.generatedAt || new Date().toISOString(),
+      overallPosition: { rating, summary },
+      strengths,
+      pressurePoints,
+      rankedOpportunities,
+      suggestedScenarios,
+      actionPlan,
+      missingInformation: stringList(report.missingInformation),
+      importantConsiderations: stringList(report.importantConsiderations),
+      disclaimer: String(report.disclaimer || "This report provides general educational information and scenario guidance based on the information and assumptions entered into the app. It does not take into account all matters that may be relevant to your circumstances and does not constitute personal financial product, taxation, legal or credit advice. Projections are estimates only and actual outcomes may vary. Consider obtaining advice from an appropriately licensed professional before acting on financial decisions.").trim(),
+    };
   }
 
   function markPersonalPlanCreated() {
@@ -1331,6 +1644,302 @@
     if (introSampleActions) introSampleActions.classList.toggle("hidden", Boolean(userState.hasCreatedPersonalPlan));
     const continuePanel = document.getElementById("continuePanel");
     if (continuePanel) continuePanel.classList.toggle("hidden", !hasSavedDraft());
+  }
+
+  async function loadAiInsightsConfig() {
+    if (aiInsightsConfig.configLoaded && aiInsightsConfig.enabled) {
+      renderOutputs();
+      return;
+    }
+    try {
+      const response = await fetch(AI_INSIGHTS_ENDPOINT, {
+        method: "GET",
+        headers: { Accept: "application/json" },
+      });
+      if (!response.ok) {
+        aiInsightsConfig = { ...aiInsightsConfig, enabled: false, configLoaded: true };
+        renderOutputs();
+        return;
+      }
+      const config = await response.json();
+      aiInsightsConfig = {
+        enabled: Boolean(config.enabled),
+        configLoaded: true,
+        maxGenerations: Number(config.maxGenerations) || AI_INSIGHTS_DEFAULT_MAX_GENERATIONS,
+        cooldownMs: Number(config.cooldownMs) || AI_INSIGHTS_DEFAULT_COOLDOWN_MS,
+      };
+    } catch {
+      aiInsightsConfig = { ...aiInsightsConfig, enabled: Boolean(window.FFS_ENABLE_AI_INSIGHTS), configLoaded: true };
+    }
+    renderOutputs();
+  }
+
+  function renderAiInsightsHomeCard(result) {
+    const card = document.getElementById("aiInsightsHomeCard");
+    if (!card) return;
+    if (!aiInsightsConfig.enabled) {
+      card.classList.add("hidden");
+      return;
+    }
+    const completion = isFinancialPlanComplete(plan, result);
+    card.classList.remove("hidden");
+    card.classList.toggle("ai-insights-card-locked", !completion.complete);
+    card.classList.toggle("ai-insights-card-active", completion.complete);
+    card.setAttribute("aria-disabled", completion.complete ? "false" : "true");
+    card.setAttribute("role", completion.complete ? "button" : "group");
+    card.tabIndex = completion.complete ? 0 : -1;
+    const missingPreview = completion.missingSections.slice(0, 3).join(", ");
+    card.innerHTML = `
+      <span class="ai-beta-label">Private Beta</span>
+      <h3>AI Financial Freedom Insights</h3>
+      <p>Receive a personalised explanation of your financial position, identify your biggest opportunities and explore strategies that may help you reach financial freedom sooner.</p>
+      ${completion.complete
+        ? `<button class="btn btn-primary mt-4" type="button" data-ai-insights-action="open">Open AI Insights</button>`
+        : `<div class="ai-locked-note">
+            <strong>Complete your financial plan to unlock AI Insights.</strong>
+            <small>${escapeHtml(missingPreview ? `Still needed: ${missingPreview}.` : completion.message)}</small>
+          </div>`}
+    `;
+  }
+
+  function ensureAiInsightsModal() {
+    let modal = document.getElementById("aiInsightsModal");
+    if (modal) return modal;
+    document.body.insertAdjacentHTML("beforeend", `
+      <div class="ai-insights-modal hidden" id="aiInsightsModal" role="dialog" aria-modal="true" aria-labelledby="aiInsightsTitle">
+        <button class="ai-insights-backdrop" type="button" data-ai-insights-action="close" aria-label="Close AI insights"></button>
+        <article class="ai-insights-panel">
+          <button class="goal-info-close" type="button" data-ai-insights-action="close" aria-label="Close">X</button>
+          <div id="aiInsightsModalBody"></div>
+        </article>
+      </div>
+    `);
+    return document.getElementById("aiInsightsModal");
+  }
+
+  function aiUsageLimitMessage() {
+    const settings = currentAiInsightsSettings();
+    const usage = settings.usage || {};
+    const maxGenerations = Number(aiInsightsConfig.maxGenerations) || AI_INSIGHTS_DEFAULT_MAX_GENERATIONS;
+    const cooldownMs = Number(aiInsightsConfig.cooldownMs) || AI_INSIGHTS_DEFAULT_COOLDOWN_MS;
+    const count = Number(usage.count) || 0;
+    if (count >= maxGenerations) return `Private beta limit reached for this plan. You can still review your saved insights.`;
+    if (usage.lastGeneratedAt) {
+      const elapsed = Date.now() - new Date(usage.lastGeneratedAt).getTime();
+      if (Number.isFinite(elapsed) && elapsed < cooldownMs) {
+        const seconds = Math.ceil((cooldownMs - elapsed) / 1000);
+        return `Please wait ${seconds} seconds before generating another review.`;
+      }
+    }
+    return "";
+  }
+
+  function aiScenarioTarget(title, inputs = []) {
+    const text = `${title} ${inputs.join(" ")}`.toLowerCase();
+    if (/super|salary sacrifice|concessional/.test(text)) return "super";
+    if (/mortgage|loan|debt|offset|repay/.test(text)) return "decision";
+    if (/spend|retirement spending|lifestyle|target age|age/.test(text)) return "goals";
+    if (/income|work|salary/.test(text)) return "setup";
+    if (/invest|share|etf|portfolio/.test(text)) return "investments";
+    return "decision";
+  }
+
+  function renderAiInsightList(items, className = "") {
+    if (!items?.length) return `<p class="ai-empty-note">No specific items were returned for this section.</p>`;
+    return `<div class="ai-card-list ${className}">${items.map((item) => `
+      <article class="ai-result-card">
+        <div class="ai-result-card-heading">
+          <h4>${escapeHtml(item.title)}</h4>
+          ${item.importance ? `<span class="ai-chip">${escapeHtml(item.importance)}</span>` : ""}
+          ${item.potentialImpact ? `<span class="ai-chip">${escapeHtml(item.potentialImpact)} impact</span>` : ""}
+        </div>
+        <p>${escapeHtml(item.explanation || item.reason || "")}</p>
+        ${item.tradeOffs?.length ? `<ul>${item.tradeOffs.map((tradeOff) => `<li>${escapeHtml(tradeOff)}</li>`).join("")}</ul>` : ""}
+      </article>
+    `).join("")}</div>`;
+  }
+
+  function renderAiInsightsReport(report) {
+    if (!report) return "";
+    return `
+      <section class="ai-results">
+        <div class="ai-report-section">
+          <span class="metric-label">Overall Position</span>
+          <article class="ai-overall-card">
+            <span class="ai-rating">${escapeHtml(report.overallPosition.rating)}</span>
+            <p>${escapeHtml(report.overallPosition.summary)}</p>
+          </article>
+        </div>
+        <div class="ai-report-section">
+          <h3>Your Financial Strengths</h3>
+          ${renderAiInsightList(report.strengths)}
+        </div>
+        <div class="ai-report-section">
+          <h3>What May Be Slowing Your Progress</h3>
+          ${renderAiInsightList(report.pressurePoints)}
+        </div>
+        <div class="ai-report-section">
+          <h3>Highest-Priority Opportunities</h3>
+          ${renderAiInsightList(report.rankedOpportunities)}
+        </div>
+        <div class="ai-report-section">
+          <h3>Scenarios Worth Exploring</h3>
+          ${report.suggestedScenarios?.length ? report.suggestedScenarios.map((scenario) => {
+            const target = aiScenarioTarget(scenario.title, scenario.scenarioInputs);
+            return `
+              <article class="ai-result-card">
+                <div class="ai-result-card-heading">
+                  <h4>${escapeHtml(scenario.title)}</h4>
+                  <span class="ai-chip">Scenario</span>
+                </div>
+                <p>${escapeHtml(scenario.reason)}</p>
+                ${scenario.scenarioInputs?.length ? `<ul>${scenario.scenarioInputs.map((input) => `<li>${escapeHtml(input)}</li>`).join("")}</ul>` : ""}
+                ${scenario.disclaimer ? `<small>${escapeHtml(scenario.disclaimer)}</small>` : ""}
+                <button class="btn mt-3" type="button" data-ai-scenario-target="${escapeHtml(target)}">Explore This Scenario</button>
+              </article>
+            `;
+          }).join("") : `<p class="ai-empty-note">No scenario suggestions were returned.</p>`}
+        </div>
+        <div class="ai-report-section">
+          <h3>Suggested Action Plan</h3>
+          <div class="ai-action-grid">
+            <article><h4>Next 30 Days</h4><ul>${report.actionPlan.next30Days.map((item) => `<li>${escapeHtml(item)}</li>`).join("") || "<li>Review your plan details.</li>"}</ul></article>
+            <article><h4>Next 12 Months</h4><ul>${report.actionPlan.next12Months.map((item) => `<li>${escapeHtml(item)}</li>`).join("") || "<li>Model one practical scenario.</li>"}</ul></article>
+            <article><h4>Longer Term</h4><ul>${report.actionPlan.longerTerm.map((item) => `<li>${escapeHtml(item)}</li>`).join("") || "<li>Review assumptions regularly.</li>"}</ul></article>
+          </div>
+        </div>
+        <div class="ai-report-section">
+          <h3>Important Considerations</h3>
+          <ul>${[...(report.missingInformation || []), ...(report.importantConsiderations || [])].map((item) => `<li>${escapeHtml(item)}</li>`).join("") || "<li>Actual outcomes may vary from the assumptions used.</li>"}</ul>
+        </div>
+        <div class="ai-disclaimer">
+          <h3>General Information Disclaimer</h3>
+          <p>${escapeHtml(report.disclaimer)}</p>
+        </div>
+      </section>
+    `;
+  }
+
+  function renderAiInsightsModal() {
+    const modal = ensureAiInsightsModal();
+    modal.classList.toggle("hidden", !aiInsightsUi.isOpen);
+    if (!aiInsightsUi.isOpen) return;
+    const body = document.getElementById("aiInsightsModalBody");
+    if (!body) return;
+    const result = CALC.calculatePlan(plan);
+    const completion = isFinancialPlanComplete(plan, result);
+    const settings = currentAiInsightsSettings();
+    const report = validateAiInsightsReport(settings.report);
+    const currentHash = currentPlanInsightsHash();
+    const isStale = Boolean(report && settings.planHash && settings.planHash !== currentHash);
+    const limitMessage = aiUsageLimitMessage();
+    const canGenerate = completion.complete
+      && aiInsightsUi.consentAccepted
+      && !aiInsightsUi.isLoading
+      && !limitMessage;
+    body.innerHTML = `
+      <div class="ai-modal-header">
+        <div>
+          <span class="ai-beta-label">Private Beta</span>
+          <h2 id="aiInsightsTitle">Your Financial Freedom Insights</h2>
+          <p>Your financial plan will be securely analysed to provide educational insights, highlight financial pressure points and suggest scenarios you may wish to explore.</p>
+        </div>
+      </div>
+      <div class="ai-privacy-note">
+        <strong>Privacy notice</strong>
+        <p>Only an anonymous financial summary is sent for review. Names, contact details, account numbers, tax file numbers and unrelated personal notes are not included.</p>
+        <p>For your privacy, do not enter names, account numbers, tax file numbers or other identifying information into free-text fields.</p>
+      </div>
+      ${completion.complete ? "" : `<div class="ai-warning"><strong>Complete your financial plan to unlock AI Insights.</strong><p>${escapeHtml(completion.message)}</p></div>`}
+      ${isStale ? `<div class="ai-warning"><strong>Your financial plan has changed since these insights were generated.</strong><p>Generate a new review to reflect your updated position.</p></div>` : ""}
+      ${aiInsightsUi.error ? `<div class="ai-error"><strong>AI Insights could not be generated.</strong><p>${escapeHtml(aiInsightsUi.error)}</p></div>` : ""}
+      <label class="ai-consent">
+        <input id="aiInsightsConsent" type="checkbox"${aiInsightsUi.consentAccepted ? " checked" : ""}>
+        <span>I understand that this report provides general educational information and scenario guidance only. It does not provide personal financial product advice or replace advice from a licensed financial adviser.</span>
+      </label>
+      <div class="ai-actions">
+        <button class="btn btn-primary" type="button" data-ai-insights-action="generate" ${canGenerate ? "" : "disabled"}>
+          ${aiInsightsUi.isLoading ? "Generating..." : report ? "Regenerate My Insights" : "Generate My Insights"}
+        </button>
+        ${limitMessage ? `<small>${escapeHtml(limitMessage)}</small>` : ""}
+      </div>
+      ${aiInsightsUi.isLoading ? `<div class="ai-loading" role="status">Reviewing your plan and preparing your private beta insights...</div>` : ""}
+      ${report ? `<p class="ai-generated-time">Generated ${escapeHtml(formatLastSaved(report.generatedAt))}</p>${renderAiInsightsReport(report)}` : ""}
+    `;
+  }
+
+  function openAiInsights() {
+    if (!aiInsightsConfig.enabled) return;
+    const completion = isFinancialPlanComplete(plan, CALC.calculatePlan(plan));
+    if (!completion.complete) {
+      updateSaveStatus(completion.message);
+      renderAiInsightsHomeCard(CALC.calculatePlan(plan));
+      return;
+    }
+    aiInsightsUi.isOpen = true;
+    aiInsightsUi.error = "";
+    renderAiInsightsModal();
+  }
+
+  function closeAiInsightsModal() {
+    aiInsightsUi.isOpen = false;
+    renderAiInsightsModal();
+  }
+
+  async function generateAiInsights() {
+    if (aiInsightsUi.isLoading) return;
+    const result = CALC.calculatePlan(plan);
+    const completion = isFinancialPlanComplete(plan, result);
+    if (!completion.complete) {
+      aiInsightsUi.error = completion.message;
+      renderAiInsightsModal();
+      return;
+    }
+    const limitMessage = aiUsageLimitMessage();
+    if (limitMessage) {
+      aiInsightsUi.error = limitMessage;
+      renderAiInsightsModal();
+      return;
+    }
+    const summary = buildFinancialPlanSummary(plan);
+    const planHash = simpleHash(summary);
+    aiInsightsUi.isLoading = true;
+    aiInsightsUi.error = "";
+    renderAiInsightsModal();
+    try {
+      const response = await fetch(AI_INSIGHTS_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          planSummary: summary,
+          planHash,
+          requestedAt: new Date().toISOString(),
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "The AI service was not available. Please try again later.");
+      const validated = validateAiInsightsReport(payload.insights);
+      if (!validated) throw new Error("The AI response could not be read safely. Please try again.");
+      const settings = currentAiInsightsSettings();
+      settings.report = validated;
+      settings.generatedAt = validated.generatedAt;
+      settings.planHash = planHash;
+      settings.usage = {
+        count: (Number(settings.usage?.count) || 0) + 1,
+        lastGeneratedAt: new Date().toISOString(),
+      };
+      saveDraft("AI Insights generated.");
+      updateSaveStatus("AI Insights generated.");
+    } catch (error) {
+      aiInsightsUi.error = error.message || "The review could not be generated. Please try again later.";
+    } finally {
+      aiInsightsUi.isLoading = false;
+      renderAiInsightsModal();
+      renderAiInsightsHomeCard(result);
+    }
   }
 
   function blankUserPlan() {
@@ -5910,6 +6519,7 @@
     updatePersonDependentLabels();
     updateSaveStatus();
     updatePreview(result);
+    renderAiInsightsHomeCard(result);
     renderDashboard(result);
     renderCashflow(result);
     renderLoan(result);
@@ -5928,6 +6538,7 @@
     renderSetupSummary(result);
     renderComparison(result);
     renderWhatIf(result);
+    renderAiInsightsModal();
     document.getElementById("disclaimer").textContent = DATA.disclaimer;
     if (hasOpenedWorkspace) document.getElementById("appWorkspace").classList.remove("hidden");
   }
@@ -6237,6 +6848,11 @@
 
     document.addEventListener("change", (event) => {
       const target = event.target;
+      if (target.id === "aiInsightsConsent") {
+        aiInsightsUi.consentAccepted = Boolean(target.checked);
+        renderAiInsightsModal();
+        return;
+      }
       if (target.closest("[data-timing-editor]")) {
         updateWeeklyTimingDraftFromInput(target);
       }
@@ -6274,6 +6890,31 @@
 
       if (event.target.closest("[data-info-close]")) {
         closeGoalInfo();
+        return;
+      }
+
+      const aiAction = event.target.closest("[data-ai-insights-action]");
+      if (aiAction) {
+        event.preventDefault();
+        const action = aiAction.dataset.aiInsightsAction;
+        if (action === "open") openAiInsights();
+        if (action === "close") closeAiInsightsModal();
+        if (action === "generate") generateAiInsights();
+        return;
+      }
+
+      const aiCard = event.target.closest("[data-ai-insights-card]");
+      if (aiCard) {
+        event.preventDefault();
+        if (aiCard.getAttribute("aria-disabled") !== "true") openAiInsights();
+        return;
+      }
+
+      const aiScenarioTarget = event.target.closest("[data-ai-scenario-target]");
+      if (aiScenarioTarget) {
+        event.preventDefault();
+        closeAiInsightsModal();
+        showWorkspace(aiScenarioTarget.dataset.aiScenarioTarget || "decision");
         return;
       }
 
@@ -6479,6 +7120,14 @@
         closeMobileActionMenu();
         closeSamplePlanMenus();
         closeGoalInfo();
+        closeAiInsightsModal();
+      }
+
+      const aiCard = event.target.closest?.("[data-ai-insights-card]");
+      if (aiCard && (event.key === "Enter" || event.key === " ")) {
+        event.preventDefault();
+        if (aiCard.getAttribute("aria-disabled") !== "true") openAiInsights();
+        return;
       }
 
       const summaryJump = event.target.closest?.("[data-summary-jump]");
@@ -6548,5 +7197,6 @@
 
   renderAll();
   bindEvents();
+  loadAiInsightsConfig();
   if (hasOpenedWorkspace) showWorkspace(activeView);
 })();
