@@ -12,6 +12,7 @@
   const AI_INSIGHTS_ENDPOINT = "/api/ai-insights";
   const AI_INSIGHTS_DEFAULT_MAX_GENERATIONS = 5;
   const AI_INSIGHTS_DEFAULT_COOLDOWN_MS = 60000;
+  const ENGAGEMENT_JOURNEY_ENABLED = window.FFS_ENGAGEMENT_JOURNEY_ENABLED !== false;
   console.info(`Weekly Plan editor build: ${WEEKLY_EDITOR_BUILD_ID}`);
   const frequencies = [
     ["weekly", "Weekly"],
@@ -366,6 +367,480 @@
         }).join("")}
       </div>
     `;
+  }
+
+  const engagementJourneyStages = [
+    {
+      name: "Getting Started",
+      purpose: "Complete the plan details and confirm the household's current position.",
+      priority: "Finish the Financial Plan so progress can be measured.",
+    },
+    {
+      name: "Building Stability",
+      purpose: "Create positive cashflow and start building reliable cash reserves.",
+      priority: "Keep regular spending below income and confirm the weekly plan.",
+    },
+    {
+      name: "Emergency Ready",
+      purpose: "Build a cash buffer so unexpected costs do not derail the plan.",
+      priority: "Increase cash or offset savings toward three months of expenses.",
+    },
+    {
+      name: "Reducing Debt",
+      purpose: "Reduce pressure from loans, credit cards and other debts.",
+      priority: "Keep repayments on track and consider extra debt reduction scenarios.",
+    },
+    {
+      name: "Building Wealth",
+      purpose: "Invest regularly and grow income-producing assets.",
+      priority: "Maintain planned investment and super contributions.",
+    },
+    {
+      name: "Growing Investment Income",
+      purpose: "Build enough investments for passive income to cover more lifestyle costs.",
+      priority: "Review whether current investing is enough for the target age.",
+    },
+    {
+      name: "Approaching Independence",
+      purpose: "Close the gap between investment income and the target lifestyle cost.",
+      priority: "Model the highest-impact scenarios before changing the plan.",
+    },
+    {
+      name: "Financial Independence",
+      purpose: "Investments and passive income can fund a meaningful portion of lifestyle costs.",
+      priority: "Review accessibility, super timing and risk before relying on the result.",
+    },
+    {
+      name: "Financial Freedom",
+      purpose: "Investments and passive income are projected to fund the chosen lifestyle.",
+      priority: "Keep the plan reviewed and stress-test assumptions regularly.",
+    },
+  ];
+
+  function engagementData(targetPlan = plan) {
+    ensurePlanSettings(targetPlan);
+    return targetPlan.reportSettings.engagement;
+  }
+
+  function engagementJourneyIsEnabled() {
+    return ENGAGEMENT_JOURNEY_ENABLED && engagementData().engagementJourneyEnabled !== false;
+  }
+
+  function engagementProgress(result) {
+    const targetSpending = Number(plan.personal.targetAnnualSpending || result.annualLivingExpenses) || 0;
+    const withdrawalRate = safeWithdrawalRate();
+    const sustainableIncome = (Number(result.financialIndependenceAssets) || 0) * withdrawalRate;
+    const fiRaw = targetSpending > 0 ? sustainableIncome / targetSpending * 100 : 0;
+    const ffRaw = Number(result.targetCapital) > 0
+      ? (Number(result.financialIndependenceAssets) || 0) / Number(result.targetCapital) * 100
+      : fiRaw;
+    return {
+      targetSpending,
+      sustainableIncome,
+      financialIndependenceRaw: Math.max(0, fiRaw),
+      financialFreedomRaw: Math.max(0, ffRaw),
+      financialIndependence: Math.min(100, Math.max(0, fiRaw)),
+      financialFreedom: Math.min(100, Math.max(0, ffRaw)),
+    };
+  }
+
+  function emergencyMonths(result) {
+    const cash = (Number(plan.assets.cash) || 0) + (Number(plan.assets.offsetBalance) || 0);
+    const monthlyCosts = (Number(result.annualLivingExpenses) || 0) / 12;
+    return monthlyCosts > 0 ? cash / monthlyCosts : 0;
+  }
+
+  function engagementStageInfo(result) {
+    const progress = engagementProgress(result);
+    const emergency = emergencyMonths(result);
+    const surplus = Number(result.finalProjectedCashSurplus) || 0;
+    const invested = Number(result.investmentBalance) || 0;
+    const debt = Number(result.totalLiabilities) || 0;
+    const hasPlanData = Boolean(result.annualGrossIncome || result.totalAssets || result.annualLivingExpenses);
+    let index = 0;
+    if (!hasPlanData) index = 0;
+    else if (progress.financialFreedomRaw >= 100) index = 8;
+    else if (progress.financialIndependenceRaw >= 100) index = 7;
+    else if (progress.financialIndependenceRaw >= 75) index = 6;
+    else if (progress.financialIndependenceRaw >= 40) index = 5;
+    else if (invested > 0 || result.annualInvestmentContributions > 0) index = 4;
+    else if (debt > 0 && result.totalAssets > 0) index = 3;
+    else if (emergency >= 3) index = 2;
+    else if (surplus > 0 || emergency > 0) index = 1;
+    const stage = engagementJourneyStages[index];
+    const nextStage = engagementJourneyStages[index + 1] || null;
+    const actions = [];
+    if (!hasPlanData) actions.push("Complete the Financial Plan to calculate your journey.");
+    if (surplus <= 0 && hasPlanData) actions.push("Create positive final projected surplus.");
+    if (emergency < 3 && hasPlanData) actions.push(`Build cash or offset reserves toward ${emergency.toFixed(1)} of 3 months covered.`);
+    if ((invested <= 0 && result.annualInvestmentContributions <= 0) && hasPlanData) actions.push("Start building income-producing investments.");
+    if (debt > 0 && result.totalAssets > 0 && debt > result.totalAssets * 0.5) actions.push("Reduce debt pressure below 50% of total assets.");
+    if (progress.financialIndependenceRaw < 100 && invested > 0) actions.push(`Grow FI assets toward ${money(result.targetCapital || 0)}.`);
+    if (!actions.length) actions.push(stage.priority);
+    return {
+      index,
+      stage,
+      nextStage,
+      progress,
+      emergency,
+      actions: actions.slice(0, 3),
+    };
+  }
+
+  function engagementJourneyMapHtml(stageInfo) {
+    return `
+      <div class="engagement-stage-map" role="list" aria-label="Financial journey stages">
+        ${engagementJourneyStages.map((stage, index) => {
+          const complete = index < stageInfo.index;
+          const current = index === stageInfo.index;
+          return `
+            <div class="engagement-stage-step ${complete ? "complete" : ""} ${current ? "current" : ""}" role="listitem" aria-current="${current ? "step" : "false"}">
+              <span>${complete ? "OK" : index + 1}</span>
+              <strong>${escapeHtml(stage.name)}</strong>
+              <small>${current ? "Current" : complete ? "Completed" : index === stageInfo.index + 1 ? "Next" : "Later"}</small>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    `;
+  }
+
+  function engagementGreetingName() {
+    return String(plan.personal.person1Name || "").trim() || "there";
+  }
+
+  function engagementGreeting() {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Good morning";
+    if (hour < 18) return "Good afternoon";
+    return "Good evening";
+  }
+
+  function storedShortTermGoals() {
+    return engagementData().shortTermGoals;
+  }
+
+  function normalisedShortTermGoals(result) {
+    const stored = storedShortTermGoals()
+      .filter((goal) => goal.status !== "cancelled")
+      .map((goal) => ({
+        id: goal.id || makeId("goal"),
+        name: goal.name || "Short-term goal",
+        category: goal.category || "custom",
+        targetAmount: Number(goal.targetAmount) || 0,
+        currentAmount: Number(goal.currentAmount) || 0,
+        targetDate: goal.targetDate || "",
+        recurringAmount: Number(goal.recurringAmount) || 0,
+        recurringFrequency: goal.recurringFrequency || "weekly",
+        priority: goal.priority || "medium",
+        status: goal.status || "active",
+        source: "engagement",
+      }));
+    const legacyGoals = Array.isArray(plan.goalItems) ? plan.goalItems
+      .filter((goal) => (Number(goal.target) || 0) > 0)
+      .map((goal) => ({
+        id: goal.id || makeId("legacy-goal"),
+        name: goal.name || "Goal",
+        category: /emergency/i.test(goal.name || "") ? "emergency fund" : "custom",
+        targetAmount: Number(goal.target) || 0,
+        currentAmount: Number(goal.current) || 0,
+        targetDate: "",
+        recurringAmount: 0,
+        recurringFrequency: "weekly",
+        priority: "medium",
+        status: (Number(goal.current) || 0) >= (Number(goal.target) || 0) ? "completed" : "active",
+        source: "legacy",
+      })) : [];
+    const fallbackTarget = Math.max(1000, Math.round((Number(result.annualLivingExpenses) || Number(plan.personal.targetAnnualSpending) || 0) / 4));
+    const fallbackCurrent = Math.min(fallbackTarget, (Number(plan.assets.cash) || 0) + (Number(plan.assets.offsetBalance) || 0));
+    const fallback = fallbackTarget > 1000 ? [{
+      id: "fallback-emergency-fund",
+      name: "Emergency fund",
+      category: "emergency fund",
+      targetAmount: fallbackTarget,
+      currentAmount: fallbackCurrent,
+      targetDate: "",
+      recurringAmount: Math.max(50, Math.round(Math.max(0, fallbackTarget - fallbackCurrent) / 26)),
+      recurringFrequency: "fortnightly",
+      priority: "high",
+      status: fallbackCurrent >= fallbackTarget ? "completed" : "active",
+      source: "calculated",
+    }] : [];
+    return [...stored, ...legacyGoals, ...fallback];
+  }
+
+  function primaryShortTermGoal(result) {
+    const goals = normalisedShortTermGoals(result);
+    return goals.find((goal) => goal.status === "active" && goal.targetAmount > goal.currentAmount)
+      || goals.find((goal) => goal.targetAmount > 0)
+      || null;
+  }
+
+  function goalProgressPercent(goal) {
+    if (!goal?.targetAmount) return 0;
+    return Math.min(100, Math.max(0, (Number(goal.currentAmount) || 0) / Number(goal.targetAmount) * 100));
+  }
+
+  function goalRemaining(goal) {
+    return Math.max(0, (Number(goal?.targetAmount) || 0) - (Number(goal?.currentAmount) || 0));
+  }
+
+  function goalTimeRemaining(goal) {
+    if (!goal?.targetDate) return "Target date not set";
+    const today = new Date();
+    const date = new Date(`${goal.targetDate}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return "Target date not set";
+    const weeks = Math.ceil((date.getTime() - today.getTime()) / (7 * 24 * 60 * 60 * 1000));
+    if (weeks <= 0) return "Due now";
+    if (weeks < 9) return `${weeks} week${weeks === 1 ? "" : "s"} remaining`;
+    const months = Math.ceil(weeks / 4.345);
+    return `${months} month${months === 1 ? "" : "s"} remaining`;
+  }
+
+  function weeklyCompletionStreak() {
+    if (!weeklyPlan?.weeks?.length) return 0;
+    const completed = weeklyPlan.weeks
+      .filter((week) => week.isCompleted)
+      .map((week) => week.weekNumber)
+      .sort((a, b) => b - a);
+    if (!completed.length) return 0;
+    let streak = 1;
+    for (let index = 1; index < completed.length; index += 1) {
+      if (completed[index] === completed[index - 1] - 1) streak += 1;
+      else break;
+    }
+    return streak;
+  }
+
+  function currentWeeklyMission(result) {
+    const week = weeklyCurrentWeek();
+    const streak = weeklyCompletionStreak();
+    const plannedInvestment = week?.planned?.investment || (Number(result.annualInvestmentContributions) || 0) / 52;
+    const plannedSuper = week?.planned?.extraSuper || (Number(result.annualExtraSuperContributions) || 0) / 52;
+    const tasks = [
+      {
+        id: "review",
+        title: "Complete this week's financial review",
+        amount: 0,
+        completed: Boolean(week?.isCompleted),
+      },
+      {
+        id: "balance",
+        title: "Confirm your opening bank balance",
+        amount: 0,
+        completed: Boolean(week?.actual && week.actual.openingBalance !== null && week.actual.openingBalance !== undefined),
+      },
+      {
+        id: "invest",
+        title: plannedInvestment > 0 ? `Record planned investing of ${money(plannedInvestment)}` : "Review investment plan",
+        amount: plannedInvestment,
+        completed: Boolean(week?.actual?.investment !== null && week?.actual?.investment !== undefined),
+      },
+      {
+        id: "super",
+        title: plannedSuper > 0 ? `Record extra super of ${money(plannedSuper)}` : "Review super contributions",
+        amount: plannedSuper,
+        completed: plannedSuper <= 0 || Boolean(week?.actual?.extraSuper !== null && week?.actual?.extraSuper !== undefined),
+      },
+      {
+        id: "bills",
+        title: "Check bills and spending against plan",
+        amount: 0,
+        completed: Boolean(week?.actual?.essentialCosts !== null && week?.actual?.essentialCosts !== undefined),
+      },
+    ];
+    const completedCount = tasks.filter((task) => task.completed).length;
+    return {
+      week,
+      tasks,
+      completedCount,
+      totalTasks: tasks.length,
+      percent: tasks.length ? Math.round(completedCount / tasks.length * 100) : 0,
+      streak,
+      plannedWealthAmount: tasks.reduce((total, task) => total + (Number(task.amount) || 0), 0),
+    };
+  }
+
+  function engagementOpeningMessage(result, stageInfo, goal, mission) {
+    if (mission.week && !mission.week.isCompleted && mission.streak > 0) {
+      return `Completing this week's plan keeps your ${mission.streak}-week streak alive.`;
+    }
+    if (goal && goalRemaining(goal) > 0 && goalRemaining(goal) <= Math.max(500, goal.targetAmount * 0.1)) {
+      return `You are only ${money(goalRemaining(goal))} away from ${goal.name}.`;
+    }
+    if (result.investmentBalance >= 100000) return "Your investments have now passed $100,000.";
+    if (stageInfo.emergency > 0) return `Your emergency fund is now covering ${stageInfo.emergency.toFixed(1)} months.`;
+    if (mission.plannedWealthAmount > 0) return `This week you have ${money(mission.plannedWealthAmount)} planned toward your financial future.`;
+    return "Complete this week's review to update your journey.";
+  }
+
+  function engagementTodayWin(result, goal, mission) {
+    if (mission.week && !mission.week.isCompleted) {
+      return {
+        title: "Complete this week's financial review",
+        text: "Confirm income, bills, transfers and your closing balance so the plan stays current.",
+        action: "weeklyplan",
+        actionLabel: "Open Weekly Plan",
+      };
+    }
+    if (goal && goalRemaining(goal) > 0) {
+      const suggested = Math.min(goalRemaining(goal), Math.max(50, Number(goal.recurringAmount) || 100));
+      return {
+        title: `Add progress to ${goal.name}`,
+        text: `Recording ${money(suggested)} would move this goal closer. Only record money you have actually set aside.`,
+        action: "add-goal-progress",
+        actionLabel: "Add Progress",
+        goalId: goal.id,
+      };
+    }
+    if ((Number(result.annualInvestmentContributions) || 0) > 0) {
+      return {
+        title: "Review your investment contribution",
+        text: "Check that this week's planned investing is still affordable after bills and spending.",
+        action: "investments",
+        actionLabel: "Review Investments",
+      };
+    }
+    return {
+      title: "No urgent action today",
+      text: "You are ready to review goals, weekly cashflow or AI Insights when you have a moment.",
+      action: "dashboard",
+      actionLabel: "View Dashboard",
+    };
+  }
+
+  function syncEngagementAchievements(result) {
+    const data = engagementData();
+    if (data.preferences?.achievementsEnabled === false) return data.achievements;
+    const existing = new Set(data.achievements.map((item) => item.id));
+    const emergency = emergencyMonths(result);
+    const definitions = [
+      { id: "first-weekly-review", active: Boolean(weeklyPlan?.weeks?.some((week) => week.isCompleted)), title: "First Weekly Review", description: "You completed your first weekly money review." },
+      { id: "four-week-streak", active: weeklyCompletionStreak() >= 4, title: "Four Consecutive Weeks", description: "You completed four weekly reviews in a row." },
+      { id: "emergency-started", active: ((Number(plan.assets.cash) || 0) + (Number(plan.assets.offsetBalance) || 0)) > 0, title: "Emergency Fund Started", description: "You have started building cash or offset reserves." },
+      { id: "one-month-covered", active: emergency >= 1, title: "One Month Covered", description: "Your cash and offset reserves cover about one month of living costs." },
+      { id: "three-months-covered", active: emergency >= 3, title: "Three Months Covered", description: "Your cash and offset reserves cover about three months of living costs." },
+      { id: "first-investment-contribution", active: (Number(result.annualInvestmentContributions) || 0) > 0, title: "First Investment Contribution", description: "Your plan includes regular investment contributions." },
+      { id: "invested-100k", active: (Number(result.investmentBalance) || 0) >= 100000, title: "$100,000 Invested", description: "Your investment balance has passed $100,000." },
+      { id: "positive-surplus", active: (Number(result.finalProjectedCashSurplus) || 0) > 0, title: "Positive Monthly Surplus", description: "Your plan keeps a cash buffer after planned spending and wealth-building contributions." },
+      { id: "financial-independence-reached", active: engagementProgress(result).financialIndependenceRaw >= 100, title: "Financial Independence Reached", description: "The app estimates your FI assets can fund the target lifestyle." },
+    ];
+    definitions.forEach((definition) => {
+      if (!definition.active || existing.has(definition.id)) return;
+      data.achievements.unshift({
+        id: definition.id,
+        achievementType: definition.id,
+        title: definition.title,
+        description: definition.description,
+        unlockedAt: new Date().toISOString(),
+        metadata: {},
+      });
+      existing.add(definition.id);
+    });
+    return data.achievements;
+  }
+
+  function logProgressEvent(event) {
+    const data = engagementData();
+    const duplicateKey = event.metadata?.dedupeKey || `${event.eventType}-${event.goalId || ""}-${event.amount || ""}-${new Date().toDateString()}`;
+    const exists = data.progressEvents.some((item) => item.metadata?.dedupeKey === duplicateKey);
+    if (exists) return;
+    data.progressEvents.unshift({
+      id: makeId("progress"),
+      planId: "local-plan",
+      createdAt: new Date().toISOString(),
+      source: "manual",
+      ...event,
+      metadata: {
+        ...(event.metadata || {}),
+        dedupeKey: duplicateKey,
+      },
+    });
+    data.progressEvents = data.progressEvents.slice(0, 80);
+  }
+
+  function latestProgressEvents(limit = 4) {
+    return engagementData().progressEvents.slice(0, limit);
+  }
+
+  function latestAchievement(result) {
+    const achievements = syncEngagementAchievements(result);
+    return achievements[0] || null;
+  }
+
+  function projectionRowAtAge(projection, age) {
+    if (!Array.isArray(projection) || !projection.length) return null;
+    return projection.find((row) => Number(row.age) >= Number(age)) || projection.at(-1);
+  }
+
+  function futureYouPreview(result) {
+    const targetAge = Number(plan.personal.fullRetirementAge || plan.personal.semiRetirementAge || plan.personal.workOptionalAge) || ((Number(plan.personal.person1Age) || 0) + 10);
+    const investment = projectionRowAtAge(result.investmentProjection, targetAge);
+    const superRow = projectionRowAtAge(result.superProjection, targetAge);
+    const progressRow = projectionRowAtAge(result.financialFreedomProgressProjection, targetAge);
+    return {
+      age: targetAge,
+      investmentBalance: Number(investment?.closingBalance) || result.investmentBalance || 0,
+      superBalance: Number(superRow?.closingBalance) || result.superannuationBalance || 0,
+      passiveIncome: annualPassiveIncome(result),
+      progress: Number(progressRow?.progress) || engagementProgress(result).financialFreedomRaw || 0,
+    };
+  }
+
+  function aiOpeningInsightHtml() {
+    const settings = currentAiInsightsSettings();
+    const report = validateAiInsightsReport(settings.report);
+    if (!aiInsightsConfig.enabled) {
+      return `
+        <article class="engagement-card engagement-ai-card">
+          <span class="metric-label">AI Coach</span>
+          <h3>Private beta switched off</h3>
+          <p>AI Insights can be enabled for selected testers without changing the financial plan.</p>
+        </article>
+      `;
+    }
+    if (!report || engagementData().preferences?.aiOpeningInsightsEnabled === false) {
+      return `
+        <article class="engagement-card engagement-ai-card">
+          <span class="metric-label">AI Coach</span>
+          <h3>AI Financial Freedom Insights</h3>
+          <p>Generate private beta insights after completing your plan to see a personalised coaching-style summary.</p>
+          <button class="btn btn-primary" type="button" data-engagement-action="ai">Open AI Insights</button>
+        </article>
+      `;
+    }
+    return `
+      <article class="engagement-card engagement-ai-card">
+        <span class="metric-label">AI-generated insight</span>
+        <h3>${escapeHtml(report.overallPosition.rating)}</h3>
+        <p>${escapeHtml(report.overallPosition.summary)}</p>
+        <small>Uses the anonymous financial summary from your current saved plan.</small>
+        <button class="btn mt-3" type="button" data-engagement-action="ai">Review AI Insights</button>
+      </article>
+    `;
+  }
+
+  function ensureStoredGoal(goal) {
+    const data = engagementData();
+    let stored = data.shortTermGoals.find((item) => item.id === goal.id);
+    if (!stored) {
+      stored = {
+        id: goal.id === "fallback-emergency-fund" ? makeId("goal-emergency") : goal.id,
+        name: goal.name,
+        category: goal.category || "custom",
+        targetAmount: Number(goal.targetAmount) || 0,
+        currentAmount: Number(goal.currentAmount) || 0,
+        targetDate: goal.targetDate || "",
+        recurringAmount: Number(goal.recurringAmount) || 0,
+        recurringFrequency: goal.recurringFrequency || "weekly",
+        priority: goal.priority || "medium",
+        status: goal.status || "active",
+        createdAt: new Date().toISOString(),
+        notes: "",
+      };
+      data.shortTermGoals.unshift(stored);
+    }
+    return stored;
   }
 
   function safeWithdrawalRate() {
@@ -923,10 +1398,53 @@
     return Math.max(0, Math.min(wizardSteps.length - 1, Math.round(step)));
   }
 
+  function defaultEngagementData() {
+    return {
+      version: 1,
+      engagementJourneyEnabled: true,
+      shortTermGoals: [],
+      progressEvents: [],
+      achievements: [],
+      cachedInsights: [],
+      weeklyMissionOverrides: {},
+      preferences: {
+        celebrationsEnabled: true,
+        achievementsEnabled: true,
+        aiOpeningInsightsEnabled: true,
+        reducedMotion: false,
+        reminderPreferences: {
+          enabled: false,
+        },
+      },
+    };
+  }
+
   function ensurePlanSettings(targetPlan = plan) {
     if (!targetPlan.reportSettings || typeof targetPlan.reportSettings !== "object") targetPlan.reportSettings = {};
     if (!targetPlan.reportSettings.weeklyPlanner || typeof targetPlan.reportSettings.weeklyPlanner !== "object") {
       targetPlan.reportSettings.weeklyPlanner = {};
+    }
+    if (!targetPlan.reportSettings.engagement || typeof targetPlan.reportSettings.engagement !== "object") {
+      targetPlan.reportSettings.engagement = defaultEngagementData();
+    } else {
+      const defaults = defaultEngagementData();
+      targetPlan.reportSettings.engagement = {
+        ...defaults,
+        ...targetPlan.reportSettings.engagement,
+        shortTermGoals: Array.isArray(targetPlan.reportSettings.engagement.shortTermGoals) ? targetPlan.reportSettings.engagement.shortTermGoals : [],
+        progressEvents: Array.isArray(targetPlan.reportSettings.engagement.progressEvents) ? targetPlan.reportSettings.engagement.progressEvents : [],
+        achievements: Array.isArray(targetPlan.reportSettings.engagement.achievements) ? targetPlan.reportSettings.engagement.achievements : [],
+        cachedInsights: Array.isArray(targetPlan.reportSettings.engagement.cachedInsights) ? targetPlan.reportSettings.engagement.cachedInsights : [],
+        weeklyMissionOverrides: targetPlan.reportSettings.engagement.weeklyMissionOverrides || {},
+        preferences: {
+          ...defaults.preferences,
+          ...(targetPlan.reportSettings.engagement.preferences || {}),
+          reminderPreferences: {
+            ...defaults.preferences.reminderPreferences,
+            ...(targetPlan.reportSettings.engagement.preferences?.reminderPreferences || {}),
+          },
+        },
+      };
     }
     if (!targetPlan.reportSettings.aiInsights || typeof targetPlan.reportSettings.aiInsights !== "object") {
       targetPlan.reportSettings.aiInsights = {
@@ -2705,6 +3223,212 @@
       points: [{ x: 0, y: percent }, ...result.financialFreedomProgressProjection.map((row) => ({ x: row.year, y: row.progress }))],
     }], { xMarks: [0, 10, 20, 30], xLabel: (mark) => `${mark}y`, yLabel: (value) => `${Math.round(value)}%` });
     renderAssumptions(result);
+  }
+
+  function thisWeekProgressAmount() {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - start.getDay() + 1);
+    return latestProgressEvents(20)
+      .filter((event) => new Date(event.createdAt) >= start)
+      .reduce((total, event) => total + (Number(event.amount) || 0), 0);
+  }
+
+  function engagementMetricCard(label, value, note = "") {
+    return `
+      <article class="engagement-metric-card">
+        <span>${escapeHtml(label)}</span>
+        <strong>${escapeHtml(value)}</strong>
+        ${note ? `<small>${escapeHtml(note)}</small>` : ""}
+      </article>
+    `;
+  }
+
+  function engagementProgressCard(title, percent, actualPercent, note, info) {
+    const width = Math.min(100, Math.max(0, percent));
+    return `
+      <article class="engagement-progress-card">
+        <div class="engagement-progress-card-heading">
+          <span class="metric-label">${escapeHtml(title)}</span>
+          <button class="field-info-button" type="button" data-info-key="financialStage" aria-label="More information about ${escapeHtml(title)}">&#9432;</button>
+        </div>
+        <strong>${plainPercent(width)}</strong>
+        <div class="engagement-progress-track" aria-label="${escapeHtml(title)} ${plainPercent(width)}">
+          <span style="width:${width}%"></span>
+        </div>
+        <p>${escapeHtml(note)}</p>
+        <small>${escapeHtml(info || `${plainPercent(actualPercent)} calculated before display cap.`)}</small>
+      </article>
+    `;
+  }
+
+  function missionTaskHtml(task) {
+    return `
+      <li class="${task.completed ? "complete" : ""}">
+        <span aria-hidden="true">${task.completed ? "OK" : ""}</span>
+        <strong>${escapeHtml(task.title)}</strong>
+      </li>
+    `;
+  }
+
+  function renderEngagementHome(result) {
+    const container = document.getElementById("engagementHome");
+    const snapshotHeading = document.querySelector(".home-snapshot-heading");
+    const snapshotGrid = document.querySelector(".home-snapshot-grid");
+    const oldSteps = document.querySelector("#homeView > .steps-grid");
+    const enabled = engagementJourneyIsEnabled();
+    if (snapshotHeading) snapshotHeading.classList.toggle("hidden", enabled);
+    if (snapshotGrid) snapshotGrid.classList.toggle("hidden", enabled);
+    if (oldSteps) oldSteps.classList.toggle("hidden", enabled);
+    if (!container) return;
+    container.classList.toggle("hidden", !enabled);
+    if (!enabled) return;
+
+    const progress = engagementProgress(result);
+    const stageInfo = engagementStageInfo(result);
+    const goal = primaryShortTermGoal(result);
+    const mission = currentWeeklyMission(result);
+    const todayWin = engagementTodayWin(result, goal, mission);
+    const openingMessage = engagementOpeningMessage(result, stageInfo, goal, mission);
+    const weeklyAmount = thisWeekProgressAmount();
+    const achievement = latestAchievement(result);
+    const future = futureYouPreview(result);
+    const recentEvents = latestProgressEvents(4);
+    const goalPercent = goalProgressPercent(goal);
+    const goalRequiredWeekly = goal && goal.targetDate
+      ? Math.max(0, goalRemaining(goal) / Math.max(1, Math.ceil((new Date(`${goal.targetDate}T00:00:00`).getTime() - Date.now()) / (7 * 24 * 60 * 60 * 1000))))
+      : Number(goal?.recurringAmount) || 0;
+    const displayName = engagementGreetingName();
+
+    container.innerHTML = `
+      <section class="engagement-welcome-card">
+        <div>
+          <span class="metric-label">Financial journey</span>
+          <h2>${escapeHtml(engagementGreeting())}, ${escapeHtml(displayName)}</h2>
+          <p>${escapeHtml(openingMessage)}</p>
+        </div>
+        <div class="engagement-welcome-stats" aria-label="Financial journey snapshot">
+          ${engagementMetricCard("Financial Independence", `${plainPercent(progress.financialIndependence)} funded`, "Based on FI assets and withdrawal rate.")}
+          ${engagementMetricCard("Financial Freedom", `${plainPercent(progress.financialFreedom)} funded`, "Compared with target FI capital.")}
+          ${engagementMetricCard("This week added", money(weeklyAmount), "Recorded progress events only.")}
+        </div>
+      </section>
+
+      <section class="engagement-primary-progress">
+        ${engagementProgressCard(
+          "Financial Independence",
+          progress.financialIndependence,
+          progress.financialIndependenceRaw,
+          `${money(progress.sustainableIncome)} estimated annual sustainable income toward ${money(progress.targetSpending)} target spending.`,
+          "Uses current FI assets multiplied by the selected withdrawal rate."
+        )}
+        ${engagementProgressCard(
+          "Financial Freedom",
+          progress.financialFreedom,
+          progress.financialFreedomRaw,
+          `${money(result.financialIndependenceAssets)} current FI assets toward ${money(result.targetCapital || 0)} target FI capital.`,
+          "Uses the app's existing FI assets and target capital calculation."
+        )}
+      </section>
+
+      <section class="engagement-card-grid">
+        <article class="engagement-card engagement-today-card">
+          <span class="metric-label">Today's Win</span>
+          <h3>${escapeHtml(todayWin.title)}</h3>
+          <p>${escapeHtml(todayWin.text)}</p>
+          <button class="btn btn-primary" type="button" data-engagement-action="${escapeHtml(todayWin.action)}"${todayWin.goalId ? ` data-goal-id="${escapeHtml(todayWin.goalId)}"` : ""}>${escapeHtml(todayWin.actionLabel)}</button>
+        </article>
+
+        <article class="engagement-card">
+          <span class="metric-label">Weekly Mission</span>
+          <h3>${mission.completedCount} of ${mission.totalTasks} complete</h3>
+          <div class="engagement-progress-track" aria-label="Weekly mission ${mission.percent}% complete"><span style="width:${mission.percent}%"></span></div>
+          <ul class="engagement-task-list">${mission.tasks.map(missionTaskHtml).join("")}</ul>
+          <p>${mission.streak ? `${mission.streak}-week consistency streak.` : "Complete your first weekly review to start a streak."}</p>
+          <button class="btn mt-3" type="button" data-engagement-action="weeklyplan">Open Weekly Plan</button>
+        </article>
+
+        <article class="engagement-card">
+          <span class="metric-label">Primary Short-Term Goal</span>
+          ${goal ? `
+            <h3>${escapeHtml(goal.name)}</h3>
+            <p>${money(goal.currentAmount)} saved of ${money(goal.targetAmount)}. ${money(goalRemaining(goal))} remaining.</p>
+            <div class="engagement-progress-track" aria-label="${escapeHtml(goal.name)} ${plainPercent(goalPercent)} complete"><span style="width:${goalPercent}%"></span></div>
+            <small>${escapeHtml(goalTimeRemaining(goal))}${goalRequiredWeekly ? ` - about ${money(goalRequiredWeekly)} per week required.` : ""}</small>
+            <button class="btn mt-3" type="button" data-engagement-action="add-goal-progress" data-goal-id="${escapeHtml(goal.id)}">Add Progress</button>
+          ` : `
+            <h3>Create your first goal</h3>
+            <p>Add a savings, investing, debt-reduction or emergency-fund goal to make progress visible.</p>
+            <button class="btn mt-3" type="button" data-engagement-action="goals">Open Goals</button>
+          `}
+        </article>
+
+        <article class="engagement-card engagement-stage-card">
+          <span class="metric-label">Current Journey Stage</span>
+          <h3>${escapeHtml(stageInfo.stage.name)}</h3>
+          <p>${escapeHtml(stageInfo.stage.purpose)}</p>
+          <div class="engagement-stage-actions">
+            <strong>What moves you forward</strong>
+            <ul>${stageInfo.actions.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+          </div>
+        </article>
+      </section>
+
+      <section class="engagement-journey-section">
+        <div>
+          <span class="metric-label">Journey map</span>
+          <h3>Your financial stages</h3>
+        </div>
+        ${engagementJourneyMapHtml(stageInfo)}
+      </section>
+
+      <section class="engagement-card-grid engagement-secondary-grid">
+        ${aiOpeningInsightHtml()}
+
+        <article class="engagement-card">
+          <span class="metric-label">Recent Progress</span>
+          <h3>${recentEvents.length ? "Latest recorded actions" : "No progress recorded yet"}</h3>
+          ${recentEvents.length ? `
+            <ul class="engagement-event-list">
+              ${recentEvents.map((event) => `<li><strong>${escapeHtml(event.title)}</strong><span>${event.amount ? money(event.amount) : ""}</span></li>`).join("")}
+            </ul>
+          ` : `<p>Record goal contributions or complete weekly reviews to build your progress history.</p>`}
+        </article>
+
+        <article class="engagement-card">
+          <span class="metric-label">Latest Achievement</span>
+          ${achievement ? `
+            <h3>${escapeHtml(achievement.title)}</h3>
+            <p>${escapeHtml(achievement.description)}</p>
+            <small>Unlocked ${escapeHtml(formatLastSaved(achievement.unlockedAt))}</small>
+          ` : `
+            <h3>First milestone waiting</h3>
+            <p>Complete a weekly review, start emergency savings or add an investment contribution to unlock the first milestone.</p>
+          `}
+        </article>
+
+        <article class="engagement-card">
+          <span class="metric-label">Future You Preview</span>
+          <h3>Your future at age ${escapeHtml(future.age)}</h3>
+          <div class="engagement-mini-table">
+            <div><span>Investments</span><strong>${money(future.investmentBalance)}</strong></div>
+            <div><span>Super</span><strong>${money(future.superBalance)}</strong></div>
+            <div><span>Estimated passive income</span><strong>${money(future.passiveIncome)}</strong></div>
+            <div><span>Target lifestyle funded</span><strong>${plainPercent(Math.min(100, future.progress))}</strong></div>
+          </div>
+          <small>Projected based on the current assumptions. Outcomes may vary.</small>
+        </article>
+      </section>
+
+      <section class="engagement-quick-links">
+        <button class="btn" type="button" data-engagement-action="setup">Financial Plan</button>
+        <button class="btn" type="button" data-engagement-action="weeklyplan">Weekly Plan</button>
+        <button class="btn" type="button" data-engagement-action="goals">Goals</button>
+        <button class="btn" type="button" data-engagement-action="decision">Decision Engine</button>
+        <button class="btn" type="button" data-engagement-action="reports">Reports</button>
+        <button class="btn btn-primary" type="button" data-engagement-action="ai">AI Coach</button>
+      </section>
+    `;
   }
 
   function renderAssumptions(result) {
@@ -6511,6 +7235,73 @@
     renderAll();
   }
 
+  function addGoalProgress(goalId) {
+    const result = CALC.calculatePlan(plan);
+    const goal = normalisedShortTermGoals(result).find((item) => item.id === goalId) || primaryShortTermGoal(result);
+    if (!goal) {
+      showWorkspace("goals");
+      return;
+    }
+    const response = window.prompt(`How much progress did you add to ${goal.name}? Only record money you have actually set aside.`, "");
+    if (response === null) return;
+    const amount = Number(String(response).replace(/[$,]/g, ""));
+    if (!Number.isFinite(amount) || amount <= 0) {
+      updateSaveStatus("Progress was not recorded. Enter a positive amount.");
+      return;
+    }
+    const stored = goal.source === "legacy"
+      ? null
+      : ensureStoredGoal(goal);
+    const previousAmount = Number(goal.currentAmount) || 0;
+    if (stored) {
+      stored.currentAmount = Math.max(0, Number(stored.currentAmount) || 0) + amount;
+      if (stored.targetAmount > 0 && stored.currentAmount >= stored.targetAmount) {
+        stored.status = "completed";
+        stored.completedAt = stored.completedAt || new Date().toISOString();
+      }
+    } else {
+      const legacyGoal = Array.isArray(plan.goalItems) ? plan.goalItems.find((item) => item.id === goal.id) : null;
+      if (legacyGoal) legacyGoal.current = Math.max(0, Number(legacyGoal.current) || 0) + amount;
+    }
+    logProgressEvent({
+      eventType: "goal-contribution-recorded",
+      title: `Added progress to ${goal.name}`,
+      description: `Goal progress increased from ${plainPercent(goalProgressPercent({ ...goal, currentAmount: previousAmount }))} to ${plainPercent(goalProgressPercent({ ...goal, currentAmount: previousAmount + amount }))}.`,
+      amount,
+      goalId: stored?.id || goal.id,
+      source: "manual",
+      metadata: {
+        dedupeKey: `goal-${goal.id}-${Date.now()}`,
+      },
+    });
+    syncEngagementAchievements(CALC.calculatePlan(plan));
+    saveDraft(`Added ${money(amount)} to ${goal.name}.`);
+    renderAll();
+  }
+
+  function handleEngagementAction(actionElement) {
+    const action = actionElement.dataset.engagementAction;
+    if (action === "add-goal-progress") {
+      addGoalProgress(actionElement.dataset.goalId);
+      return;
+    }
+    if (action === "ai") {
+      if (aiInsightsConfig.enabled) openAiInsights();
+      else updateSaveStatus("AI Insights private beta is not enabled in this environment.");
+      return;
+    }
+    const viewMap = {
+      dashboard: "dashboard",
+      setup: "setup",
+      weeklyplan: "weeklyplan",
+      goals: "goals",
+      investments: "investments",
+      decision: "decision",
+      reports: "reports",
+    };
+    showWorkspace(viewMap[action] || "dashboard");
+  }
+
   function renderOutputs() {
     syncCollectionsToLegacy();
     const result = CALC.calculatePlan(plan);
@@ -6518,6 +7309,7 @@
     updateSetupNavigationLabel();
     updatePersonDependentLabels();
     updateSaveStatus();
+    renderEngagementHome(result);
     updatePreview(result);
     renderAiInsightsHomeCard(result);
     renderDashboard(result);
@@ -6890,6 +7682,13 @@
 
       if (event.target.closest("[data-info-close]")) {
         closeGoalInfo();
+        return;
+      }
+
+      const engagementAction = event.target.closest("[data-engagement-action]");
+      if (engagementAction) {
+        event.preventDefault();
+        handleEngagementAction(engagementAction);
         return;
       }
 

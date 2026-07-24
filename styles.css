@@ -1484,6 +1484,385 @@ main {
   }
 }
 
+.engagement-home {
+  display: grid;
+  gap: clamp(18px, 3vw, 28px);
+  margin-top: clamp(28px, 5vw, 48px);
+}
+
+.engagement-home.hidden {
+  display: none;
+}
+
+.engagement-welcome-card,
+.engagement-card,
+.engagement-progress-card,
+.engagement-journey-section,
+.engagement-metric-card {
+  min-width: 0;
+  border: 1px solid #dbe4ee;
+  border-radius: 24px;
+  background: #ffffff;
+  box-shadow: 0 16px 38px rgba(15, 39, 66, 0.07);
+}
+
+.engagement-welcome-card {
+  display: grid;
+  gap: 22px;
+  align-items: center;
+  padding: clamp(22px, 4vw, 34px);
+  background:
+    linear-gradient(135deg, rgba(217, 245, 235, 0.72), rgba(239, 246, 255, 0.82)),
+    #ffffff;
+}
+
+.engagement-welcome-card h2 {
+  margin-top: 8px;
+  color: #0f2742;
+  font-size: clamp(30px, 5vw, 52px);
+  font-weight: 950;
+  letter-spacing: 0;
+  line-height: 1.02;
+}
+
+.engagement-welcome-card p,
+.engagement-card p,
+.engagement-progress-card p,
+.engagement-stage-actions li,
+.engagement-task-list li,
+.engagement-event-list li {
+  color: #475569;
+  line-height: 1.5;
+}
+
+.engagement-welcome-stats,
+.engagement-primary-progress,
+.engagement-card-grid,
+.engagement-secondary-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.engagement-welcome-stats {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.engagement-metric-card,
+.engagement-card,
+.engagement-progress-card,
+.engagement-journey-section {
+  padding: clamp(16px, 2.5vw, 22px);
+}
+
+.engagement-metric-card {
+  display: grid;
+  gap: 5px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.engagement-metric-card span,
+.engagement-card .metric-label,
+.engagement-progress-card .metric-label {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.engagement-metric-card strong {
+  color: #0f2742;
+  font-size: clamp(22px, 3vw, 30px);
+  font-weight: 950;
+  line-height: 1.08;
+}
+
+.engagement-metric-card small,
+.engagement-progress-card small,
+.engagement-card small {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.engagement-primary-progress {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.engagement-progress-card {
+  display: grid;
+  gap: 12px;
+}
+
+.engagement-progress-card-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.engagement-progress-card > strong {
+  color: #08734e;
+  font-size: clamp(42px, 7vw, 64px);
+  font-weight: 950;
+  line-height: 0.95;
+}
+
+.engagement-progress-track {
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e8edf3;
+}
+
+.engagement-progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #0f9f6e, #2563eb);
+}
+
+.engagement-card-grid {
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+}
+
+.engagement-card {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.engagement-card h3,
+.engagement-journey-section h3 {
+  color: #0f2742;
+  font-size: clamp(20px, 2.4vw, 26px);
+  font-weight: 950;
+  line-height: 1.12;
+}
+
+.engagement-today-card {
+  border-color: #b9e8d6;
+  background: #f3fbf7;
+}
+
+.engagement-task-list,
+.engagement-stage-actions ul,
+.engagement-event-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.engagement-task-list li {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.engagement-task-list li span {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  color: #08734e;
+  font-size: 10px;
+  font-weight: 950;
+}
+
+.engagement-task-list li.complete span {
+  border-color: #0f9f6e;
+  background: #d9f5eb;
+}
+
+.engagement-task-list li strong {
+  color: #334155;
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.engagement-stage-actions {
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #f8fafc;
+  padding: 14px;
+}
+
+.engagement-stage-actions strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #0f2742;
+  font-size: 13px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.engagement-journey-section {
+  display: grid;
+  gap: 16px;
+}
+
+.engagement-stage-map {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(9, minmax(120px, 1fr));
+  overflow-x: auto;
+  padding-bottom: 4px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.engagement-stage-step {
+  display: grid;
+  min-width: 120px;
+  gap: 6px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #f8fafc;
+  padding: 12px;
+}
+
+.engagement-stage-step span {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 999px;
+  background: #e8edf3;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.engagement-stage-step strong {
+  color: #0f2742;
+  font-size: 13px;
+  font-weight: 950;
+  line-height: 1.2;
+}
+
+.engagement-stage-step small {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.engagement-stage-step.complete {
+  background: #f3fbf7;
+}
+
+.engagement-stage-step.complete span,
+.engagement-stage-step.current span {
+  background: #d9f5eb;
+  color: #08734e;
+}
+
+.engagement-stage-step.current {
+  border-color: #0f9f6e;
+  box-shadow: inset 0 0 0 2px rgba(15, 159, 110, 0.12);
+}
+
+.engagement-event-list li,
+.engagement-mini-table div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: baseline;
+  border-bottom: 1px solid #edf2f7;
+  padding: 8px 0;
+}
+
+.engagement-event-list li:last-child,
+.engagement-mini-table div:last-child {
+  border-bottom: 0;
+}
+
+.engagement-event-list strong,
+.engagement-mini-table span {
+  color: #475569;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.engagement-event-list span,
+.engagement-mini-table strong {
+  color: #0f2742;
+  font-size: 14px;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.engagement-quick-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (min-width: 900px) {
+  .engagement-welcome-card {
+    grid-template-columns: minmax(0, 1.2fr) minmax(360px, 0.8fr);
+  }
+
+  .engagement-card-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .engagement-secondary-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .engagement-ai-card,
+  .engagement-secondary-grid .engagement-card:last-child {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 640px) {
+  .engagement-home {
+    margin-top: 22px;
+  }
+
+  .engagement-welcome-card,
+  .engagement-card,
+  .engagement-progress-card,
+  .engagement-journey-section,
+  .engagement-metric-card {
+    border-radius: 20px;
+  }
+
+  .engagement-stage-map {
+    grid-template-columns: 1fr;
+    overflow-x: visible;
+  }
+
+  .engagement-stage-step {
+    min-width: 0;
+    grid-template-columns: 32px minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .engagement-event-list li,
+  .engagement-mini-table div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 3px;
+  }
+
+  .engagement-event-list span,
+  .engagement-mini-table strong {
+    white-space: normal;
+  }
+
+  .engagement-quick-links .btn {
+    width: 100%;
+  }
+}
+
 .section-heading {
   margin-bottom: 18px;
 }
