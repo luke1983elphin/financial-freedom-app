@@ -19,6 +19,59 @@ main {
   overflow-x: hidden;
 }
 
+.demo-mode-banner {
+  position: sticky;
+  top: var(--app-header-height, 0px);
+  z-index: 29;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #b9e8d6;
+  background: #ecfdf5;
+  padding: 10px max(16px, calc((100vw - 1280px) / 2 + 16px));
+  color: #0f2742;
+  box-shadow: 0 10px 24px rgba(15, 39, 66, 0.06);
+}
+
+.demo-mode-banner.hidden {
+  display: none;
+}
+
+.demo-mode-banner strong,
+.demo-mode-banner span {
+  display: block;
+}
+
+.demo-mode-banner strong {
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.demo-mode-banner span {
+  margin-top: 2px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.demo-mode-banner .btn {
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .demo-mode-banner {
+    position: static;
+    display: grid;
+    padding: 10px 14px;
+  }
+
+  .demo-mode-banner .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
 .brand-kicker,
 .nav-title {
   letter-spacing: 0;
@@ -1702,6 +1755,46 @@ main {
   text-transform: uppercase;
 }
 
+.engagement-full-journey-details {
+  display: grid;
+  gap: 14px;
+}
+
+.engagement-full-journey-details summary {
+  display: flex;
+  min-height: 48px;
+  cursor: pointer;
+  list-style: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #f8fafc;
+  padding: 12px 14px;
+  color: #0f2742;
+  font-weight: 950;
+}
+
+.engagement-full-journey-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.engagement-full-journey-details summary:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.22);
+  outline-offset: 3px;
+}
+
+.engagement-full-journey-details summary strong {
+  color: #08734e;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.engagement-full-journey-details[open] summary {
+  margin-bottom: 14px;
+}
+
 .engagement-journey-section {
   display: grid;
   gap: 16px;
@@ -1847,6 +1940,14 @@ main {
     align-items: center;
   }
 
+  .engagement-full-journey-details summary {
+    display: grid;
+  }
+
+  .engagement-full-journey-details summary strong {
+    white-space: normal;
+  }
+
   .engagement-event-list li,
   .engagement-mini-table div {
     grid-template-columns: minmax(0, 1fr);
@@ -1860,6 +1961,413 @@ main {
 
   .engagement-quick-links .btn {
     width: 100%;
+  }
+}
+
+.engagement-hero {
+  display: grid;
+  gap: clamp(18px, 3vw, 28px);
+  align-items: stretch;
+  border: 1px solid #cfe8df;
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at top right, rgba(217, 245, 235, 0.92), transparent 38%),
+    linear-gradient(135deg, #ffffff 0%, #eef6ff 100%);
+  padding: clamp(20px, 4vw, 38px);
+  box-shadow: 0 20px 52px rgba(15, 39, 66, 0.1);
+}
+
+.engagement-empty-hero {
+  background:
+    linear-gradient(135deg, rgba(248, 250, 252, 0.94), rgba(239, 246, 255, 0.98)),
+    #ffffff;
+}
+
+.engagement-hero-copy {
+  display: grid;
+  gap: 14px;
+  align-content: center;
+  min-width: 0;
+}
+
+.engagement-hero h2 {
+  color: #0f2742;
+  font-size: clamp(32px, 6vw, 62px);
+  font-weight: 950;
+  letter-spacing: 0;
+  line-height: 0.98;
+}
+
+.engagement-hero p {
+  max-width: 64ch;
+  color: #475569;
+  font-size: clamp(15px, 1.6vw, 18px);
+  line-height: 1.55;
+}
+
+.engagement-hero small {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.engagement-hero-progress {
+  display: grid;
+  gap: 10px;
+  max-width: 540px;
+}
+
+.engagement-hero-progress strong {
+  color: #08734e;
+  font-size: clamp(58px, 10vw, 92px);
+  font-weight: 950;
+  line-height: 0.9;
+}
+
+.engagement-hero-facts {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.engagement-hero-facts div,
+.engagement-empty-preview span {
+  min-width: 0;
+  border: 1px solid rgba(203, 213, 225, 0.72);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.78);
+  padding: 13px 14px;
+}
+
+.engagement-hero-facts span {
+  display: block;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.engagement-hero-facts strong {
+  display: block;
+  margin-top: 4px;
+  color: #0f2742;
+  font-size: 15px;
+  font-weight: 950;
+  line-height: 1.25;
+}
+
+.engagement-hero-action {
+  display: grid;
+  gap: 12px;
+  align-content: center;
+  border: 1px solid #b9e8d6;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.86);
+  padding: clamp(16px, 2.4vw, 22px);
+}
+
+.engagement-hero-action h3 {
+  color: #0f2742;
+  font-size: clamp(22px, 3vw, 30px);
+  font-weight: 950;
+  line-height: 1.1;
+}
+
+.engagement-empty-preview {
+  display: grid;
+  gap: 10px;
+  align-content: center;
+}
+
+.engagement-empty-preview span {
+  color: #0f2742;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.engagement-two-column {
+  display: grid;
+  gap: 16px;
+}
+
+.engagement-section-heading-row {
+  display: flex;
+  min-width: 0;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.engagement-section-heading-row > strong {
+  color: #08734e;
+  font-size: 16px;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.engagement-mission-card h3,
+.engagement-goal-card .engagement-section-heading-row strong {
+  color: #08734e;
+  font-size: clamp(34px, 5vw, 52px);
+  font-weight: 950;
+  line-height: 0.95;
+}
+
+.engagement-task-list.compact {
+  gap: 6px;
+}
+
+.engagement-task-button {
+  display: grid;
+  width: 100%;
+  min-height: 44px;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  padding: 6px;
+  text-align: left;
+}
+
+.engagement-task-button:hover,
+.engagement-task-button:focus-visible {
+  background: #f8fafc;
+  outline: 2px solid rgba(37, 99, 235, 0.18);
+  outline-offset: 2px;
+}
+
+.engagement-compact-stage-row {
+  display: grid;
+  gap: 10px;
+}
+
+.engagement-compact-stage-row div {
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #f8fafc;
+  padding: 12px;
+}
+
+.engagement-compact-stage-row div.current {
+  border-color: #0f9f6e;
+  background: #f3fbf7;
+}
+
+.engagement-compact-stage-row span {
+  display: block;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.engagement-compact-stage-row strong {
+  display: block;
+  margin-top: 4px;
+  color: #0f2742;
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.engagement-button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.engagement-future-compact {
+  gap: 16px;
+}
+
+.engagement-future-metrics {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.engagement-future-metrics div {
+  min-width: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #f8fafc;
+  padding: 14px;
+}
+
+.engagement-future-metrics span {
+  display: block;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.engagement-future-metrics strong {
+  display: block;
+  margin-top: 5px;
+  color: #0f2742;
+  font-size: clamp(17px, 2vw, 22px);
+  font-weight: 950;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.engagement-progress-achievement {
+  display: grid;
+  gap: 16px;
+}
+
+.engagement-celebration-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+
+.engagement-celebration-modal.hidden {
+  display: none;
+}
+
+.engagement-celebration-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(15, 39, 66, 0.3);
+}
+
+.engagement-celebration-card {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: min(100%, 480px);
+  gap: 14px;
+  border: 1px solid #b9e8d6;
+  border-radius: 24px;
+  background: #ffffff;
+  padding: clamp(22px, 4vw, 32px);
+  text-align: center;
+  box-shadow: 0 26px 78px rgba(15, 39, 66, 0.24);
+}
+
+.engagement-checkmark {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  place-items: center;
+  justify-self: center;
+  border-radius: 999px;
+  background: #d9f5eb;
+  color: #08734e;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.engagement-celebration-card h2 {
+  color: #0f2742;
+  font-size: 30px;
+  font-weight: 950;
+}
+
+.engagement-celebration-card p {
+  color: #475569;
+  line-height: 1.5;
+}
+
+.engagement-celebration-stats {
+  display: grid;
+  gap: 8px;
+}
+
+.engagement-celebration-stats span {
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #f8fafc;
+  padding: 10px;
+  color: #0f2742;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .engagement-celebration-card {
+    animation: engagementPop 260ms ease-out;
+  }
+
+  @keyframes engagementPop {
+    from {
+      opacity: 0;
+      transform: translateY(10px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+}
+
+@media (min-width: 860px) {
+  .engagement-hero {
+    grid-template-columns: minmax(0, 1.55fr) minmax(300px, 0.65fr);
+  }
+
+  .engagement-two-column {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .engagement-progress-achievement {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1280px) {
+  .engagement-home {
+    max-width: 1280px;
+    margin-inline: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .engagement-hero {
+    gap: 16px;
+    border-radius: 22px;
+    padding: 18px;
+  }
+
+  .engagement-hero h2 {
+    font-size: 34px;
+  }
+
+  .engagement-hero-progress strong {
+    font-size: 58px;
+  }
+
+  .engagement-hero-facts,
+  .engagement-future-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .engagement-section-heading-row {
+    display: grid;
+  }
+
+  .engagement-section-heading-row > strong {
+    white-space: normal;
+  }
+
+  .engagement-button-row .btn {
+    flex: 1 1 100%;
+    min-height: 44px;
+  }
+
+  .engagement-celebration-modal {
+    align-items: end;
+    padding: 10px;
+  }
+
+  .engagement-celebration-card {
+    border-radius: 20px;
   }
 }
 
