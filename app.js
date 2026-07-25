@@ -206,7 +206,6 @@
   let activeWizardStep = normaliseWizardStep(restoredDraftUi.activeWizardStep);
   let hasOpenedWorkspace = Boolean(savedDraft) || Boolean(restoredDraftUi.hasOpenedWorkspace);
   let activeWhatIfId = whatIfActions[0].id;
-  let selectedSamplePlanId = DATA.samplePlans?.[1]?.id || DATA.samplePlans?.[0]?.id || "";
   let generatedWeeklyPlanner = null;
   let weeklyPlan = loadWeeklyPlan();
   let activeWeeklyPlanTab = restoredDraftUi.activeWeeklyPlanTab || "thisWeek";
@@ -2804,11 +2803,56 @@
     return !hasValue(currentPlan);
   }
 
-  function showWorkspace(view = "dashboard") {
+  function normaliseNavigationTarget(target) {
+    const value = String(target || "").trim();
+    const aliases = {
+      "financial-plan": "setup",
+      financialPlan: "setup",
+      setup: "setup",
+      dashboard: "dashboard",
+      "weekly-plan": "weeklyplan",
+      weekly: "weeklyplan",
+      weeklyplan: "weeklyplan",
+      goals: "goals",
+      investments: "investments",
+      super: "super",
+      "decision-engine": "decision",
+      decision: "decision",
+      reports: "reports",
+      scenarios: "scenarios",
+      "saved-scenarios": "scenarios",
+      future: "decision",
+      "future-you": "decision",
+      "ai-coach": "ai",
+      ai: "ai",
+    };
+    return aliases[value] || value;
+  }
+
+  function navigateToSection(sectionId, options = {}) {
+    const target = normaliseNavigationTarget(sectionId);
+    if (target === "ai") {
+      if (aiInsightsConfig.enabled) openAiInsights();
+      else updateSaveStatus("AI Insights private beta is not enabled in this environment.");
+      return true;
+    }
+    const section = document.querySelector(`[data-view-panel="${target}"]`);
+    if (!section) {
+      console.error(`Navigation target not found: ${sectionId}`);
+      updateSaveStatus(`Navigation target not found: ${sectionId}`);
+      return false;
+    }
+    showWorkspace(target, options);
+    return true;
+  }
+
+  function showWorkspace(view = "dashboard", options = {}) {
     hasOpenedWorkspace = true;
-    document.getElementById("appWorkspace").classList.remove("hidden");
-    setView(view);
-    document.getElementById("appWorkspace").scrollIntoView({ behavior: "smooth", block: "start" });
+    const workspace = document.getElementById("appWorkspace");
+    workspace.classList.remove("hidden");
+    if (!setView(view)) return;
+    if (options?.scroll === false) return;
+    workspace.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function setView(view) {
@@ -2819,6 +2863,12 @@
       forecast: "dashboard",
     };
     view = viewAliases[view] || view;
+    const targetPanel = document.querySelector(`[data-view-panel="${view}"]`);
+    if (!targetPanel) {
+      console.error(`Navigation target not found: ${view}`);
+      updateSaveStatus(`Navigation target not found: ${view}`);
+      return false;
+    }
     activeView = view;
     document.body.dataset.activeView = view;
     document.querySelectorAll("[data-view-panel]").forEach((panel) => {
@@ -2828,6 +2878,7 @@
       button.classList.toggle("active", button.dataset.view === view);
     });
     if (view === "setup") renderWizardStep();
+    return true;
   }
 
   function optionsHtml(selected) {
@@ -7757,6 +7808,40 @@
   function renderOutputs() {
     syncCollectionsToLegacy();
     const result = CALC.calculatePlan(plan);
+engagement-financial-journey
+    safeRenderModule("Demo banner", () => renderDemoModeBanner());
+    safeRenderModule("Sample plan options", () => renderSamplePlanOptions());
+    safeRenderModule("Setup labels", () => {
+      updateSetupNavigationLabel();
+      updatePersonDependentLabels();
+      updateSaveStatus();
+    });
+    safeRenderModule("Engagement Home", () => renderEngagementHome(result));
+    safeRenderModule("Home preview", () => updatePreview(result));
+    safeRenderModule("AI Insights card", () => renderAiInsightsHomeCard(result));
+    safeRenderModule("Dashboard", () => renderDashboard(result));
+    safeRenderModule("Cashflow", () => renderCashflow(result));
+    safeRenderModule("Loans", () => renderLoan(result));
+    safeRenderModule("Investments", () => renderInvestments(result));
+    safeRenderModule("Super", () => renderSuper(result));
+    safeRenderModule("Milestones", () => renderMilestones(result));
+    safeRenderModule("Forecast", () => renderForecast(result));
+    safeRenderModule("Goals", () => renderGoalsSummary(result));
+    safeRenderModule("Decision Engine", () => renderDecision(result));
+    safeRenderModule("Saved Scenarios", () => renderScenarios());
+    safeRenderModule("Reports", () => renderReports(result));
+    safeRenderModule("Weekly Plan", () => renderWeeklyPlan(result));
+    safeRenderModule("Wizard results", () => renderWizardResults(result));
+    safeRenderModule("Wizard", () => renderWizardStep());
+    safeRenderModule("HELP review", () => renderHelpReview(result));
+    safeRenderModule("Setup summary", () => renderSetupSummary(result));
+    safeRenderModule("Comparison", () => renderComparison(result));
+    safeRenderModule("What If", () => renderWhatIf(result));
+    safeRenderModule("AI Insights modal", () => renderAiInsightsModal());
+    safeRenderModule("Disclaimer", () => {
+      document.getElementById("disclaimer").textContent = DATA.disclaimer;
+    });
+
     renderDemoModeBanner();
     renderSamplePlanOptions();
     updateSetupNavigationLabel();
@@ -7785,13 +7870,14 @@
     renderWhatIf(result);
     renderAiInsightsModal();
     document.getElementById("disclaimer").textContent = DATA.disclaimer;
+
     if (hasOpenedWorkspace) document.getElementById("appWorkspace").classList.remove("hidden");
   }
 
   function renderAll() {
-    renderForms();
+    safeRenderModule("Forms", () => renderForms());
     renderOutputs();
-    restoreDraftUiInputs();
+    safeRenderModule("Draft UI", () => restoreDraftUiInputs());
   }
 
   function loadSamplePlan() {
@@ -8230,7 +8316,7 @@
       if (aiScenarioTarget) {
         event.preventDefault();
         closeAiInsightsModal();
-        showWorkspace(aiScenarioTarget.dataset.aiScenarioTarget || "decision");
+        navigateToSection(aiScenarioTarget.dataset.aiScenarioTarget || "decision");
         return;
       }
 
@@ -8290,7 +8376,7 @@
         const action = weeklyHealthAction.dataset.weeklyHealthAction;
         if (action === "update-plan") {
           activeWizardStep = 1;
-          showWorkspace("setup");
+          navigateToSection("setup");
           updateSaveStatus("Review the Financial Plan and update strategic assumptions only if you choose to.");
         } else if (action === "keep-plan") {
           updateSaveStatus("Financial Plan unchanged.");
@@ -8380,7 +8466,10 @@
       }
 
       const nav = event.target.closest("[data-view]");
-      if (nav) setView(nav.dataset.view);
+      if (nav) {
+        navigateToSection(nav.dataset.view);
+        return;
+      }
 
       const whatIfButton = event.target.closest("[data-what-if]");
       if (whatIfButton) {
@@ -8401,7 +8490,8 @@
       const homeStep = event.target.closest("[data-home-step]");
       if (homeStep) {
         if (homeStep.dataset.homeStep === "setup") activeWizardStep = 0;
-        showWorkspace(homeStep.dataset.homeStep);
+        navigateToSection(homeStep.dataset.homeStep);
+        return;
       }
 
       const loadId = event.target.closest("[data-load-scenario]")?.dataset.loadScenario;
@@ -8472,7 +8562,7 @@
       if (!homeStep || (event.key !== "Enter" && event.key !== " ")) return;
       event.preventDefault();
       if (homeStep.dataset.homeStep === "setup") activeWizardStep = 0;
-      showWorkspace(homeStep.dataset.homeStep);
+      navigateToSection(homeStep.dataset.homeStep);
     });
 
     document.addEventListener("focusin", (event) => {
@@ -8482,7 +8572,7 @@
 
     document.getElementById("heroDemoButton").addEventListener("click", loadSamplePlan);
     document.getElementById("continueSampleButton").addEventListener("click", loadSamplePlan);
-    document.getElementById("continuePlanButton").addEventListener("click", () => showWorkspace("dashboard"));
+    document.getElementById("continuePlanButton").addEventListener("click", () => navigateToSection("dashboard"));
     document.getElementById("continueNewPlanButton").addEventListener("click", resetPlan);
     document.getElementById("enterDataButton").addEventListener("click", startMyPlan);
     document.getElementById("heroStartButton").addEventListener("click", startMyPlan);
@@ -8526,8 +8616,8 @@
     document.getElementById("weeklyPlanImportInput").addEventListener("change", (event) => importWeeklyPlanBackup(event.target.files?.[0]));
   }
 
-  renderAll();
   bindEvents();
+  renderAll();
   loadAiInsightsConfig();
   if (hasOpenedWorkspace) showWorkspace(activeView);
 })();
