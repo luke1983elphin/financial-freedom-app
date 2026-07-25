@@ -199,7 +199,6 @@
   let activePlanId = normalisePlanId(storedPlanContext.lastPersonalPlanId || storedPlanContext.activePlanId || DEFAULT_PERSONAL_PLAN_ID);
   let isDemoMode = false;
   let isSwitchingPlans = false;
-  let selectedSamplePlanId = DATA.samplePlans?.[1]?.id || DATA.samplePlans?.[0]?.id || "";
   const savedDraft = loadDraft();
   let userState = loadUserState(savedDraft);
   let plan = ensureCurrentPlanIdentity(CALC.clonePlan(savedDraft || CALC.emptyPlan()));
@@ -1984,7 +1983,7 @@
     return text.startsWith("personal-plan:") ? text : `personal-plan:${text.replace(/^personal-plan[:\-]?/, "")}`;
   }
 
-  function demoPlanId(sampleId = "") {
+  function demoPlanId(sampleId = selectedSamplePlanId) {
     return sampleId ? `${DEMO_PLAN_ID}:${sampleId}` : DEMO_PLAN_ID;
   }
 
@@ -2055,7 +2054,7 @@
       planId,
       source,
       isDemo: source === "sample",
-      samplePlanId: source === "sample" ? (options.samplePlanId || targetPlan.meta?.samplePlanId || "") : "",
+      samplePlanId: source === "sample" ? (options.samplePlanId || targetPlan.meta?.samplePlanId || selectedSamplePlanId || "") : "",
       storageVersion: 1,
       updatedAt: targetPlan.meta?.updatedAt || new Date().toISOString(),
     };
@@ -7803,21 +7802,13 @@
       reports: "reports",
     };
     engagementCelebration = null;
-    navigateToSection(viewMap[action] || "dashboard");
-  }
-
-  function safeRenderModule(name, renderFn) {
-    try {
-      renderFn();
-    } catch (error) {
-      console.error(`${name} render failed`, error);
-      updateSaveStatus(`${name} could not render. Navigation remains available.`);
-    }
+    showWorkspace(viewMap[action] || "dashboard");
   }
 
   function renderOutputs() {
     syncCollectionsToLegacy();
     const result = CALC.calculatePlan(plan);
+engagement-financial-journey
     safeRenderModule("Demo banner", () => renderDemoModeBanner());
     safeRenderModule("Sample plan options", () => renderSamplePlanOptions());
     safeRenderModule("Setup labels", () => {
@@ -7850,6 +7841,36 @@
     safeRenderModule("Disclaimer", () => {
       document.getElementById("disclaimer").textContent = DATA.disclaimer;
     });
+
+    renderDemoModeBanner();
+    renderSamplePlanOptions();
+    updateSetupNavigationLabel();
+    updatePersonDependentLabels();
+    updateSaveStatus();
+    renderEngagementHome(result);
+    updatePreview(result);
+    renderAiInsightsHomeCard(result);
+    renderDashboard(result);
+    renderCashflow(result);
+    renderLoan(result);
+    renderInvestments(result);
+    renderSuper(result);
+    renderMilestones(result);
+    renderForecast(result);
+    renderGoalsSummary(result);
+    renderDecision(result);
+    renderScenarios();
+    renderReports(result);
+    renderWeeklyPlan(result);
+    renderWizardResults(result);
+    renderWizardStep();
+    renderHelpReview(result);
+    renderSetupSummary(result);
+    renderComparison(result);
+    renderWhatIf(result);
+    renderAiInsightsModal();
+    document.getElementById("disclaimer").textContent = DATA.disclaimer;
+
     if (hasOpenedWorkspace) document.getElementById("appWorkspace").classList.remove("hidden");
   }
 
