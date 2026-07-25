@@ -6,6 +6,12 @@
   const SCENARIO_KEY = "ffs-scenarios-v3-mobile-dashboard-ux-test";
   const WEEKLY_PLAN_KEY = "ffs-weekly-plan-v1-v3-mobile-dashboard-ux-test";
   const USER_STATE_KEY = "ffs-user-state-v3-mobile-dashboard-ux-test";
+  const PLAN_CONTEXT_KEY = "ffs-plan-context-v3-mobile-dashboard-ux-test";
+  const DEFAULT_PERSONAL_PLAN_ID = "personal-plan:default";
+  const DEMO_PLAN_ID = "sample-plan";
+  const PERSONAL_PLAN_PREFIX = "ffs-personal-plan-v1:";
+  const PERSONAL_WEEKLY_PLAN_PREFIX = "ffs-weekly-plan-v1:";
+  const SNAPSHOT_PREFIX = "ffs-financial-snapshots-v1:";
   const APP_VERSION = "3.0-test-weekly-planner";
   const WEEKLY_EDITOR_BUILD_ID = "2026-07-17-02";
   const EXPORT_SCHEMA_VERSION = 1;
@@ -189,9 +195,13 @@
 
   let restoredDraftUi = {};
   let saveStatusTimer = null;
+  const storedPlanContext = loadPlanContext();
+  let activePlanId = normalisePlanId(storedPlanContext.lastPersonalPlanId || storedPlanContext.activePlanId || DEFAULT_PERSONAL_PLAN_ID);
+  let isDemoMode = false;
+  let isSwitchingPlans = false;
   const savedDraft = loadDraft();
   let userState = loadUserState(savedDraft);
-  let plan = CALC.clonePlan(savedDraft || CALC.emptyPlan());
+  let plan = ensureCurrentPlanIdentity(CALC.clonePlan(savedDraft || CALC.emptyPlan()));
   let activeView = restoredDraftUi.activeView || "dashboard";
   let activeWizardStep = normaliseWizardStep(restoredDraftUi.activeWizardStep);
   let hasOpenedWorkspace = Boolean(savedDraft) || Boolean(restoredDraftUi.hasOpenedWorkspace);
@@ -712,6 +722,7 @@
 
   function syncEngagementAchievements(result) {
     const data = engagementData();
+    if (isDemoActive()) return data.achievements;
     if (data.preferences?.achievementsEnabled === false) return data.achievements;
     const existing = new Set(data.achievements.map((item) => item.id));
     const emergency = emergencyMonths(result);
@@ -730,6 +741,7 @@
       if (!definition.active || existing.has(definition.id)) return;
       data.achievements.unshift({
         id: definition.id,
+        planId: normalisePlanId(activePlanId),
         achievementType: definition.id,
         title: definition.title,
         description: definition.description,
@@ -742,13 +754,14 @@
   }
 
   function logProgressEvent(event) {
+    if (isDemoActive()) return;
     const data = engagementData();
     const duplicateKey = event.metadata?.dedupeKey || `${event.eventType}-${event.goalId || ""}-${event.amount || ""}-${new Date().toDateString()}`;
     const exists = data.progressEvents.some((item) => item.metadata?.dedupeKey === duplicateKey);
     if (exists) return;
     data.progressEvents.unshift({
       id: makeId("progress"),
-      planId: "local-plan",
+      planId: normalisePlanId(activePlanId),
       createdAt: new Date().toISOString(),
       source: "manual",
       ...event,
@@ -849,6 +862,7 @@
   }
 
   function showEngagementCelebration(details) {
+    if (isDemoActive()) return;
     if (engagementData().preferences?.celebrationsEnabled === false) return;
     engagementCelebration = {
       id: makeId("celebration"),
@@ -896,6 +910,7 @@
     if (!stored) {
       stored = {
         id: goal.id === "fallback-emergency-fund" ? makeId("goal-emergency") : goal.id,
+        planId: normalisePlanId(activePlanId),
         name: goal.name,
         category: goal.category || "custom",
         targetAmount: Number(goal.targetAmount) || 0,
@@ -1543,10 +1558,17 @@
 
   function migrateScenarioData(scenario) {
     if (!scenario || typeof scenario !== "object") return null;
+    const source = scenario.source === "sample" ? "sample" : "user";
+    const planId = source === "sample"
+      ? DEMO_PLAN_ID
+      : normalisePlanId(scenario.planId || scenario.plan?.meta?.planId || activePlanId || DEFAULT_PERSONAL_PLAN_ID);
+    const scenarioPlan = migratePlanData(scenario.plan || scenario);
     return {
       ...scenario,
+      source,
+      planId,
       savedAt: scenario.savedAt || new Date().toISOString(),
-      plan: migratePlanData(scenario.plan || scenario),
+      plan: ensurePlanIdentity(scenarioPlan, { source: source === "sample" ? "sample" : "personal", planId }),
     };
   }
 
@@ -1576,7 +1598,9 @@
 
   function stablePlanJson(planData) {
     try {
-      return JSON.stringify(migratePlanData(planData));
+      const comparable = migratePlanData(planData);
+      delete comparable.meta;
+      return JSON.stringify(comparable);
     } catch {
       return "";
     }
@@ -1649,6 +1673,8 @@
       hasCreatedPersonalPlan,
       createdAt: loaded.createdAt || (hasCreatedPersonalPlan ? new Date().toISOString() : ""),
       updatedAt: loaded.updatedAt || "",
+      lastPersonalPlanId: normalisePlanId(loaded.lastPersonalPlanId || activePlanId || DEFAULT_PERSONAL_PLAN_ID),
+      lastPersonalRoute: loaded.lastPersonalRoute || restoredDraftUi.activeView || "dashboard",
     };
     if (hasCreatedPersonalPlan !== Boolean(loaded.hasCreatedPersonalPlan)) persistUserState(state);
     return state;
@@ -1659,6 +1685,8 @@
       localStorage.setItem(USER_STATE_KEY, JSON.stringify({
         version: 1,
         ...nextState,
+        lastPersonalPlanId: normalisePlanId(nextState.lastPersonalPlanId || activePlanId || DEFAULT_PERSONAL_PLAN_ID),
+        lastPersonalRoute: nextState.lastPersonalRoute || "dashboard",
         updatedAt: new Date().toISOString(),
       }));
     } catch {
@@ -1950,65 +1978,234 @@
     };
   }
 
+  function normalisePlanId(value) {
+    const text = String(value || "").trim();
+    if (!text || text === DEMO_PLAN_ID || /^sample-plan/.test(text)) return DEFAULT_PERSONAL_PLAN_ID;
+    return text.startsWith("personal-plan:") ? text : `personal-plan:${text.replace(/^personal-plan[:\-]?/, "")}`;
+  }
+
+  function demoPlanId(sampleId = selectedSamplePlanId) {
+    return sampleId ? `${DEMO_PLAN_ID}:${sampleId}` : DEMO_PLAN_ID;
+  }
+
+  function loadPlanContext() {
+    try {
+      const raw = localStorage.getItem(PLAN_CONTEXT_KEY);
+      const parsed = raw ? JSON.parse(raw) : {};
+      return {
+        version: 1,
+        ...parsed,
+        activePlanId: normalisePlanId(parsed.activePlanId || parsed.lastPersonalPlanId || DEFAULT_PERSONAL_PLAN_ID),
+        lastPersonalPlanId: normalisePlanId(parsed.lastPersonalPlanId || parsed.activePlanId || DEFAULT_PERSONAL_PLAN_ID),
+        mode: "personal",
+      };
+    } catch {
+      return {
+        version: 1,
+        activePlanId: DEFAULT_PERSONAL_PLAN_ID,
+        lastPersonalPlanId: DEFAULT_PERSONAL_PLAN_ID,
+        lastPersonalRoute: "dashboard",
+        mode: "personal",
+      };
+    }
+  }
+
+  function persistPlanContext(patch = {}) {
+    try {
+      const previous = loadPlanContext();
+      const personalPlanId = normalisePlanId(patch.lastPersonalPlanId || activePlanId || previous.lastPersonalPlanId || DEFAULT_PERSONAL_PLAN_ID);
+      localStorage.setItem(PLAN_CONTEXT_KEY, JSON.stringify({
+        version: 1,
+        ...previous,
+        ...patch,
+        mode: "personal",
+        activePlanId: personalPlanId,
+        lastPersonalPlanId: personalPlanId,
+        lastPersonalRoute: patch.lastPersonalRoute || previous.lastPersonalRoute || "dashboard",
+        updatedAt: new Date().toISOString(),
+      }));
+    } catch {
+      // Context is a convenience for switching plans; legacy keys still keep the current plan recoverable.
+    }
+  }
+
+  function currentPersonalPlanKey(planId = activePlanId) {
+    return `${PERSONAL_PLAN_PREFIX}${normalisePlanId(planId)}`;
+  }
+
+  function currentPersonalWeeklyPlanKey(planId = activePlanId) {
+    return `${PERSONAL_WEEKLY_PLAN_PREFIX}${normalisePlanId(planId)}`;
+  }
+
+  function currentSnapshotKey(planId = activePlanId) {
+    return `${SNAPSHOT_PREFIX}${normalisePlanId(planId)}`;
+  }
+
+  function isDemoActive() {
+    return Boolean(isDemoMode || plan?.meta?.source === "sample" || plan?.meta?.isDemo);
+  }
+
+  function ensurePlanIdentity(targetPlan, options = {}) {
+    const source = options.source || (isDemoMode ? "sample" : "personal");
+    const planId = source === "sample"
+      ? demoPlanId(options.samplePlanId || targetPlan?.meta?.samplePlanId)
+      : normalisePlanId(options.planId || targetPlan?.meta?.planId || activePlanId || DEFAULT_PERSONAL_PLAN_ID);
+    targetPlan.meta = {
+      ...(targetPlan.meta || {}),
+      planId,
+      source,
+      isDemo: source === "sample",
+      samplePlanId: source === "sample" ? (options.samplePlanId || targetPlan.meta?.samplePlanId || selectedSamplePlanId || "") : "",
+      storageVersion: 1,
+      updatedAt: targetPlan.meta?.updatedAt || new Date().toISOString(),
+    };
+    return targetPlan;
+  }
+
+  function ensureCurrentPlanIdentity(targetPlan = plan) {
+    return ensurePlanIdentity(targetPlan, {
+      source: isDemoMode ? "sample" : "personal",
+      planId: activePlanId,
+      samplePlanId: selectedSamplePlanId,
+    });
+  }
+
+  function parseStoredPlanRecord(raw) {
+    if (!raw) return null;
+    const saved = JSON.parse(raw);
+    if (saved?.plan) {
+      return {
+        ...saved,
+        plan: migratePlanData(saved.plan),
+        ui: saved.ui || {},
+      };
+    }
+    return {
+      version: 2,
+      appVersion: APP_VERSION,
+      savedAt: "",
+      plan: migratePlanData(saved),
+      ui: {},
+    };
+  }
+
+  function readPersonalDraftRecord(planId = activePlanId) {
+    const personalKey = currentPersonalPlanKey(planId);
+    try {
+      const namespaced = parseStoredPlanRecord(localStorage.getItem(personalKey));
+      if (namespaced?.plan) return namespaced;
+    } catch {
+      // Fall back to legacy below.
+    }
+    try {
+      const legacy = parseStoredPlanRecord(localStorage.getItem(DRAFT_KEY));
+      if (!legacy?.plan || isBundledSamplePlan(legacy.plan)) return null;
+      legacy.plan = ensurePlanIdentity(legacy.plan, { source: "personal", planId });
+      localStorage.setItem(personalKey, JSON.stringify({
+        version: 4,
+        appVersion: APP_VERSION,
+        migratedFrom: DRAFT_KEY,
+        migratedAt: new Date().toISOString(),
+        savedAt: legacy.savedAt || new Date().toISOString(),
+        plan: legacy.plan,
+        ui: legacy.ui || {},
+      }));
+      persistPlanContext({ lastPersonalPlanId: planId, lastPersonalRoute: legacy.ui?.activeView || "dashboard" });
+      return legacy;
+    } catch {
+      return null;
+    }
+  }
+
+  function writePersonalDraftRecord(message = "") {
+    if (isDemoActive() || isSwitchingPlans) return "";
+    const savedAt = new Date().toISOString();
+    const ui = collectDraftUi();
+    const planSnapshot = ensurePlanIdentity(migratePlanData(plan), { source: "personal", planId: activePlanId });
+    const payload = {
+      version: 4,
+      appVersion: APP_VERSION,
+      savedAt,
+      planId: normalisePlanId(activePlanId),
+      plan: planSnapshot,
+      ui,
+      storageKeys: {
+        personalPlan: currentPersonalPlanKey(),
+        legacyDraft: DRAFT_KEY,
+        weeklyPlan: currentPersonalWeeklyPlanKey(),
+        snapshots: currentSnapshotKey(),
+      },
+    };
+    localStorage.setItem(currentPersonalPlanKey(), JSON.stringify(payload));
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(payload));
+    localStorage.setItem(LAST_SAVED_KEY, savedAt);
+    restoredDraftUi = ui;
+    persistPlanContext({ lastPersonalPlanId: activePlanId, lastPersonalRoute: activeView || "dashboard" });
+    if (message) updateSaveStatus(message);
+    return savedAt;
+  }
+
+  function personalSavedDraftExists(planId = activePlanId) {
+    return Boolean(readPersonalDraftRecord(planId)?.plan);
+  }
+
+  function preservePersonalContextBeforeDemo() {
+    if (isDemoActive()) return;
+    if (hasMeaningfulPersonalPlanData(plan) || personalSavedDraftExists(activePlanId)) {
+      writePersonalDraftRecord();
+    }
+    persistPlanContext({ lastPersonalPlanId: activePlanId, lastPersonalRoute: activeView || "dashboard" });
+  }
+
   function markPersonalPlanCreated() {
-    if (userState.hasCreatedPersonalPlan) return;
+    if (isDemoActive() || isSwitchingPlans || isBundledSamplePlan(plan)) return;
+    activePlanId = normalisePlanId(activePlanId || DEFAULT_PERSONAL_PLAN_ID);
+    ensureCurrentPlanIdentity(plan);
     userState = {
       ...userState,
       hasCreatedPersonalPlan: true,
       createdAt: userState.createdAt || new Date().toISOString(),
+      lastPersonalPlanId: activePlanId,
+      lastPersonalRoute: activeView || userState.lastPersonalRoute || "dashboard",
     };
     persistUserState();
   }
 
   function hasSavedDraft() {
-    try {
-      return Boolean(localStorage.getItem(DRAFT_KEY));
-    } catch {
-      return false;
-    }
+    return personalSavedDraftExists(activePlanId);
   }
 
   function loadDraft() {
-    try {
-      const raw = localStorage.getItem(DRAFT_KEY);
-      if (!raw) {
-        restoredDraftUi = {};
-        return null;
-      }
-      const saved = JSON.parse(raw);
-      if (saved?.plan) {
-        restoredDraftUi = saved.ui || {};
-        return migratePlanData(saved.plan);
-      }
-      restoredDraftUi = {};
-      return migratePlanData(saved);
-    } catch {
+    const record = readPersonalDraftRecord(activePlanId);
+    if (!record?.plan) {
       restoredDraftUi = {};
       return null;
     }
+    restoredDraftUi = record.ui || {};
+    const planId = normalisePlanId(record.plan?.meta?.planId || record.planId || activePlanId);
+    activePlanId = planId;
+    persistPlanContext({ lastPersonalPlanId: planId, lastPersonalRoute: restoredDraftUi.activeView || "dashboard" });
+    return ensurePlanIdentity(record.plan, { source: "personal", planId });
   }
 
   function persistDraft() {
-    const savedAt = new Date().toISOString();
-    const ui = collectDraftUi();
-    localStorage.setItem(DRAFT_KEY, JSON.stringify({
-      version: 3,
-      appVersion: APP_VERSION,
-      savedAt,
-      plan: migratePlanData(plan),
-      ui,
-    }));
-    localStorage.setItem(LAST_SAVED_KEY, savedAt);
-    restoredDraftUi = ui;
-    return savedAt;
+    return writePersonalDraftRecord();
   }
 
   function saveDraft(message = "") {
+    if (isDemoActive()) {
+      updateSaveStatus(message || "Sample Plan only. Your personal plan has not been changed.");
+      return;
+    }
     persistDraft();
     updateSaveStatus(message);
   }
 
   function autosavePlan() {
+    if (isDemoActive() || isSwitchingPlans) {
+      updateSaveStatus("Sample Plan only. Changes here are not saved to your personal plan.");
+      return;
+    }
     markPersonalPlanCreated();
     updateSaveStatus("Saving...");
     persistDraft();
@@ -2047,34 +2244,55 @@
   }
 
   function loadScenarios() {
+    if (isDemoActive()) return sampleScenarioList(plan);
     try {
       const raw = localStorage.getItem(SCENARIO_KEY);
-      return raw ? migrateScenarioList(JSON.parse(raw)) : [];
+      return raw ? migrateScenarioList(JSON.parse(raw)).filter((scenario) => scenario.source !== "sample") : [];
     } catch {
       return [];
     }
   }
 
   function saveScenarios(scenarios) {
-    localStorage.setItem(SCENARIO_KEY, JSON.stringify(migrateScenarioList(scenarios)));
+    if (isDemoActive() || isSwitchingPlans) {
+      updateSaveStatus("Sample Plan scenarios are temporary and were not saved to your personal plans.");
+      return;
+    }
+    localStorage.setItem(SCENARIO_KEY, JSON.stringify(migrateScenarioList(scenarios).filter((scenario) => scenario.source !== "sample")));
   }
 
   function loadWeeklyPlan() {
+    if (isDemoMode) return null;
     try {
+      const namespaced = localStorage.getItem(currentPersonalWeeklyPlanKey());
+      if (namespaced) return window.FFSWeeklyPlan.migrate(JSON.parse(namespaced));
       const raw = localStorage.getItem(WEEKLY_PLAN_KEY);
-      return raw ? window.FFSWeeklyPlan.migrate(JSON.parse(raw)) : null;
+      if (!raw) return null;
+      const migrated = window.FFSWeeklyPlan.migrate(JSON.parse(raw));
+      localStorage.setItem(currentPersonalWeeklyPlanKey(), JSON.stringify(migrated));
+      return migrated;
     } catch {
       return null;
     }
   }
 
   function saveWeeklyPlan(message = "") {
+    if (isDemoActive() || isSwitchingPlans) {
+      if (message) updateSaveStatus("Sample Plan weekly changes are temporary and were not saved to your personal plan.");
+      return;
+    }
     if (!weeklyPlan) {
+      localStorage.removeItem(currentPersonalWeeklyPlanKey());
       localStorage.removeItem(WEEKLY_PLAN_KEY);
       return;
     }
     weeklyPlan.updatedAt = new Date().toISOString();
-    localStorage.setItem(WEEKLY_PLAN_KEY, JSON.stringify(window.FFSWeeklyPlan.migrate(weeklyPlan)));
+    const payload = window.FFSWeeklyPlan.migrate({
+      ...weeklyPlan,
+      planId: normalisePlanId(activePlanId),
+    });
+    localStorage.setItem(currentPersonalWeeklyPlanKey(), JSON.stringify(payload));
+    localStorage.setItem(WEEKLY_PLAN_KEY, JSON.stringify(payload));
     if (message) updateSaveStatus(message);
   }
 
@@ -2086,7 +2304,10 @@
     weeklyPlanUiState.isTimingSetupExpanded = null;
     editingTimingItemId = null;
     timingEditDraft = null;
-    localStorage.removeItem(WEEKLY_PLAN_KEY);
+    if (!isDemoActive()) {
+      localStorage.removeItem(currentPersonalWeeklyPlanKey());
+      localStorage.removeItem(WEEKLY_PLAN_KEY);
+    }
     updateSaveStatus(message);
   }
 
@@ -2125,11 +2346,15 @@
       appVersion: APP_VERSION,
       schemaVersion: EXPORT_SCHEMA_VERSION,
       exportedAt: new Date().toISOString(),
+      planId: isDemoActive() ? DEMO_PLAN_ID : normalisePlanId(activePlanId),
+      planSource: isDemoActive() ? "sample" : "personal",
       storageKeys: {
-        draft: DRAFT_KEY,
+        draft: isDemoActive() ? "temporary-sample-plan" : currentPersonalPlanKey(),
+        legacyDraft: DRAFT_KEY,
         scenarios: SCENARIO_KEY,
-        weeklyPlan: WEEKLY_PLAN_KEY,
+        weeklyPlan: isDemoActive() ? "temporary-sample-weekly-plan" : currentPersonalWeeklyPlanKey(),
         userState: USER_STATE_KEY,
+        snapshots: isDemoActive() ? "sample-plan-excluded-from-personal-snapshots" : currentSnapshotKey(),
       },
       plan: migratePlanData(plan),
       scenarios: loadScenarios(),
@@ -2171,6 +2396,9 @@
       return;
     }
     plan = imported.plan;
+    activePlanId = normalisePlanId(imported.plan?.meta?.planId || payload.planId || activePlanId || DEFAULT_PERSONAL_PLAN_ID);
+    isDemoMode = false;
+    plan = ensurePlanIdentity(plan, { source: "personal", planId: activePlanId });
     generatedWeeklyPlanner = null;
     weeklyPlan = imported.weeklyPlan;
     restoredDraftUi = imported.ui || {};
@@ -2179,7 +2407,10 @@
     }
     saveScenarios(imported.scenarios);
     if (weeklyPlan) saveWeeklyPlan();
-    else localStorage.removeItem(WEEKLY_PLAN_KEY);
+    else {
+      localStorage.removeItem(currentPersonalWeeklyPlanKey());
+      localStorage.removeItem(WEEKLY_PLAN_KEY);
+    }
     saveDraft("Plan imported successfully.");
     renderAll();
     showWorkspace(activeView || "dashboard");
@@ -2210,6 +2441,24 @@
   function selectedSamplePlan() {
     const plans = DATA.samplePlans || [{ id: "sample", name: "Sample Plan", plan: DATA.demoPlan }];
     return plans.find((item) => item.id === selectedSamplePlanId) || plans[0];
+  }
+
+  function sampleScenarioList(basePlan = plan) {
+    if (!Array.isArray(DATA.demoScenarioAdjustments)) return [];
+    const demoBase = CALC.clonePlan(basePlan || selectedSamplePlan()?.plan || DATA.demoPlan || {});
+    return DATA.demoScenarioAdjustments.map((item, index) => {
+      const scenarioPlan = applyScenarioAdjustments(demoBase, item.adjustments || {});
+      return {
+        id: `sample-scenario-${index + 1}`,
+        source: "sample",
+        planId: DEMO_PLAN_ID,
+        name: item.name,
+        notes: item.notes,
+        savedAt: new Date().toISOString(),
+        plan: ensurePlanIdentity(scenarioPlan, { source: "sample", samplePlanId: selectedSamplePlanId }),
+        summary: scenarioSummary(scenarioPlan),
+      };
+    });
   }
 
   function renderSamplePlanOptions() {
@@ -2539,7 +2788,7 @@
     blank.goalItems = [];
     blank.comparison = { ...comparisonDefaults };
     ensurePlanSettings(blank);
-    return blank;
+    return ensurePlanIdentity(blank, { source: "personal", planId: activePlanId || DEFAULT_PERSONAL_PLAN_ID });
   }
 
   function isBlankPlan(currentPlan) {
@@ -4861,6 +5110,7 @@
     syncCollectionsToLegacy();
     const result = CALC.calculatePlan(plan);
     weeklyPlan = window.FFSWeeklyPlan.createFromPlan(plan, result, readWeeklySetupOptions(), null);
+    weeklyPlan.planId = isDemoActive() ? DEMO_PLAN_ID : normalisePlanId(activePlanId);
     activeWeeklyPlanTab = "thisWeek";
     weeklyEditingWeek = null;
     weeklyViewedWeekNumber = null;
@@ -7266,6 +7516,10 @@
   }
 
   function saveCurrentPlanAsScenario(options = {}) {
+    if (isDemoActive()) {
+      updateSaveStatus("Sample Plan is temporary. Return to My Plan before saving a personal scenario.");
+      return;
+    }
     syncCollectionsToLegacy();
     const scenarios = loadScenarios();
     const nameInput = document.getElementById("scenarioName");
@@ -7287,6 +7541,7 @@
     const scenario = {
       id: `scenario-${Date.now()}`,
       source: "user",
+      planId: normalisePlanId(activePlanId),
       name,
       notes,
       savedAt: new Date().toISOString(),
@@ -7411,6 +7666,10 @@
   }
 
   function addGoalProgress(goalId) {
+    if (isDemoActive()) {
+      updateSaveStatus("Sample Plan progress is not recorded. Return to My Plan to record personal progress.");
+      return;
+    }
     const result = CALC.calculatePlan(plan);
     const goal = normalisedShortTermGoals(result).find((item) => item.id === goalId) || primaryShortTermGoal(result);
     if (!goal) {
@@ -7498,6 +7757,7 @@
   function renderOutputs() {
     syncCollectionsToLegacy();
     const result = CALC.calculatePlan(plan);
+    renderDemoModeBanner();
     renderSamplePlanOptions();
     updateSetupNavigationLabel();
     updatePersonDependentLabels();
@@ -7536,20 +7796,72 @@
 
   function loadSamplePlan() {
     const sample = selectedSamplePlan();
-    plan = CALC.clonePlan(sample.plan);
+    preservePersonalContextBeforeDemo();
+    isSwitchingPlans = true;
+    isDemoMode = true;
+    activePlanId = DEMO_PLAN_ID;
+    plan = ensurePlanIdentity(CALC.clonePlan(sample.plan), { source: "sample", samplePlanId: sample.id });
     generatedWeeklyPlanner = null;
-    resetWeeklyPlanStorage("");
+    weeklyPlan = null;
+    weeklyEditingWeek = null;
+    weeklyViewedWeekNumber = null;
+    weeklyPlanUiState.isTimingSetupExpanded = null;
+    editingTimingItemId = null;
+    timingEditDraft = null;
     seedSampleScenarios(sample.plan);
-    saveDraft("All changes saved");
+    isSwitchingPlans = false;
     renderAll();
     showWorkspace("dashboard");
+    updateSaveStatus("Viewing Sample Plan. Your personal plan has not been changed.");
+  }
+
+  function returnToPersonalPlan(targetView = "") {
+    isSwitchingPlans = true;
+    const context = loadPlanContext();
+    activePlanId = normalisePlanId(context.lastPersonalPlanId || userState.lastPersonalPlanId || DEFAULT_PERSONAL_PLAN_ID);
+    isDemoMode = false;
+    const saved = loadDraft();
+    plan = ensurePlanIdentity(CALC.clonePlan(saved || CALC.emptyPlan()), { source: "personal", planId: activePlanId });
+    weeklyPlan = loadWeeklyPlan();
+    generatedWeeklyPlanner = null;
+    engagementCelebration = null;
+    restoredDraftUi = restoredDraftUi || {};
+    isSwitchingPlans = false;
+    renderAll();
+    showWorkspace(targetView || context.lastPersonalRoute || restoredDraftUi.activeView || "dashboard");
+    updateSaveStatus("Your personal plan and progress history have been restored.");
+  }
+
+  function renderDemoModeBanner() {
+    let banner = document.getElementById("demoModeBanner");
+    if (!banner) {
+      const header = document.querySelector("header");
+      banner = document.createElement("div");
+      banner.id = "demoModeBanner";
+      banner.className = "demo-mode-banner hidden";
+      banner.innerHTML = `
+        <div>
+          <strong>You are viewing the Sample Plan</strong>
+          <span>Changes here will not affect your personal plan.</span>
+        </div>
+        <button class="btn btn-primary" type="button" data-demo-return>Return to My Plan</button>
+      `;
+      header?.insertAdjacentElement("afterend", banner);
+    }
+    banner.classList.toggle("hidden", !isDemoActive());
   }
 
   function startMyPlan() {
+    if (isDemoActive()) {
+      activeWizardStep = 0;
+      returnToPersonalPlan("setup");
+      return;
+    }
     const saved = loadDraft();
     if (saved) {
-      plan = CALC.clonePlan(saved);
+      plan = ensurePlanIdentity(CALC.clonePlan(saved), { source: "personal", planId: activePlanId });
       generatedWeeklyPlanner = null;
+      weeklyPlan = loadWeeklyPlan();
       restoreDraftUiInputs();
       updateSaveStatus("Existing saved plan restored.");
     } else if (isBlankPlan(plan)) {
@@ -7569,24 +7881,34 @@
 
   function resetPlan() {
     if (!window.confirm("Clear the current plan and start again?")) return;
-    plan = blankUserPlan();
+    isSwitchingPlans = true;
+    isDemoMode = false;
+    const context = loadPlanContext();
+    activePlanId = normalisePlanId(context.lastPersonalPlanId || DEFAULT_PERSONAL_PLAN_ID);
+    plan = ensurePlanIdentity(blankUserPlan(), { source: "personal", planId: activePlanId });
     generatedWeeklyPlanner = null;
     resetWeeklyPlanStorage("");
+    localStorage.removeItem(currentPersonalPlanKey());
     localStorage.removeItem(DRAFT_KEY);
     localStorage.removeItem(LAST_SAVED_KEY);
     document.getElementById("scenarioName").value = "";
     document.getElementById("scenarioNotes").value = "";
     activeWizardStep = 0;
+    isSwitchingPlans = false;
     renderAll();
     showWorkspace("setup");
   }
 
   function clearSavedPlan() {
     if (!window.confirm("Clear the saved plan and all current entries? This cannot be undone.")) return;
+    isDemoMode = false;
+    activePlanId = normalisePlanId(activePlanId || DEFAULT_PERSONAL_PLAN_ID);
+    localStorage.removeItem(currentPersonalPlanKey());
+    localStorage.removeItem(currentPersonalWeeklyPlanKey());
     localStorage.removeItem(DRAFT_KEY);
     localStorage.removeItem(LAST_SAVED_KEY);
     restoredDraftUi = {};
-    plan = blankUserPlan();
+    plan = ensurePlanIdentity(blankUserPlan(), { source: "personal", planId: activePlanId });
     generatedWeeklyPlanner = null;
     resetWeeklyPlanStorage("");
     activeWizardStep = 0;
@@ -7653,12 +7975,18 @@
   }
 
   function duplicateScenario() {
+    if (isDemoActive()) {
+      updateSaveStatus("Sample Plan is temporary. Return to My Plan before duplicating a personal scenario.");
+      return;
+    }
     syncCollectionsToLegacy();
     const scenarios = loadScenarios();
     const planSnapshot = CALC.clonePlan(plan);
     if (!isBundledSamplePlan(planSnapshot)) markPersonalPlanCreated();
     const scenario = {
       id: `scenario-${Date.now()}`,
+      source: "user",
+      planId: normalisePlanId(activePlanId),
       name: `Copy ${scenarios.length + 1}`,
       notes: "Duplicated from the current plan.",
       savedAt: new Date().toISOString(),
@@ -7695,17 +8023,7 @@
   }
 
   function seedSampleScenarios(basePlan = DATA.demoPlan) {
-    if (!Array.isArray(DATA.demoScenarioAdjustments)) return;
-    const existingUserScenarios = loadScenarios().filter((scenario) => scenario.source !== "sample");
-    const sampleScenarios = DATA.demoScenarioAdjustments.map((item, index) => ({
-      id: `sample-scenario-${index + 1}`,
-      source: "sample",
-      name: item.name,
-      notes: item.notes,
-      savedAt: new Date().toISOString(),
-      plan: applyScenarioAdjustments(basePlan, item.adjustments || {}),
-    }));
-    saveScenarios([...sampleScenarios, ...existingUserScenarios]);
+    return sampleScenarioList(basePlan);
   }
 
   function bindEvents() {
@@ -7875,6 +8193,12 @@
 
       if (event.target.closest("[data-info-close]")) {
         closeGoalInfo();
+        return;
+      }
+
+      if (event.target.closest("[data-demo-return]")) {
+        event.preventDefault();
+        returnToPersonalPlan();
         return;
       }
 
@@ -8084,9 +8408,24 @@
       if (loadId) {
         const scenario = loadScenarios().find((item) => item.id === loadId);
         if (scenario) {
-          plan = CALC.clonePlan(scenario.plan);
+          if (scenario.source === "sample") {
+            isDemoMode = true;
+            activePlanId = DEMO_PLAN_ID;
+            plan = ensurePlanIdentity(CALC.clonePlan(scenario.plan), { source: "sample", samplePlanId: selectedSamplePlanId });
+            generatedWeeklyPlanner = null;
+            weeklyPlan = null;
+            renderAll();
+            showWorkspace("dashboard");
+            updateSaveStatus("Sample scenario loaded temporarily. Your personal plan has not been changed.");
+            return;
+          }
+          isSwitchingPlans = true;
+          isDemoMode = false;
+          activePlanId = normalisePlanId(scenario.planId || scenario.plan?.meta?.planId || activePlanId || DEFAULT_PERSONAL_PLAN_ID);
+          plan = ensurePlanIdentity(CALC.clonePlan(scenario.plan), { source: "personal", planId: activePlanId });
           generatedWeeklyPlanner = null;
           resetWeeklyPlanStorage("");
+          isSwitchingPlans = false;
           saveDraft();
           renderAll();
           showWorkspace("dashboard");
