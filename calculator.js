@@ -345,7 +345,7 @@
           type,
           owner: normaliseIncomeOwner(item.owner || item.incomeOwner, type, index),
           amount: number(item.amount),
-          frequency: item.frequency || "annually",
+          frequency: type === "rentalNetCashIncome" ? "annually" : item.frequency || "annually",
         };
       });
     }
@@ -421,6 +421,173 @@
       hasOverride: person1OverrideEnabled || person2OverrideEnabled,
       concessionalCap: CONCESSIONAL_SUPER_CAP,
       note: "Estimated employer super contributions are calculated from salary and wages only.",
+    };
+  }
+
+  function normaliseLinkedLoanIds(value) {
+    if (Array.isArray(value)) return value.map((item) => String(item || "").trim()).filter(Boolean);
+    if (typeof value === "string") return value.split(",").map((item) => item.trim()).filter(Boolean);
+    return [];
+  }
+
+  function liabilityAnnualRepayment(item = {}) {
+    return roundCurrency(annualize(item.repayment, item.repaymentFrequency || "monthly"));
+  }
+
+  function getAnnualLoanBreakdown(loan = {}) {
+    const balance = nonNegative(loan.balance);
+    const annualInterestRate = annualRate(loan.interestRatePct);
+    const regularAnnualRepayments = liabilityAnnualRepayment(loan);
+    const additionalPrincipal = roundCurrency(annualize(loan.additionalPrincipalRepayment, loan.additionalPrincipalFrequency || "annually"));
+    const repaymentType = loan.repaymentType === "interestOnly" ? "interestOnly" : "principalAndInterest";
+
+    if (balance <= 0) {
+      return {
+        loanId: loan.id || "",
+        annualRepayments: roundCurrency(regularAnnualRepayments + additionalPrincipal),
+        regularAnnualRepayments,
+        annualInterest: 0,
+        annualPrincipal: additionalPrincipal,
+        additionalPrincipal,
+        closingBalance: 0,
+        repaymentType,
+      };
+    }
+
+    if (repaymentType === "interestOnly") {
+      const annualInterest = roundCurrency(balance * annualInterestRate);
+      return {
+        loanId: loan.id || "",
+        annualRepayments: roundCurrency(regularAnnualRepayments + additionalPrincipal),
+        regularAnnualRepayments,
+        annualInterest,
+        annualPrincipal: additionalPrincipal,
+        additionalPrincipal,
+        closingBalance: roundCurrency(Math.max(0, balance - additionalPrincipal)),
+        repaymentType,
+      };
+    }
+
+    const monthlyRepayment = roundCurrency(regularAnnualRepayments / MONTHS_PER_YEAR);
+    const termYears = nonNegative(loan.termYears) || 30;
+    const amortisation = amortiseLoan({
+      principal: balance,
+      annualInterestRate,
+      monthlyRepayment,
+      termYears,
+      offsetBalance: 0,
+    });
+    const firstYear = amortisation.schedule.slice(0, MONTHS_PER_YEAR);
+    let annualInterest = roundCurrency(firstYear.reduce((total, row) => total + row.interestCharged, 0));
+    let annualPrincipal = roundCurrency(firstYear.reduce((total, row) => total + Math.max(0, row.principalRepaid), 0));
+    let closingBalance = firstYear.at(-1)?.closingBalance;
+
+    if (!firstYear.length && regularAnnualRepayments > 0) {
+      annualInterest = roundCurrency(balance * annualInterestRate);
+      annualPrincipal = roundCurrency(Math.max(0, regularAnnualRepayments - annualInterest));
+      closingBalance = roundCurrency(Math.max(0, balance - annualPrincipal));
+    }
+
+    annualPrincipal = roundCurrency(annualPrincipal + additionalPrincipal);
+    closingBalance = roundCurrency(Math.max(0, (closingBalance ?? balance) - additionalPrincipal));
+
+    return {
+      loanId: loan.id || "",
+      annualRepayments: roundCurrency(regularAnnualRepayments + additionalPrincipal),
+      regularAnnualRepayments,
+      annualInterest,
+      annualPrincipal,
+      additionalPrincipal,
+      closingBalance,
+      repaymentType,
+    };
+  }
+
+  function calculateRentalPropertyCashflow(propertyIncome = {}, linkedLoans = []) {
+    const treatment = propertyIncome.rentalCashflowTreatment === "beforeInterest" ? "beforeInterest" : "afterInterest";
+    const annualNetRentalCashIncome = roundCurrency(annualize(propertyIncome.amount, propertyIncome.frequency || "annually"));
+    const loanBreakdowns = linkedLoans.map(getAnnualLoanBreakdown);
+    const annualLoanRepayments = roundCurrency(loanBreakdowns.reduce((total, item) => total + item.annualRepayments, 0));
+    const annualLoanInterest = roundCurrency(loanBreakdowns.reduce((total, item) => total + item.annualInterest, 0));
+    const annualLoanPrincipal = roundCurrency(loanBreakdowns.reduce((total, item) => total + item.annualPrincipal, 0));
+    const householdDebtDeduction = treatment === "beforeInterest" ? annualLoanRepayments : annualLoanPrincipal;
+    return {
+      id: propertyIncome.id || "",
+      name: propertyIncome.propertyName || propertyIncome.name || "Rental property",
+      treatment,
+      annualNetRentalCashIncome,
+      linkedLoanCount: linkedLoans.length,
+      linkedLoanIds: linkedLoans.map((loan) => loan.id).filter(Boolean),
+      loanBreakdowns,
+      annualLoanRepayments,
+      annualLoanInterest,
+      annualLoanPrincipal,
+      householdDebtDeduction: roundCurrency(householdDebtDeduction),
+      householdCashflowContribution: roundCurrency(annualNetRentalCashIncome - householdDebtDeduction),
+    };
+  }
+
+  function calculateRentalCashflowSummary(plan = {}) {
+    const incomeItems = normalisedIncomeItems(plan).filter((item) => item.type === "rentalNetCashIncome");
+    const rentalLoans = (Array.isArray(plan.liabilityItems) ? plan.liabilityItems : [])
+      .filter((item) => item.type === "rentalPropertyLoan");
+    const usedLoanIds = new Set();
+    const warnings = [];
+    const propertyResults = incomeItems.map((income) => {
+      const linkedIds = normaliseLinkedLoanIds(income.linkedLoanIds || income.linkedLoanId);
+      const linkedLoans = rentalLoans.filter((loan) => {
+        const linkedFromIncome = linkedIds.includes(String(loan.id || ""));
+        const linkedFromLoan = loan.linkedRentalIncomeId && String(loan.linkedRentalIncomeId) === String(income.id || "");
+        if (!linkedFromIncome && !linkedFromLoan) return false;
+        if (usedLoanIds.has(loan.id) && !loan.allowMultipleRentalLinks) {
+          warnings.push(`${loan.name || "A rental property loan"} is linked to more than one rental income entry. It has only been counted once.`);
+          return false;
+        }
+        usedLoanIds.add(loan.id);
+        return true;
+      });
+      return calculateRentalPropertyCashflow(income, linkedLoans);
+    });
+
+    const unlinkedRentalLoans = rentalLoans.filter((loan) => loan.id && !usedLoanIds.has(loan.id));
+    const confirmedUnlinked = unlinkedRentalLoans
+      .filter((loan) => loan.unlinkedRentalCashflowTreatment === "afterInterest" || loan.unlinkedRentalCashflowTreatment === "beforeInterest")
+      .map((loan) => {
+        const breakdown = getAnnualLoanBreakdown(loan);
+        const treatment = loan.unlinkedRentalCashflowTreatment === "beforeInterest" ? "beforeInterest" : "afterInterest";
+        return {
+          loan,
+          breakdown,
+          treatment,
+          householdDebtDeduction: treatment === "beforeInterest" ? breakdown.annualRepayments : breakdown.annualPrincipal,
+        };
+      });
+    unlinkedRentalLoans
+      .filter((loan) => !loan.unlinkedRentalCashflowTreatment || loan.unlinkedRentalCashflowTreatment === "unconfirmed")
+      .forEach((loan) => warnings.push(`${loan.name || "A rental property loan"} is not linked to a rental property income entry. Confirm whether loan interest is already included in the rental cashflow amount.`));
+
+    const propertyDebtDeduction = roundCurrency(propertyResults.reduce((total, item) => total + item.householdDebtDeduction, 0));
+    const confirmedUnlinkedDebtDeduction = roundCurrency(confirmedUnlinked.reduce((total, item) => total + item.householdDebtDeduction, 0));
+    const annualLoanInterest = roundCurrency(
+      propertyResults.reduce((total, item) => total + item.annualLoanInterest, 0)
+      + confirmedUnlinked.reduce((total, item) => total + item.breakdown.annualInterest, 0),
+    );
+    const annualLoanPrincipal = roundCurrency(
+      propertyResults.reduce((total, item) => total + item.annualLoanPrincipal, 0)
+      + confirmedUnlinked.reduce((total, item) => total + item.breakdown.annualPrincipal, 0),
+    );
+
+    return {
+      propertyResults,
+      unlinkedRentalLoans: unlinkedRentalLoans.map((loan) => ({ id: loan.id, name: loan.name || "Rental property loan" })),
+      confirmedUnlinked,
+      warnings,
+      annualNetRentalIncome: roundCurrency(propertyResults.reduce((total, item) => total + item.annualNetRentalCashIncome, 0)),
+      annualLoanRepayments: roundCurrency(propertyResults.reduce((total, item) => total + item.annualLoanRepayments, 0) + confirmedUnlinked.reduce((total, item) => total + item.breakdown.annualRepayments, 0)),
+      annualLoanInterest,
+      annualLoanPrincipal,
+      annualHouseholdDebtDeduction: roundCurrency(propertyDebtDeduction + confirmedUnlinkedDebtDeduction),
+      annualHouseholdCashflowContribution: roundCurrency(propertyResults.reduce((total, item) => total + item.householdCashflowContribution, 0) - confirmedUnlinkedDebtDeduction),
     };
   }
 
@@ -907,6 +1074,10 @@
     const ownedStudyLoanBalance = roundCurrency(person1StslBalance + person2StslBalance + unassignedStslBalance);
     const legacyStudyLoanBalance = nonNegative(plan.liabilities.hecsHelpDebt);
     const totalStudyLoanBalance = roundCurrency(Math.max(legacyStudyLoanBalance, ownedStudyLoanBalance));
+    const rentalPropertyLoanBalance = roundCurrency((Array.isArray(plan.liabilityItems) ? plan.liabilityItems : [])
+      .filter((item) => item.type === "rentalPropertyLoan")
+      .reduce((total, item) => total + nonNegative(item.balance), 0));
+    const rentalPropertyCashflow = calculateRentalCashflowSummary(plan);
     const totalAssets = roundCurrency(
       nonNegative(plan.assets.homeValue)
       + nonNegative(plan.assets.otherPropertyValue)
@@ -922,6 +1093,7 @@
     const totalLiabilities = roundCurrency(
       nonNegative(plan.liabilities.homeLoanBalance)
       + totalStudyLoanBalance
+      + rentalPropertyLoanBalance
       + nonNegative(plan.liabilities.otherDebts)
       + creditCardBalance,
     );
@@ -1032,7 +1204,8 @@
     const annualLivingExpenses = annualExpenses;
     const annualMortgageRepayments = roundCurrency(nonNegative(plan.liabilities.monthlyRepayment || plan.expenses.mortgageRepayments) * MONTHS_PER_YEAR);
     const annualCreditCardRepayments = roundCurrency(nonNegative(plan.liabilities.creditCardMonthlyRepayment) * MONTHS_PER_YEAR);
-    const annualDebtRepayments = roundCurrency(annualMortgageRepayments + annualCreditCardRepayments);
+    const annualRentalLoanCashflowRepayments = roundCurrency(rentalPropertyCashflow.annualHouseholdDebtDeduction);
+    const annualDebtRepayments = roundCurrency(annualMortgageRepayments + annualCreditCardRepayments + annualRentalLoanCashflowRepayments);
     const estimatedTaxAndHelp = roundCurrency(taxEstimate.incomeTax + taxEstimate.medicareLevy + taxEstimate.medicareLevySurcharge + helpRepaymentEstimate.annualRepayment);
     const netIncomeAfterTaxHelp = roundCurrency(annualGrossIncome - taxEstimate.incomeTax - taxEstimate.medicareLevy - taxEstimate.medicareLevySurcharge - helpRepaymentEstimate.annualRepayment);
     const annualInvestmentContributions = roundCurrency(nonNegative(plan.investing.annualInvestingTarget));
@@ -1195,7 +1368,10 @@
       annualOtherRegularExpenses,
       annualMortgageRepayments,
       annualCreditCardRepayments,
+      annualRentalLoanCashflowRepayments,
       annualDebtRepayments,
+      rentalPropertyLoanBalance,
+      rentalPropertyCashflow,
       annualInvestmentContributions,
       annualExtraSuperContributions,
       netIncomeAfterTaxHelp,
@@ -1262,6 +1438,9 @@
     calculateEmployerSuperForPerson,
     employerSuperSummary,
     incomeBreakdown,
+    getAnnualLoanBreakdown,
+    calculateRentalPropertyCashflow,
+    calculateRentalCashflowSummary,
     amortiseLoan,
     calculateOffsetBenefit,
     calculateLoanSummary,

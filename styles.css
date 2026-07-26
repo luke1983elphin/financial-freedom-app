@@ -749,6 +749,48 @@ main {
   line-height: 1.45;
 }
 
+.rental-loan-link-list {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #dbeafe;
+  border-radius: 16px;
+  background: #f8fbff;
+  padding: 14px;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #0f2742;
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.checkbox-row input {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+
+.rental-cashflow-card {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 18px;
+  background: #f8fbff;
+  padding: 16px;
+}
+
+.rental-cashflow-card-compact {
+  margin-top: 14px;
+}
+
+.rental-property-row small {
+  line-height: 1.4;
+}
+
 .comparison-grid {
   display: grid;
   gap: 14px;

@@ -74,7 +74,10 @@
   ];
   const liabilityTypeOptions = [
     ["homeLoan", "Home loan"],
-    ["investmentLoan", "Investment Loan"],
+    ["rentalPropertyLoan", "Rental property loan"],
+    ["investmentLoan", "Investment loan"],
+    ["personalLoan", "Personal loan"],
+    ["vehicleLoan", "Vehicle loan"],
     ["creditCard", "Credit Card"],
     ["otherDebt", "Other debt"],
   ];
@@ -87,6 +90,19 @@
     ["other", "Other"],
   ];
   const incomeTypeLabels = Object.fromEntries(incomeTypeOptions);
+  const rentalCashflowTreatmentOptions = [
+    ["afterInterest", "Net cash income after interest"],
+    ["beforeInterest", "Net operating cash income before interest"],
+  ];
+  const rentalLoanRepaymentTypeOptions = [
+    ["principalAndInterest", "Principal and interest"],
+    ["interestOnly", "Interest-only"],
+  ];
+  const unlinkedRentalCashflowTreatmentOptions = [
+    ["unconfirmed", "Confirm treatment"],
+    ["afterInterest", "Rental income already includes loan interest"],
+    ["beforeInterest", "Rental income is entered before loan interest"],
+  ];
   const hospitalCoverOptions = [
     ["", "Select cover status"],
     ["full-year", "Full financial year"],
@@ -171,7 +187,11 @@
     },
     rentalNetCashIncome: {
       title: "Rental property net cash income",
-      body: "Enter the expected annual cash income from the property after property operating expenses and loan interest. This is for financial-planning cashflow purposes and may differ from the taxable rental profit or loss.",
+      body: "Enter the property's expected annual cash income after rental property operating expenses and rental loan interest. Where a rental loan is linked, only the principal component of the loan repayments will be deducted separately from household cash surplus. This avoids counting the loan interest twice.",
+    },
+    rentalLoanPrincipal: {
+      title: "Rental loan principal",
+      body: "Only the principal component is deducted separately from household cashflow because rental loan interest is already included in the linked rental property net cash income.",
     },
     employerSuperEstimate: {
       title: "Estimated employer super contributions",
@@ -1360,6 +1380,11 @@
       item.type = normaliseIncomeType(item.type || item.incomeType, index);
       item.owner = normaliseIncomeOwner(item.owner || item.incomeOwner, item.type, index);
       if (item.type === "salaryWages" && item.owner === "joint") item.owner = index === 1 ? "person2" : "person1";
+      if (item.type === "rentalNetCashIncome") {
+        item.frequency = "annually";
+        item.rentalCashflowTreatment = item.rentalCashflowTreatment === "beforeInterest" ? "beforeInterest" : "afterInterest";
+        if (!Array.isArray(item.linkedLoanIds)) item.linkedLoanIds = item.linkedLoanId ? [item.linkedLoanId] : [];
+      }
     });
   }
 
@@ -1436,6 +1461,30 @@
     plan.liabilities.hecsHelpDebt = person1Balance + person2Balance;
     plan.liabilities.unassignedStslBalance = unassignedBalance;
     plan.liabilities.stslOwnerConfirmationNeeded = unassignedBalance > 0;
+  }
+
+  function normaliseRentalPropertyData() {
+    if (!Array.isArray(plan.incomeItems)) plan.incomeItems = [];
+    if (!Array.isArray(plan.liabilityItems)) plan.liabilityItems = [];
+    const rentalLoanIds = new Set(plan.liabilityItems.filter((item) => item.type === "rentalPropertyLoan").map((item) => String(item.id)));
+    const rentalIncomeById = new Map(plan.incomeItems.filter((item) => item.type === "rentalNetCashIncome").map((item) => [String(item.id), item]));
+    plan.incomeItems.forEach((item) => {
+      if (item.type !== "rentalNetCashIncome") return;
+      item.frequency = "annually";
+      item.rentalCashflowTreatment = item.rentalCashflowTreatment === "beforeInterest" ? "beforeInterest" : "afterInterest";
+      item.linkedLoanIds = linkedLoanIds(item).filter((id) => rentalLoanIds.has(id));
+    });
+    plan.liabilityItems.forEach((item) => {
+      if (item.type !== "rentalPropertyLoan") return;
+      item.owner = item.owner || "joint";
+      item.repaymentType = item.repaymentType === "interestOnly" ? "interestOnly" : "principalAndInterest";
+      item.additionalPrincipalFrequency = item.additionalPrincipalFrequency || "annually";
+      item.unlinkedRentalCashflowTreatment = item.unlinkedRentalCashflowTreatment || "unconfirmed";
+      const linkedIncome = item.linkedRentalIncomeId ? rentalIncomeById.get(String(item.linkedRentalIncomeId)) : null;
+      if (linkedIncome && item.id && !linkedLoanIds(linkedIncome).includes(String(item.id))) {
+        linkedIncome.linkedLoanIds = [...linkedLoanIds(linkedIncome), String(item.id)];
+      }
+    });
   }
 
   function hasFinancialPlanData(currentPlan = plan) {
@@ -1535,6 +1584,7 @@
       plan.liabilityItems.push({ id: "liability-credit-card", name: "Credit Card", type: "creditCard", balance: plan.liabilities.creditCardBalance || 0, interestRatePct: plan.liabilities.creditCardInterestRatePct || 19.99, repayment: plan.liabilities.creditCardMonthlyRepayment || 0, repaymentFrequency: "monthly", termYears: 0, creditLimit: plan.liabilities.creditCardLimit || 0 });
     }
     normaliseStslLiabilities();
+    normaliseRentalPropertyData();
     if (!Array.isArray(plan.expenseItems)) {
       plan.expenseItems = [
         { id: "expense-living", name: plan.expenses.livingName || "Living costs", category: "living", amount: plan.expenses.livingCosts || 0, frequency: plan.expenses.livingFrequency || "monthly" },
@@ -1647,6 +1697,7 @@
       : (creditCards[0]?.interestRatePct || 19.99);
     plan.liabilities.creditCardMonthlyRepayment = creditCards.reduce((total, item) => total + annualValue(item.repayment, item.repaymentFrequency || "monthly"), 0) / 12;
     plan.liabilities.creditCardLimit = creditCards.reduce((total, item) => total + (Number(item.creditLimit) || 0), 0);
+    plan.liabilities.rentalPropertyLoanBalance = liabilities.filter((item) => item.type === "rentalPropertyLoan").reduce((total, item) => total + (Number(item.balance) || 0), 0);
     plan.liabilities.otherDebts = liabilities.filter((item) => item.type === "otherDebt").reduce((total, item) => total + (Number(item.balance) || 0), 0);
     plan.expenses.mortgageRepayments = plan.liabilities.monthlyRepayment;
 
@@ -3202,6 +3253,97 @@
     });
   }
 
+  function rentalPropertyLoanItems() {
+    ensureCollectionData();
+    return (plan.liabilityItems || []).filter((item) => item.type === "rentalPropertyLoan");
+  }
+
+  function rentalIncomeItems() {
+    ensureCollectionData();
+    return (plan.incomeItems || []).filter((item) => item.type === "rentalNetCashIncome");
+  }
+
+  function linkedLoanIds(item) {
+    if (Array.isArray(item.linkedLoanIds)) return item.linkedLoanIds.map((id) => String(id));
+    if (typeof item.linkedLoanIds === "string") return item.linkedLoanIds.split(",").map((id) => id.trim()).filter(Boolean);
+    return item.linkedLoanId ? [String(item.linkedLoanId)] : [];
+  }
+
+  function updateRentalIncomeLoanLink(input) {
+    ensureCollectionData();
+    const income = plan.incomeItems.find((item) => String(item.id) === String(input.dataset.rentalLoanLink));
+    if (!income || income.type !== "rentalNetCashIncome") return;
+    const loanId = String(input.dataset.loanId || "");
+    if (!loanId) {
+      income.linkedLoanIds = [];
+      income.linkedLoanId = "";
+    } else {
+      const linked = new Set(linkedLoanIds(income));
+      if (input.checked) linked.add(loanId);
+      else linked.delete(loanId);
+      income.linkedLoanIds = [...linked];
+      income.linkedLoanId = income.linkedLoanIds.length === 1 ? income.linkedLoanIds[0] : "";
+    }
+    plan.liabilityItems.forEach((loan) => {
+      if (loan.type !== "rentalPropertyLoan") return;
+      if (loan.linkedRentalIncomeId === income.id && !linkedLoanIds(income).includes(String(loan.id))) loan.linkedRentalIncomeId = "";
+      if (linkedLoanIds(income).includes(String(loan.id))) loan.linkedRentalIncomeId = income.id;
+    });
+    generatedWeeklyPlanner = null;
+    if (weeklyPlan) {
+      markWeeklyTimingReviewRequired();
+      saveWeeklyPlan();
+    }
+    syncCollectionsToLegacy();
+    autosavePlan();
+    renderAll();
+  }
+
+  function rentalLoanLinkControls(item) {
+    const loans = rentalPropertyLoanItems();
+    if (!loans.length) {
+      return `<p class="field-help mt-3">No rental property loans have been added yet. Add a liability and classify it as Rental property loan to link it here.</p>`;
+    }
+    const linked = new Set(linkedLoanIds(item));
+    return `
+      <div class="rental-loan-link-list mt-4">
+        <span class="field-label">Linked rental property loan</span>
+        <label class="checkbox-row">
+          <input type="checkbox" data-rental-loan-link="${escapeHtml(item.id)}" data-loan-id="" ${linked.size ? "" : "checked"}>
+          <span>No linked loan</span>
+        </label>
+        ${loans.map((loan) => `
+          <label class="checkbox-row">
+            <input type="checkbox" data-rental-loan-link="${escapeHtml(item.id)}" data-loan-id="${escapeHtml(loan.id)}"${linked.has(String(loan.id)) ? " checked" : ""}>
+            <span>${escapeHtml(loan.name || "Rental property loan")}</span>
+          </label>
+        `).join("")}
+      </div>
+    `;
+  }
+
+  function rentalIncomeLinkOptions(selected = "") {
+    return [["", "No linked rental income"], ...rentalIncomeItems().map((item) => [item.id, item.propertyName || item.name || "Rental property"])]
+      .map(([value, label]) => `<option value="${escapeHtml(value)}"${selected === value ? " selected" : ""}>${escapeHtml(label)}</option>`)
+      .join("");
+  }
+
+  function rentalIncomeLinkOptionPairs() {
+    return [["", "No linked rental income"], ...rentalIncomeItems().map((item) => [item.id, item.propertyName || item.name || "Rental property"])];
+  }
+
+  function rentalLoanBreakdownTiles(item) {
+    const breakdown = CALC.getAnnualLoanBreakdown?.(item);
+    if (!breakdown) return "";
+    return `
+      <div class="summary-grid mt-4">
+        ${summaryTile("Annual repayment", money(breakdown.annualRepayments))}
+        ${summaryTile("Estimated interest", money(breakdown.annualInterest))}
+        ${summaryTile("Estimated principal", money(breakdown.annualPrincipal), "", "rentalLoanPrincipal")}
+      </div>
+    `;
+  }
+
   function dynamicInput(collection, item, key, label, options = {}) {
     const rawValue = item[key] ?? "";
     const isBlankNumber = options.kind !== "text" && options.type !== "select" && Number(rawValue) === 0 && rawValue !== "0";
@@ -3262,6 +3404,21 @@
     item.owner = owner;
     const typeLabel = incomeTypeLabels[type] || "Income";
     const ownerLabel = owner === "joint" ? "Joint" : personDisplayName(owner === "person2" ? 2 : 1);
+    const rentalFields = type === "rentalNetCashIncome" ? `
+          ${dynamicInput("incomeItems", item, "name", "Income description", { kind: "text", placeholder: "e.g. Rental property cashflow" })}
+          ${dynamicInput("incomeItems", item, "type", "Income type", { type: "select", options: incomeTypeOptions, infoKey: "rentalNetCashIncome" })}
+          ${dynamicInput("incomeItems", item, "propertyName", "Property name or description", { kind: "text", placeholder: "e.g. Smith Street rental" })}
+          ${dynamicInput("incomeItems", item, "owner", "Income owner", { type: "select", options: incomeOwnerOptions(type) })}
+          ${dynamicInput("incomeItems", item, "amount", "Annual net cash income", { step: "100", infoKey: "rentalNetCashIncome" })}
+          ${dynamicInput("incomeItems", item, "rentalCashflowTreatment", "Rental cashflow treatment", { type: "select", options: rentalCashflowTreatmentOptions })}
+          ${dynamicInput("incomeItems", item, "note", "Optional notes", { kind: "text", placeholder: "Optional context" })}
+        ` : `
+          ${dynamicInput("incomeItems", item, "name", "Income name", { kind: "text", placeholder: "e.g. Salary, rent, dividends" })}
+          ${dynamicInput("incomeItems", item, "type", "Income type", { type: "select", options: incomeTypeOptions })}
+          ${dynamicInput("incomeItems", item, "owner", "Income owner", { type: "select", options: incomeOwnerOptions(type) })}
+          ${dynamicInput("incomeItems", item, "amount", "Gross amount", { step: "100", placeholder: "Amount for the selected frequency" })}
+          ${dynamicInput("incomeItems", item, "frequency", "Frequency", { type: "select", options: frequencies })}
+        `;
     return `
       <article class="form-item-card dynamic-item-card">
         <div class="item-card-title">
@@ -3273,13 +3430,9 @@
           ${removeButton("incomeItems", item.id)}
         </div>
         <div class="input-grid mt-4">
-          ${dynamicInput("incomeItems", item, "name", "Income name", { kind: "text", placeholder: "e.g. Salary, rent, dividends" })}
-          ${dynamicInput("incomeItems", item, "type", "Income type", { type: "select", options: incomeTypeOptions, infoKey: type === "rentalNetCashIncome" ? "rentalNetCashIncome" : "" })}
-          ${dynamicInput("incomeItems", item, "owner", "Income owner", { type: "select", options: incomeOwnerOptions(type) })}
-          ${dynamicInput("incomeItems", item, "amount", "Gross amount", { step: "100", placeholder: "Amount for the selected frequency" })}
-          ${dynamicInput("incomeItems", item, "frequency", "Frequency", { type: "select", options: frequencies })}
+          ${rentalFields}
         </div>
-        ${type === "rentalNetCashIncome" ? `<p class="field-help mt-3">${escapeHtml(goalInfoCopy.rentalNetCashIncome.body)}</p>` : ""}
+        ${type === "rentalNetCashIncome" ? `${rentalLoanLinkControls(item)}<p class="field-help mt-3">${escapeHtml(goalInfoCopy.rentalNetCashIncome.body)}</p>` : ""}
       </article>
     `;
   }
@@ -3356,6 +3509,23 @@
         </article>
       `;
     }
+    const isRentalLoan = item.type === "rentalPropertyLoan";
+    const linkedIncomeId = item.linkedRentalIncomeId || "";
+    const rentalLinkedFromIncome = isRentalLoan && rentalIncomeItems().some((income) => linkedLoanIds(income).includes(String(item.id)));
+    const rentalLinkText = rentalLinkedFromIncome
+      ? `<p class="field-help mt-3">This loan is linked from a rental property income entry. The income entry controls whether principal only or full repayment is deducted from household cashflow.</p>`
+      : "";
+    const unlinkedWarning = isRentalLoan && !linkedIncomeId && !rentalLinkedFromIncome
+      ? `<p class="tax-note mt-3"><strong>Rental loan not linked:</strong> This rental property loan is not linked to a rental property income entry. Confirm whether its interest has already been included in the rental cashflow amount.</p>`
+      : "";
+    const rentalFields = isRentalLoan ? `
+          ${dynamicInput("liabilityItems", item, "owner", "Loan owner", { type: "select", options: incomeOwnerOptions("other") })}
+          ${dynamicInput("liabilityItems", item, "repaymentType", "Repayment type", { type: "select", options: rentalLoanRepaymentTypeOptions })}
+          ${dynamicInput("liabilityItems", item, "linkedRentalIncomeId", "Linked rental property income", { type: "select", options: rentalIncomeLinkOptionPairs() })}
+          ${!linkedIncomeId && !rentalLinkedFromIncome ? dynamicInput("liabilityItems", item, "unlinkedRentalCashflowTreatment", "Unlinked rental cashflow treatment", { type: "select", options: unlinkedRentalCashflowTreatmentOptions }) : ""}
+          ${item.repaymentType === "interestOnly" ? dynamicInput("liabilityItems", item, "additionalPrincipalRepayment", "Additional principal repayment", { step: "100" }) : ""}
+          ${item.repaymentType === "interestOnly" ? dynamicInput("liabilityItems", item, "additionalPrincipalFrequency", "Additional principal frequency", { type: "select", options: frequencies }) : ""}
+        ` : "";
     return `
       <article class="form-item-card dynamic-item-card">
         <div class="item-card-title">
@@ -3373,7 +3543,9 @@
           ${dynamicInput("liabilityItems", item, "repayment", "Repayment amount", { step: "100" })}
           ${dynamicInput("liabilityItems", item, "repaymentFrequency", "Repayment frequency", { type: "select", options: frequencies })}
           ${dynamicInput("liabilityItems", item, "termYears", "Remaining term (years)", { step: "1" })}
+          ${rentalFields}
         </div>
+        ${isRentalLoan ? `${rentalLoanBreakdownTiles(item)}${rentalLinkText}${unlinkedWarning}<p class="field-help mt-3">Rental property loans can be linked to rental property net cash income so loan interest is not counted twice in household cashflow.</p>` : ""}
       </article>
     `;
   }
@@ -4256,10 +4428,51 @@
     `;
   }
 
+  function rentalCashflowSummaryHtml(result, options = {}) {
+    const summary = result?.rentalPropertyCashflow;
+    if (!summary || (!summary.propertyResults?.length && !summary.confirmedUnlinked?.length && !summary.warnings?.length)) return "";
+    const totalLabel = summary.annualHouseholdDebtDeduction === summary.annualLoanPrincipal
+      ? "Rental loan principal repayments"
+      : "Rental loan cashflow deduction";
+    const propertyRows = (summary.propertyResults || []).map((item) => `
+      <article class="mini-card rental-property-row">
+        <span>${escapeHtml(item.name || "Rental property")}</span>
+        <strong>${money(item.householdCashflowContribution)}</strong>
+        <small>${item.treatment === "beforeInterest" ? "Before interest: full linked repayments deducted." : "After interest: linked principal only deducted."}</small>
+      </article>
+    `).join("");
+    const confirmedRows = (summary.confirmedUnlinked || []).map((item) => `
+      <article class="mini-card rental-property-row">
+        <span>${escapeHtml(item.loan?.name || "Unlinked rental property loan")}</span>
+        <strong>-${money(item.householdDebtDeduction)}</strong>
+        <small>${item.treatment === "beforeInterest" ? "Confirmed before-interest treatment." : "Confirmed after-interest treatment."}</small>
+      </article>
+    `).join("");
+    const warningRows = (summary.warnings || []).map((warning) => `<p class="tax-note mt-3">${escapeHtml(warning)}</p>`).join("");
+    return `
+      <section class="rental-cashflow-card${options.compact ? " rental-cashflow-card-compact" : ""}">
+        <div class="card-subheading">
+          <h3>Rental property cashflow</h3>
+          <p>Linked rental loans only deduct principal separately when rental cash income is entered after loan interest.</p>
+        </div>
+        <div class="summary-grid mt-3">
+          ${summaryTile("Rental property net cash income", money(summary.annualNetRentalIncome))}
+          ${summaryTile(totalLabel, `-${money(summary.annualHouseholdDebtDeduction)}`)}
+          ${summaryTile("Net contribution to household cashflow", money(summary.annualHouseholdCashflowContribution), summary.annualHouseholdCashflowContribution >= 0 ? "status-green" : "status-amber")}
+          ${summaryTile("Estimated rental loan interest", money(summary.annualLoanInterest))}
+        </div>
+        ${propertyRows || confirmedRows ? `<div class="summary-grid mt-3">${propertyRows}${confirmedRows}</div>` : ""}
+        ${warningRows}
+      </section>
+    `;
+  }
+
   function renderCashflow(result) {
     document.getElementById("cashflowTable").innerHTML = cashflowRows(result).map(([label, value]) => `
       ${cashflowRowHtml(label, value)}
     `).join("");
+    const rentalContainer = document.getElementById("rentalCashflowSummary");
+    if (rentalContainer) rentalContainer.innerHTML = rentalCashflowSummaryHtml(result);
   }
 
   function renderLoan(result) {
@@ -7455,6 +7668,7 @@
             ["Remaining cash surplus", result.finalProjectedCashSurplus],
           ].map(([label, value]) => cashflowRowHtml(label, value)).join("")}
         </div>
+        ${rentalCashflowSummaryHtml(result, { compact: true })}
         <p class="report-narrative">Cashflow is estimated from gross income, then reduced by tax, Medicare levy, STSL compulsory repayments where applicable, living expenses, debt repayments, investing and extra super contributions.</p>
         <p class="report-narrative">The remaining cash surplus is the amount left after the planned spending and wealth-building amounts entered in the app.</p>
         <div class="${cashflowTone}"><strong>${cashflowHeading}</strong><p>${cashflowText}</p></div>
@@ -8531,6 +8745,26 @@
         if (target.dataset.collection === "incomeItems") {
           item.type = normaliseIncomeType(item.type, plan.incomeItems.indexOf(item));
           item.owner = normaliseIncomeOwner(item.owner, item.type, plan.incomeItems.indexOf(item));
+          if (item.type === "rentalNetCashIncome") {
+            item.frequency = "annually";
+            item.rentalCashflowTreatment = item.rentalCashflowTreatment === "beforeInterest" ? "beforeInterest" : "afterInterest";
+            if (!Array.isArray(item.linkedLoanIds)) item.linkedLoanIds = linkedLoanIds(item);
+          }
+        }
+        if (target.dataset.collection === "liabilityItems") {
+          if (item.type === "rentalPropertyLoan") {
+            item.owner = item.owner || "joint";
+            item.repaymentType = item.repaymentType === "interestOnly" ? "interestOnly" : "principalAndInterest";
+            item.additionalPrincipalFrequency = item.additionalPrincipalFrequency || "annually";
+            item.unlinkedRentalCashflowTreatment = item.unlinkedRentalCashflowTreatment || "unconfirmed";
+          } else {
+            (plan.incomeItems || []).forEach((income) => {
+              if (income.type !== "rentalNetCashIncome") return;
+              income.linkedLoanIds = linkedLoanIds(income).filter((id) => String(id) !== String(item.id));
+              if (String(income.linkedLoanId || "") === String(item.id)) income.linkedLoanId = "";
+            });
+          }
+          normaliseRentalPropertyData();
         }
         generatedWeeklyPlanner = null;
         if (weeklyPlan) {
@@ -8599,6 +8833,11 @@
 
     document.addEventListener("change", (event) => {
       const target = event.target;
+      const rentalLoanLink = target.closest("[data-rental-loan-link]");
+      if (rentalLoanLink) {
+        updateRentalIncomeLoanLink(rentalLoanLink);
+        return;
+      }
       if (target.id === "aiInsightsConsent") {
         aiInsightsUi.consentAccepted = Boolean(target.checked);
         renderAiInsightsModal();
