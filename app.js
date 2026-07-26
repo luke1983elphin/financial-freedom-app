@@ -75,10 +75,18 @@
   const liabilityTypeOptions = [
     ["homeLoan", "Home loan"],
     ["investmentLoan", "Investment Loan"],
-    ["hecsHelp", "Study and Training Support Loan"],
     ["creditCard", "Credit Card"],
     ["otherDebt", "Other debt"],
   ];
+  const incomeTypeOptions = [
+    ["salaryWages", "Salary or wages"],
+    ["interest", "Interest"],
+    ["rentalNetCashIncome", "Rental property net cash income"],
+    ["dividends", "Dividends"],
+    ["distributions", "Distribution income"],
+    ["other", "Other"],
+  ];
+  const incomeTypeLabels = Object.fromEntries(incomeTypeOptions);
   const hospitalCoverOptions = [
     ["", "Select cover status"],
     ["full-year", "Full financial year"],
@@ -160,6 +168,14 @@
     hospitalCover: {
       title: "Eligible private patient hospital cover",
       body: "Eligible private patient hospital cover may affect Medicare levy surcharge estimates. Extras-only policies generally do not prevent Medicare levy surcharge exposure.",
+    },
+    rentalNetCashIncome: {
+      title: "Rental property net cash income",
+      body: "Enter the expected annual cash income from the property after property operating expenses and loan interest. This is for financial-planning cashflow purposes and may differ from the taxable rental profit or loss.",
+    },
+    employerSuperEstimate: {
+      title: "Estimated employer super contributions",
+      body: "Estimated employer super contributions are calculated from the salary and wages entered for this person using the current Australian employer super guarantee rate of 12%. Actual contributions may differ because of contribution limits, maximum contribution bases, salary-packaging arrangements, employment conditions or excluded earnings.",
     },
     investmentReturn: {
       title: "Investment Return",
@@ -1268,12 +1284,56 @@
     return `${personDisplayName(personNumber)} Super`;
   }
 
-  function stslOwnerOptions() {
-    return [
+  function normaliseIncomeType(value, index = 0) {
+    const text = String(value || "").trim();
+    if (["salaryWages", "salary", "wages", "employment"].includes(text)) return "salaryWages";
+    if (incomeTypeOptions.some(([option]) => option === text)) return text;
+    return index < 2 ? "salaryWages" : "other";
+  }
+
+  function normaliseIncomeOwner(value, type = "other", index = 0) {
+    const text = String(value || "").trim();
+    if (text === "person1" || text === "person2") return text;
+    if (text === "joint" && type !== "salaryWages") return "joint";
+    if (index === 1) return "person2";
+    if (index === 0 || type === "salaryWages") return "person1";
+    return "joint";
+  }
+
+  function incomeOwnerOptions(type) {
+    const options = [
       ["person1", personDisplayName(1)],
       ["person2", personDisplayName(2)],
-      ["joint", "Unassigned / household"],
     ];
+    if (type !== "salaryWages") options.push(["joint", "Joint"]);
+    return options;
+  }
+
+  function personKey(personNumber) {
+    return personNumber === 2 ? "person2" : "person1";
+  }
+
+  function stslDebtSelected(personNumber) {
+    const key = personKey(personNumber);
+    const selected = plan.income?.[`${key}HasStslDebt`];
+    const legacySelected = plan.income?.[`${key}HasHelpDebt`];
+    if (selected !== null && selected !== undefined) return Boolean(selected);
+    if (legacySelected !== null && legacySelected !== undefined) return Boolean(legacySelected);
+    return Number(plan.liabilities?.[`${key}HecsHelpDebt`]) > 0;
+  }
+
+  function stslLiabilityId(personNumber) {
+    return `liability-stsl-${personKey(personNumber)}`;
+  }
+
+  function stslLiabilityName(personNumber) {
+    return `${personDisplayName(personNumber)} - STSL balance`;
+  }
+
+  function employerSuperInfoText() {
+    const summary = CALC.employerSuperSummary?.(plan) || {};
+    const rate = (Number(summary.rate) || 0.12) * 100;
+    return `Estimated employer super contributions are calculated from salary and wages using the current Australian employer super guarantee rate of ${rate.toFixed(rate % 1 ? 1 : 0)}%. Actual contributions may differ because of contribution limits, maximum contribution bases, salary-packaging arrangements, employment conditions or excluded earnings.`;
   }
 
   function isDefaultIncomeName(value, personNumber) {
@@ -1292,6 +1352,90 @@
     const secondSuper = plan.assetItems?.find((item) => item.id === "asset-super-2");
     if (firstSuper) firstSuper.name = superDisplayName(1);
     if (secondSuper) secondSuper.name = superDisplayName(2);
+  }
+
+  function normaliseIncomeItems() {
+    if (!Array.isArray(plan.incomeItems)) return;
+    plan.incomeItems.forEach((item, index) => {
+      item.type = normaliseIncomeType(item.type || item.incomeType, index);
+      item.owner = normaliseIncomeOwner(item.owner || item.incomeOwner, item.type, index);
+      if (item.type === "salaryWages" && item.owner === "joint") item.owner = index === 1 ? "person2" : "person1";
+    });
+  }
+
+  function extractKnownStslBalances(existingItems) {
+    return existingItems.reduce((summary, item) => {
+      if (item.type !== "hecsHelp" && item.type !== "stsl") {
+        summary.otherItems.push(item);
+        return summary;
+      }
+      const amount = Number(item.balance) || 0;
+      if (item.owner === "person1" || item.id === stslLiabilityId(1)) summary.person1 += amount;
+      else if (item.owner === "person2" || item.id === stslLiabilityId(2)) summary.person2 += amount;
+      else if (amount > 0) summary.unassigned += amount;
+      return summary;
+    }, { person1: 0, person2: 0, unassigned: 0, otherItems: [] });
+  }
+
+  function normaliseStslLiabilities() {
+    if (!plan.liabilities) plan.liabilities = {};
+    const existingItems = Array.isArray(plan.liabilityItems) ? plan.liabilityItems : [];
+    const extracted = extractKnownStslBalances(existingItems);
+    let person1Balance = extracted.person1 || Number(plan.liabilities.person1HecsHelpDebt) || Number(plan.liabilities.person1StslBalance) || 0;
+    let person2Balance = extracted.person2 || Number(plan.liabilities.person2HecsHelpDebt) || Number(plan.liabilities.person2StslBalance) || 0;
+    let unassignedBalance = Number(plan.liabilities.unassignedStslBalance) || extracted.unassigned || 0;
+    const legacyHouseholdBalance = Number(plan.liabilities.hecsHelpDebt) || Number(plan.liabilities.stslBalance) || 0;
+
+    if (!extracted.person1 && !extracted.person2 && !unassignedBalance && legacyHouseholdBalance > 0) {
+      const p1Selected = stslDebtSelected(1);
+      const p2Selected = stslDebtSelected(2);
+      if (p1Selected && !p2Selected) person1Balance = legacyHouseholdBalance;
+      else if (p2Selected && !p1Selected) person2Balance = legacyHouseholdBalance;
+      else unassignedBalance = legacyHouseholdBalance;
+    }
+
+    if (plan.income.person1HasStslDebt === false) person1Balance = 0;
+    if (plan.income.person2HasStslDebt === false) person2Balance = 0;
+    if (person1Balance > 0 && plan.income.person1HasStslDebt == null) plan.income.person1HasStslDebt = true;
+    if (person2Balance > 0 && plan.income.person2HasStslDebt == null) plan.income.person2HasStslDebt = true;
+
+    const nextItems = [...extracted.otherItems];
+    if (stslDebtSelected(1)) {
+      nextItems.push({
+        id: stslLiabilityId(1),
+        name: stslLiabilityName(1),
+        type: "hecsHelp",
+        owner: "person1",
+        subtype: "STSL",
+        balance: person1Balance,
+        interestRatePct: 0,
+        repayment: 0,
+        repaymentFrequency: "monthly",
+        termYears: 0,
+      });
+    }
+    if (stslDebtSelected(2)) {
+      nextItems.push({
+        id: stslLiabilityId(2),
+        name: stslLiabilityName(2),
+        type: "hecsHelp",
+        owner: "person2",
+        subtype: "STSL",
+        balance: person2Balance,
+        interestRatePct: 0,
+        repayment: 0,
+        repaymentFrequency: "monthly",
+        termYears: 0,
+      });
+    }
+    plan.liabilityItems = nextItems;
+    plan.liabilities.person1HecsHelpDebt = person1Balance;
+    plan.liabilities.person2HecsHelpDebt = person2Balance;
+    plan.liabilities.person1StslBalance = person1Balance;
+    plan.liabilities.person2StslBalance = person2Balance;
+    plan.liabilities.hecsHelpDebt = person1Balance + person2Balance;
+    plan.liabilities.unassignedStslBalance = unassignedBalance;
+    plan.liabilities.stslOwnerConfirmationNeeded = unassignedBalance > 0;
   }
 
   function hasFinancialPlanData(currentPlan = plan) {
@@ -1352,11 +1496,12 @@
   function ensureCollectionData() {
     if (!Array.isArray(plan.incomeItems)) {
       plan.incomeItems = [
-        { id: "income-person-1", name: plan.income.person1IncomeName || `${personDisplayName(1)} income`, amount: plan.income.person1Income || 0, frequency: plan.income.person1Frequency || "fortnightly" },
-        { id: "income-person-2", name: plan.income.person2IncomeName || `${personDisplayName(2)} income`, amount: plan.income.person2Income || 0, frequency: plan.income.person2Frequency || "fortnightly" },
-        { id: "income-other", name: plan.income.otherIncomeName || "Other Income", amount: plan.income.otherIncome || 0, frequency: plan.income.otherIncomeFrequency || "annually" },
+        { id: "income-person-1", name: plan.income.person1IncomeName || `${personDisplayName(1)} income`, type: "salaryWages", owner: "person1", amount: plan.income.person1Income || 0, frequency: plan.income.person1Frequency || "fortnightly" },
+        { id: "income-person-2", name: plan.income.person2IncomeName || `${personDisplayName(2)} income`, type: "salaryWages", owner: "person2", amount: plan.income.person2Income || 0, frequency: plan.income.person2Frequency || "fortnightly" },
+        { id: "income-other", name: plan.income.otherIncomeName || "Other Income", type: "other", owner: "joint", amount: plan.income.otherIncome || 0, frequency: plan.income.otherIncomeFrequency || "annually" },
       ];
     }
+    normaliseIncomeItems();
     if (!Array.isArray(plan.assetItems)) {
       plan.assetItems = [
         { id: "asset-home", name: "Home", category: "home", value: plan.assets.homeValue || 0 },
@@ -1382,7 +1527,6 @@
           repaymentFrequency: "monthly",
           termYears: plan.liabilities.remainingLoanTermYears || 0,
         },
-        { id: "liability-stsl", name: "Study and Training Support Loan", type: "hecsHelp", owner: "person1", subtype: "HECS-HELP", balance: plan.liabilities.hecsHelpDebt || 0, interestRatePct: 0, repayment: 0, repaymentFrequency: "monthly", termYears: 0, lastUpdated: "", note: "" },
         { id: "liability-credit-card", name: "Credit Card", type: "creditCard", balance: plan.liabilities.creditCardBalance || 0, interestRatePct: plan.liabilities.creditCardInterestRatePct || 19.99, repayment: plan.liabilities.creditCardMonthlyRepayment || 0, repaymentFrequency: "monthly", termYears: 0, creditLimit: plan.liabilities.creditCardLimit || 0 },
         { id: "liability-other", name: "Other debts", type: "otherDebt", balance: plan.liabilities.otherDebts || 0, interestRatePct: 0, repayment: 0, repaymentFrequency: "monthly", termYears: 0 },
       ];
@@ -1390,14 +1534,7 @@
     if (plan.liabilityItems.length && !plan.liabilityItems.some((item) => item.type === "creditCard") && (Number(plan.liabilities.creditCardBalance) || Number(plan.liabilities.creditCardLimit))) {
       plan.liabilityItems.push({ id: "liability-credit-card", name: "Credit Card", type: "creditCard", balance: plan.liabilities.creditCardBalance || 0, interestRatePct: plan.liabilities.creditCardInterestRatePct || 19.99, repayment: plan.liabilities.creditCardMonthlyRepayment || 0, repaymentFrequency: "monthly", termYears: 0, creditLimit: plan.liabilities.creditCardLimit || 0 });
     }
-    plan.liabilityItems.forEach((item) => {
-      if (item.type === "stsl") item.type = "hecsHelp";
-      if (item.type === "hecsHelp") {
-        if (!item.name || /HECS|HELP/i.test(item.name)) item.name = "Study and Training Support Loan";
-        if (!item.owner) item.owner = "person1";
-        if (!item.subtype) item.subtype = "HECS-HELP";
-      }
-    });
+    normaliseStslLiabilities();
     if (!Array.isArray(plan.expenseItems)) {
       plan.expenseItems = [
         { id: "expense-living", name: plan.expenses.livingName || "Living costs", category: "living", amount: plan.expenses.livingCosts || 0, frequency: plan.expenses.livingFrequency || "monthly" },
@@ -1437,19 +1574,28 @@
   function syncCollectionsToLegacy() {
     ensureCollectionData();
     const incomes = plan.incomeItems;
-    const firstIncome = incomes[0] || {};
-    const secondIncome = incomes[1] || {};
-    const otherAnnualIncome = incomes.slice(2).reduce((total, item) => total + annualValue(item.amount, item.frequency), 0);
+    normaliseIncomeItems();
+    const person1SalaryItems = incomes.filter((item) => item.type === "salaryWages" && item.owner === "person1");
+    const person2SalaryItems = incomes.filter((item) => item.type === "salaryWages" && item.owner === "person2");
+    const firstIncome = person1SalaryItems[0] || incomes.find((item) => item.owner === "person1") || {};
+    const secondIncome = person2SalaryItems[0] || incomes.find((item) => item.owner === "person2") || {};
+    const person1SalaryAnnual = person1SalaryItems.reduce((total, item) => total + annualValue(item.amount, item.frequency), 0);
+    const person2SalaryAnnual = person2SalaryItems.reduce((total, item) => total + annualValue(item.amount, item.frequency), 0);
+    const otherAnnualIncome = incomes
+      .filter((item) => item.type !== "salaryWages")
+      .reduce((total, item) => total + annualValue(item.amount, item.frequency), 0);
 
     plan.income.person1IncomeName = firstIncome.name || "";
-    plan.income.person1Income = Number(firstIncome.amount) || 0;
-    plan.income.person1Frequency = firstIncome.frequency || "annually";
+    plan.income.person1Income = person1SalaryAnnual;
+    plan.income.person1Frequency = "annually";
     plan.income.person2IncomeName = secondIncome.name || "";
-    plan.income.person2Income = Number(secondIncome.amount) || 0;
-    plan.income.person2Frequency = secondIncome.frequency || "annually";
+    plan.income.person2Income = person2SalaryAnnual;
+    plan.income.person2Frequency = "annually";
     plan.income.otherIncomeName = "Other Income";
     plan.income.otherIncome = otherAnnualIncome;
     plan.income.otherIncomeFrequency = "annually";
+    const employerSuper = CALC.employerSuperSummary?.(plan);
+    if (employerSuper) plan.investing.employerSuperContributions = employerSuper.totalEffective;
 
     syncDefaultPersonCollectionLabels();
     const assets = plan.assetItems;
@@ -1485,13 +1631,15 @@
     plan.liabilities.monthlyRepayment = homeLoanRepaymentAnnual / 12;
     plan.liabilities.remainingLoanTermYears = homeLoans.reduce((max, item) => Math.max(max, Number(item.termYears) || 0), 0);
     const stslLiabilities = liabilities.filter((item) => item.type === "hecsHelp" || item.type === "stsl");
-    plan.liabilities.hecsHelpDebt = stslLiabilities.reduce((total, item) => total + (Number(item.balance) || 0), 0);
     plan.liabilities.person1HecsHelpDebt = stslLiabilities
-      .filter((item) => item.owner === "person1" || (!item.owner && !plan.liabilities.person2HecsHelpDebt))
+      .filter((item) => item.owner === "person1")
       .reduce((total, item) => total + (Number(item.balance) || 0), 0);
     plan.liabilities.person2HecsHelpDebt = stslLiabilities
       .filter((item) => item.owner === "person2")
       .reduce((total, item) => total + (Number(item.balance) || 0), 0);
+    plan.liabilities.person1StslBalance = plan.liabilities.person1HecsHelpDebt;
+    plan.liabilities.person2StslBalance = plan.liabilities.person2HecsHelpDebt;
+    plan.liabilities.hecsHelpDebt = plan.liabilities.person1HecsHelpDebt + plan.liabilities.person2HecsHelpDebt;
     const creditCards = liabilities.filter((item) => item.type === "creditCard");
     plan.liabilities.creditCardBalance = creditCards.reduce((total, item) => total + (Number(item.balance) || 0), 0);
     plan.liabilities.creditCardInterestRatePct = plan.liabilities.creditCardBalance > 0
@@ -2996,15 +3144,74 @@
     `).join("");
   }
 
+  function employerSuperPanelHtml() {
+    const result = CALC.calculatePlan(plan);
+    const employerSuper = result.employerSuperContributions || CALC.employerSuperSummary?.(plan) || {};
+    const ratePercent = ((Number(employerSuper.rate) || 0.12) * 100).toFixed(0);
+    const person1Name = personDisplayName(1);
+    const person2Name = personDisplayName(2);
+    const concessionalCap = Number(employerSuper.concessionalCap || result.taxConfiguration?.concessionalSuperCap) || 30000;
+    const person1ContributionTotal = Number(employerSuper.person1Amount) || 0;
+    const person2ContributionTotal = Number(employerSuper.person2Amount) || 0;
+    const householdExtraSuper = Number(plan.investing.extraSuperContributions) || 0;
+    const hasSecondPerson = Boolean(plan.personal.person2Name || plan.personal.person2Age || person2ContributionTotal);
+    const capWarnings = [];
+    if (person1ContributionTotal > concessionalCap) capWarnings.push(`${person1Name}'s estimated employer super exceeds the standard concessional cap of ${money(concessionalCap)}.`);
+    if (person2ContributionTotal > concessionalCap) capWarnings.push(`${person2Name}'s estimated employer super exceeds the standard concessional cap of ${money(concessionalCap)}.`);
+    if (householdExtraSuper > 0 && (person1ContributionTotal + person2ContributionTotal + householdExtraSuper) > concessionalCap * (hasSecondPerson ? 2 : 1)) {
+      capWarnings.push(`Total employer super plus extra super contributions may exceed the standard concessional contribution cap. The app warns only; it does not reduce contributions automatically.`);
+    }
+    const overrideFields = [
+      { label: `Override estimated employer super - ${person1Name}`, path: "investing.person1EmployerSuperOverrideEnabled", type: "checkbox", help: "Use only where actual employer contributions differ from the standard estimate." },
+      ...(plan.investing.person1EmployerSuperOverrideEnabled ? [{ label: `${person1Name} override amount`, path: "investing.person1EmployerSuperOverride", step: "1000" }] : []),
+      { label: `Override estimated employer super - ${person2Name}`, path: "investing.person2EmployerSuperOverrideEnabled", type: "checkbox", help: "Use only where actual employer contributions differ from the standard estimate." },
+      ...(plan.investing.person2EmployerSuperOverrideEnabled ? [{ label: `${person2Name} override amount`, path: "investing.person2EmployerSuperOverride", step: "1000" }] : []),
+    ];
+    return `
+      <article class="form-item-card employer-super-panel" data-employer-super-panel>
+        <div class="card-subheading">
+          <h3 class="field-label-with-info">Estimated employer super contributions ${infoButtonHtml("employerSuperEstimate", "Estimated employer super contributions")}</h3>
+          <p>Salary and wages x ${ratePercent}%. These amounts update automatically from income records classified as Salary or wages.</p>
+        </div>
+        <div class="summary-grid mt-4">
+          ${summaryTile(`${person1Name} estimated employer super`, money(employerSuper.person1Amount || 0))}
+          ${summaryTile(`${person2Name} estimated employer super`, money(employerSuper.person2Amount || 0))}
+          ${summaryTile("Household estimated employer super", money(employerSuper.totalEffective || 0))}
+        </div>
+        ${capWarnings.length ? `<p class="tax-note mt-3"><strong>Contribution cap warning:</strong> ${escapeHtml(capWarnings.join(" "))}</p>` : ""}
+        ${employerSuper.hasOverride ? `<p class="field-help mt-3">Manual override is active. Calculated amount before override: ${money(employerSuper.totalCalculated || 0)}.</p>` : ""}
+        <div class="input-grid mt-4">${overrideFields.map(field).join("")}</div>
+        <div class="weekly-action-row mt-3">
+          <button class="btn" type="button" data-employer-super-reset="person1">Use calculated amount - ${escapeHtml(person1Name)}</button>
+          <button class="btn" type="button" data-employer-super-reset="person2">Use calculated amount - ${escapeHtml(person2Name)}</button>
+        </div>
+        <p class="field-help mt-3">${escapeHtml(employerSuperInfoText())}</p>
+      </article>
+    `;
+  }
+
+  function appendEmployerSuperPanel(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.insertAdjacentHTML("beforeend", employerSuperPanelHtml());
+  }
+
+  function refreshEmployerSuperPanels() {
+    document.querySelectorAll("[data-employer-super-panel]").forEach((panel) => {
+      panel.outerHTML = employerSuperPanelHtml();
+    });
+  }
+
   function dynamicInput(collection, item, key, label, options = {}) {
     const rawValue = item[key] ?? "";
     const isBlankNumber = options.kind !== "text" && options.type !== "select" && Number(rawValue) === 0 && rawValue !== "0";
     const value = isBlankNumber ? "" : rawValue;
     const common = `data-collection="${collection}" data-id="${item.id}" data-key="${key}"`;
+    const infoButton = infoButtonHtml(options.infoKey, label);
     if (options.type === "select") {
       return `
         <label>
-          <span class="field-label">${escapeHtml(label)}</span>
+          <span class="field-label field-label-with-info">${escapeHtml(label)}${infoButton}</span>
           <select class="field-input" ${common} data-type="text">${optionList(options.options, value)}</select>
         </label>
       `;
@@ -3012,7 +3219,7 @@
     if (options.type === "checkbox") {
       return `
         <label class="toggle-field">
-          <span class="field-label">${escapeHtml(label)}</span>
+          <span class="field-label field-label-with-info">${escapeHtml(label)}${infoButton}</span>
           <input class="toggle-input" ${common} data-type="boolean" type="checkbox"${rawValue ? " checked" : ""}>
         </label>
       `;
@@ -3020,7 +3227,7 @@
     const inputType = options.kind === "text" ? "text" : "number";
     return `
       <label>
-        <span class="field-label">${escapeHtml(label)}</span>
+        <span class="field-label field-label-with-info">${escapeHtml(label)}${infoButton}</span>
         <input class="field-input" ${common} data-type="${options.kind || "number"}" type="${inputType}" step="${options.step || "1"}" value="${escapeHtml(value)}" placeholder="${escapeHtml(options.placeholder || "")}">
       </label>
     `;
@@ -3049,20 +3256,30 @@
   }
 
   function incomeCard(item, index) {
+    const type = normaliseIncomeType(item.type, index);
+    const owner = normaliseIncomeOwner(item.owner, type, index);
+    item.type = type;
+    item.owner = owner;
+    const typeLabel = incomeTypeLabels[type] || "Income";
+    const ownerLabel = owner === "joint" ? "Joint" : personDisplayName(owner === "person2" ? 2 : 1);
     return `
       <article class="form-item-card dynamic-item-card">
         <div class="item-card-title">
           <div>
             <span>Income ${index + 1}</span>
             <h4>${escapeHtml(item.name || "Income")}</h4>
+            <small>${escapeHtml(typeLabel)} - ${escapeHtml(ownerLabel)}</small>
           </div>
           ${removeButton("incomeItems", item.id)}
         </div>
         <div class="input-grid mt-4">
           ${dynamicInput("incomeItems", item, "name", "Income name", { kind: "text", placeholder: "e.g. Salary, rent, dividends" })}
-          ${dynamicInput("incomeItems", item, "amount", "Amount", { step: "100" })}
+          ${dynamicInput("incomeItems", item, "type", "Income type", { type: "select", options: incomeTypeOptions, infoKey: type === "rentalNetCashIncome" ? "rentalNetCashIncome" : "" })}
+          ${dynamicInput("incomeItems", item, "owner", "Income owner", { type: "select", options: incomeOwnerOptions(type) })}
+          ${dynamicInput("incomeItems", item, "amount", "Gross amount", { step: "100", placeholder: "Amount for the selected frequency" })}
           ${dynamicInput("incomeItems", item, "frequency", "Frequency", { type: "select", options: frequencies })}
         </div>
+        ${type === "rentalNetCashIncome" ? `<p class="field-help mt-3">${escapeHtml(goalInfoCopy.rentalNetCashIncome.body)}</p>` : ""}
       </article>
     `;
   }
@@ -3088,31 +3305,33 @@
 
   function liabilityCard(item, index) {
     if (item.type === "hecsHelp" || item.type === "stsl") {
-      const stsl = CALC.calculatePlan(plan).stslRepaymentEstimate || CALC.calculatePlan(plan).helpRepaymentEstimate;
+      const result = CALC.calculatePlan(plan);
+      const stsl = result.stslRepaymentEstimate || result.helpRepaymentEstimate;
       const ownerKey = item.owner === "person2" ? "person2" : "person1";
+      const personNumber = ownerKey === "person2" ? 2 : 1;
+      item.owner = ownerKey;
+      item.name = stslLiabilityName(personNumber);
       const ownerEstimate = stsl?.[ownerKey] || {};
       return `
         <article class="form-item-card dynamic-item-card">
           <div class="item-card-title">
             <div>
               <span>STSL estimate</span>
-              <h4>${escapeHtml(item.name || "Study and Training Support Loan")}</h4>
+              <h4>${escapeHtml(stslLiabilityName(personNumber))}</h4>
             </div>
-            ${removeButton("liabilityItems", item.id)}
           </div>
           <div class="input-grid mt-4">
-            ${dynamicInput("liabilityItems", item, "owner", "Owner", { type: "select", options: stslOwnerOptions() })}
-            ${dynamicInput("liabilityItems", item, "balance", "Current STSL balance", { step: "1000" })}
+            ${dynamicInput("liabilityItems", item, "balance", `${personDisplayName(personNumber)} - STSL balance`, { step: "1000" })}
             ${dynamicInput("liabilityItems", item, "subtype", "Optional subtype", { kind: "text", placeholder: "e.g. HECS-HELP, VET Student Loan" })}
             ${dynamicInput("liabilityItems", item, "lastUpdated", "Last updated", { kind: "text", placeholder: "e.g. July 2026" })}
             ${dynamicInput("liabilityItems", item, "note", "Optional note", { kind: "text", placeholder: "Optional context" })}
           </div>
           <div class="summary-grid mt-4">
-            ${summaryTile(`${personDisplayName(ownerKey === "person2" ? 2 : 1)} repayment income`, money(ownerEstimate.repaymentIncome || 0))}
+            ${summaryTile(`${personDisplayName(personNumber)} repayment income`, money(ownerEstimate.repaymentIncome || 0))}
             ${summaryTile("Estimated annual STSL compulsory repayment", money(ownerEstimate.annualRepayment || 0))}
-            ${summaryTile("Estimated years until repaid", stsl.estimatedYearsToRepay ? `${stsl.estimatedYearsToRepay.toFixed(1)} years` : "No compulsory repayment estimated")}
+            ${summaryTile("Estimated years until repaid", ownerEstimate.annualRepayment && item.balance ? `${(Number(item.balance) / ownerEstimate.annualRepayment).toFixed(1)} years` : "No compulsory repayment estimated")}
           </div>
-          <p class="field-help mt-3">STSL includes relevant government study and training loans such as HECS-HELP, HELP, VET Student Loans and other covered loan programs. The balance affects net worth; compulsory repayment is estimated from income and the person's STSL selection.</p>
+          <p class="field-help mt-3">STSL includes relevant government study and training loans such as HECS-HELP, HELP, VET Student Loans and other covered loan programs. This field belongs only to ${escapeHtml(personDisplayName(personNumber))}. Clear that person's STSL checkbox in Income if they do not have this debt.</p>
         </article>
       `;
     }
@@ -3248,12 +3467,15 @@
   function renderLiabilityCollection(containerId) {
     const container = document.getElementById(containerId);
     if (!container) return;
+    const stslWarning = plan.liabilities?.stslOwnerConfirmationNeeded
+      ? `<div class="tax-note mb-4"><strong>Confirm STSL owner:</strong> ${money(plan.liabilities.unassignedStslBalance || 0)} of existing Study and Training Support Loan balance could not be assigned safely. Select the correct person's STSL checkbox in Income, then enter the balance for that person below.</div>`
+      : "";
     container.innerHTML = collectionShell({
       title: "Liabilities / Loans",
-      description: "Add each loan or liability. Study and Training Support Loan balances are assigned to a person; compulsory repayments are estimated from income.",
+      description: "Add each loan or liability. Study and Training Support Loan balances appear separately for each person who has selected an STSL debt in Income.",
       addLabel: "Add liability",
       collection: "liabilityItems",
-      body: plan.liabilityItems.map(liabilityCard).join(""),
+      body: stslWarning + plan.liabilityItems.map(liabilityCard).join(""),
     });
   }
 
@@ -3318,7 +3540,6 @@
       { label: "Financial Freedom target age", path: "personal.fullRetirementAge", infoKey: "financialFreedomTargetAge" },
       { label: "Annual Lifestyle Spending Needed for Financial Freedom", path: "personal.targetAnnualSpending", step: "1000", infoKey: "annualLifestyleSpending" },
       { label: "Annual investing target", path: "investing.annualInvestingTarget", step: "1000", infoKey: "annualInvestingTarget" },
-      { label: "Employer super contributions", path: "investing.employerSuperContributions", step: "1000" },
       { label: "Extra super contributions", path: "investing.extraSuperContributions", step: "1000", infoKey: "extraSuperContributions" },
     ];
     const assumptionFields = [
@@ -3338,6 +3559,7 @@
     ];
 
     renderForm("personalForm", [...aboutFields, ...goalFields]);
+    appendEmployerSuperPanel("personalForm");
     renderAssetCollection("assetsForm");
     renderLiabilityCollection("liabilitiesForm");
     renderLiabilityCollection("loanForm");
@@ -3352,16 +3574,17 @@
     renderForm("superForm", [
       { label: superDisplayName(1), path: "assets.superPerson1", step: "1000" },
       { label: superDisplayName(2), path: "assets.superPerson2", step: "1000" },
-      { label: "Employer super contributions", path: "investing.employerSuperContributions", step: "1000" },
       { label: "Extra super contributions", path: "investing.extraSuperContributions", step: "1000", infoKey: "extraSuperContributions" },
       { label: "Expected super return (%)", path: "investing.expectedSuperReturnPct", step: "0.1" },
     ]);
+    appendEmployerSuperPanel("superForm");
     renderForm("wizardAboutForm", aboutFields);
     renderIncomeCollection("wizardIncomeForm");
     renderAssetCollection("wizardAssetsForm");
     renderLiabilityCollection("wizardLoansForm");
     renderExpenseCollection("wizardExpensesForm");
     renderForm("wizardGoalsForm", goalFields);
+    appendEmployerSuperPanel("wizardGoalsForm");
     renderGoalCollection("wizardGoalExamples");
     renderForm("wizardDownsizingForm", downsizingFields);
     renderForm("wizardAssumptionsReview", assumptionFields);
@@ -3991,7 +4214,11 @@
     const help = result.stslRepaymentEstimate || result.helpRepaymentEstimate;
     const tiles = [
       summaryTile("Outstanding STSL Balance", money(help.balance)),
+      summaryTile(`${personDisplayName(1)} STSL Balance`, money(help.person1?.balance || 0)),
+      summaryTile(`${personDisplayName(2)} STSL Balance`, money(help.person2?.balance || 0)),
       summaryTile("Estimated Repayment Income", money(help.repaymentIncome)),
+      summaryTile(`${personDisplayName(1)} Annual STSL Compulsory Repayment`, money(help.person1?.annualRepayment || 0)),
+      summaryTile(`${personDisplayName(2)} Annual STSL Compulsory Repayment`, money(help.person2?.annualRepayment || 0)),
       summaryTile("Estimated Annual STSL Compulsory Repayment", money(help.annualRepayment)),
       summaryTile("Estimated Years Until Loan Repaid", help.estimatedYearsToRepay ? `${help.estimatedYearsToRepay.toFixed(1)} years` : "No compulsory repayment estimated"),
     ].join("") + `<p class="tax-note mt-4">STSL estimate uses repayment income and is capped at the current balance when a balance has been entered.</p>`;
@@ -7202,6 +7429,8 @@
           ${summaryTile("Net cashflow", money(result.finalProjectedCashSurplus), result.finalProjectedCashSurplus >= 0 ? "status-green" : "status-amber")}
           ${summaryTile("Total assets", money(result.totalAssets))}
           ${summaryTile("Total liabilities", money(result.totalLiabilities))}
+          ${Number((result.stslRepaymentEstimate || result.helpRepaymentEstimate)?.person1?.balance || 0) > 0 ? summaryTile(`${personDisplayName(1)} STSL balance`, money((result.stslRepaymentEstimate || result.helpRepaymentEstimate).person1.balance)) : ""}
+          ${Number((result.stslRepaymentEstimate || result.helpRepaymentEstimate)?.person2?.balance || 0) > 0 ? summaryTile(`${personDisplayName(2)} STSL balance`, money((result.stslRepaymentEstimate || result.helpRepaymentEstimate).person2.balance)) : ""}
           ${summaryTile("Net worth", money(result.currentNetWorth))}
           ${summaryTile("Current FI assets", money(result.financialIndependenceAssets))}
           ${summaryTile("Current investment portfolio", money(result.investmentBalance))}
@@ -7797,7 +8026,7 @@
   function addCollectionItem(collection) {
     ensureCollectionData();
     const defaults = {
-      incomeItems: { id: makeId("income"), name: "Other Income", amount: 0, frequency: "annually" },
+      incomeItems: { id: makeId("income"), name: "Other Income", type: "other", owner: "joint", amount: 0, frequency: "annually" },
       assetItems: { id: makeId("asset"), name: "New asset", category: "cash", value: 0 },
       liabilityItems: { id: makeId("liability"), name: "New liability", type: "otherDebt", balance: 0, interestRatePct: 0, repayment: 0, repaymentFrequency: "monthly", termYears: 0 },
       expenseItems: { id: makeId("expense"), name: "New expense", category: "other", amount: 0, frequency: "monthly" },
@@ -8299,6 +8528,10 @@
         if (!item) return;
         const value = target.dataset.type === "boolean" ? target.checked : target.dataset.type === "text" ? target.value : Number(target.value);
         item[target.dataset.key] = value;
+        if (target.dataset.collection === "incomeItems") {
+          item.type = normaliseIncomeType(item.type, plan.incomeItems.indexOf(item));
+          item.owner = normaliseIncomeOwner(item.owner, item.type, plan.incomeItems.indexOf(item));
+        }
         generatedWeeklyPlanner = null;
         if (weeklyPlan) {
           markWeeklyTimingReviewRequired();
@@ -8310,6 +8543,13 @@
         if (target.dataset.collection === "liabilityItems" && target.dataset.key === "type") {
           renderAll();
           return;
+        }
+        if (target.dataset.collection === "incomeItems" && (target.dataset.key === "type" || target.dataset.key === "owner")) {
+          renderAll();
+          return;
+        }
+        if (target.dataset.collection === "incomeItems" && (target.dataset.key === "amount" || target.dataset.key === "frequency")) {
+          refreshEmployerSuperPanels();
         }
         renderOutputs();
         return;
@@ -8339,6 +8579,19 @@
       if (target.dataset.path === "expenses.mortgageRepayments") {
         setPath(plan, "liabilities.monthlyRepayment", value);
         syncInputs("liabilities.monthlyRepayment", value);
+      }
+      if (target.dataset.path === "income.person1HasStslDebt" || target.dataset.path === "income.person2HasStslDebt") {
+        syncCollectionsToLegacy();
+        autosavePlan();
+        renderAll();
+        return;
+      }
+      if (target.dataset.path?.startsWith("investing.person") && target.dataset.path.includes("EmployerSuperOverride")) {
+        syncCollectionsToLegacy();
+        autosavePlan();
+        renderForms();
+        renderOutputs();
+        return;
       }
       autosavePlan();
       renderOutputs();
@@ -8433,6 +8686,20 @@
       if (summaryJump) {
         event.preventDefault();
         jumpToSummaryTarget(summaryJump);
+        return;
+      }
+
+      const employerSuperReset = event.target.closest("[data-employer-super-reset]");
+      if (employerSuperReset) {
+        event.preventDefault();
+        const owner = employerSuperReset.dataset.employerSuperReset === "person2" ? "person2" : "person1";
+        plan.investing[`${owner}EmployerSuperOverrideEnabled`] = false;
+        plan.investing[`${owner}EmployerSuperOverride`] = 0;
+        syncCollectionsToLegacy();
+        autosavePlan();
+        renderForms();
+        renderOutputs();
+        updateSaveStatus("Employer super estimate reset to calculated amount.");
         return;
       }
 
