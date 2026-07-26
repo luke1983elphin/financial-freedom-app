@@ -2,13 +2,14 @@ const samplePlans = [
   {
     id: "young-professional",
     name: "Young Professional",
-    description: "A single-person sample focused on building wealth while managing HELP debt.",
+    description: "A single-person sample focused on building wealth while managing a Study and Training Support Loan debt.",
     plan: {
       personal: {
         person1Name: "Emma",
         person2Name: "",
         person1Age: 29,
         person2Age: 0,
+        dependants: 0,
         workOptionalAge: 45,
         semiRetirementAge: 55,
         fullRetirementAge: 60,
@@ -47,6 +48,12 @@ const samplePlans = [
         otherIncomeName: "Other Income",
         otherIncome: 2200,
         otherIncomeFrequency: "annually",
+        person1HasStslDebt: true,
+        person2HasStslDebt: false,
+        person1HospitalCoverStatus: "full-year",
+        person2HospitalCoverStatus: "",
+        person1HospitalCoverDays: 365,
+        person2HospitalCoverDays: 0,
       },
       incomeItems: [
         { id: "income-emma", name: "Emma salary", amount: 95000, frequency: "annually" },
@@ -96,7 +103,7 @@ const samplePlans = [
         { id: "asset-vehicle", name: "Car", category: "vehicle", value: 12000 },
       ],
       liabilityItems: [
-        { id: "liability-help", name: "Outstanding HELP Balance", type: "hecsHelp", balance: 38000, interestRatePct: 0, repayment: 0, repaymentFrequency: "monthly", termYears: 0 },
+        { id: "liability-help", name: "Study and Training Support Loan", type: "hecsHelp", owner: "person1", subtype: "HECS-HELP", balance: 38000, interestRatePct: 0, repayment: 0, repaymentFrequency: "monthly", termYears: 0 },
         { id: "liability-credit-card", name: "Credit card", type: "creditCard", balance: 1200, interestRatePct: 19.99, repayment: 180, repaymentFrequency: "monthly", termYears: 0, creditLimit: 6000 },
       ],
       investing: {
@@ -130,6 +137,7 @@ const samplePlans = [
         person2Name: "Sarah",
         person1Age: 43,
         person2Age: 41,
+        dependants: 2,
         workOptionalAge: 50,
         semiRetirementAge: 55,
         fullRetirementAge: 60,
@@ -168,6 +176,12 @@ const samplePlans = [
         otherIncomeName: "Other Income",
         otherIncome: 6500,
         otherIncomeFrequency: "annually",
+        person1HasStslDebt: false,
+        person2HasStslDebt: true,
+        person1HospitalCoverStatus: "full-year",
+        person2HospitalCoverStatus: "full-year",
+        person1HospitalCoverDays: 365,
+        person2HospitalCoverDays: 365,
       },
       incomeItems: [
         { id: "income-luke", name: "Luke salary", amount: 120000, frequency: "annually" },
@@ -223,7 +237,7 @@ const samplePlans = [
       ],
       liabilityItems: [
         { id: "liability-home-loan", name: "Home loan", type: "homeLoan", balance: 420000, interestRatePct: 6.1, repayment: 3100, repaymentFrequency: "monthly", termYears: 24 },
-        { id: "liability-help", name: "Outstanding HELP Balance", type: "hecsHelp", balance: 22000, interestRatePct: 0, repayment: 0, repaymentFrequency: "monthly", termYears: 0 },
+        { id: "liability-help", name: "Study and Training Support Loan", type: "hecsHelp", owner: "person2", subtype: "HECS-HELP", balance: 22000, interestRatePct: 0, repayment: 0, repaymentFrequency: "monthly", termYears: 0 },
         { id: "liability-credit-card", name: "Credit card", type: "creditCard", balance: 6000, interestRatePct: 19.99, repayment: 350, repaymentFrequency: "monthly", termYears: 0, creditLimit: 12000 },
       ],
       investing: {
@@ -257,6 +271,7 @@ const samplePlans = [
         person2Name: "Karen",
         person1Age: 57,
         person2Age: 55,
+        dependants: 0,
         workOptionalAge: 58,
         semiRetirementAge: 60,
         fullRetirementAge: 62,
@@ -295,6 +310,12 @@ const samplePlans = [
         otherIncomeName: "Other Income",
         otherIncome: 14000,
         otherIncomeFrequency: "annually",
+        person1HasStslDebt: false,
+        person2HasStslDebt: false,
+        person1HospitalCoverStatus: "full-year",
+        person2HospitalCoverStatus: "full-year",
+        person1HospitalCoverDays: 365,
+        person2HospitalCoverDays: 365,
       },
       incomeItems: [
         { id: "income-michael", name: "Michael salary", amount: 100000, frequency: "annually" },
@@ -348,7 +369,7 @@ const samplePlans = [
       ],
       liabilityItems: [
         { id: "liability-home-loan", name: "Home loan", type: "homeLoan", balance: 150000, interestRatePct: 5.9, repayment: 2400, repaymentFrequency: "monthly", termYears: 8 },
-        { id: "liability-help", name: "Outstanding HELP Balance", type: "hecsHelp", balance: 0, interestRatePct: 0, repayment: 0, repaymentFrequency: "monthly", termYears: 0 },
+        { id: "liability-help", name: "Study and Training Support Loan", type: "hecsHelp", owner: "person1", subtype: "HECS-HELP", balance: 0, interestRatePct: 0, repayment: 0, repaymentFrequency: "monthly", termYears: 0 },
         { id: "liability-credit-card", name: "Credit card", type: "creditCard", balance: 0, interestRatePct: 19.99, repayment: 0, repaymentFrequency: "monthly", termYears: 0, creditLimit: 10000 },
       ],
       investing: {
@@ -375,7 +396,7 @@ const samplePlans = [
 ];
 
 window.FFS_DATA = {
-  disclaimer: "This tool is for education and modelling only and is not financial advice. Tax, HELP and cashflow figures are estimates for modelling.",
+  disclaimer: "This tool is for education and modelling only and is not financial advice. Tax, STSL compulsory repayments and cashflow figures are estimates for modelling.",
   samplePlans,
   demoPlan: samplePlans[1].plan,
   demoScenarioAdjustments: [

@@ -331,7 +331,7 @@
       active: netIncome.person1Annual > 0,
       isNetPay: true,
       estimated: true,
-      note: "Estimated net amount after tax, Medicare and HELP based on the information entered in the plan.",
+      note: "Estimated net amount after tax, Medicare and STSL compulsory repayments based on the information entered in the plan.",
     });
     addItem({
       id: "timing-income-person-2",
@@ -344,7 +344,7 @@
       active: netIncome.person2Annual > 0,
       isNetPay: true,
       estimated: true,
-      note: "Estimated net amount after tax, Medicare and HELP based on the information entered in the plan.",
+      note: "Estimated net amount after tax, Medicare and STSL compulsory repayments based on the information entered in the plan.",
     });
     addItem({
       id: "timing-income-other",

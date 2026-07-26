@@ -6,6 +6,12 @@
   const SCENARIO_KEY = "ffs-scenarios-v3-mobile-dashboard-ux-test";
   const WEEKLY_PLAN_KEY = "ffs-weekly-plan-v1-v3-mobile-dashboard-ux-test";
   const USER_STATE_KEY = "ffs-user-state-v3-mobile-dashboard-ux-test";
+  const PLAN_CONTEXT_KEY = "ffs-plan-context-v3-mobile-dashboard-ux-test";
+  const DEFAULT_PERSONAL_PLAN_ID = "personal-plan:default";
+  const DEMO_PLAN_ID = "sample-plan";
+  const PERSONAL_PLAN_PREFIX = "ffs-personal-plan-v1:";
+  const PERSONAL_WEEKLY_PLAN_PREFIX = "ffs-weekly-plan-v1:";
+  const SNAPSHOT_PREFIX = "ffs-financial-snapshots-v1:";
   const APP_VERSION = "3.0-test-weekly-planner";
   const WEEKLY_EDITOR_BUILD_ID = "2026-07-17-02";
   const EXPORT_SCHEMA_VERSION = 1;
@@ -69,9 +75,15 @@
   const liabilityTypeOptions = [
     ["homeLoan", "Home loan"],
     ["investmentLoan", "Investment Loan"],
-    ["hecsHelp", "HECS / HELP"],
+    ["hecsHelp", "Study and Training Support Loan"],
     ["creditCard", "Credit Card"],
     ["otherDebt", "Other debt"],
+  ];
+  const hospitalCoverOptions = [
+    ["", "Select cover status"],
+    ["full-year", "Full financial year"],
+    ["partial-year", "Part of the financial year"],
+    ["no-cover", "No eligible cover"],
   ];
   const expenseCategoryOptions = [
     ["living", "Living costs"],
@@ -141,6 +153,14 @@
       title: "Financial stages",
       body: "The stage shows where your plan appears to sit today. Stage progress looks at practical steps such as positive cashflow, emergency savings, debt control and investment progress. Lifestyle funding is separate: it compares passive income or FI assets with your target annual lifestyle cost.",
     },
+    stslDebt: {
+      title: "Study and Training Support Loan",
+      body: "STSL is the collective term for Australian government study and training loans, including HECS-HELP, HELP, VET Student Loans and other covered study or training loan programs.",
+    },
+    hospitalCover: {
+      title: "Eligible private patient hospital cover",
+      body: "Eligible private patient hospital cover may affect Medicare levy surcharge estimates. Extras-only policies generally do not prevent Medicare levy surcharge exposure.",
+    },
     investmentReturn: {
       title: "Investment Return",
       body: "This is the expected average yearly return on your investments before inflation. It helps estimate how your portfolio may grow over time.",
@@ -151,7 +171,7 @@
     },
   };
   const coreExpenseCategories = new Set(["living", "food", "utilities", "insurance", "schoolChildren", "ratesPropertyCosts"]);
-  const incomeHelperText = "Enter your gross income before tax. The simulator estimates tax and HELP repayments separately.";
+  const incomeHelperText = "Enter your gross income before tax. The app estimates tax and STSL compulsory repayments separately.";
   const defaultOtherExpenseItems = [
     { id: "expense-subscriptions", name: "Monthly subscriptions", category: "subscriptions", amount: 0, frequency: "monthly" },
     { id: "expense-phone", name: "Phone / Internet", category: "phoneInternet", amount: 0, frequency: "monthly" },
@@ -189,14 +209,18 @@
 
   let restoredDraftUi = {};
   let saveStatusTimer = null;
+  const storedPlanContext = loadPlanContext();
+  let activePlanId = normalisePlanId(storedPlanContext.lastPersonalPlanId || storedPlanContext.activePlanId || DEFAULT_PERSONAL_PLAN_ID);
+  let isDemoMode = false;
+  let isSwitchingPlans = false;
+  let selectedSamplePlanId = DATA.samplePlans?.[1]?.id || DATA.samplePlans?.[0]?.id || "";
   const savedDraft = loadDraft();
   let userState = loadUserState(savedDraft);
-  let plan = CALC.clonePlan(savedDraft || CALC.emptyPlan());
+  let plan = ensureCurrentPlanIdentity(CALC.clonePlan(savedDraft || CALC.emptyPlan()));
   let activeView = restoredDraftUi.activeView || "dashboard";
   let activeWizardStep = normaliseWizardStep(restoredDraftUi.activeWizardStep);
   let hasOpenedWorkspace = Boolean(savedDraft) || Boolean(restoredDraftUi.hasOpenedWorkspace);
   let activeWhatIfId = whatIfActions[0].id;
-  let selectedSamplePlanId = DATA.samplePlans?.[1]?.id || DATA.samplePlans?.[0]?.id || "";
   let generatedWeeklyPlanner = null;
   let weeklyPlan = loadWeeklyPlan();
   let activeWeeklyPlanTab = restoredDraftUi.activeWeeklyPlanTab || "thisWeek";
@@ -210,6 +234,7 @@
   let timingEditDraft = null;
   let weeklyPlanRenderCount = 0;
   const weeklyActualDrafts = new Map();
+  let engagementMissionExpanded = false;
   let aiInsightsConfig = {
     enabled: Boolean(window.FFS_ENABLE_AI_INSIGHTS),
     configLoaded: Boolean(window.FFS_ENABLE_AI_INSIGHTS),
@@ -222,6 +247,7 @@
     isLoading: false,
     error: "",
   };
+  let engagementCelebration = null;
 
   const currency = new Intl.NumberFormat("en-AU", {
     style: "currency",
@@ -702,15 +728,16 @@
       };
     }
     return {
-      title: "No urgent action today",
-      text: "You are ready to review goals, weekly cashflow or AI Insights when you have a moment.",
+      title: "You are on track",
+      text: "A quick weekly review will keep your journey current.",
       action: "dashboard",
-      actionLabel: "View Dashboard",
+      actionLabel: "Review Progress",
     };
   }
 
   function syncEngagementAchievements(result) {
     const data = engagementData();
+    if (isDemoActive()) return data.achievements;
     if (data.preferences?.achievementsEnabled === false) return data.achievements;
     const existing = new Set(data.achievements.map((item) => item.id));
     const emergency = emergencyMonths(result);
@@ -729,6 +756,7 @@
       if (!definition.active || existing.has(definition.id)) return;
       data.achievements.unshift({
         id: definition.id,
+        planId: normalisePlanId(activePlanId),
         achievementType: definition.id,
         title: definition.title,
         description: definition.description,
@@ -741,13 +769,14 @@
   }
 
   function logProgressEvent(event) {
+    if (isDemoActive()) return;
     const data = engagementData();
     const duplicateKey = event.metadata?.dedupeKey || `${event.eventType}-${event.goalId || ""}-${event.amount || ""}-${new Date().toDateString()}`;
     const exists = data.progressEvents.some((item) => item.metadata?.dedupeKey === duplicateKey);
     if (exists) return;
     data.progressEvents.unshift({
       id: makeId("progress"),
-      planId: "local-plan",
+      planId: normalisePlanId(activePlanId),
       createdAt: new Date().toISOString(),
       source: "manual",
       ...event,
@@ -773,18 +802,69 @@
     return projection.find((row) => Number(row.age) >= Number(age)) || projection.at(-1);
   }
 
+  function projectionYearForAge(age) {
+    const currentAge = Number(plan.personal.person1Age || plan.personal.person2Age) || 0;
+    return Math.max(0, Math.round(Number(age || currentAge) - currentAge));
+  }
+
+  function mortgageBalanceAtAge(result, age) {
+    const years = projectionYearForAge(age);
+    if (years <= 0) return Number(result.effectiveMortgageBalance) || 0;
+    const month = years * 12;
+    const row = result.loan?.schedule?.find((item) => Number(item.month) >= month) || result.loan?.schedule?.at(-1);
+    return Math.max(0, Number(row?.closingBalance ?? result.loan?.finalBalance ?? 0));
+  }
+
   function futureYouPreview(result) {
-    const targetAge = Number(plan.personal.fullRetirementAge || plan.personal.semiRetirementAge || plan.personal.workOptionalAge) || ((Number(plan.personal.person1Age) || 0) + 10);
-    const investment = projectionRowAtAge(result.investmentProjection, targetAge);
-    const superRow = projectionRowAtAge(result.superProjection, targetAge);
-    const progressRow = projectionRowAtAge(result.financialFreedomProgressProjection, targetAge);
+    const engagement = engagementData();
+    const fallbackAge = Number(plan.personal.fullRetirementAge || plan.personal.semiRetirementAge || plan.personal.workOptionalAge) || ((Number(plan.personal.person1Age) || 0) + 10);
+    const requestedAge = Number(engagement.futureYouAge || fallbackAge);
+    const currentAge = Number(plan.personal.person1Age || plan.personal.person2Age) || 0;
+    const useCurrentPosition = currentAge > 0 && requestedAge <= currentAge;
+    const investment = useCurrentPosition ? null : projectionRowAtAge(result.investmentProjection, requestedAge);
+    const projectedAge = useCurrentPosition
+      ? currentAge
+      : Number(investment?.age) || requestedAge;
+    const year = useCurrentPosition ? 0 : Number(investment?.year) || projectionYearForAge(projectedAge);
+    const superRow = useCurrentPosition ? null : projectionRowAtAge(result.superProjection, projectedAge);
+    const progressRow = useCurrentPosition ? null : projectionRowAtAge(result.financialFreedomProgressProjection, projectedAge);
+    const netWorthRow = useCurrentPosition ? null : projectionRowAtAge(result.netWorthProjection, projectedAge);
+    const mortgageBalance = mortgageBalanceAtAge(result, projectedAge);
+    const superAccessible = projectedAge >= Number(result.superAccessAge || 60) ? Number(superRow?.closingBalance) || 0 : 0;
+    const projectedFiAssets = (Number(investment?.closingBalance) || result.investmentBalance || 0) + (Number(plan.assets.offsetBalance) || 0) + superAccessible;
     return {
-      age: targetAge,
+      age: projectedAge,
+      requestedAge,
+      year,
+      currentAge,
       investmentBalance: Number(investment?.closingBalance) || result.investmentBalance || 0,
       superBalance: Number(superRow?.closingBalance) || result.superannuationBalance || 0,
-      passiveIncome: annualPassiveIncome(result),
+      mortgageBalance,
+      netWorth: year <= 0 ? result.currentNetWorth : Number(netWorthRow?.closingBalance) || result.currentNetWorth || 0,
+      passiveIncome: projectedFiAssets * safeWithdrawalRate(),
       progress: Number(progressRow?.progress) || engagementProgress(result).financialFreedomRaw || 0,
     };
+  }
+
+  function estimatedFinancialIndependenceLabel(result) {
+    const currentAge = Number(plan.personal.person1Age || plan.personal.person2Age) || 0;
+    const progress = engagementProgress(result);
+    if (!currentAge && !result.financialFreedomProgressProjection?.length) return "Complete setup";
+    if (progress.financialIndependenceRaw >= 100) return "Reached in this model";
+    const row = (result.financialFreedomProgressProjection || []).find((item) => Number(item.progress) >= 100);
+    if (!row) return "Not yet projected";
+    const years = currentAge ? Math.max(0, Number(row.age) - currentAge) : Number(row.year) || 0;
+    return currentAge ? `Age ${row.age} - about ${years} year${years === 1 ? "" : "s"}` : `About ${row.year} year${row.year === 1 ? "" : "s"}`;
+  }
+
+  function isEngagementPlanReady(result) {
+    return Boolean(result.annualGrossIncome || result.totalAssets || result.annualLivingExpenses || plan.incomeItems?.length || plan.assetItems?.length);
+  }
+
+  function shortenText(value, maxLength = 210) {
+    const text = String(value || "").trim();
+    if (text.length <= maxLength) return text;
+    return `${text.slice(0, maxLength - 1).trim()}...`;
   }
 
   function aiOpeningInsightHtml() {
@@ -794,30 +874,79 @@
       return `
         <article class="engagement-card engagement-ai-card">
           <span class="metric-label">AI Coach</span>
-          <h3>Private beta switched off</h3>
-          <p>AI Insights can be enabled for selected testers without changing the financial plan.</p>
+          <h3>Your AI Coach</h3>
+          <p>AI coaching is switched off in this environment. Your plan and calculations still work normally.</p>
         </article>
       `;
     }
     if (!report || engagementData().preferences?.aiOpeningInsightsEnabled === false) {
       return `
         <article class="engagement-card engagement-ai-card">
-          <span class="metric-label">AI Coach</span>
-          <h3>AI Financial Freedom Insights</h3>
-          <p>Generate private beta insights after completing your plan to see a personalised coaching-style summary.</p>
-          <button class="btn btn-primary" type="button" data-engagement-action="ai">Open AI Insights</button>
+          <span class="metric-label">Your AI Coach</span>
+          <h3>One suggestion based on your current plan</h3>
+          <p>Generate private beta insights to see a short coaching-style observation based on your current figures.</p>
+          <div class="engagement-button-row">
+            <button class="btn btn-primary" type="button" data-engagement-action="ai">Ask a Question</button>
+            <button class="btn" type="button" data-engagement-action="ai">See Full Insight</button>
+          </div>
         </article>
       `;
     }
     return `
       <article class="engagement-card engagement-ai-card">
-        <span class="metric-label">AI-generated insight</span>
-        <h3>${escapeHtml(report.overallPosition.rating)}</h3>
-        <p>${escapeHtml(report.overallPosition.summary)}</p>
+        <span class="metric-label">Your AI Coach</span>
+        <h3>One suggestion based on your current plan</h3>
+        <p>${escapeHtml(shortenText(report.overallPosition.summary, 230))}</p>
         <small>Uses the anonymous financial summary from your current saved plan.</small>
-        <button class="btn mt-3" type="button" data-engagement-action="ai">Review AI Insights</button>
+        <div class="engagement-button-row">
+          <button class="btn btn-primary" type="button" data-engagement-action="ai">Ask a Question</button>
+          <button class="btn" type="button" data-engagement-action="ai">See Full Insight</button>
+        </div>
       </article>
     `;
+  }
+
+  function showEngagementCelebration(details) {
+    if (isDemoActive()) return;
+    if (engagementData().preferences?.celebrationsEnabled === false) return;
+    engagementCelebration = {
+      id: makeId("celebration"),
+      title: details.title || "Great work!",
+      message: details.message || "Your progress has been recorded.",
+      amountLabel: details.amountLabel || "",
+      secondaryLabel: details.secondaryLabel || "",
+    };
+  }
+
+  function renderEngagementCelebration() {
+    let modal = document.getElementById("engagementCelebrationModal");
+    if (!modal) {
+      document.body.insertAdjacentHTML("beforeend", `
+        <div class="engagement-celebration-modal hidden" id="engagementCelebrationModal" role="dialog" aria-modal="true" aria-labelledby="engagementCelebrationTitle">
+          <button class="engagement-celebration-backdrop" type="button" data-engagement-action="close-celebration" aria-label="Close celebration"></button>
+          <article class="engagement-celebration-card">
+            <div class="engagement-checkmark" aria-hidden="true">OK</div>
+            <h2 id="engagementCelebrationTitle"></h2>
+            <p id="engagementCelebrationMessage"></p>
+            <div class="engagement-celebration-stats" id="engagementCelebrationStats"></div>
+            <div class="engagement-button-row">
+              <button class="btn btn-primary" type="button" data-engagement-action="weeklyplan">View Progress</button>
+              <button class="btn" type="button" data-engagement-action="close-celebration">Continue</button>
+            </div>
+          </article>
+        </div>
+      `);
+      modal = document.getElementById("engagementCelebrationModal");
+    }
+    modal.classList.toggle("hidden", !engagementCelebration);
+    if (!engagementCelebration) return;
+    document.getElementById("engagementCelebrationTitle").textContent = engagementCelebration.title;
+    document.getElementById("engagementCelebrationMessage").textContent = engagementCelebration.message;
+    const stats = document.getElementById("engagementCelebrationStats");
+    stats.innerHTML = [engagementCelebration.amountLabel, engagementCelebration.secondaryLabel]
+      .filter(Boolean)
+      .map((item) => `<span>${escapeHtml(item)}</span>`)
+      .join("");
   }
 
   function ensureStoredGoal(goal) {
@@ -826,6 +955,7 @@
     if (!stored) {
       stored = {
         id: goal.id === "fallback-emergency-fund" ? makeId("goal-emergency") : goal.id,
+        planId: normalisePlanId(activePlanId),
         name: goal.name,
         category: goal.category || "custom",
         targetAmount: Number(goal.targetAmount) || 0,
@@ -1138,6 +1268,14 @@
     return `${personDisplayName(personNumber)} Super`;
   }
 
+  function stslOwnerOptions() {
+    return [
+      ["person1", personDisplayName(1)],
+      ["person2", personDisplayName(2)],
+      ["joint", "Unassigned / household"],
+    ];
+  }
+
   function isDefaultIncomeName(value, personNumber) {
     const text = String(value || "").trim();
     if (!text) return true;
@@ -1244,7 +1382,7 @@
           repaymentFrequency: "monthly",
           termYears: plan.liabilities.remainingLoanTermYears || 0,
         },
-        { id: "liability-hecs", name: "HECS / HELP", type: "hecsHelp", balance: plan.liabilities.hecsHelpDebt || 0, interestRatePct: 0, repayment: 0, repaymentFrequency: "monthly", termYears: 0 },
+        { id: "liability-stsl", name: "Study and Training Support Loan", type: "hecsHelp", owner: "person1", subtype: "HECS-HELP", balance: plan.liabilities.hecsHelpDebt || 0, interestRatePct: 0, repayment: 0, repaymentFrequency: "monthly", termYears: 0, lastUpdated: "", note: "" },
         { id: "liability-credit-card", name: "Credit Card", type: "creditCard", balance: plan.liabilities.creditCardBalance || 0, interestRatePct: plan.liabilities.creditCardInterestRatePct || 19.99, repayment: plan.liabilities.creditCardMonthlyRepayment || 0, repaymentFrequency: "monthly", termYears: 0, creditLimit: plan.liabilities.creditCardLimit || 0 },
         { id: "liability-other", name: "Other debts", type: "otherDebt", balance: plan.liabilities.otherDebts || 0, interestRatePct: 0, repayment: 0, repaymentFrequency: "monthly", termYears: 0 },
       ];
@@ -1252,6 +1390,14 @@
     if (plan.liabilityItems.length && !plan.liabilityItems.some((item) => item.type === "creditCard") && (Number(plan.liabilities.creditCardBalance) || Number(plan.liabilities.creditCardLimit))) {
       plan.liabilityItems.push({ id: "liability-credit-card", name: "Credit Card", type: "creditCard", balance: plan.liabilities.creditCardBalance || 0, interestRatePct: plan.liabilities.creditCardInterestRatePct || 19.99, repayment: plan.liabilities.creditCardMonthlyRepayment || 0, repaymentFrequency: "monthly", termYears: 0, creditLimit: plan.liabilities.creditCardLimit || 0 });
     }
+    plan.liabilityItems.forEach((item) => {
+      if (item.type === "stsl") item.type = "hecsHelp";
+      if (item.type === "hecsHelp") {
+        if (!item.name || /HECS|HELP/i.test(item.name)) item.name = "Study and Training Support Loan";
+        if (!item.owner) item.owner = "person1";
+        if (!item.subtype) item.subtype = "HECS-HELP";
+      }
+    });
     if (!Array.isArray(plan.expenseItems)) {
       plan.expenseItems = [
         { id: "expense-living", name: plan.expenses.livingName || "Living costs", category: "living", amount: plan.expenses.livingCosts || 0, frequency: plan.expenses.livingFrequency || "monthly" },
@@ -1338,7 +1484,14 @@
     plan.liabilities.homeLoanInterestRatePct = weightedRate;
     plan.liabilities.monthlyRepayment = homeLoanRepaymentAnnual / 12;
     plan.liabilities.remainingLoanTermYears = homeLoans.reduce((max, item) => Math.max(max, Number(item.termYears) || 0), 0);
-    plan.liabilities.hecsHelpDebt = liabilities.filter((item) => item.type === "hecsHelp").reduce((total, item) => total + (Number(item.balance) || 0), 0);
+    const stslLiabilities = liabilities.filter((item) => item.type === "hecsHelp" || item.type === "stsl");
+    plan.liabilities.hecsHelpDebt = stslLiabilities.reduce((total, item) => total + (Number(item.balance) || 0), 0);
+    plan.liabilities.person1HecsHelpDebt = stslLiabilities
+      .filter((item) => item.owner === "person1" || (!item.owner && !plan.liabilities.person2HecsHelpDebt))
+      .reduce((total, item) => total + (Number(item.balance) || 0), 0);
+    plan.liabilities.person2HecsHelpDebt = stslLiabilities
+      .filter((item) => item.owner === "person2")
+      .reduce((total, item) => total + (Number(item.balance) || 0), 0);
     const creditCards = liabilities.filter((item) => item.type === "creditCard");
     plan.liabilities.creditCardBalance = creditCards.reduce((total, item) => total + (Number(item.balance) || 0), 0);
     plan.liabilities.creditCardInterestRatePct = plan.liabilities.creditCardBalance > 0
@@ -1473,10 +1626,17 @@
 
   function migrateScenarioData(scenario) {
     if (!scenario || typeof scenario !== "object") return null;
+    const source = scenario.source === "sample" ? "sample" : "user";
+    const planId = source === "sample"
+      ? DEMO_PLAN_ID
+      : normalisePlanId(scenario.planId || scenario.plan?.meta?.planId || activePlanId || DEFAULT_PERSONAL_PLAN_ID);
+    const scenarioPlan = migratePlanData(scenario.plan || scenario);
     return {
       ...scenario,
+      source,
+      planId,
       savedAt: scenario.savedAt || new Date().toISOString(),
-      plan: migratePlanData(scenario.plan || scenario),
+      plan: ensurePlanIdentity(scenarioPlan, { source: source === "sample" ? "sample" : "personal", planId }),
     };
   }
 
@@ -1506,7 +1666,9 @@
 
   function stablePlanJson(planData) {
     try {
-      return JSON.stringify(migratePlanData(planData));
+      const comparable = migratePlanData(planData);
+      delete comparable.meta;
+      return JSON.stringify(comparable);
     } catch {
       return "";
     }
@@ -1579,6 +1741,8 @@
       hasCreatedPersonalPlan,
       createdAt: loaded.createdAt || (hasCreatedPersonalPlan ? new Date().toISOString() : ""),
       updatedAt: loaded.updatedAt || "",
+      lastPersonalPlanId: normalisePlanId(loaded.lastPersonalPlanId || activePlanId || DEFAULT_PERSONAL_PLAN_ID),
+      lastPersonalRoute: loaded.lastPersonalRoute || restoredDraftUi.activeView || "dashboard",
     };
     if (hasCreatedPersonalPlan !== Boolean(loaded.hasCreatedPersonalPlan)) persistUserState(state);
     return state;
@@ -1589,6 +1753,8 @@
       localStorage.setItem(USER_STATE_KEY, JSON.stringify({
         version: 1,
         ...nextState,
+        lastPersonalPlanId: normalisePlanId(nextState.lastPersonalPlanId || activePlanId || DEFAULT_PERSONAL_PLAN_ID),
+        lastPersonalRoute: nextState.lastPersonalRoute || "dashboard",
         updatedAt: new Date().toISOString(),
       }));
     } catch {
@@ -1880,65 +2046,234 @@
     };
   }
 
+  function normalisePlanId(value) {
+    const text = String(value || "").trim();
+    if (!text || text === DEMO_PLAN_ID || /^sample-plan/.test(text)) return DEFAULT_PERSONAL_PLAN_ID;
+    return text.startsWith("personal-plan:") ? text : `personal-plan:${text.replace(/^personal-plan[:\-]?/, "")}`;
+  }
+
+  function demoPlanId(sampleId = "") {
+    return sampleId ? `${DEMO_PLAN_ID}:${sampleId}` : DEMO_PLAN_ID;
+  }
+
+  function loadPlanContext() {
+    try {
+      const raw = localStorage.getItem(PLAN_CONTEXT_KEY);
+      const parsed = raw ? JSON.parse(raw) : {};
+      return {
+        version: 1,
+        ...parsed,
+        activePlanId: normalisePlanId(parsed.activePlanId || parsed.lastPersonalPlanId || DEFAULT_PERSONAL_PLAN_ID),
+        lastPersonalPlanId: normalisePlanId(parsed.lastPersonalPlanId || parsed.activePlanId || DEFAULT_PERSONAL_PLAN_ID),
+        mode: "personal",
+      };
+    } catch {
+      return {
+        version: 1,
+        activePlanId: DEFAULT_PERSONAL_PLAN_ID,
+        lastPersonalPlanId: DEFAULT_PERSONAL_PLAN_ID,
+        lastPersonalRoute: "dashboard",
+        mode: "personal",
+      };
+    }
+  }
+
+  function persistPlanContext(patch = {}) {
+    try {
+      const previous = loadPlanContext();
+      const personalPlanId = normalisePlanId(patch.lastPersonalPlanId || activePlanId || previous.lastPersonalPlanId || DEFAULT_PERSONAL_PLAN_ID);
+      localStorage.setItem(PLAN_CONTEXT_KEY, JSON.stringify({
+        version: 1,
+        ...previous,
+        ...patch,
+        mode: "personal",
+        activePlanId: personalPlanId,
+        lastPersonalPlanId: personalPlanId,
+        lastPersonalRoute: patch.lastPersonalRoute || previous.lastPersonalRoute || "dashboard",
+        updatedAt: new Date().toISOString(),
+      }));
+    } catch {
+      // Context is a convenience for switching plans; legacy keys still keep the current plan recoverable.
+    }
+  }
+
+  function currentPersonalPlanKey(planId = activePlanId) {
+    return `${PERSONAL_PLAN_PREFIX}${normalisePlanId(planId)}`;
+  }
+
+  function currentPersonalWeeklyPlanKey(planId = activePlanId) {
+    return `${PERSONAL_WEEKLY_PLAN_PREFIX}${normalisePlanId(planId)}`;
+  }
+
+  function currentSnapshotKey(planId = activePlanId) {
+    return `${SNAPSHOT_PREFIX}${normalisePlanId(planId)}`;
+  }
+
+  function isDemoActive() {
+    return Boolean(isDemoMode || plan?.meta?.source === "sample" || plan?.meta?.isDemo);
+  }
+
+  function ensurePlanIdentity(targetPlan, options = {}) {
+    const source = options.source || (isDemoMode ? "sample" : "personal");
+    const planId = source === "sample"
+      ? demoPlanId(options.samplePlanId || targetPlan?.meta?.samplePlanId)
+      : normalisePlanId(options.planId || targetPlan?.meta?.planId || activePlanId || DEFAULT_PERSONAL_PLAN_ID);
+    targetPlan.meta = {
+      ...(targetPlan.meta || {}),
+      planId,
+      source,
+      isDemo: source === "sample",
+      samplePlanId: source === "sample" ? (options.samplePlanId || targetPlan.meta?.samplePlanId || "") : "",
+      storageVersion: 1,
+      updatedAt: targetPlan.meta?.updatedAt || new Date().toISOString(),
+    };
+    return targetPlan;
+  }
+
+  function ensureCurrentPlanIdentity(targetPlan = plan) {
+    return ensurePlanIdentity(targetPlan, {
+      source: isDemoMode ? "sample" : "personal",
+      planId: activePlanId,
+      samplePlanId: selectedSamplePlanId,
+    });
+  }
+
+  function parseStoredPlanRecord(raw) {
+    if (!raw) return null;
+    const saved = JSON.parse(raw);
+    if (saved?.plan) {
+      return {
+        ...saved,
+        plan: migratePlanData(saved.plan),
+        ui: saved.ui || {},
+      };
+    }
+    return {
+      version: 2,
+      appVersion: APP_VERSION,
+      savedAt: "",
+      plan: migratePlanData(saved),
+      ui: {},
+    };
+  }
+
+  function readPersonalDraftRecord(planId = activePlanId) {
+    const personalKey = currentPersonalPlanKey(planId);
+    try {
+      const namespaced = parseStoredPlanRecord(localStorage.getItem(personalKey));
+      if (namespaced?.plan) return namespaced;
+    } catch {
+      // Fall back to legacy below.
+    }
+    try {
+      const legacy = parseStoredPlanRecord(localStorage.getItem(DRAFT_KEY));
+      if (!legacy?.plan || isBundledSamplePlan(legacy.plan)) return null;
+      legacy.plan = ensurePlanIdentity(legacy.plan, { source: "personal", planId });
+      localStorage.setItem(personalKey, JSON.stringify({
+        version: 4,
+        appVersion: APP_VERSION,
+        migratedFrom: DRAFT_KEY,
+        migratedAt: new Date().toISOString(),
+        savedAt: legacy.savedAt || new Date().toISOString(),
+        plan: legacy.plan,
+        ui: legacy.ui || {},
+      }));
+      persistPlanContext({ lastPersonalPlanId: planId, lastPersonalRoute: legacy.ui?.activeView || "dashboard" });
+      return legacy;
+    } catch {
+      return null;
+    }
+  }
+
+  function writePersonalDraftRecord(message = "") {
+    if (isDemoActive() || isSwitchingPlans) return "";
+    const savedAt = new Date().toISOString();
+    const ui = collectDraftUi();
+    const planSnapshot = ensurePlanIdentity(migratePlanData(plan), { source: "personal", planId: activePlanId });
+    const payload = {
+      version: 4,
+      appVersion: APP_VERSION,
+      savedAt,
+      planId: normalisePlanId(activePlanId),
+      plan: planSnapshot,
+      ui,
+      storageKeys: {
+        personalPlan: currentPersonalPlanKey(),
+        legacyDraft: DRAFT_KEY,
+        weeklyPlan: currentPersonalWeeklyPlanKey(),
+        snapshots: currentSnapshotKey(),
+      },
+    };
+    localStorage.setItem(currentPersonalPlanKey(), JSON.stringify(payload));
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(payload));
+    localStorage.setItem(LAST_SAVED_KEY, savedAt);
+    restoredDraftUi = ui;
+    persistPlanContext({ lastPersonalPlanId: activePlanId, lastPersonalRoute: activeView || "dashboard" });
+    if (message) updateSaveStatus(message);
+    return savedAt;
+  }
+
+  function personalSavedDraftExists(planId = activePlanId) {
+    return Boolean(readPersonalDraftRecord(planId)?.plan);
+  }
+
+  function preservePersonalContextBeforeDemo() {
+    if (isDemoActive()) return;
+    if (hasMeaningfulPersonalPlanData(plan) || personalSavedDraftExists(activePlanId)) {
+      writePersonalDraftRecord();
+    }
+    persistPlanContext({ lastPersonalPlanId: activePlanId, lastPersonalRoute: activeView || "dashboard" });
+  }
+
   function markPersonalPlanCreated() {
-    if (userState.hasCreatedPersonalPlan) return;
+    if (isDemoActive() || isSwitchingPlans || isBundledSamplePlan(plan)) return;
+    activePlanId = normalisePlanId(activePlanId || DEFAULT_PERSONAL_PLAN_ID);
+    ensureCurrentPlanIdentity(plan);
     userState = {
       ...userState,
       hasCreatedPersonalPlan: true,
       createdAt: userState.createdAt || new Date().toISOString(),
+      lastPersonalPlanId: activePlanId,
+      lastPersonalRoute: activeView || userState.lastPersonalRoute || "dashboard",
     };
     persistUserState();
   }
 
   function hasSavedDraft() {
-    try {
-      return Boolean(localStorage.getItem(DRAFT_KEY));
-    } catch {
-      return false;
-    }
+    return personalSavedDraftExists(activePlanId);
   }
 
   function loadDraft() {
-    try {
-      const raw = localStorage.getItem(DRAFT_KEY);
-      if (!raw) {
-        restoredDraftUi = {};
-        return null;
-      }
-      const saved = JSON.parse(raw);
-      if (saved?.plan) {
-        restoredDraftUi = saved.ui || {};
-        return migratePlanData(saved.plan);
-      }
-      restoredDraftUi = {};
-      return migratePlanData(saved);
-    } catch {
+    const record = readPersonalDraftRecord(activePlanId);
+    if (!record?.plan) {
       restoredDraftUi = {};
       return null;
     }
+    restoredDraftUi = record.ui || {};
+    const planId = normalisePlanId(record.plan?.meta?.planId || record.planId || activePlanId);
+    activePlanId = planId;
+    persistPlanContext({ lastPersonalPlanId: planId, lastPersonalRoute: restoredDraftUi.activeView || "dashboard" });
+    return ensurePlanIdentity(record.plan, { source: "personal", planId });
   }
 
   function persistDraft() {
-    const savedAt = new Date().toISOString();
-    const ui = collectDraftUi();
-    localStorage.setItem(DRAFT_KEY, JSON.stringify({
-      version: 3,
-      appVersion: APP_VERSION,
-      savedAt,
-      plan: migratePlanData(plan),
-      ui,
-    }));
-    localStorage.setItem(LAST_SAVED_KEY, savedAt);
-    restoredDraftUi = ui;
-    return savedAt;
+    return writePersonalDraftRecord();
   }
 
   function saveDraft(message = "") {
+    if (isDemoActive()) {
+      updateSaveStatus(message || "Sample Plan only. Your personal plan has not been changed.");
+      return;
+    }
     persistDraft();
     updateSaveStatus(message);
   }
 
   function autosavePlan() {
+    if (isDemoActive() || isSwitchingPlans) {
+      updateSaveStatus("Sample Plan only. Changes here are not saved to your personal plan.");
+      return;
+    }
     markPersonalPlanCreated();
     updateSaveStatus("Saving...");
     persistDraft();
@@ -1977,34 +2312,55 @@
   }
 
   function loadScenarios() {
+    if (isDemoActive()) return sampleScenarioList(plan);
     try {
       const raw = localStorage.getItem(SCENARIO_KEY);
-      return raw ? migrateScenarioList(JSON.parse(raw)) : [];
+      return raw ? migrateScenarioList(JSON.parse(raw)).filter((scenario) => scenario.source !== "sample") : [];
     } catch {
       return [];
     }
   }
 
   function saveScenarios(scenarios) {
-    localStorage.setItem(SCENARIO_KEY, JSON.stringify(migrateScenarioList(scenarios)));
+    if (isDemoActive() || isSwitchingPlans) {
+      updateSaveStatus("Sample Plan scenarios are temporary and were not saved to your personal plans.");
+      return;
+    }
+    localStorage.setItem(SCENARIO_KEY, JSON.stringify(migrateScenarioList(scenarios).filter((scenario) => scenario.source !== "sample")));
   }
 
   function loadWeeklyPlan() {
+    if (isDemoMode) return null;
     try {
+      const namespaced = localStorage.getItem(currentPersonalWeeklyPlanKey());
+      if (namespaced) return window.FFSWeeklyPlan.migrate(JSON.parse(namespaced));
       const raw = localStorage.getItem(WEEKLY_PLAN_KEY);
-      return raw ? window.FFSWeeklyPlan.migrate(JSON.parse(raw)) : null;
+      if (!raw) return null;
+      const migrated = window.FFSWeeklyPlan.migrate(JSON.parse(raw));
+      localStorage.setItem(currentPersonalWeeklyPlanKey(), JSON.stringify(migrated));
+      return migrated;
     } catch {
       return null;
     }
   }
 
   function saveWeeklyPlan(message = "") {
+    if (isDemoActive() || isSwitchingPlans) {
+      if (message) updateSaveStatus("Sample Plan weekly changes are temporary and were not saved to your personal plan.");
+      return;
+    }
     if (!weeklyPlan) {
+      localStorage.removeItem(currentPersonalWeeklyPlanKey());
       localStorage.removeItem(WEEKLY_PLAN_KEY);
       return;
     }
     weeklyPlan.updatedAt = new Date().toISOString();
-    localStorage.setItem(WEEKLY_PLAN_KEY, JSON.stringify(window.FFSWeeklyPlan.migrate(weeklyPlan)));
+    const payload = window.FFSWeeklyPlan.migrate({
+      ...weeklyPlan,
+      planId: normalisePlanId(activePlanId),
+    });
+    localStorage.setItem(currentPersonalWeeklyPlanKey(), JSON.stringify(payload));
+    localStorage.setItem(WEEKLY_PLAN_KEY, JSON.stringify(payload));
     if (message) updateSaveStatus(message);
   }
 
@@ -2016,7 +2372,10 @@
     weeklyPlanUiState.isTimingSetupExpanded = null;
     editingTimingItemId = null;
     timingEditDraft = null;
-    localStorage.removeItem(WEEKLY_PLAN_KEY);
+    if (!isDemoActive()) {
+      localStorage.removeItem(currentPersonalWeeklyPlanKey());
+      localStorage.removeItem(WEEKLY_PLAN_KEY);
+    }
     updateSaveStatus(message);
   }
 
@@ -2055,11 +2414,15 @@
       appVersion: APP_VERSION,
       schemaVersion: EXPORT_SCHEMA_VERSION,
       exportedAt: new Date().toISOString(),
+      planId: isDemoActive() ? DEMO_PLAN_ID : normalisePlanId(activePlanId),
+      planSource: isDemoActive() ? "sample" : "personal",
       storageKeys: {
-        draft: DRAFT_KEY,
+        draft: isDemoActive() ? "temporary-sample-plan" : currentPersonalPlanKey(),
+        legacyDraft: DRAFT_KEY,
         scenarios: SCENARIO_KEY,
-        weeklyPlan: WEEKLY_PLAN_KEY,
+        weeklyPlan: isDemoActive() ? "temporary-sample-weekly-plan" : currentPersonalWeeklyPlanKey(),
         userState: USER_STATE_KEY,
+        snapshots: isDemoActive() ? "sample-plan-excluded-from-personal-snapshots" : currentSnapshotKey(),
       },
       plan: migratePlanData(plan),
       scenarios: loadScenarios(),
@@ -2101,6 +2464,9 @@
       return;
     }
     plan = imported.plan;
+    activePlanId = normalisePlanId(imported.plan?.meta?.planId || payload.planId || activePlanId || DEFAULT_PERSONAL_PLAN_ID);
+    isDemoMode = false;
+    plan = ensurePlanIdentity(plan, { source: "personal", planId: activePlanId });
     generatedWeeklyPlanner = null;
     weeklyPlan = imported.weeklyPlan;
     restoredDraftUi = imported.ui || {};
@@ -2109,7 +2475,10 @@
     }
     saveScenarios(imported.scenarios);
     if (weeklyPlan) saveWeeklyPlan();
-    else localStorage.removeItem(WEEKLY_PLAN_KEY);
+    else {
+      localStorage.removeItem(currentPersonalWeeklyPlanKey());
+      localStorage.removeItem(WEEKLY_PLAN_KEY);
+    }
     saveDraft("Plan imported successfully.");
     renderAll();
     showWorkspace(activeView || "dashboard");
@@ -2140,6 +2509,24 @@
   function selectedSamplePlan() {
     const plans = DATA.samplePlans || [{ id: "sample", name: "Sample Plan", plan: DATA.demoPlan }];
     return plans.find((item) => item.id === selectedSamplePlanId) || plans[0];
+  }
+
+  function sampleScenarioList(basePlan = plan) {
+    if (!Array.isArray(DATA.demoScenarioAdjustments)) return [];
+    const demoBase = CALC.clonePlan(basePlan || selectedSamplePlan()?.plan || DATA.demoPlan || {});
+    return DATA.demoScenarioAdjustments.map((item, index) => {
+      const scenarioPlan = applyScenarioAdjustments(demoBase, item.adjustments || {});
+      return {
+        id: `sample-scenario-${index + 1}`,
+        source: "sample",
+        planId: DEMO_PLAN_ID,
+        name: item.name,
+        notes: item.notes,
+        savedAt: new Date().toISOString(),
+        plan: ensurePlanIdentity(scenarioPlan, { source: "sample", samplePlanId: selectedSamplePlanId }),
+        summary: scenarioSummary(scenarioPlan),
+      };
+    });
   }
 
   function renderSamplePlanOptions() {
@@ -2469,7 +2856,7 @@
     blank.goalItems = [];
     blank.comparison = { ...comparisonDefaults };
     ensurePlanSettings(blank);
-    return blank;
+    return ensurePlanIdentity(blank, { source: "personal", planId: activePlanId || DEFAULT_PERSONAL_PLAN_ID });
   }
 
   function isBlankPlan(currentPlan) {
@@ -2485,11 +2872,56 @@
     return !hasValue(currentPlan);
   }
 
-  function showWorkspace(view = "dashboard") {
+  function normaliseNavigationTarget(target) {
+    const value = String(target || "").trim();
+    const aliases = {
+      "financial-plan": "setup",
+      financialPlan: "setup",
+      setup: "setup",
+      dashboard: "dashboard",
+      "weekly-plan": "weeklyplan",
+      weekly: "weeklyplan",
+      weeklyplan: "weeklyplan",
+      goals: "goals",
+      investments: "investments",
+      super: "super",
+      "decision-engine": "decision",
+      decision: "decision",
+      reports: "reports",
+      scenarios: "scenarios",
+      "saved-scenarios": "scenarios",
+      future: "decision",
+      "future-you": "decision",
+      "ai-coach": "ai",
+      ai: "ai",
+    };
+    return aliases[value] || value;
+  }
+
+  function navigateToSection(sectionId, options = {}) {
+    const target = normaliseNavigationTarget(sectionId);
+    if (target === "ai") {
+      if (aiInsightsConfig.enabled) openAiInsights();
+      else updateSaveStatus("AI Insights private beta is not enabled in this environment.");
+      return true;
+    }
+    const section = document.querySelector(`[data-view-panel="${target}"]`);
+    if (!section) {
+      console.error(`Navigation target not found: ${sectionId}`);
+      updateSaveStatus(`Navigation target not found: ${sectionId}`);
+      return false;
+    }
+    showWorkspace(target, options);
+    return true;
+  }
+
+  function showWorkspace(view = "dashboard", options = {}) {
     hasOpenedWorkspace = true;
-    document.getElementById("appWorkspace").classList.remove("hidden");
-    setView(view);
-    document.getElementById("appWorkspace").scrollIntoView({ behavior: "smooth", block: "start" });
+    const workspace = document.getElementById("appWorkspace");
+    workspace.classList.remove("hidden");
+    if (!setView(view)) return;
+    if (options?.scroll === false) return;
+    workspace.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function setView(view) {
@@ -2500,6 +2932,12 @@
       forecast: "dashboard",
     };
     view = viewAliases[view] || view;
+    const targetPanel = document.querySelector(`[data-view-panel="${view}"]`);
+    if (!targetPanel) {
+      console.error(`Navigation target not found: ${view}`);
+      updateSaveStatus(`Navigation target not found: ${view}`);
+      return false;
+    }
     activeView = view;
     document.body.dataset.activeView = view;
     document.querySelectorAll("[data-view-panel]").forEach((panel) => {
@@ -2509,6 +2947,7 @@
       button.classList.toggle("active", button.dataset.view === view);
     });
     if (view === "setup") renderWizardStep();
+    return true;
   }
 
   function optionsHtml(selected) {
@@ -2521,7 +2960,7 @@
     const infoButton = infoButtonHtml(config.infoKey, config.label);
     let input = "";
     if (config.type === "select") {
-      input = `<select class="field-input" id="${id}" data-path="${config.path}" data-type="text">${optionsHtml(value)}</select>`;
+      input = `<select class="field-input" id="${id}" data-path="${config.path}" data-type="text">${config.options ? optionList(config.options, value) : optionsHtml(value)}</select>`;
     } else if (config.type === "checkbox") {
       input = `<input class="toggle-input" id="${id}" data-path="${config.path}" data-type="boolean" type="checkbox"${value ? " checked" : ""}>`;
     } else {
@@ -2567,6 +3006,14 @@
         <label>
           <span class="field-label">${escapeHtml(label)}</span>
           <select class="field-input" ${common} data-type="text">${optionList(options.options, value)}</select>
+        </label>
+      `;
+    }
+    if (options.type === "checkbox") {
+      return `
+        <label class="toggle-field">
+          <span class="field-label">${escapeHtml(label)}</span>
+          <input class="toggle-input" ${common} data-type="boolean" type="checkbox"${rawValue ? " checked" : ""}>
         </label>
       `;
     }
@@ -2640,26 +3087,32 @@
   }
 
   function liabilityCard(item, index) {
-    if (item.type === "hecsHelp") {
-      const help = CALC.calculatePlan(plan).helpRepaymentEstimate;
+    if (item.type === "hecsHelp" || item.type === "stsl") {
+      const stsl = CALC.calculatePlan(plan).stslRepaymentEstimate || CALC.calculatePlan(plan).helpRepaymentEstimate;
+      const ownerKey = item.owner === "person2" ? "person2" : "person1";
+      const ownerEstimate = stsl?.[ownerKey] || {};
       return `
         <article class="form-item-card dynamic-item-card">
           <div class="item-card-title">
             <div>
-              <span>HELP estimate</span>
-              <h4>Outstanding HELP Balance</h4>
+              <span>STSL estimate</span>
+              <h4>${escapeHtml(item.name || "Study and Training Support Loan")}</h4>
             </div>
             ${removeButton("liabilityItems", item.id)}
           </div>
           <div class="input-grid mt-4">
-            ${dynamicInput("liabilityItems", item, "balance", "Outstanding HELP Balance", { step: "1000" })}
+            ${dynamicInput("liabilityItems", item, "owner", "Owner", { type: "select", options: stslOwnerOptions() })}
+            ${dynamicInput("liabilityItems", item, "balance", "Current STSL balance", { step: "1000" })}
+            ${dynamicInput("liabilityItems", item, "subtype", "Optional subtype", { kind: "text", placeholder: "e.g. HECS-HELP, VET Student Loan" })}
+            ${dynamicInput("liabilityItems", item, "lastUpdated", "Last updated", { kind: "text", placeholder: "e.g. July 2026" })}
+            ${dynamicInput("liabilityItems", item, "note", "Optional note", { kind: "text", placeholder: "Optional context" })}
           </div>
           <div class="summary-grid mt-4">
-            ${summaryTile("Estimated Repayment Income", money(help.repaymentIncome))}
-            ${summaryTile("Estimated Annual Repayment", money(help.annualRepayment))}
-            ${summaryTile("Estimated Years Until Loan Repaid", help.estimatedYearsToRepay ? `${help.estimatedYearsToRepay.toFixed(1)} years` : "No compulsory repayment estimated")}
+            ${summaryTile(`${personDisplayName(ownerKey === "person2" ? 2 : 1)} repayment income`, money(ownerEstimate.repaymentIncome || 0))}
+            ${summaryTile("Estimated annual STSL compulsory repayment", money(ownerEstimate.annualRepayment || 0))}
+            ${summaryTile("Estimated years until repaid", stsl.estimatedYearsToRepay ? `${stsl.estimatedYearsToRepay.toFixed(1)} years` : "No compulsory repayment estimated")}
           </div>
-          <p class="field-help mt-3">Estimate updates from income and current balance.</p>
+          <p class="field-help mt-3">STSL includes relevant government study and training loans such as HECS-HELP, HELP, VET Student Loans and other covered loan programs. The balance affects net worth; compulsory repayment is estimated from income and the person's STSL selection.</p>
         </article>
       `;
     }
@@ -2745,6 +3198,29 @@
     `;
   }
 
+  function taxSettingsCardHtml() {
+    const p1 = personDisplayName(1);
+    const p2 = personDisplayName(2);
+    const fields = [
+      { label: `${p1} has a Study and Training Support Loan debt`, path: "income.person1HasStslDebt", type: "checkbox", infoKey: "stslDebt", help: "Select this if STSL withholding or compulsory repayment should be estimated for this person. Enter the balance under Liabilities." },
+      { label: `${p2} has a Study and Training Support Loan debt`, path: "income.person2HasStslDebt", type: "checkbox", infoKey: "stslDebt", help: "The debt balance is entered under Liabilities and can be assigned to this person." },
+      { label: `${p1} eligible private patient hospital cover`, path: "income.person1HospitalCoverStatus", type: "select", options: hospitalCoverOptions, infoKey: "hospitalCover" },
+      { label: `${p1} covered days if partial year`, path: "income.person1HospitalCoverDays", step: "1", help: "Only needed when cover applied for part of the financial year." },
+      { label: `${p2} eligible private patient hospital cover`, path: "income.person2HospitalCoverStatus", type: "select", options: hospitalCoverOptions, infoKey: "hospitalCover" },
+      { label: `${p2} covered days if partial year`, path: "income.person2HospitalCoverDays", step: "1", help: "Only needed when cover applied for part of the financial year." },
+      { label: "Dependent children", path: "personal.dependants", step: "1", help: "Used only for family Medicare levy surcharge thresholds." },
+    ];
+    return `
+      <article class="form-item-card">
+        <div class="card-subheading">
+          <h3>Tax and study-loan details</h3>
+          <p>These settings help estimate STSL compulsory repayments and Medicare levy surcharge separately from income tax. Extras-only private health policies generally do not prevent Medicare levy surcharge exposure.</p>
+        </div>
+        <div class="input-grid mt-4">${fields.map(field).join("")}</div>
+      </article>
+    `;
+  }
+
   function renderIncomeCollection(containerId) {
     const container = document.getElementById(containerId);
     if (!container) return;
@@ -2754,7 +3230,7 @@
       addLabel: "Add income",
       collection: "incomeItems",
       body: plan.incomeItems.map(incomeCard).join(""),
-    });
+    }) + taxSettingsCardHtml();
   }
 
   function renderAssetCollection(containerId) {
@@ -2774,7 +3250,7 @@
     if (!container) return;
     container.innerHTML = collectionShell({
       title: "Liabilities / Loans",
-      description: "Add each loan or liability. HECS/HELP only needs the current balance; repayment is estimated from income.",
+      description: "Add each loan or liability. Study and Training Support Loan balances are assigned to a person; compulsory repayments are estimated from income.",
       addLabel: "Add liability",
       collection: "liabilityItems",
       body: plan.liabilityItems.map(liabilityCard).join(""),
@@ -2823,6 +3299,7 @@
         collection: "expenseItems",
         body: plan.expenseItems.map(expenseCard).join(""),
       })}
+      ${taxSettingsCardHtml()}
     `;
   }
 
@@ -2833,6 +3310,7 @@
       { label: "Person 2 name", path: "personal.person2Name", kind: "text" },
       { label: "Person 1 age", path: "personal.person1Age" },
       { label: "Person 2 age", path: "personal.person2Age" },
+      { label: "Dependent children", path: "personal.dependants", step: "1" },
     ];
     const goalFields = [
       { label: "Building Wealth target age", path: "personal.workOptionalAge", infoKey: "buildingWealthTargetAge" },
@@ -3174,7 +3652,7 @@
 
     document.getElementById("dashboardHeroMetrics").innerHTML = [
       metricCard("Net Worth", money(result.currentNetWorth), "", "What you own minus what you owe."),
-      metricCard("Final Projected Surplus", money(annualSurplus), annualSurplus >= 0 ? "status-green" : "status-amber", "Estimated money left after tax, Medicare, HELP, living costs, loan repayments, investing and extra super."),
+      metricCard("Final Projected Surplus", money(annualSurplus), annualSurplus >= 0 ? "status-green" : "status-amber", "Estimated money left after tax, Medicare, STSL compulsory repayments, living costs, loan repayments, investing and extra super."),
       metricCard("Investments", money(result.investmentBalance), "", "Projected investment balance includes contributions and earnings over time."),
       metricCard("Super", money(result.superannuationBalance), "status-green", "Tracked separately from other investments."),
       metricCard("Target Lifestyle Funded", plainPercent(percent), percent >= 75 ? "status-green" : "", "Based on projected investment and passive income compared with your target annual lifestyle cost."),
@@ -3265,8 +3743,10 @@
   function missionTaskHtml(task) {
     return `
       <li class="${task.completed ? "complete" : ""}">
-        <span aria-hidden="true">${task.completed ? "OK" : ""}</span>
-        <strong>${escapeHtml(task.title)}</strong>
+        <button class="engagement-task-button" type="button" data-engagement-action="weeklyplan">
+          <span aria-hidden="true">${task.completed ? "OK" : ""}</span>
+          <strong>${escapeHtml(task.title)}</strong>
+        </button>
       </li>
     `;
   }
@@ -3286,149 +3766,206 @@
 
     const progress = engagementProgress(result);
     const stageInfo = engagementStageInfo(result);
+    const completion = isFinancialPlanComplete(plan, result);
     const goal = primaryShortTermGoal(result);
     const mission = currentWeeklyMission(result);
     const todayWin = engagementTodayWin(result, goal, mission);
-    const openingMessage = engagementOpeningMessage(result, stageInfo, goal, mission);
     const weeklyAmount = thisWeekProgressAmount();
     const achievement = latestAchievement(result);
     const future = futureYouPreview(result);
-    const recentEvents = latestProgressEvents(4);
+    const recentEvents = latestProgressEvents(3);
     const goalPercent = goalProgressPercent(goal);
     const goalRequiredWeekly = goal && goal.targetDate
       ? Math.max(0, goalRemaining(goal) / Math.max(1, Math.ceil((new Date(`${goal.targetDate}T00:00:00`).getTime() - Date.now()) / (7 * 24 * 60 * 60 * 1000))))
       : Number(goal?.recurringAmount) || 0;
     const displayName = engagementGreetingName();
+    const hasPlanData = isEngagementPlanReady(result);
+    const completedTask = mission.tasks.find((task) => task.completed);
+    const unfinishedTasks = mission.tasks.filter((task) => !task.completed);
+    const missionPreviewTasks = [completedTask, ...unfinishedTasks].filter(Boolean).slice(0, 3);
+    const visibleMissionTasks = engagementMissionExpanded ? mission.tasks : missionPreviewTasks;
+    const moreMissionCount = Math.max(0, mission.tasks.length - missionPreviewTasks.length);
+    const previousStage = stageInfo.index > 0 ? engagementJourneyStages[stageInfo.index - 1] : null;
+    const nextStage = engagementJourneyStages[stageInfo.index + 1] || null;
+    const nextStageProgress = nextStage ? Math.max(0, Math.min(100, progress.financialIndependence)) : 100;
+    const goalProjected = goal?.targetDate
+      ? goalTimeRemaining(goal)
+      : goal && goalRequiredWeekly > 0
+        ? `Projected completion: about ${Math.ceil(goalRemaining(goal) / Math.max(1, goalRequiredWeekly))} week${Math.ceil(goalRemaining(goal) / Math.max(1, goalRequiredWeekly)) === 1 ? "" : "s"}`
+        : "Projected completion: add a contribution plan";
+
+    if (!hasPlanData) {
+      container.innerHTML = `
+        <section class="engagement-hero engagement-empty-hero">
+          <div class="engagement-hero-copy">
+            <span class="metric-label">Financial journey</span>
+            <h2>Build your financial journey</h2>
+            <p>Complete your plan or load the sample to see your progress, Weekly Mission, Future You and personalised AI coaching.</p>
+            <div class="engagement-button-row">
+              <button class="btn btn-primary" type="button" data-engagement-action="setup">Continue My Plan</button>
+              <button class="btn" type="button" data-engagement-action="sample">Load Sample Plan</button>
+            </div>
+          </div>
+          <div class="engagement-empty-preview" aria-label="What unlocks after setup">
+            <span>Progress tracking</span>
+            <span>Weekly Mission</span>
+            <span>Short-term goals</span>
+            <span>Future You preview</span>
+          </div>
+        </section>
+      `;
+      renderEngagementCelebration();
+      return;
+    }
+
+    if (!completion.complete) {
+      container.innerHTML = `
+        <section class="engagement-hero engagement-empty-hero">
+          <div class="engagement-hero-copy">
+            <span class="metric-label">Financial journey</span>
+            <h2>${escapeHtml(engagementGreeting())}, ${escapeHtml(displayName)}</h2>
+            <p>Complete your financial plan to calculate your journey.</p>
+            <small>${escapeHtml(completion.missingSections.slice(0, 4).join(", "))}${completion.missingSections.length > 4 ? " and more" : ""}</small>
+            <div class="engagement-button-row">
+              <button class="btn btn-primary" type="button" data-engagement-action="setup">Continue Setup</button>
+            </div>
+          </div>
+          <div class="engagement-empty-preview" aria-label="Setup progress preview">
+            <span>Financial Freedom progress</span>
+            <span>Journey stage</span>
+            <span>Weekly Mission</span>
+            <span>AI coaching</span>
+          </div>
+        </section>
+      `;
+      renderEngagementCelebration();
+      return;
+    }
 
     container.innerHTML = `
-      <section class="engagement-welcome-card">
-        <div>
-          <span class="metric-label">Financial journey</span>
-          <h2>${escapeHtml(engagementGreeting())}, ${escapeHtml(displayName)}</h2>
-          <p>${escapeHtml(openingMessage)}</p>
+      <section class="engagement-hero">
+        <div class="engagement-hero-copy">
+          <span class="metric-label">${escapeHtml(engagementGreeting())}, ${escapeHtml(displayName)}</span>
+          <h2>Your Financial Freedom Journey</h2>
+          <div class="engagement-hero-progress" aria-label="Financial Freedom progress ${plainPercent(progress.financialFreedom)}">
+            <strong>${plainPercent(progress.financialFreedom)}</strong>
+            <div class="engagement-progress-track"><span style="width:${progress.financialFreedom}%"></span></div>
+          </div>
+          <div class="engagement-hero-facts">
+            <div><span>Current stage</span><strong>${escapeHtml(stageInfo.stage.name)}</strong></div>
+            <div><span>Estimated Financial Independence</span><strong>${escapeHtml(estimatedFinancialIndependenceLabel(result))}</strong></div>
+            <div><span>This week</span><strong>${weeklyAmount > 0 ? `${money(weeklyAmount)} recorded toward goals` : "No progress recorded this week yet."}</strong></div>
+          </div>
         </div>
-        <div class="engagement-welcome-stats" aria-label="Financial journey snapshot">
-          ${engagementMetricCard("Financial Independence", `${plainPercent(progress.financialIndependence)} funded`, "Based on FI assets and withdrawal rate.")}
-          ${engagementMetricCard("Financial Freedom", `${plainPercent(progress.financialFreedom)} funded`, "Compared with target FI capital.")}
-          ${engagementMetricCard("This week added", money(weeklyAmount), "Recorded progress events only.")}
-        </div>
-      </section>
-
-      <section class="engagement-primary-progress">
-        ${engagementProgressCard(
-          "Financial Independence",
-          progress.financialIndependence,
-          progress.financialIndependenceRaw,
-          `${money(progress.sustainableIncome)} estimated annual sustainable income toward ${money(progress.targetSpending)} target spending.`,
-          "Uses current FI assets multiplied by the selected withdrawal rate."
-        )}
-        ${engagementProgressCard(
-          "Financial Freedom",
-          progress.financialFreedom,
-          progress.financialFreedomRaw,
-          `${money(result.financialIndependenceAssets)} current FI assets toward ${money(result.targetCapital || 0)} target FI capital.`,
-          "Uses the app's existing FI assets and target capital calculation."
-        )}
-      </section>
-
-      <section class="engagement-card-grid">
-        <article class="engagement-card engagement-today-card">
-          <span class="metric-label">Today's Win</span>
+        <aside class="engagement-hero-action">
+          <span class="metric-label">Today's Opportunity</span>
           <h3>${escapeHtml(todayWin.title)}</h3>
           <p>${escapeHtml(todayWin.text)}</p>
-          <button class="btn btn-primary" type="button" data-engagement-action="${escapeHtml(todayWin.action)}"${todayWin.goalId ? ` data-goal-id="${escapeHtml(todayWin.goalId)}"` : ""}>${escapeHtml(todayWin.actionLabel)}</button>
-        </article>
+          <button class="btn btn-primary" type="button" data-engagement-action="${escapeHtml(todayWin.action)}"${todayWin.goalId ? ` data-goal-id="${escapeHtml(todayWin.goalId)}"` : ""}>${escapeHtml(todayWin.actionLabel === "View Dashboard" ? "Review Progress" : todayWin.actionLabel)}</button>
+        </aside>
+      </section>
 
-        <article class="engagement-card">
-          <span class="metric-label">Weekly Mission</span>
-          <h3>${mission.completedCount} of ${mission.totalTasks} complete</h3>
+      <section class="engagement-two-column">
+        <article class="engagement-card engagement-mission-card">
+          <span class="metric-label">This Week's Mission</span>
+          <div class="engagement-section-heading-row">
+            <h3>${plainPercent(mission.percent)} complete</h3>
+            <strong>${mission.completedCount} of ${mission.totalTasks} actions</strong>
+          </div>
           <div class="engagement-progress-track" aria-label="Weekly mission ${mission.percent}% complete"><span style="width:${mission.percent}%"></span></div>
-          <ul class="engagement-task-list">${mission.tasks.map(missionTaskHtml).join("")}</ul>
-          <p>${mission.streak ? `${mission.streak}-week consistency streak.` : "Complete your first weekly review to start a streak."}</p>
-          <button class="btn mt-3" type="button" data-engagement-action="weeklyplan">Open Weekly Plan</button>
+          <ul class="engagement-task-list compact">
+            ${visibleMissionTasks.map((task) => missionTaskHtml(task)).join("")}
+          </ul>
+          ${moreMissionCount ? `<button class="engagement-more-button" type="button" data-engagement-action="toggle-mission" aria-expanded="${engagementMissionExpanded ? "true" : "false"}">${engagementMissionExpanded ? "Show fewer" : `+${moreMissionCount} more action${moreMissionCount === 1 ? "" : "s"}`}</button>` : ""}
+          <button class="btn mt-3" type="button" data-engagement-action="weeklyplan">Continue Weekly Plan</button>
         </article>
 
-        <article class="engagement-card">
-          <span class="metric-label">Primary Short-Term Goal</span>
+        <article class="engagement-card engagement-goal-card">
+          <span class="metric-label">Primary Goal</span>
           ${goal ? `
-            <h3>${escapeHtml(goal.name)}</h3>
-            <p>${money(goal.currentAmount)} saved of ${money(goal.targetAmount)}. ${money(goalRemaining(goal))} remaining.</p>
+            <div class="engagement-section-heading-row">
+              <h3>${escapeHtml(goal.name)}</h3>
+              <strong>${plainPercent(goalPercent)}</strong>
+            </div>
             <div class="engagement-progress-track" aria-label="${escapeHtml(goal.name)} ${plainPercent(goalPercent)} complete"><span style="width:${goalPercent}%"></span></div>
-            <small>${escapeHtml(goalTimeRemaining(goal))}${goalRequiredWeekly ? ` - about ${money(goalRequiredWeekly)} per week required.` : ""}</small>
-            <button class="btn mt-3" type="button" data-engagement-action="add-goal-progress" data-goal-id="${escapeHtml(goal.id)}">Add Progress</button>
+            <p>${money(goal.currentAmount)} of ${money(goal.targetAmount)}</p>
+            <small>${escapeHtml(goalProjected)}</small>
+            <small>Next planned contribution: ${goalRequiredWeekly ? money(goalRequiredWeekly) : "Not set"}</small>
+            <div class="engagement-button-row">
+              <button class="btn btn-primary" type="button" data-engagement-action="add-goal-progress" data-goal-id="${escapeHtml(goal.id)}">Add Progress</button>
+              <button class="btn" type="button" data-engagement-action="goals">View Goal</button>
+            </div>
           ` : `
-            <h3>Create your first goal</h3>
-            <p>Add a savings, investing, debt-reduction or emergency-fund goal to make progress visible.</p>
-            <button class="btn mt-3" type="button" data-engagement-action="goals">Open Goals</button>
+            <h3>Choose something meaningful to work toward</h3>
+            <p>Build an emergency fund, plan a holiday, reduce debt or create your own goal.</p>
+            <button class="btn btn-primary" type="button" data-engagement-action="goals">Create Goal</button>
           `}
         </article>
+      </section>
 
-        <article class="engagement-card engagement-stage-card">
-          <span class="metric-label">Current Journey Stage</span>
-          <h3>${escapeHtml(stageInfo.stage.name)}</h3>
-          <p>${escapeHtml(stageInfo.stage.purpose)}</p>
-          <div class="engagement-stage-actions">
-            <strong>What moves you forward</strong>
-            <ul>${stageInfo.actions.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+      <section class="engagement-two-column">
+        <article class="engagement-card engagement-journey-snapshot">
+          <span class="metric-label">Your Journey</span>
+          <div class="engagement-compact-stage-row">
+            ${previousStage ? `<div><span>Previous</span><strong>${escapeHtml(previousStage.name)}</strong></div>` : ""}
+            <div class="current"><span>Current stage</span><strong>${escapeHtml(stageInfo.stage.name)}</strong></div>
+            ${nextStage ? `<div><span>Next</span><strong>${escapeHtml(nextStage.name)}</strong></div>` : `<div><span>Status</span><strong>Financial Freedom</strong></div>`}
           </div>
+          <div class="engagement-progress-track" aria-label="${nextStage ? `Progress toward ${nextStage.name} ${plainPercent(nextStageProgress)}` : "Financial Freedom stage reached"}"><span style="width:${nextStage ? Math.max(12, nextStageProgress) : 100}%"></span></div>
+          <p>${escapeHtml(stageInfo.actions[0] || stageInfo.stage.priority)}</p>
+          <button class="btn" type="button" data-engagement-action="goals">View Full Journey</button>
         </article>
-      </section>
 
-      <section class="engagement-journey-section">
-        <div>
-          <span class="metric-label">Journey map</span>
-          <h3>Your financial stages</h3>
-        </div>
-        ${engagementJourneyMapHtml(stageInfo)}
-      </section>
-
-      <section class="engagement-card-grid engagement-secondary-grid">
         ${aiOpeningInsightHtml()}
+      </section>
 
-        <article class="engagement-card">
+      <section class="engagement-card engagement-future-compact">
+        <div class="engagement-section-heading-row">
+          <div>
+            <span class="metric-label">Future You</span>
+            <h3>Projected at age ${escapeHtml(future.age)}</h3>
+          </div>
+          <div class="engagement-button-row">
+            <button class="btn" type="button" data-engagement-action="change-future-age">Change age</button>
+            <button class="btn" type="button" data-engagement-action="decision">Explore Future You</button>
+          </div>
+        </div>
+        <div class="engagement-future-metrics">
+          <div><span>Mortgage</span><strong>${future.mortgageBalance > 0 ? money(future.mortgageBalance) : "Paid off"}</strong></div>
+          <div><span>Investments</span><strong>${money(future.investmentBalance)}</strong></div>
+          <div><span>Super</span><strong>${money(future.superBalance)}</strong></div>
+          <div><span>Passive Income</span><strong>${money(future.passiveIncome)} per year</strong></div>
+          <div><span>Lifestyle Funded</span><strong>${plainPercent(Math.min(100, future.progress))}</strong></div>
+          <div><span>Net Worth</span><strong>${money(future.netWorth)}</strong></div>
+        </div>
+        <small>All figures in this preview use the same projection period: age ${escapeHtml(future.age)} (${future.year} year${future.year === 1 ? "" : "s"} from the current age used by the model).</small>
+      </section>
+
+      <section class="engagement-card engagement-progress-achievement">
+        <div>
           <span class="metric-label">Recent Progress</span>
-          <h3>${recentEvents.length ? "Latest recorded actions" : "No progress recorded yet"}</h3>
+          <h3>${recentEvents.length ? "Latest activity" : "No progress recorded yet"}</h3>
           ${recentEvents.length ? `
             <ul class="engagement-event-list">
               ${recentEvents.map((event) => `<li><strong>${escapeHtml(event.title)}</strong><span>${event.amount ? money(event.amount) : ""}</span></li>`).join("")}
             </ul>
-          ` : `<p>Record goal contributions or complete weekly reviews to build your progress history.</p>`}
-        </article>
-
-        <article class="engagement-card">
-          <span class="metric-label">Latest Achievement</span>
+          ` : `<p>Complete your first weekly review or record a goal contribution to begin your history.</p>`}
+        </div>
+        <div>
+          <span class="metric-label">First milestone</span>
           ${achievement ? `
             <h3>${escapeHtml(achievement.title)}</h3>
             <p>${escapeHtml(achievement.description)}</p>
             <small>Unlocked ${escapeHtml(formatLastSaved(achievement.unlockedAt))}</small>
           ` : `
-            <h3>First milestone waiting</h3>
-            <p>Complete a weekly review, start emergency savings or add an investment contribution to unlock the first milestone.</p>
+            <h3>Complete one Weekly Mission</h3>
+            <p>Your first milestone will appear after a confirmed weekly review or recorded contribution.</p>
           `}
-        </article>
-
-        <article class="engagement-card">
-          <span class="metric-label">Future You Preview</span>
-          <h3>Your future at age ${escapeHtml(future.age)}</h3>
-          <div class="engagement-mini-table">
-            <div><span>Investments</span><strong>${money(future.investmentBalance)}</strong></div>
-            <div><span>Super</span><strong>${money(future.superBalance)}</strong></div>
-            <div><span>Estimated passive income</span><strong>${money(future.passiveIncome)}</strong></div>
-            <div><span>Target lifestyle funded</span><strong>${plainPercent(Math.min(100, future.progress))}</strong></div>
-          </div>
-          <small>Projected based on the current assumptions. Outcomes may vary.</small>
-        </article>
-      </section>
-
-      <section class="engagement-quick-links">
-        <button class="btn" type="button" data-engagement-action="setup">Financial Plan</button>
-        <button class="btn" type="button" data-engagement-action="weeklyplan">Weekly Plan</button>
-        <button class="btn" type="button" data-engagement-action="goals">Goals</button>
-        <button class="btn" type="button" data-engagement-action="decision">Decision Engine</button>
-        <button class="btn" type="button" data-engagement-action="reports">Reports</button>
-        <button class="btn btn-primary" type="button" data-engagement-action="ai">AI Coach</button>
+          <button class="btn mt-3" type="button" data-engagement-action="weeklyplan">View Progress</button>
+        </div>
       </section>
     `;
+    renderEngagementCelebration();
   }
 
   function renderAssumptions(result) {
@@ -3441,7 +3978,8 @@
       ["Inflation", `${Number(plan.investing.inflationPct || 0).toFixed(1)}% per year estimate`],
       ["Wage growth", `${Number(plan.investing.wageGrowthPct || 0).toFixed(1)}% per year estimate`],
       ["Medicare levy", `${Math.round((result.taxEstimate.medicareLevyRate || 0) * 100)}% estimate`],
-      ["HELP repayment assumptions", `Estimated above $69,528 repayment income and capped by current balance`],
+      ["Medicare levy surcharge", result.taxEstimate.medicareLevySurchargeEstimate?.cannotConfirm ? "Cover status incomplete" : `${percentFromRatio(result.taxEstimate.medicareLevySurchargeEstimate?.rate || 0)} estimate`],
+      ["STSL compulsory repayment assumptions", `Estimated above $69,528 repayment income and capped by current balance when entered`],
       ["Concessional contributions tax", "15% applied before money is invested in super"],
       ["Safe withdrawal rate", `${Number(plan.investing.safeWithdrawalRatePct || 0).toFixed(1)}% estimate`],
       ["Super access age", `Age ${result.superAccessAge} in this model`],
@@ -3450,13 +3988,13 @@
   }
 
   function renderHelpReview(result) {
-    const help = result.helpRepaymentEstimate;
+    const help = result.stslRepaymentEstimate || result.helpRepaymentEstimate;
     const tiles = [
-      summaryTile("Outstanding HELP Balance", money(help.balance)),
+      summaryTile("Outstanding STSL Balance", money(help.balance)),
       summaryTile("Estimated Repayment Income", money(help.repaymentIncome)),
-      summaryTile("Estimated Annual HELP Repayment", money(help.annualRepayment)),
+      summaryTile("Estimated Annual STSL Compulsory Repayment", money(help.annualRepayment)),
       summaryTile("Estimated Years Until Loan Repaid", help.estimatedYearsToRepay ? `${help.estimatedYearsToRepay.toFixed(1)} years` : "No compulsory repayment estimated"),
-    ].join("") + `<p class="tax-note mt-4">HELP estimate uses repayment income and is capped at the current balance.</p>`;
+    ].join("") + `<p class="tax-note mt-4">STSL estimate uses repayment income and is capped at the current balance when a balance has been entered.</p>`;
     ["wizardHelpReview", "reportHelpSummary"].forEach((id) => {
       const container = document.getElementById(id);
       if (container) container.innerHTML = tiles;
@@ -3468,8 +4006,9 @@
       ["Gross income", result.annualGrossIncome],
       [`Less: Estimated income tax (${result.taxEstimate.taxYear})`, -result.taxEstimate.incomeTax],
       ["Less: Medicare levy", -result.taxEstimate.medicareLevy],
-      ["Less: Estimated HECS/HELP repayment", -result.helpRepaymentEstimate.annualRepayment],
-      ["Net income after tax and HELP", result.netIncomeAfterTaxHelp],
+      ["Less: Medicare levy surcharge", -result.taxEstimate.medicareLevySurcharge],
+      ["Less: Estimated STSL compulsory repayment", -result.helpRepaymentEstimate.annualRepayment],
+      ["Net income after tax and STSL", result.netIncomeAfterTaxHelp],
       ["Less: Living expenses", -result.annualCoreLivingExpenses],
       ["Less: Loan repayments", -result.annualDebtRepayments],
       ["Less: Other regular expenses", -result.annualOtherRegularExpenses],
@@ -3510,9 +4049,9 @@
       summaryTile("Total principal repaid", money(loan.totalPrincipalRepaid)),
       ...[5, 10, 20, 30].map((year) => summaryTile(`Balance at ${year} years`, money(loan.balanceAtYears[year]))),
     ].join("");
-    const help = result.helpRepaymentEstimate;
+    const help = result.stslRepaymentEstimate || result.helpRepaymentEstimate;
     document.getElementById("helpEstimateSummary").innerHTML = `
-      <strong>HELP estimate:</strong> ${money(help.annualRepayment)} per year from estimated repayment income of ${money(help.repaymentIncome)}.
+      <strong>STSL estimate:</strong> ${money(help.annualRepayment)} per year from estimated repayment income of ${money(help.repaymentIncome)}.
       ${help.estimatedYearsToRepay ? `Estimated time to repay: ${help.estimatedYearsToRepay.toFixed(1)} years.` : "No compulsory repayment estimated."}
       ${escapeHtml(help.note)}
     `;
@@ -3587,6 +4126,37 @@
       summaryTile("Current FI Assets", money(result.financialIndependenceAssets), "", "currentFiAssets"),
       summaryTile("Annual Lifestyle Spending Needed for Financial Freedom", money(plan.personal.targetAnnualSpending), "", "annualLifestyleSpending"),
     ].join("");
+    renderEngagementFullJourney(result);
+  }
+
+  function renderEngagementFullJourney(result) {
+    const container = document.getElementById("engagementFullJourney");
+    if (!container) return;
+    const enabled = engagementJourneyIsEnabled();
+    container.classList.toggle("hidden", !enabled);
+    if (!enabled) {
+      container.innerHTML = "";
+      return;
+    }
+    const stageInfo = engagementStageInfo(result);
+    const nextStage = stageInfo.nextStage;
+    container.innerHTML = `
+      <div class="card-subheading">
+        <h3>Full Financial Journey</h3>
+        <p>Review the wider journey here while Home stays focused on your current stage and next step.</p>
+      </div>
+      <details class="engagement-full-journey-details">
+        <summary>
+          <span>${escapeHtml(stageInfo.stage.name)} is your current stage</span>
+          <strong>${nextStage ? `Next: ${escapeHtml(nextStage.name)}` : "Financial Freedom reached"}</strong>
+        </summary>
+        ${engagementJourneyMapHtml(stageInfo)}
+        <div class="engagement-stage-actions">
+          <strong>What moves you forward</strong>
+          <ul>${stageInfo.actions.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+        </div>
+      </details>
+    `;
   }
 
   function renderDecision(result) {
@@ -4325,7 +4895,7 @@
           <label>
             <span class="field-label">Description</span>
             <input class="field-input" type="text" data-weekly-timing-draft="${escapeHtml(item.id)}" data-key="description" data-type="text" value="${escapeHtml(draft.description || "")}">
-            ${item.isNetPay ? `<small class="field-help">Estimated net pay is based on income, tax, Medicare levy, HELP and salary-sacrifice information entered in the Financial Plan.</small>` : ""}
+            ${item.isNetPay ? `<small class="field-help">Estimated net pay is based on income, tax, Medicare levy, STSL compulsory repayments and salary-sacrifice information entered in the Financial Plan.</small>` : ""}
           </label>
           <label>
             <span class="field-label">Amount</span>
@@ -4572,7 +5142,7 @@
         <p class="weekly-review-status mt-4"><strong>${escapeHtml(weeklyTimingStatusText(validation))}</strong> · ${escapeHtml(weeklyTimingSummaryText(validation))}</p>
         ${validation.blocking.length ? `<p class="weekly-warning mt-3">Please correct the highlighted timing items before continuing. ${escapeHtml(validation.blocking.join(" "))}</p>` : ""}
         ${!validation.blocking.length && validation.warnings.length ? `<p class="weekly-warning mt-3">Some timing details are estimated. ${escapeHtml(validation.warnings.join(" "))}</p>` : ""}
-        <p class="weekly-device-note mt-4">Estimated net pay is based on the income, tax, Medicare levy, HELP and salary-sacrifice information entered in the Financial Plan. Actual payroll amounts may differ.</p>
+        <p class="weekly-device-note mt-4">Estimated net pay is based on the income, tax, Medicare levy, STSL compulsory repayments and salary-sacrifice information entered in the Financial Plan. Actual payroll amounts may differ.</p>
         <p class="weekly-device-note mt-3">Changes made here update your weekly schedule only. They do not automatically change your long-term Financial Freedom plan.</p>
         <div class="mt-4">${weeklyTimingRowsHtml()}</div>
         ${weeklyOneOffFormHtml()}
@@ -4706,6 +5276,7 @@
     syncCollectionsToLegacy();
     const result = CALC.calculatePlan(plan);
     weeklyPlan = window.FFSWeeklyPlan.createFromPlan(plan, result, readWeeklySetupOptions(), null);
+    weeklyPlan.planId = isDemoActive() ? DEMO_PLAN_ID : normalisePlanId(activePlanId);
     activeWeeklyPlanTab = "thisWeek";
     weeklyEditingWeek = null;
     weeklyViewedWeekNumber = null;
@@ -5141,7 +5712,7 @@
     const helper = canAdjust
       ? "Update this amount if your actual bank balance differs from the balance carried into this week."
       : week.weekNumber > weeklyPlanCurrentCalendarWeekNumber()
-        ? "Future weeks inherit the prior week's actual closing balance once available, otherwise the projected closing balance."
+        ? "Future weeks inherit the prior week's actual closing balance once available. You can enter early actuals if you already know them."
         : "Reopen this completed week to adjust the opening balance.";
     return `
       <article class="card weekly-opening-balance-card weekly-step-section mt-4" id="weekly-step-opening" data-weekly-step-section="opening">
@@ -5162,7 +5733,7 @@
             <div class="weekly-opening-adjustment mt-3">
               <label>
                 <span class="field-label">Actual opening bank balance</span>
-                <input class="field-input" type="number" step="0.01" data-weekly-opening-balance="${week.weekNumber}" value="${weeklyInputValue(actualOpening)}">
+                <input class="field-input weekly-actual-input" type="number" inputmode="decimal" step="0.01" data-weekly-opening-balance="${week.weekNumber}" value="${weeklyInputValue(actualOpening)}">
                 <small class="field-help">This is a reconciliation adjustment only. It does not change last week or your long-term Financial Freedom plan.</small>
               </label>
               <button class="btn btn-primary" type="button" data-weekly-action="save-opening-balance" data-weekly-week="${week.weekNumber}">Save opening balance</button>
@@ -5227,14 +5798,14 @@
     const actual = week.actual || {};
     const hasValue = weeklyHasActualAmount(actual, key);
     const value = hasValue ? actual[key] : "";
-    const disabled = options.disabled ? " disabled" : "";
     const placeholder = options.type === "text" || defaultValue === "" || defaultValue === undefined
       ? ""
       : ` placeholder="${weeklyInputValue(defaultValue || 0)}"`;
+    const inputMode = options.type === "text" ? "" : ' inputmode="decimal"';
     return `
       <label>
         <span class="field-label">${escapeHtml(label)}</span>
-        <input class="field-input" type="${options.type || "number"}" step="${options.step || "1"}" data-weekly-actual="${escapeHtml(key)}" data-weekly-week="${week.weekNumber}" value="${options.type === "text" ? escapeHtml(value || "") : hasValue ? weeklyInputValue(value) : ""}"${placeholder}${disabled}>
+        <input class="field-input weekly-actual-input" type="${options.type || "number"}"${inputMode} step="${options.step || "1"}" data-weekly-actual="${escapeHtml(key)}" data-weekly-week="${week.weekNumber}" value="${options.type === "text" ? escapeHtml(value || "") : hasValue ? weeklyInputValue(value) : ""}"${placeholder}>
       </label>
     `;
   }
@@ -5263,9 +5834,9 @@
           <summary>Scheduled income details</summary>
           ${weeklyStepDetailRows("Income", week.detail?.incomeItems || [])}
         </details>
-        <div class="weekly-actual-grid mt-4 ${canEdit ? "" : "weekly-readonly"}">
-          ${weeklyActualField(week, "income", "Money in", planned.income, { disabled: !canEdit })}
-          ${weeklyActualField(week, "transfersIn", "Other money in / transfers in", 0, { disabled: !canEdit })}
+        <div class="weekly-actual-grid mt-4">
+          ${weeklyActualField(week, "income", "Money in", planned.income)}
+          ${weeklyActualField(week, "transfersIn", "Other money in / transfers in", 0)}
         </div>
       </article>
     `;
@@ -5293,10 +5864,10 @@
           ${weeklyStepDetailRows("Bills", week.detail?.billItems || [])}
           ${weeklyStepDetailRows("Provisions", week.detail?.provisionItems || week.detail?.setAsideItems || [])}
         </details>
-        <div class="weekly-actual-grid mt-4 ${canEdit ? "" : "weekly-readonly"}">
-          ${weeklyActualField(week, "essentialCosts", "Bills and spending", planned.essentialCosts, { disabled: !canEdit })}
-          ${weeklyActualField(week, "amountSetAside", "Amounts set aside", planned.provisions || planned.amountSetAside || 0, { disabled: !canEdit })}
-          ${weeklyActualField(week, "discretionarySpending", "Lifestyle spending", planned.discretionaryAllowance, { disabled: !canEdit })}
+        <div class="weekly-actual-grid mt-4">
+          ${weeklyActualField(week, "essentialCosts", "Bills and spending", planned.essentialCosts)}
+          ${weeklyActualField(week, "amountSetAside", "Amounts set aside", planned.provisions || planned.amountSetAside || 0)}
+          ${weeklyActualField(week, "discretionarySpending", "Lifestyle spending", planned.discretionaryAllowance)}
         </div>
       </article>
     `;
@@ -5325,12 +5896,12 @@
           <summary>Transfer details</summary>
           ${weeklyStepDetailRows("Transfers", week.detail?.transferItems || [])}
         </details>
-        <div class="weekly-actual-grid mt-4 ${canEdit ? "" : "weekly-readonly"}">
-          ${weeklyActualField(week, "offsetTransfer", "Offset transfer", planned.offsetTransfer || 0, { disabled: !canEdit })}
-          ${weeklyActualField(week, "investment", "Investing", planned.investment, { disabled: !canEdit })}
-          ${weeklyActualField(week, "extraDebtRepayment", "Extra debt repayment", planned.extraDebtRepayment, { disabled: !canEdit })}
-          ${weeklyActualField(week, "extraSuper", "Additional super", planned.extraSuper, { disabled: !canEdit })}
-          ${weeklyActualField(week, "otherTransfers", "Other transfers", planned.otherTransfers || 0, { disabled: !canEdit })}
+        <div class="weekly-actual-grid mt-4">
+          ${weeklyActualField(week, "offsetTransfer", "Offset transfer", planned.offsetTransfer || 0)}
+          ${weeklyActualField(week, "investment", "Investing", planned.investment)}
+          ${weeklyActualField(week, "extraDebtRepayment", "Extra debt repayment", planned.extraDebtRepayment)}
+          ${weeklyActualField(week, "extraSuper", "Additional super", planned.extraSuper)}
+          ${weeklyActualField(week, "otherTransfers", "Other transfers", planned.otherTransfers || 0)}
         </div>
       </article>
     `;
@@ -5347,9 +5918,9 @@
           </div>
         </div>
         ${weeklyLiveBalanceSummaryHtml(week, "complete")}
-        <div class="weekly-actual-grid mt-4 ${canEdit ? "" : "weekly-readonly"}">
-          ${weeklyActualField(week, "enteredBankBalance", "Bank balance entered by user", "", { disabled: !canEdit })}
-          ${weeklyActualField(week, "notes", "Notes", week.actual?.notes || "", { type: "text", disabled: !canEdit })}
+        <div class="weekly-actual-grid mt-4">
+          ${weeklyActualField(week, "enteredBankBalance", "Bank balance entered by user", "")}
+          ${weeklyActualField(week, "notes", "Notes", week.actual?.notes || "", { type: "text" })}
         </div>
         <div class="weekly-calculated-closing mt-4">
           <span data-weekly-actual-closing-label="${week.weekNumber}">${escapeHtml(weeklyActualClosingData(week).label)}</span>
@@ -5359,19 +5930,19 @@
         ${weeklyForecastActualGrid(week)}
         ${weeklyVarianceSummaryHtml(week)}
         <div class="weekly-check-grid mt-4">
-          ${weeklyCheckbox(week, "incomeReceived", "Income received", { disabled: !canEdit })}
-          ${weeklyCheckbox(week, "billsPaid", "Bills paid", { disabled: !canEdit })}
-          ${weeklyCheckbox(week, "investmentCompleted", "Investing completed", { disabled: !canEdit })}
-          ${weeklyCheckbox(week, "superCompleted", "Super completed", { disabled: !canEdit })}
-          ${weeklyCheckbox(week, "debtCompleted", "Debt repayment completed", { disabled: !canEdit })}
+          ${weeklyCheckbox(week, "incomeReceived", "Income received")}
+          ${weeklyCheckbox(week, "billsPaid", "Bills paid")}
+          ${weeklyCheckbox(week, "investmentCompleted", "Investing completed")}
+          ${weeklyCheckbox(week, "superCompleted", "Super completed")}
+          ${weeklyCheckbox(week, "debtCompleted", "Debt repayment completed")}
         </div>
         <div class="weekly-action-row mt-4">
-          ${canEdit && !isEditableCompleted ? `<button class="btn btn-primary" type="button" data-weekly-action="complete-week" data-weekly-week="${week.weekNumber}">Complete Week</button>` : ""}
-          ${canEdit ? `<button class="btn" type="button" data-weekly-action="save-week" data-weekly-week="${week.weekNumber}">${isEditableCompleted ? "Save completed week" : "Save Progress"}</button>` : ""}
+          ${canEdit && !week.isCompleted && !isFutureWeek ? `<button class="btn btn-primary" type="button" data-weekly-action="complete-week" data-weekly-week="${week.weekNumber}">Complete Week</button>` : ""}
+          <button class="btn" type="button" data-weekly-action="save-week" data-weekly-week="${week.weekNumber}">${week.isCompleted || isEditableCompleted ? "Save completed week" : "Save Progress"}</button>
           ${isEditableCompleted ? `<button class="btn" type="button" data-weekly-action="cancel-week-edit" data-weekly-week="${week.weekNumber}">Cancel</button>` : ""}
-          ${completedReadOnly ? `<button class="btn" type="button" data-weekly-action="mark-week-incomplete" data-weekly-week="${week.weekNumber}">Mark as incomplete</button>` : ""}
+          ${week.isCompleted ? `<button class="btn" type="button" data-weekly-action="mark-week-incomplete" data-weekly-week="${week.weekNumber}">Mark as incomplete</button>` : ""}
           ${week.isCompleted && week.weekNumber < weeklyPlan.weeks.length ? `<button class="btn" type="button" data-weekly-action="view-week" data-weekly-week="${week.weekNumber + 1}">View next week</button>` : ""}
-          ${isFutureWeek ? `<p class="weekly-warning">This week has not started yet.</p>` : ""}
+          ${isFutureWeek ? `<p class="weekly-warning">This week has not started yet. Actual fields are available for early entry, but Complete Week is intentionally unavailable until the week begins.</p>` : ""}
         </div>
       </article>
     `;
@@ -5386,12 +5957,11 @@
     return weeklyOpeningStepHtml(week, canEdit);
   }
 
-  function weeklyCheckbox(week, key, label, options = {}) {
+  function weeklyCheckbox(week, key, label) {
     const checked = week.actual?.checks?.[key] ? " checked" : "";
-    const disabled = options.disabled ? " disabled" : "";
     return `
       <label class="weekly-check">
-        <input type="checkbox" data-weekly-actual-check="${escapeHtml(key)}" data-weekly-week="${week.weekNumber}"${checked}${disabled}>
+        <input type="checkbox" data-weekly-actual-check="${escapeHtml(key)}" data-weekly-week="${week.weekNumber}"${checked}>
         <span>${escapeHtml(label)}</span>
       </label>
     `;
@@ -5418,8 +5988,8 @@
     const statusClass = weeklyStatusClass(planned.status);
     const isFutureWeek = !weeklyWeekHasStarted(week);
     const isEditableCompleted = week.isCompleted && weeklyEditingWeek === week.weekNumber;
-    const canEdit = (!week.isCompleted && !isFutureWeek) || isEditableCompleted;
-    const completedReadOnly = week.isCompleted && !isEditableCompleted;
+    const canEdit = true;
+    const completedReadOnly = false;
     return `
       ${weeklyNavigationHtml(week)}
       <article class="weekly-hero card ${statusClass}">
@@ -5792,11 +6362,12 @@
   function commitWeeklyActualDraft(weekNumber, status = "Weekly progress saved.") {
     if (!weeklyPlan || !weeklyActualDrafts.has(Number(weekNumber))) return;
     const week = weeklyPlan.weeks.find((item) => item.weekNumber === Number(weekNumber));
-    if (!week || (week.isCompleted && weeklyEditingWeek !== week.weekNumber)) return;
+    if (!week) return;
     weeklyPlan = window.FFSWeeklyPlan.updateActual(weeklyPlan, weekNumber, {
       ...(week.actual || {}),
       ...weeklyActualDrafts.get(Number(weekNumber)),
     });
+    weeklyPlan = window.FFSWeeklyPlan.reforecast(plan, CALC.calculatePlan(plan), weeklyPlan);
     weeklyActualDrafts.delete(Number(weekNumber));
     generatedWeeklyPlanner = null;
     saveWeeklyPlan(status);
@@ -5814,15 +6385,36 @@
     }
     const actual = { ...(week.actual || {}), ...readWeekActual(weekNumber), ...(weeklyActualDrafts.get(Number(weekNumber)) || {}) };
     const editingCompletedWeek = week.isCompleted && weeklyEditingWeek === week.weekNumber;
+    const shouldReforecastActual = week.isCompleted || editingCompletedWeek;
     weeklyPlan = complete
       ? window.FFSWeeklyPlan.completeWeek(plan, result, weeklyPlan, weekNumber, actual)
-      : editingCompletedWeek
+      : shouldReforecastActual
         ? window.FFSWeeklyPlan.completeWeek(plan, result, weeklyPlan, weekNumber, actual)
         : window.FFSWeeklyPlan.updateActual(weeklyPlan, weekNumber, actual);
     if (complete || editingCompletedWeek) weeklyEditingWeek = null;
     weeklyActualDrafts.delete(Number(weekNumber));
     weeklyViewedWeekNumber = weekNumber;
     generatedWeeklyPlanner = null;
+    if (complete && !editingCompletedWeek) {
+      const completedWeek = weeklyPlan.weeks.find((item) => item.weekNumber === Number(weekNumber));
+      const transfers = weeklyActualTransfers(completedWeek?.actual || {}, completedWeek?.planned || {});
+      logProgressEvent({
+        eventType: "weekly-plan-completed",
+        title: `Week ${weekNumber} completed`,
+        description: "Weekly review completed and future weeks updated from recorded actuals.",
+        amount: transfers,
+        source: "weekly-plan",
+        metadata: {
+          dedupeKey: `weekly-completed-${weekNumber}`,
+        },
+      });
+      showEngagementCelebration({
+        title: "Week Complete",
+        message: transfers > 0 ? `You directed ${money(transfers)} toward your financial future this week.` : "Your weekly review has been recorded and the plan is up to date.",
+        amountLabel: `Weekly progress: ${money(thisWeekProgressAmount())}`,
+        secondaryLabel: `Current streak: ${weeklyCompletionStreak()} week${weeklyCompletionStreak() === 1 ? "" : "s"}`,
+      });
+    }
     saveWeeklyPlan(complete ? `Week ${weekNumber} has been marked complete.` : editingCompletedWeek ? `Week ${weekNumber} has been updated.` : "Weekly progress saved.");
     renderAll();
     showWorkspace("weeklyplan");
@@ -5833,13 +6425,6 @@
     const result = CALC.calculatePlan(plan);
     const week = weeklyPlan.weeks.find((item) => item.weekNumber === Number(weekNumber));
     if (!week) return;
-    const isFutureWeek = !weeklyWeekHasStarted(week);
-    const isEditableCompleted = week.isCompleted && weeklyEditingWeek === week.weekNumber;
-    const canAdjust = (!week.isCompleted && !isFutureWeek) || isEditableCompleted;
-    if (!canAdjust) {
-      updateSaveStatus("Opening balance can only be updated for the current week, a past incomplete week or a reopened completed week.");
-      return;
-    }
     const input = document.querySelector(`[data-weekly-opening-balance="${weekNumber}"]`);
     const amount = readWeeklyNullableAmount(input?.value);
     if (amount === null) {
@@ -6524,7 +7109,7 @@
     if (!immediate.length) immediate.push("Keep the positive monthly cash buffer visible and decide whether it should support investments, debt reduction or reserves.");
 
     nextYear.push(...recommendations.slice(0, 2).map((item) => item.title));
-    if (Number(result.annualInvestmentContributions) > 0) nextYear.push("Check that the annual investing target remains affordable after tax, HELP, expenses and debt repayments.");
+    if (Number(result.annualInvestmentContributions) > 0) nextYear.push("Check that the annual investing target remains affordable after tax, STSL compulsory repayments, expenses and debt repayments.");
     if (Number(result.annualExtraSuperContributions) > 0) nextYear.push("Review extra super contributions for affordability and access timing.");
     if (!nextYear.length) nextYear.push("Update the plan with income, expenses, assets and debt details, then regenerate this report.");
 
@@ -6570,8 +7155,8 @@
       ? "Your current plan allocates more money than the estimated cash available. The plan may need to be adjusted by reducing expenses, reducing contributions, increasing income or using available cash reserves."
       : "Your plan currently retains an estimated cash buffer after all entered spending and wealth-building contributions.";
     const financialHealth = result.finalProjectedCashSurplus < 0
-      ? "The model shows a cashflow shortfall after tax, HELP repayments, spending, debt repayments and planned wealth-building contributions."
-      : "The model shows a positive cash buffer after tax, HELP repayments, spending, debt repayments and planned wealth-building contributions.";
+      ? "The model shows a cashflow shortfall after tax, STSL compulsory repayments, spending, debt repayments and planned wealth-building contributions."
+      : "The model shows a positive cash buffer after tax, STSL compulsory repayments, spending, debt repayments and planned wealth-building contributions.";
     const tenYearProgress = progressAtYear(result, 10);
     const tenYearProgressText = tenYearProgress > 100
       ? "Projected FI assets exceed the selected target in the 10-year view, based on the assumptions entered."
@@ -6626,13 +7211,14 @@
         <p class="report-narrative">Your current FI assets may be lower than total net worth because some assets, such as your home, vehicles or personal-use assets, may not currently be treated as available to fund living costs.</p>
       `, "report-page-break")}
 
-      ${reportSection("Cashflow Analysis", "A step-by-step view of how gross income is reduced by estimated tax, HELP repayments, living costs, debt repayments and planned wealth-building contributions.", `
+      ${reportSection("Cashflow Analysis", "A step-by-step view of how gross income is reduced by estimated tax, STSL compulsory repayments, living costs, debt repayments and planned wealth-building contributions.", `
         <div class="table-list cashflow-list report-waterfall">
           ${[
             ["Gross income", result.annualGrossIncome],
             [`Less: Estimated income tax (${result.taxEstimate.taxYear})`, -result.taxEstimate.incomeTax],
             ["Less: Medicare levy", -result.taxEstimate.medicareLevy],
-            ...(Number(result.helpRepaymentEstimate.annualRepayment) > 0 ? [["Less: Estimated HECS/HELP repayment", -result.helpRepaymentEstimate.annualRepayment]] : []),
+            ["Less: Medicare levy surcharge", -result.taxEstimate.medicareLevySurcharge],
+            ...(Number(result.helpRepaymentEstimate.annualRepayment) > 0 ? [["Less: Estimated STSL compulsory repayment", -result.helpRepaymentEstimate.annualRepayment]] : []),
             ["Less: Living expenses", -result.annualLivingExpenses],
             ["Less: Debt repayments", -result.annualDebtRepayments],
             ["Less: Annual investing", -result.annualInvestmentContributions],
@@ -6640,7 +7226,7 @@
             ["Remaining cash surplus", result.finalProjectedCashSurplus],
           ].map(([label, value]) => cashflowRowHtml(label, value)).join("")}
         </div>
-        <p class="report-narrative">Cashflow is estimated from gross income, then reduced by tax, Medicare levy, HELP repayments where applicable, living expenses, debt repayments, investing and extra super contributions.</p>
+        <p class="report-narrative">Cashflow is estimated from gross income, then reduced by tax, Medicare levy, STSL compulsory repayments where applicable, living expenses, debt repayments, investing and extra super contributions.</p>
         <p class="report-narrative">The remaining cash surplus is the amount left after the planned spending and wealth-building amounts entered in the app.</p>
         <div class="${cashflowTone}"><strong>${cashflowHeading}</strong><p>${cashflowText}</p></div>
       `, "report-page-break report-compact-section")}
@@ -6783,7 +7369,7 @@
       { label: "Accessible investments", value: money(result.accessibleInvestmentAssets) },
       { label: "Super from age 60", value: money(result.superannuationBalance) },
       { label: "Annual Income", value: money(result.annualGrossIncome) },
-      { label: "Net income after tax and HELP", value: money(result.netIncomeAfterTaxHelp) },
+      { label: "Net income after tax and STSL", value: money(result.netIncomeAfterTaxHelp) },
       { label: "Annual Living Expenses", value: money(result.annualLivingExpenses) },
       { label: "Annual Loan Repayments", value: money(result.annualDebtRepayments) },
       { label: "Annual Surplus", value: money(result.cashSurplusBeforeInvesting) },
@@ -6900,7 +7486,8 @@
       summaryTile("Taxable income estimate", `${money(result.taxEstimate.taxableIncomeAfterExtraSuper)} -> ${money(revisedResult.taxEstimate.taxableIncomeAfterExtraSuper)}`),
       summaryTile("Estimated income tax", `${money(result.taxEstimate.incomeTax)} -> ${money(revisedResult.taxEstimate.incomeTax)}`),
       summaryTile("Estimated Medicare levy", `${money(result.taxEstimate.medicareLevy)} -> ${money(revisedResult.taxEstimate.medicareLevy)}`),
-      summaryTile("HELP repayment estimate", `${money(result.helpRepaymentEstimate.annualRepayment)} -> ${money(revisedResult.helpRepaymentEstimate.annualRepayment)}`),
+      summaryTile("Estimated Medicare levy surcharge", `${money(result.taxEstimate.medicareLevySurcharge)} -> ${money(revisedResult.taxEstimate.medicareLevySurcharge)}`),
+      summaryTile("STSL compulsory repayment estimate", `${money(result.helpRepaymentEstimate.annualRepayment)} -> ${money(revisedResult.helpRepaymentEstimate.annualRepayment)}`),
       summaryTile("Super balance in 2 years", `${money(superAtYear(result, 2))} -> ${money(superAtYear(revisedResult, 2))}`),
       summaryTile("Investment balance in 2 years", `${money(investmentAtYear(result, 2))} -> ${money(investmentAtYear(revisedResult, 2))}`),
       summaryTile("Debt balance now", `${money(result.totalLiabilities)} -> ${money(revisedResult.totalLiabilities)}`),
@@ -7091,6 +7678,10 @@
   }
 
   function saveCurrentPlanAsScenario(options = {}) {
+    if (isDemoActive()) {
+      updateSaveStatus("Sample Plan is temporary. Return to My Plan before saving a personal scenario.");
+      return;
+    }
     syncCollectionsToLegacy();
     const scenarios = loadScenarios();
     const nameInput = document.getElementById("scenarioName");
@@ -7112,6 +7703,7 @@
     const scenario = {
       id: `scenario-${Date.now()}`,
       source: "user",
+      planId: normalisePlanId(activePlanId),
       name,
       notes,
       savedAt: new Date().toISOString(),
@@ -7236,6 +7828,10 @@
   }
 
   function addGoalProgress(goalId) {
+    if (isDemoActive()) {
+      updateSaveStatus("Sample Plan progress is not recorded. Return to My Plan to record personal progress.");
+      return;
+    }
     const result = CALC.calculatePlan(plan);
     const goal = normalisedShortTermGoals(result).find((item) => item.id === goalId) || primaryShortTermGoal(result);
     if (!goal) {
@@ -7275,19 +7871,57 @@
       },
     });
     syncEngagementAchievements(CALC.calculatePlan(plan));
+    showEngagementCelebration({
+      title: "Great work!",
+      message: `You added ${money(amount)} toward ${goal.name}.`,
+      amountLabel: `Weekly progress: ${money(thisWeekProgressAmount())}`,
+      secondaryLabel: `Goal progress: ${plainPercent(goalProgressPercent({ ...goal, currentAmount: previousAmount + amount }))}`,
+    });
     saveDraft(`Added ${money(amount)} to ${goal.name}.`);
     renderAll();
   }
 
   function handleEngagementAction(actionElement) {
     const action = actionElement.dataset.engagementAction;
+    if (action === "close-celebration") {
+      engagementCelebration = null;
+      renderEngagementCelebration();
+      return;
+    }
+    if (action === "sample") {
+      engagementCelebration = null;
+      loadSamplePlan();
+      return;
+    }
     if (action === "add-goal-progress") {
       addGoalProgress(actionElement.dataset.goalId);
       return;
     }
     if (action === "ai") {
+      engagementCelebration = null;
       if (aiInsightsConfig.enabled) openAiInsights();
       else updateSaveStatus("AI Insights private beta is not enabled in this environment.");
+      return;
+    }
+    if (action === "toggle-mission") {
+      engagementMissionExpanded = !engagementMissionExpanded;
+      renderOutputs();
+      return;
+    }
+    if (action === "change-future-age") {
+      const result = CALC.calculatePlan(plan);
+      const current = futureYouPreview(result).age;
+      const response = window.prompt("Choose the age for Future You", String(current));
+      if (response === null) return;
+      const age = Math.max(0, Math.round(Number(response)));
+      if (!Number.isFinite(age) || age <= 0) {
+        updateSaveStatus("Future You age was not changed.");
+        return;
+      }
+      engagementData().futureYouAge = age;
+      saveDraft(`Future You preview set to age ${age}.`);
+      renderAll();
+      updateSaveStatus(`Future You preview set to age ${age}.`);
       return;
     }
     const viewMap = {
@@ -7299,64 +7933,131 @@
       decision: "decision",
       reports: "reports",
     };
-    showWorkspace(viewMap[action] || "dashboard");
+    engagementCelebration = null;
+    navigateToSection(viewMap[action] || "dashboard");
+  }
+
+  function safeRenderModule(name, renderFn) {
+    try {
+      renderFn();
+    } catch (error) {
+      console.error(`${name} render failed`, error);
+      updateSaveStatus(`${name} could not render. Navigation remains available.`);
+    }
   }
 
   function renderOutputs() {
     syncCollectionsToLegacy();
     const result = CALC.calculatePlan(plan);
-    renderSamplePlanOptions();
-    updateSetupNavigationLabel();
-    updatePersonDependentLabels();
-    updateSaveStatus();
-    renderEngagementHome(result);
-    updatePreview(result);
-    renderAiInsightsHomeCard(result);
-    renderDashboard(result);
-    renderCashflow(result);
-    renderLoan(result);
-    renderInvestments(result);
-    renderSuper(result);
-    renderMilestones(result);
-    renderForecast(result);
-    renderGoalsSummary(result);
-    renderDecision(result);
-    renderScenarios();
-    renderReports(result);
-    renderWeeklyPlan(result);
-    renderWizardResults(result);
-    renderWizardStep();
-    renderHelpReview(result);
-    renderSetupSummary(result);
-    renderComparison(result);
-    renderWhatIf(result);
-    renderAiInsightsModal();
-    document.getElementById("disclaimer").textContent = DATA.disclaimer;
+    safeRenderModule("Demo banner", () => renderDemoModeBanner());
+    safeRenderModule("Sample plan options", () => renderSamplePlanOptions());
+    safeRenderModule("Setup labels", () => {
+      updateSetupNavigationLabel();
+      updatePersonDependentLabels();
+      updateSaveStatus();
+    });
+    safeRenderModule("Engagement Home", () => renderEngagementHome(result));
+    safeRenderModule("Home preview", () => updatePreview(result));
+    safeRenderModule("AI Insights card", () => renderAiInsightsHomeCard(result));
+    safeRenderModule("Dashboard", () => renderDashboard(result));
+    safeRenderModule("Cashflow", () => renderCashflow(result));
+    safeRenderModule("Loans", () => renderLoan(result));
+    safeRenderModule("Investments", () => renderInvestments(result));
+    safeRenderModule("Super", () => renderSuper(result));
+    safeRenderModule("Milestones", () => renderMilestones(result));
+    safeRenderModule("Forecast", () => renderForecast(result));
+    safeRenderModule("Goals", () => renderGoalsSummary(result));
+    safeRenderModule("Decision Engine", () => renderDecision(result));
+    safeRenderModule("Saved Scenarios", () => renderScenarios());
+    safeRenderModule("Reports", () => renderReports(result));
+    safeRenderModule("Weekly Plan", () => renderWeeklyPlan(result));
+    safeRenderModule("Wizard results", () => renderWizardResults(result));
+    safeRenderModule("Wizard", () => renderWizardStep());
+    safeRenderModule("STSL review", () => renderHelpReview(result));
+    safeRenderModule("Setup summary", () => renderSetupSummary(result));
+    safeRenderModule("Comparison", () => renderComparison(result));
+    safeRenderModule("What If", () => renderWhatIf(result));
+    safeRenderModule("AI Insights modal", () => renderAiInsightsModal());
+    safeRenderModule("Disclaimer", () => {
+      document.getElementById("disclaimer").textContent = DATA.disclaimer;
+    });
     if (hasOpenedWorkspace) document.getElementById("appWorkspace").classList.remove("hidden");
   }
 
   function renderAll() {
-    renderForms();
+    safeRenderModule("Forms", () => renderForms());
     renderOutputs();
-    restoreDraftUiInputs();
+    safeRenderModule("Draft UI", () => restoreDraftUiInputs());
   }
 
   function loadSamplePlan() {
     const sample = selectedSamplePlan();
-    plan = CALC.clonePlan(sample.plan);
+    preservePersonalContextBeforeDemo();
+    isSwitchingPlans = true;
+    isDemoMode = true;
+    activePlanId = DEMO_PLAN_ID;
+    plan = ensurePlanIdentity(CALC.clonePlan(sample.plan), { source: "sample", samplePlanId: sample.id });
     generatedWeeklyPlanner = null;
-    resetWeeklyPlanStorage("");
+    weeklyPlan = null;
+    weeklyEditingWeek = null;
+    weeklyViewedWeekNumber = null;
+    weeklyPlanUiState.isTimingSetupExpanded = null;
+    editingTimingItemId = null;
+    timingEditDraft = null;
     seedSampleScenarios(sample.plan);
-    saveDraft("All changes saved");
+    isSwitchingPlans = false;
     renderAll();
     showWorkspace("dashboard");
+    updateSaveStatus("Viewing Sample Plan. Your personal plan has not been changed.");
+  }
+
+  function returnToPersonalPlan(targetView = "") {
+    isSwitchingPlans = true;
+    const context = loadPlanContext();
+    activePlanId = normalisePlanId(context.lastPersonalPlanId || userState.lastPersonalPlanId || DEFAULT_PERSONAL_PLAN_ID);
+    isDemoMode = false;
+    const saved = loadDraft();
+    plan = ensurePlanIdentity(CALC.clonePlan(saved || CALC.emptyPlan()), { source: "personal", planId: activePlanId });
+    weeklyPlan = loadWeeklyPlan();
+    generatedWeeklyPlanner = null;
+    engagementCelebration = null;
+    restoredDraftUi = restoredDraftUi || {};
+    isSwitchingPlans = false;
+    renderAll();
+    showWorkspace(targetView || context.lastPersonalRoute || restoredDraftUi.activeView || "dashboard");
+    updateSaveStatus("Your personal plan and progress history have been restored.");
+  }
+
+  function renderDemoModeBanner() {
+    let banner = document.getElementById("demoModeBanner");
+    if (!banner) {
+      const header = document.querySelector("header");
+      banner = document.createElement("div");
+      banner.id = "demoModeBanner";
+      banner.className = "demo-mode-banner hidden";
+      banner.innerHTML = `
+        <div>
+          <strong>You are viewing the Sample Plan</strong>
+          <span>Changes here will not affect your personal plan.</span>
+        </div>
+        <button class="btn btn-primary" type="button" data-demo-return>Return to My Plan</button>
+      `;
+      header?.insertAdjacentElement("afterend", banner);
+    }
+    banner.classList.toggle("hidden", !isDemoActive());
   }
 
   function startMyPlan() {
+    if (isDemoActive()) {
+      activeWizardStep = 0;
+      returnToPersonalPlan("setup");
+      return;
+    }
     const saved = loadDraft();
     if (saved) {
-      plan = CALC.clonePlan(saved);
+      plan = ensurePlanIdentity(CALC.clonePlan(saved), { source: "personal", planId: activePlanId });
       generatedWeeklyPlanner = null;
+      weeklyPlan = loadWeeklyPlan();
       restoreDraftUiInputs();
       updateSaveStatus("Existing saved plan restored.");
     } else if (isBlankPlan(plan)) {
@@ -7376,24 +8077,34 @@
 
   function resetPlan() {
     if (!window.confirm("Clear the current plan and start again?")) return;
-    plan = blankUserPlan();
+    isSwitchingPlans = true;
+    isDemoMode = false;
+    const context = loadPlanContext();
+    activePlanId = normalisePlanId(context.lastPersonalPlanId || DEFAULT_PERSONAL_PLAN_ID);
+    plan = ensurePlanIdentity(blankUserPlan(), { source: "personal", planId: activePlanId });
     generatedWeeklyPlanner = null;
     resetWeeklyPlanStorage("");
+    localStorage.removeItem(currentPersonalPlanKey());
     localStorage.removeItem(DRAFT_KEY);
     localStorage.removeItem(LAST_SAVED_KEY);
     document.getElementById("scenarioName").value = "";
     document.getElementById("scenarioNotes").value = "";
     activeWizardStep = 0;
+    isSwitchingPlans = false;
     renderAll();
     showWorkspace("setup");
   }
 
   function clearSavedPlan() {
     if (!window.confirm("Clear the saved plan and all current entries? This cannot be undone.")) return;
+    isDemoMode = false;
+    activePlanId = normalisePlanId(activePlanId || DEFAULT_PERSONAL_PLAN_ID);
+    localStorage.removeItem(currentPersonalPlanKey());
+    localStorage.removeItem(currentPersonalWeeklyPlanKey());
     localStorage.removeItem(DRAFT_KEY);
     localStorage.removeItem(LAST_SAVED_KEY);
     restoredDraftUi = {};
-    plan = blankUserPlan();
+    plan = ensurePlanIdentity(blankUserPlan(), { source: "personal", planId: activePlanId });
     generatedWeeklyPlanner = null;
     resetWeeklyPlanStorage("");
     activeWizardStep = 0;
@@ -7460,12 +8171,18 @@
   }
 
   function duplicateScenario() {
+    if (isDemoActive()) {
+      updateSaveStatus("Sample Plan is temporary. Return to My Plan before duplicating a personal scenario.");
+      return;
+    }
     syncCollectionsToLegacy();
     const scenarios = loadScenarios();
     const planSnapshot = CALC.clonePlan(plan);
     if (!isBundledSamplePlan(planSnapshot)) markPersonalPlanCreated();
     const scenario = {
       id: `scenario-${Date.now()}`,
+      source: "user",
+      planId: normalisePlanId(activePlanId),
       name: `Copy ${scenarios.length + 1}`,
       notes: "Duplicated from the current plan.",
       savedAt: new Date().toISOString(),
@@ -7502,17 +8219,7 @@
   }
 
   function seedSampleScenarios(basePlan = DATA.demoPlan) {
-    if (!Array.isArray(DATA.demoScenarioAdjustments)) return;
-    const existingUserScenarios = loadScenarios().filter((scenario) => scenario.source !== "sample");
-    const sampleScenarios = DATA.demoScenarioAdjustments.map((item, index) => ({
-      id: `sample-scenario-${index + 1}`,
-      source: "sample",
-      name: item.name,
-      notes: item.notes,
-      savedAt: new Date().toISOString(),
-      plan: applyScenarioAdjustments(basePlan, item.adjustments || {}),
-    }));
-    saveScenarios([...sampleScenarios, ...existingUserScenarios]);
+    return sampleScenarioList(basePlan);
   }
 
   function bindEvents() {
@@ -7554,9 +8261,8 @@
         if (!weeklyPlan) return;
         const weekNumber = Number(target.dataset.weeklyWeek || target.dataset.weeklyOpeningBalance) || weeklyPlan.currentWeekNumber;
         const week = weeklyPlan.weeks.find((item) => item.weekNumber === weekNumber);
-        if (week?.isCompleted && weeklyEditingWeek !== weekNumber) return;
         updateWeeklyActualDraftFromInput(target);
-        if (week?.isCompleted && weeklyEditingWeek === weekNumber) {
+        if (week?.isCompleted) {
           updateSaveStatus("Editing completed week. Select Save completed week when ready.");
           return;
         }
@@ -7591,7 +8297,7 @@
         ensureCollectionData();
         const item = plan[target.dataset.collection]?.find((entry) => entry.id === target.dataset.id);
         if (!item) return;
-        const value = target.dataset.type === "text" ? target.value : Number(target.value);
+        const value = target.dataset.type === "boolean" ? target.checked : target.dataset.type === "text" ? target.value : Number(target.value);
         item[target.dataset.key] = value;
         generatedWeeklyPlanner = null;
         if (weeklyPlan) {
@@ -7685,6 +8391,12 @@
         return;
       }
 
+      if (event.target.closest("[data-demo-return]")) {
+        event.preventDefault();
+        returnToPersonalPlan();
+        return;
+      }
+
       const engagementAction = event.target.closest("[data-engagement-action]");
       if (engagementAction) {
         event.preventDefault();
@@ -7713,7 +8425,7 @@
       if (aiScenarioTarget) {
         event.preventDefault();
         closeAiInsightsModal();
-        showWorkspace(aiScenarioTarget.dataset.aiScenarioTarget || "decision");
+        navigateToSection(aiScenarioTarget.dataset.aiScenarioTarget || "decision");
         return;
       }
 
@@ -7773,7 +8485,7 @@
         const action = weeklyHealthAction.dataset.weeklyHealthAction;
         if (action === "update-plan") {
           activeWizardStep = 1;
-          showWorkspace("setup");
+          navigateToSection("setup");
           updateSaveStatus("Review the Financial Plan and update strategic assumptions only if you choose to.");
         } else if (action === "keep-plan") {
           updateSaveStatus("Financial Plan unchanged.");
@@ -7863,7 +8575,10 @@
       }
 
       const nav = event.target.closest("[data-view]");
-      if (nav) setView(nav.dataset.view);
+      if (nav) {
+        navigateToSection(nav.dataset.view);
+        return;
+      }
 
       const whatIfButton = event.target.closest("[data-what-if]");
       if (whatIfButton) {
@@ -7884,16 +8599,32 @@
       const homeStep = event.target.closest("[data-home-step]");
       if (homeStep) {
         if (homeStep.dataset.homeStep === "setup") activeWizardStep = 0;
-        showWorkspace(homeStep.dataset.homeStep);
+        navigateToSection(homeStep.dataset.homeStep);
+        return;
       }
 
       const loadId = event.target.closest("[data-load-scenario]")?.dataset.loadScenario;
       if (loadId) {
         const scenario = loadScenarios().find((item) => item.id === loadId);
         if (scenario) {
-          plan = CALC.clonePlan(scenario.plan);
+          if (scenario.source === "sample") {
+            isDemoMode = true;
+            activePlanId = DEMO_PLAN_ID;
+            plan = ensurePlanIdentity(CALC.clonePlan(scenario.plan), { source: "sample", samplePlanId: selectedSamplePlanId });
+            generatedWeeklyPlanner = null;
+            weeklyPlan = null;
+            renderAll();
+            showWorkspace("dashboard");
+            updateSaveStatus("Sample scenario loaded temporarily. Your personal plan has not been changed.");
+            return;
+          }
+          isSwitchingPlans = true;
+          isDemoMode = false;
+          activePlanId = normalisePlanId(scenario.planId || scenario.plan?.meta?.planId || activePlanId || DEFAULT_PERSONAL_PLAN_ID);
+          plan = ensurePlanIdentity(CALC.clonePlan(scenario.plan), { source: "personal", planId: activePlanId });
           generatedWeeklyPlanner = null;
           resetWeeklyPlanStorage("");
+          isSwitchingPlans = false;
           saveDraft();
           renderAll();
           showWorkspace("dashboard");
@@ -7940,7 +8671,7 @@
       if (!homeStep || (event.key !== "Enter" && event.key !== " ")) return;
       event.preventDefault();
       if (homeStep.dataset.homeStep === "setup") activeWizardStep = 0;
-      showWorkspace(homeStep.dataset.homeStep);
+      navigateToSection(homeStep.dataset.homeStep);
     });
 
     document.addEventListener("focusin", (event) => {
@@ -7950,7 +8681,7 @@
 
     document.getElementById("heroDemoButton").addEventListener("click", loadSamplePlan);
     document.getElementById("continueSampleButton").addEventListener("click", loadSamplePlan);
-    document.getElementById("continuePlanButton").addEventListener("click", () => showWorkspace("dashboard"));
+    document.getElementById("continuePlanButton").addEventListener("click", () => navigateToSection("dashboard"));
     document.getElementById("continueNewPlanButton").addEventListener("click", resetPlan);
     document.getElementById("enterDataButton").addEventListener("click", startMyPlan);
     document.getElementById("heroStartButton").addEventListener("click", startMyPlan);
@@ -7994,8 +8725,8 @@
     document.getElementById("weeklyPlanImportInput").addEventListener("change", (event) => importWeeklyPlanBackup(event.target.files?.[0]));
   }
 
-  renderAll();
   bindEvents();
+  renderAll();
   loadAiInsightsConfig();
   if (hasOpenedWorkspace) showWorkspace(activeView);
 })();
