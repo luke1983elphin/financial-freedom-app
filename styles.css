@@ -4609,8 +4609,14 @@ textarea.field-input {
 
 .weekly-readonly .field-input,
 .weekly-readonly input {
-  pointer-events: none;
   background: #f8fafc;
+}
+
+.weekly-actual-input {
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
+  touch-action: manipulation;
 }
 
 .weekly-upcoming-list {
