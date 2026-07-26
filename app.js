@@ -193,6 +193,10 @@
       title: "Rental loan principal",
       body: "Only the principal component is deducted separately from household cashflow because rental loan interest is already included in the linked rental property net cash income.",
     },
+    passiveIncome: {
+      title: "Passive Income",
+      body: "Passive income includes interest, dividends, distributions, net rental property cashflow and other income identified as passive. Salary and wages are excluded. For rental properties, linked loan principal repayments are deducted because loan interest is already included in net rental cash income.",
+    },
     employerSuperEstimate: {
       title: "Estimated employer super contributions",
       body: "Estimated employer super contributions are calculated from the salary and wages entered for this person using the current Australian employer super guarantee rate of 12%. Actual contributions may differ because of contribution limits, maximum contribution bases, salary-packaging arrangements, employment conditions or excluded earnings.",
@@ -347,6 +351,7 @@
 
   function freedomPercent(result) {
     if (!result.targetCapital) return 0;
+    if (Number.isFinite(Number(result.lifestyleFundingPercent))) return Number(result.lifestyleFundingPercent);
     return (Number(result.financialIndependenceAssets) || 0) / result.targetCapital * 100;
   }
 
@@ -491,10 +496,12 @@
   function engagementProgress(result) {
     const targetSpending = Number(plan.personal.targetAnnualSpending || result.annualLivingExpenses) || 0;
     const withdrawalRate = safeWithdrawalRate();
-    const sustainableIncome = (Number(result.financialIndependenceAssets) || 0) * withdrawalRate;
+    const sustainableIncome = Number.isFinite(Number(result.annualPassiveIncome))
+      ? Number(result.annualPassiveIncome)
+      : (Number(result.financialIndependenceAssets) || 0) * withdrawalRate;
     const fiRaw = targetSpending > 0 ? sustainableIncome / targetSpending * 100 : 0;
     const ffRaw = Number(result.targetCapital) > 0
-      ? (Number(result.financialIndependenceAssets) || 0) / Number(result.targetCapital) * 100
+      ? fiRaw
       : fiRaw;
     return {
       targetSpending,
@@ -1385,6 +1392,9 @@
         item.rentalCashflowTreatment = item.rentalCashflowTreatment === "beforeInterest" ? "beforeInterest" : "afterInterest";
         if (!Array.isArray(item.linkedLoanIds)) item.linkedLoanIds = item.linkedLoanId ? [item.linkedLoanId] : [];
       }
+      if (item.type === "other" && item.isPassiveIncome === undefined && item.passiveIncome === true) {
+        item.isPassiveIncome = true;
+      }
     });
   }
 
@@ -2148,7 +2158,8 @@
         currentNetWorth: numberValue(result.currentNetWorth),
         currentFinancialIndependenceAssets: numberValue(result.financialIndependenceAssets),
         accessibleInvestmentAssets: numberValue(result.accessibleInvestmentAssets),
-        estimatedAnnualPassiveIncome: numberValue(result.financialIndependenceAssets * (numberValue(investing.safeWithdrawalRatePct) / 100)),
+        estimatedAnnualPassiveIncome: numberValue(result.annualPassiveIncome),
+        passiveIncomeBreakdown: result.passiveIncomeBreakdown || {},
         financialFreedomProgressPct: numberValue(result.financialFreedomScore),
         estimatedFinancialIndependenceAge: firstProjectedAgeAtProgress(result, 75),
         estimatedFinancialFreedomAge: estimatedFreedomAge,
@@ -3212,29 +3223,47 @@
     if (householdExtraSuper > 0 && (person1ContributionTotal + person2ContributionTotal + householdExtraSuper) > concessionalCap * (hasSecondPerson ? 2 : 1)) {
       capWarnings.push(`Total employer super plus extra super contributions may exceed the standard concessional contribution cap. The app warns only; it does not reduce contributions automatically.`);
     }
-    const overrideFields = [
-      { label: `Override estimated employer super - ${person1Name}`, path: "investing.person1EmployerSuperOverrideEnabled", type: "checkbox", help: "Use only where actual employer contributions differ from the standard estimate." },
-      ...(plan.investing.person1EmployerSuperOverrideEnabled ? [{ label: `${person1Name} override amount`, path: "investing.person1EmployerSuperOverride", step: "1000" }] : []),
-      { label: `Override estimated employer super - ${person2Name}`, path: "investing.person2EmployerSuperOverrideEnabled", type: "checkbox", help: "Use only where actual employer contributions differ from the standard estimate." },
-      ...(plan.investing.person2EmployerSuperOverrideEnabled ? [{ label: `${person2Name} override amount`, path: "investing.person2EmployerSuperOverride", step: "1000" }] : []),
-    ];
+    const summaryCard = (label, value, extraClass = "") => `
+      <article class="summary-tile employer-super-summary-card ${extraClass}">
+        <span>${escapeHtml(label)}</span>
+        <strong>${escapeHtml(value)}</strong>
+      </article>
+    `;
+    const overrideCard = (personKey, name, calculatedAmount, overrideAmount, enabled) => `
+      <article class="employer-super-override-card">
+        <div>
+          <h4>${escapeHtml(name)}</h4>
+          <p>Calculated amount: <strong>${money(calculatedAmount || 0)}</strong></p>
+        </div>
+        <label class="toggle-field employer-super-toggle">
+          <span class="field-label">Override calculated amount</span>
+          <input class="toggle-input" data-path="investing.${personKey}EmployerSuperOverrideEnabled" data-type="boolean" type="checkbox"${enabled ? " checked" : ""}>
+        </label>
+        ${enabled ? `
+          <label>
+            <span class="field-label">${escapeHtml(name)} override amount</span>
+            <input class="field-input employer-super-amount-input" data-path="investing.${personKey}EmployerSuperOverride" data-type="number" type="number" step="1000" value="${escapeHtml(overrideAmount ?? "")}">
+          </label>
+          <button class="btn" type="button" data-employer-super-reset="${escapeHtml(personKey)}">Use calculated amount</button>
+        ` : ""}
+      </article>
+    `;
     return `
       <article class="form-item-card employer-super-panel" data-employer-super-panel>
-        <div class="card-subheading">
+        <div class="card-subheading employer-super-heading">
           <h3 class="field-label-with-info">Estimated employer super contributions ${infoButtonHtml("employerSuperEstimate", "Estimated employer super contributions")}</h3>
-          <p>Salary and wages x ${ratePercent}%. These amounts update automatically from income records classified as Salary or wages.</p>
+          <p>Automatically calculated as salary and wages x ${ratePercent}%.</p>
         </div>
-        <div class="summary-grid mt-4">
-          ${summaryTile(`${person1Name} estimated employer super`, money(employerSuper.person1Amount || 0))}
-          ${summaryTile(`${person2Name} estimated employer super`, money(employerSuper.person2Amount || 0))}
-          ${summaryTile("Household estimated employer super", money(employerSuper.totalEffective || 0))}
+        <div class="employer-super-summary-grid mt-4">
+          ${summaryCard(`${person1Name} estimated employer super`, money(employerSuper.person1Amount || 0))}
+          ${summaryCard(`${person2Name} estimated employer super`, money(employerSuper.person2Amount || 0))}
+          ${summaryCard("Household estimated employer super", money(employerSuper.totalEffective || 0), "household-super-card")}
         </div>
         ${capWarnings.length ? `<p class="tax-note mt-3"><strong>Contribution cap warning:</strong> ${escapeHtml(capWarnings.join(" "))}</p>` : ""}
         ${employerSuper.hasOverride ? `<p class="field-help mt-3">Manual override is active. Calculated amount before override: ${money(employerSuper.totalCalculated || 0)}.</p>` : ""}
-        <div class="input-grid mt-4">${overrideFields.map(field).join("")}</div>
-        <div class="weekly-action-row mt-3">
-          <button class="btn" type="button" data-employer-super-reset="person1">Use calculated amount - ${escapeHtml(person1Name)}</button>
-          <button class="btn" type="button" data-employer-super-reset="person2">Use calculated amount - ${escapeHtml(person2Name)}</button>
+        <div class="employer-super-override-grid mt-4">
+          ${overrideCard("person1", person1Name, employerSuper.person1Calculated, plan.investing.person1EmployerSuperOverride, plan.investing.person1EmployerSuperOverrideEnabled)}
+          ${overrideCard("person2", person2Name, employerSuper.person2Calculated, plan.investing.person2EmployerSuperOverride, plan.investing.person2EmployerSuperOverrideEnabled)}
         </div>
         <p class="field-help mt-3">${escapeHtml(employerSuperInfoText())}</p>
       </article>
@@ -3242,8 +3271,9 @@
   }
 
   function appendEmployerSuperPanel(containerId) {
-    const container = document.getElementById(containerId);
+    const container = document.getElementById("employerSuperPanelMount") || document.getElementById(containerId);
     if (!container) return;
+    container.innerHTML = "";
     container.insertAdjacentHTML("beforeend", employerSuperPanelHtml());
   }
 
@@ -3418,6 +3448,7 @@
           ${dynamicInput("incomeItems", item, "owner", "Income owner", { type: "select", options: incomeOwnerOptions(type) })}
           ${dynamicInput("incomeItems", item, "amount", "Gross amount", { step: "100", placeholder: "Amount for the selected frequency" })}
           ${dynamicInput("incomeItems", item, "frequency", "Frequency", { type: "select", options: frequencies })}
+          ${type === "other" ? dynamicInput("incomeItems", item, "isPassiveIncome", "Passive income", { type: "checkbox", infoKey: "passiveIncome" }) : ""}
         `;
     return `
       <article class="form-item-card dynamic-item-card">
@@ -3842,6 +3873,7 @@
   }
 
   function annualPassiveIncome(result) {
+    if (Number.isFinite(Number(result.annualPassiveIncome))) return Math.round(Number(result.annualPassiveIncome));
     return Math.round((Number(result.financialIndependenceAssets) || 0) * safeWithdrawalRate());
   }
 
@@ -4026,7 +4058,7 @@
           <span class="metric-label">Target lifestyle funded</span>
           <strong>${plainPercent(percent)} of target lifestyle funded</strong>
         </div>
-        <p id="freedomPassiveText" class="progress-caption">Based on projected investment and passive income compared with your target annual lifestyle cost.</p>
+        <p id="freedomPassiveText" class="progress-caption">Based on passive income recorded in your plan compared with your target annual lifestyle cost.</p>
       </div>
       <div class="stage-actions">
         <span class="metric-label">What moves you forward</span>
@@ -4050,19 +4082,21 @@
       metricCard("Final Projected Surplus", money(annualSurplus), annualSurplus >= 0 ? "status-green" : "status-amber", "Estimated money left after tax, Medicare, STSL compulsory repayments, living costs, loan repayments, investing and extra super."),
       metricCard("Investments", money(result.investmentBalance), "", "Projected investment balance includes contributions and earnings over time."),
       metricCard("Super", money(result.superannuationBalance), "status-green", "Tracked separately from other investments."),
-      metricCard("Target Lifestyle Funded", plainPercent(percent), percent >= 75 ? "status-green" : "", "Based on projected investment and passive income compared with your target annual lifestyle cost."),
+      metricCard("Target Lifestyle Funded", plainPercent(percent), percent >= 75 ? "status-green" : "", "Based on passive income recorded in your plan compared with your target annual lifestyle cost."),
     ].join("");
     document.getElementById("secondMetricGrid").innerHTML = [
       metricCard("Your Current Financial Stage", stage.name),
       metricCard(stageInfo.nextStage ? `Progress Toward ${stageInfo.nextStage.name}` : "Financial Freedom Achieved", stageInfo.nextStage ? plainPercent(stageInfo.progressToNext) : "100%"),
       metricCard("Debt Balance", money(result.totalLiabilities), result.totalLiabilities <= result.totalAssets * 0.5 ? "status-green" : "status-amber"),
       metricCard("Monthly Surplus / Deficit", money(monthlySurplus), monthlySurplus >= 0 ? "status-green" : "status-amber"),
-      metricCard("Annual Passive Income Estimate", money(passiveIncome), "", "This estimates the annual income your investments may generate without selling assets."),
+      metricCard("Annual Passive Income", money(passiveIncome), "", "This is based on income items classified as passive, including net rental property cashflow.", "passiveIncome"),
       metricCard("Annual Living Expenses", money(livingExpenses), "", "This is calculated from your recurring expense items and excludes investing and loan principal repayments."),
       metricCard("Accessible Investments", money(result.accessibleInvestmentAssets)),
       metricCard("Highest Priority", highestRecommendation(result)),
       weeklyHealthCheckCard(result),
     ].join("");
+    const passiveBreakdown = document.getElementById("dashboardPassiveIncomeBreakdown");
+    if (passiveBreakdown) passiveBreakdown.innerHTML = passiveIncomeBreakdownHtml(result, { showOwners: true });
     document.getElementById("celebrationGrid").innerHTML = celebrationItems(result).slice(0, 6).map((item) => `
       <span class="celebration-pill">${escapeHtml(item.label)}</span>
     `).join("");
@@ -4467,6 +4501,49 @@
     `;
   }
 
+  function passiveIncomeBreakdownHtml(result, options = {}) {
+    const summary = result?.passiveIncomeBreakdown;
+    if (!summary) return "";
+    const rentalRows = (summary.rentalProperties || []).map((property) => `
+      <div class="table-row cashflow-row passive-income-rental-row">
+        <span>${escapeHtml(property.name || "Rental property")} net cash income</span>
+        <strong>${money(property.annualNetRentalCashIncome)}</strong>
+      </div>
+      <div class="table-row cashflow-row passive-income-rental-row">
+        <span>Less rental-loan ${property.treatment === "beforeInterest" ? "repayments" : "principal repayments"}</span>
+        <strong>-${money(property.householdDebtDeduction)}</strong>
+      </div>
+      <div class="table-row cashflow-row cashflow-row-final passive-income-rental-row">
+        <span>Passive rental cashflow</span>
+        <strong>${money(property.passiveRentalCashflow)}</strong>
+      </div>
+    `).join("");
+    return `
+      <section class="passive-income-card${options.compact ? " passive-income-card-compact" : ""}">
+        <div class="card-subheading">
+          <h3 class="field-label-with-info">Passive income ${infoButtonHtml("passiveIncome", "Passive Income")}</h3>
+          <p>Income that may help fund the target lifestyle without salary or wages.</p>
+        </div>
+        <div class="summary-grid mt-3">
+          ${summaryTile("Interest", money(summary.interest))}
+          ${summaryTile("Dividends", money(summary.dividends))}
+          ${summaryTile("Distribution income", money(summary.distributions))}
+          ${summaryTile("Net rental property cashflow", money(summary.rental))}
+          ${summaryTile("Other passive income", money(summary.otherPassive))}
+          ${summaryTile("Total passive income", money(summary.total), summary.total > 0 ? "status-green" : "", "passiveIncome")}
+        </div>
+        ${rentalRows ? `<div class="table-list mt-3">${rentalRows}</div>` : ""}
+        ${options.showOwners ? `
+          <div class="summary-grid mt-3">
+            ${summaryTile(`${personDisplayName(1)} passive income`, money(summary.person1))}
+            ${summaryTile(`${personDisplayName(2)} passive income`, money(summary.person2))}
+            ${summaryTile("Joint passive income", money(summary.joint))}
+          </div>
+        ` : ""}
+      </section>
+    `;
+  }
+
   function renderCashflow(result) {
     document.getElementById("cashflowTable").innerHTML = cashflowRows(result).map(([label, value]) => `
       ${cashflowRowHtml(label, value)}
@@ -4564,8 +4641,12 @@
     container.innerHTML = [
       summaryTile("Target FI Capital", money(result.targetCapital), "", "targetFiCapital"),
       summaryTile("Current FI Assets", money(result.financialIndependenceAssets), "", "currentFiAssets"),
+      summaryTile("Current annual passive income", money(annualPassiveIncome(result)), "", "passiveIncome"),
+      summaryTile("Target lifestyle funded", plainPercent(freedomPercent(result))),
       summaryTile("Annual Lifestyle Spending Needed for Financial Freedom", money(plan.personal.targetAnnualSpending), "", "annualLifestyleSpending"),
     ].join("");
+    const passiveContainer = document.getElementById("goalsPassiveIncomeBreakdown");
+    if (passiveContainer) passiveContainer.innerHTML = passiveIncomeBreakdownHtml(result, { compact: true, showOwners: true });
     renderEngagementFullJourney(result);
   }
 
@@ -7605,7 +7686,7 @@
     const summaryNarrative = `
       <div class="report-narrative-box">
         <p>Your current net worth is approximately <strong>${money(result.currentNetWorth)}</strong>. Of this amount, approximately <strong>${money(result.financialIndependenceAssets)}</strong> is currently counted as Financial Independence (FI) assets capable of supporting your future lifestyle.</p>
-        <p>Based on annual lifestyle spending of <strong>${money(plan.personal.targetAnnualSpending)}</strong>, your estimated Financial Freedom target is <strong>${money(result.targetCapital)}</strong>. You are currently <strong>${plainPercent(percent)}</strong> of the way toward this target.</p>
+        <p>Based on annual lifestyle spending of <strong>${money(plan.personal.targetAnnualSpending)}</strong>, your estimated Financial Freedom target is <strong>${money(result.targetCapital)}</strong>. Your currently identified passive income funds approximately <strong>${plainPercent(percent)}</strong> of that target lifestyle.</p>
         <p>${escapeHtml(financialHealth)}</p>
       </div>
     `;
@@ -7674,22 +7755,23 @@
         <div class="${cashflowTone}"><strong>${cashflowHeading}</strong><p>${cashflowText}</p></div>
       `, "report-page-break report-compact-section")}
 
-      ${reportSection("Target Lifestyle Funding", "This section estimates how close your current FI assets are to funding your chosen lifestyle.", `
+      ${reportSection("Target Lifestyle Funding", "This section estimates how much of your chosen lifestyle is currently supported by income classified as passive.", `
         <div class="summary-grid">
           ${summaryTile("Current FI assets", money(result.financialIndependenceAssets))}
           ${summaryTile("Target FI assets", money(result.targetCapital))}
           ${summaryTile("Gap to target", money(gap))}
           ${summaryTile("Target lifestyle funded", plainPercent(percent))}
-          ${summaryTile("Estimated annual passive income", money(annualPassiveIncome(result)))}
+          ${summaryTile("Current annual passive income", money(annualPassiveIncome(result)), "", "passiveIncome")}
           ${summaryTile("10-year investment balance", money(investmentAtYear(result, 10)))}
           ${summaryTile("10-year debt estimate", money(projectedDebtAtYear(result, 10)))}
         </div>
+        ${passiveIncomeBreakdownHtml(result, { compact: true, showOwners: true })}
         ${reportProgressBar(percent)}
         <div class="report-chart-grid mt-4">
           <article class="report-chart-card report-chart-wide">
             <h3>Target lifestyle funding</h3>
             <svg id="reportProgressChart" class="chart" viewBox="0 0 760 280" role="img" aria-label="Report target lifestyle funding progress"></svg>
-            <p>Progress compares current FI assets with the estimated target FI assets. The visual chart is capped at 100% where projected FI assets exceed the selected target.</p>
+            <p>Current progress compares passive income recorded in the plan with the annual lifestyle target. Future projected progress continues to use the app's existing FI asset projection.</p>
           </article>
         </div>
       `, "report-page-break")}
@@ -8233,6 +8315,10 @@
 
   function syncCollectionInputs(collection, id, key, value) {
     document.querySelectorAll(`[data-collection="${collection}"][data-id="${id}"][data-key="${key}"]`).forEach((input) => {
+      if (input.type === "checkbox") {
+        input.checked = Boolean(value);
+        return;
+      }
       if (input.value !== String(value ?? "")) input.value = value ?? "";
     });
   }

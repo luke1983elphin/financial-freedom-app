@@ -514,6 +514,7 @@
     return {
       id: propertyIncome.id || "",
       name: propertyIncome.propertyName || propertyIncome.name || "Rental property",
+      owner: normaliseIncomeOwner(propertyIncome.owner, propertyIncome.type),
       treatment,
       annualNetRentalCashIncome,
       linkedLoanCount: linkedLoans.length,
@@ -589,6 +590,68 @@
       annualHouseholdDebtDeduction: roundCurrency(propertyDebtDeduction + confirmedUnlinkedDebtDeduction),
       annualHouseholdCashflowContribution: roundCurrency(propertyResults.reduce((total, item) => total + item.householdCashflowContribution, 0) - confirmedUnlinkedDebtDeduction),
     };
+  }
+
+  function hasPassiveOtherIncomeFlag(item = {}) {
+    return item.isPassiveIncome === true || item.passiveIncome === true || item.isPassive === true;
+  }
+
+  function createPassiveIncomeSummary() {
+    return {
+      interest: 0,
+      dividends: 0,
+      distributions: 0,
+      rental: 0,
+      otherPassive: 0,
+      person1: 0,
+      person2: 0,
+      joint: 0,
+      total: 0,
+      rentalProperties: [],
+    };
+  }
+
+  function addPassiveIncomeAmount(summary, category, amount, owner = "joint") {
+    const annualAmount = roundCurrency(amount);
+    if (!summary[category]) summary[category] = 0;
+    summary[category] = roundCurrency(summary[category] + annualAmount);
+    if (owner === "person1") summary.person1 = roundCurrency(summary.person1 + annualAmount);
+    else if (owner === "person2") summary.person2 = roundCurrency(summary.person2 + annualAmount);
+    else summary.joint = roundCurrency(summary.joint + annualAmount);
+    summary.total = roundCurrency(summary.interest + summary.dividends + summary.distributions + summary.rental + summary.otherPassive);
+  }
+
+  function passiveIncomeBreakdown(plan = {}, rentalCashflow = null) {
+    const summary = createPassiveIncomeSummary();
+    const rentalSummary = rentalCashflow || calculateRentalCashflowSummary(plan);
+    normalisedIncomeItems(plan).forEach((item) => {
+      const type = normaliseIncomeType(item.type || item.incomeType);
+      if (type === "salaryWages" || type === "rentalNetCashIncome") return;
+      const owner = normaliseIncomeOwner(item.owner || item.incomeOwner, type);
+      const annualAmount = roundCurrency(annualize(item.amount, item.frequency || "annually"));
+      if (type === "interest") addPassiveIncomeAmount(summary, "interest", annualAmount, owner);
+      else if (type === "dividends") addPassiveIncomeAmount(summary, "dividends", annualAmount, owner);
+      else if (type === "distributions") addPassiveIncomeAmount(summary, "distributions", annualAmount, owner);
+      else if (type === "other" && hasPassiveOtherIncomeFlag(item)) addPassiveIncomeAmount(summary, "otherPassive", annualAmount, owner);
+    });
+    (rentalSummary.propertyResults || []).forEach((property) => {
+      const passiveAmount = roundCurrency(property.householdCashflowContribution);
+      addPassiveIncomeAmount(summary, "rental", passiveAmount, normaliseIncomeOwner(property.owner, "rentalNetCashIncome"));
+      summary.rentalProperties.push({
+        id: property.id,
+        name: property.name,
+        owner: property.owner,
+        treatment: property.treatment,
+        annualNetRentalCashIncome: property.annualNetRentalCashIncome,
+        annualLoanRepayments: property.annualLoanRepayments,
+        annualLoanInterest: property.annualLoanInterest,
+        annualLoanPrincipal: property.annualLoanPrincipal,
+        householdDebtDeduction: property.householdDebtDeduction,
+        passiveRentalCashflow: passiveAmount,
+      });
+    });
+    summary.total = roundCurrency(summary.interest + summary.dividends + summary.distributions + summary.rental + summary.otherPassive);
+    return summary;
   }
 
   function annualRecurringExpenses(plan) {
@@ -1078,6 +1141,8 @@
       .filter((item) => item.type === "rentalPropertyLoan")
       .reduce((total, item) => total + nonNegative(item.balance), 0));
     const rentalPropertyCashflow = calculateRentalCashflowSummary(plan);
+    const passiveIncomeSummary = passiveIncomeBreakdown(plan, rentalPropertyCashflow);
+    const annualPassiveIncome = roundCurrency(passiveIncomeSummary.total);
     const totalAssets = roundCurrency(
       nonNegative(plan.assets.homeValue)
       + nonNegative(plan.assets.otherPropertyValue)
@@ -1254,7 +1319,8 @@
       currentAge,
       safeWithdrawalRate,
     });
-    const targetCapital = safeWithdrawalRate > 0 ? nonNegative(plan.personal.targetAnnualSpending) / safeWithdrawalRate : 0;
+    const targetAnnualLifestyleSpending = nonNegative(plan.personal.targetAnnualSpending);
+    const targetCapital = safeWithdrawalRate > 0 ? targetAnnualLifestyleSpending / safeWithdrawalRate : 0;
     const milestones = [
       {
         label: "Building Wealth",
@@ -1319,7 +1385,8 @@
         firstYearDraw: maximumLifestyleDraw(totalRetirementAssets, expectedInvestmentReturn, inflation),
       }),
     ];
-    const financialFreedomScore = targetCapital > 0 ? Math.min(100, roundRatio(financialIndependenceAssets / targetCapital * 100)) : 0;
+    const lifestyleFundingPercent = targetAnnualLifestyleSpending > 0 ? Math.max(0, roundRatio(annualPassiveIncome / targetAnnualLifestyleSpending * 100)) : 0;
+    const financialFreedomScore = Math.min(100, lifestyleFundingPercent);
     const netWorthProjection = investmentProjection.map((row, index) => {
       const year = index + 1;
       const residenceValue = plan.downsizing?.enabled && nonNegative(plan.downsizing.futurePropertyValue) > 0
@@ -1362,6 +1429,9 @@
       person2SalaryWages,
       incomeBreakdown: incomeSummary,
       otherAnnualIncome,
+      passiveIncomeBreakdown: passiveIncomeSummary,
+      annualPassiveIncome,
+      lifestyleFundingPercent,
       annualExpenses,
       annualLivingExpenses,
       annualCoreLivingExpenses,
@@ -1441,6 +1511,7 @@
     getAnnualLoanBreakdown,
     calculateRentalPropertyCashflow,
     calculateRentalCashflowSummary,
+    passiveIncomeBreakdown,
     amortiseLoan,
     calculateOffsetBenefit,
     calculateLoanSummary,
