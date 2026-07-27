@@ -314,6 +314,7 @@
                 </article>
 
                 <div class="dashboard-card-grid dashboard-card-grid-secondary mt-6" id="secondMetricGrid"></div>
+                <div id="dashboardPassiveIncomeBreakdown" class="mt-4"></div>
 
                 <div class="dashboard-chart-grid mt-6 grid gap-4 xl:grid-cols-2">
                   <article class="card">
@@ -367,7 +368,10 @@
                 </div>
                 <div class="grid gap-6 xl:grid-cols-[1fr_1.1fr]">
                   <div class="card"><div id="incomeExpenseForm" class="setup-list"></div></div>
-                  <div class="card"><div id="cashflowTable" class="table-list"></div></div>
+                  <div class="card">
+                    <div id="cashflowTable" class="table-list"></div>
+                    <div id="rentalCashflowSummary" class="rental-cashflow-summary mt-4"></div>
+                  </div>
                 </div>
               </section>
 
@@ -416,7 +420,8 @@
                   <h2>Super</h2>
                   <p>Track employer super, extra contributions and balances available from age 60.</p>
                 </div>
-                <div class="grid gap-6 xl:grid-cols-[1fr_1.1fr]">
+                <div class="super-layout-grid grid gap-6 xl:grid-cols-[1fr_1.1fr]">
+                  <div id="employerSuperPanelMount" class="super-employer-panel-wrap"></div>
                   <div class="card"><div id="superForm" class="input-grid"></div></div>
                   <div class="card"><div id="superCards" class="mini-grid"></div><div id="superSummary" class="mt-4 rounded-2xl bg-blue-50 p-4"></div></div>
                 </div>
@@ -430,6 +435,7 @@
                 <div class="card">
                   <div id="personalForm" class="input-grid"></div>
                   <div id="goalsFiSummary" class="summary-grid mt-4"></div>
+                  <div id="goalsPassiveIncomeBreakdown" class="mt-4"></div>
                 </div>
                 <div id="goalExamples" class="setup-list mt-6"></div>
                 <div id="engagementFullJourney" class="card mt-6 hidden"></div>

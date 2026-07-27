@@ -74,10 +74,34 @@
   ];
   const liabilityTypeOptions = [
     ["homeLoan", "Home loan"],
-    ["investmentLoan", "Investment Loan"],
-    ["hecsHelp", "Study and Training Support Loan"],
+    ["rentalPropertyLoan", "Rental property loan"],
+    ["investmentLoan", "Investment loan"],
+    ["personalLoan", "Personal loan"],
+    ["vehicleLoan", "Vehicle loan"],
     ["creditCard", "Credit Card"],
     ["otherDebt", "Other debt"],
+  ];
+  const incomeTypeOptions = [
+    ["salaryWages", "Salary or wages"],
+    ["interest", "Interest"],
+    ["rentalNetCashIncome", "Rental property net cash income"],
+    ["dividends", "Dividends"],
+    ["distributions", "Distribution income"],
+    ["other", "Other"],
+  ];
+  const incomeTypeLabels = Object.fromEntries(incomeTypeOptions);
+  const rentalCashflowTreatmentOptions = [
+    ["afterInterest", "Net cash income after interest"],
+    ["beforeInterest", "Net operating cash income before interest"],
+  ];
+  const rentalLoanRepaymentTypeOptions = [
+    ["principalAndInterest", "Principal and interest"],
+    ["interestOnly", "Interest-only"],
+  ];
+  const unlinkedRentalCashflowTreatmentOptions = [
+    ["unconfirmed", "Confirm treatment"],
+    ["afterInterest", "Rental income already includes loan interest"],
+    ["beforeInterest", "Rental income is entered before loan interest"],
   ];
   const hospitalCoverOptions = [
     ["", "Select cover status"],
@@ -160,6 +184,22 @@
     hospitalCover: {
       title: "Eligible private patient hospital cover",
       body: "Eligible private patient hospital cover may affect Medicare levy surcharge estimates. Extras-only policies generally do not prevent Medicare levy surcharge exposure.",
+    },
+    rentalNetCashIncome: {
+      title: "Rental property net cash income",
+      body: "Enter the property's expected annual cash income after rental property operating expenses and rental loan interest. Where a rental loan is linked, only the principal component of the loan repayments will be deducted separately from household cash surplus. This avoids counting the loan interest twice.",
+    },
+    rentalLoanPrincipal: {
+      title: "Rental loan principal",
+      body: "Only the principal component is deducted separately from household cashflow because rental loan interest is already included in the linked rental property net cash income.",
+    },
+    passiveIncome: {
+      title: "Passive Income",
+      body: "Passive income includes interest, dividends, distributions, net rental property cashflow and other income identified as passive. Salary and wages are excluded. For rental properties, linked loan principal repayments are deducted because loan interest is already included in net rental cash income.",
+    },
+    employerSuperEstimate: {
+      title: "Estimated employer super contributions",
+      body: "Estimated employer super contributions are calculated from the salary and wages entered for this person using the current Australian employer super guarantee rate of 12%. Actual contributions may differ because of contribution limits, maximum contribution bases, salary-packaging arrangements, employment conditions or excluded earnings.",
     },
     investmentReturn: {
       title: "Investment Return",
@@ -311,6 +351,7 @@
 
   function freedomPercent(result) {
     if (!result.targetCapital) return 0;
+    if (Number.isFinite(Number(result.lifestyleFundingPercent))) return Number(result.lifestyleFundingPercent);
     return (Number(result.financialIndependenceAssets) || 0) / result.targetCapital * 100;
   }
 
@@ -455,10 +496,12 @@
   function engagementProgress(result) {
     const targetSpending = Number(plan.personal.targetAnnualSpending || result.annualLivingExpenses) || 0;
     const withdrawalRate = safeWithdrawalRate();
-    const sustainableIncome = (Number(result.financialIndependenceAssets) || 0) * withdrawalRate;
+    const sustainableIncome = Number.isFinite(Number(result.annualPassiveIncome))
+      ? Number(result.annualPassiveIncome)
+      : (Number(result.financialIndependenceAssets) || 0) * withdrawalRate;
     const fiRaw = targetSpending > 0 ? sustainableIncome / targetSpending * 100 : 0;
     const ffRaw = Number(result.targetCapital) > 0
-      ? (Number(result.financialIndependenceAssets) || 0) / Number(result.targetCapital) * 100
+      ? fiRaw
       : fiRaw;
     return {
       targetSpending,
@@ -1268,12 +1311,56 @@
     return `${personDisplayName(personNumber)} Super`;
   }
 
-  function stslOwnerOptions() {
-    return [
+  function normaliseIncomeType(value, index = 0) {
+    const text = String(value || "").trim();
+    if (["salaryWages", "salary", "wages", "employment"].includes(text)) return "salaryWages";
+    if (incomeTypeOptions.some(([option]) => option === text)) return text;
+    return index < 2 ? "salaryWages" : "other";
+  }
+
+  function normaliseIncomeOwner(value, type = "other", index = 0) {
+    const text = String(value || "").trim();
+    if (text === "person1" || text === "person2") return text;
+    if (text === "joint" && type !== "salaryWages") return "joint";
+    if (index === 1) return "person2";
+    if (index === 0 || type === "salaryWages") return "person1";
+    return "joint";
+  }
+
+  function incomeOwnerOptions(type) {
+    const options = [
       ["person1", personDisplayName(1)],
       ["person2", personDisplayName(2)],
-      ["joint", "Unassigned / household"],
     ];
+    if (type !== "salaryWages") options.push(["joint", "Joint"]);
+    return options;
+  }
+
+  function personKey(personNumber) {
+    return personNumber === 2 ? "person2" : "person1";
+  }
+
+  function stslDebtSelected(personNumber) {
+    const key = personKey(personNumber);
+    const selected = plan.income?.[`${key}HasStslDebt`];
+    const legacySelected = plan.income?.[`${key}HasHelpDebt`];
+    if (selected !== null && selected !== undefined) return Boolean(selected);
+    if (legacySelected !== null && legacySelected !== undefined) return Boolean(legacySelected);
+    return Number(plan.liabilities?.[`${key}HecsHelpDebt`]) > 0;
+  }
+
+  function stslLiabilityId(personNumber) {
+    return `liability-stsl-${personKey(personNumber)}`;
+  }
+
+  function stslLiabilityName(personNumber) {
+    return `${personDisplayName(personNumber)} - STSL balance`;
+  }
+
+  function employerSuperInfoText() {
+    const summary = CALC.employerSuperSummary?.(plan) || {};
+    const rate = (Number(summary.rate) || 0.12) * 100;
+    return `Estimated employer super contributions are calculated from salary and wages using the current Australian employer super guarantee rate of ${rate.toFixed(rate % 1 ? 1 : 0)}%. Actual contributions may differ because of contribution limits, maximum contribution bases, salary-packaging arrangements, employment conditions or excluded earnings.`;
   }
 
   function isDefaultIncomeName(value, personNumber) {
@@ -1292,6 +1379,122 @@
     const secondSuper = plan.assetItems?.find((item) => item.id === "asset-super-2");
     if (firstSuper) firstSuper.name = superDisplayName(1);
     if (secondSuper) secondSuper.name = superDisplayName(2);
+  }
+
+  function normaliseIncomeItems() {
+    if (!Array.isArray(plan.incomeItems)) return;
+    plan.incomeItems.forEach((item, index) => {
+      item.type = normaliseIncomeType(item.type || item.incomeType, index);
+      item.owner = normaliseIncomeOwner(item.owner || item.incomeOwner, item.type, index);
+      if (item.type === "salaryWages" && item.owner === "joint") item.owner = index === 1 ? "person2" : "person1";
+      if (item.type === "rentalNetCashIncome") {
+        item.frequency = "annually";
+        item.rentalCashflowTreatment = item.rentalCashflowTreatment === "beforeInterest" ? "beforeInterest" : "afterInterest";
+        if (!Array.isArray(item.linkedLoanIds)) item.linkedLoanIds = item.linkedLoanId ? [item.linkedLoanId] : [];
+      }
+      if (item.type === "other" && item.isPassiveIncome === undefined && item.passiveIncome === true) {
+        item.isPassiveIncome = true;
+      }
+    });
+  }
+
+  function extractKnownStslBalances(existingItems) {
+    return existingItems.reduce((summary, item) => {
+      if (item.type !== "hecsHelp" && item.type !== "stsl") {
+        summary.otherItems.push(item);
+        return summary;
+      }
+      const amount = Number(item.balance) || 0;
+      if (item.owner === "person1" || item.id === stslLiabilityId(1)) summary.person1 += amount;
+      else if (item.owner === "person2" || item.id === stslLiabilityId(2)) summary.person2 += amount;
+      else if (amount > 0) summary.unassigned += amount;
+      return summary;
+    }, { person1: 0, person2: 0, unassigned: 0, otherItems: [] });
+  }
+
+  function normaliseStslLiabilities() {
+    if (!plan.liabilities) plan.liabilities = {};
+    const existingItems = Array.isArray(plan.liabilityItems) ? plan.liabilityItems : [];
+    const extracted = extractKnownStslBalances(existingItems);
+    let person1Balance = extracted.person1 || Number(plan.liabilities.person1HecsHelpDebt) || Number(plan.liabilities.person1StslBalance) || 0;
+    let person2Balance = extracted.person2 || Number(plan.liabilities.person2HecsHelpDebt) || Number(plan.liabilities.person2StslBalance) || 0;
+    let unassignedBalance = Number(plan.liabilities.unassignedStslBalance) || extracted.unassigned || 0;
+    const legacyHouseholdBalance = Number(plan.liabilities.hecsHelpDebt) || Number(plan.liabilities.stslBalance) || 0;
+
+    if (!extracted.person1 && !extracted.person2 && !unassignedBalance && legacyHouseholdBalance > 0) {
+      const p1Selected = stslDebtSelected(1);
+      const p2Selected = stslDebtSelected(2);
+      if (p1Selected && !p2Selected) person1Balance = legacyHouseholdBalance;
+      else if (p2Selected && !p1Selected) person2Balance = legacyHouseholdBalance;
+      else unassignedBalance = legacyHouseholdBalance;
+    }
+
+    if (plan.income.person1HasStslDebt === false) person1Balance = 0;
+    if (plan.income.person2HasStslDebt === false) person2Balance = 0;
+    if (person1Balance > 0 && plan.income.person1HasStslDebt == null) plan.income.person1HasStslDebt = true;
+    if (person2Balance > 0 && plan.income.person2HasStslDebt == null) plan.income.person2HasStslDebt = true;
+
+    const nextItems = [...extracted.otherItems];
+    if (stslDebtSelected(1)) {
+      nextItems.push({
+        id: stslLiabilityId(1),
+        name: stslLiabilityName(1),
+        type: "hecsHelp",
+        owner: "person1",
+        subtype: "STSL",
+        balance: person1Balance,
+        interestRatePct: 0,
+        repayment: 0,
+        repaymentFrequency: "monthly",
+        termYears: 0,
+      });
+    }
+    if (stslDebtSelected(2)) {
+      nextItems.push({
+        id: stslLiabilityId(2),
+        name: stslLiabilityName(2),
+        type: "hecsHelp",
+        owner: "person2",
+        subtype: "STSL",
+        balance: person2Balance,
+        interestRatePct: 0,
+        repayment: 0,
+        repaymentFrequency: "monthly",
+        termYears: 0,
+      });
+    }
+    plan.liabilityItems = nextItems;
+    plan.liabilities.person1HecsHelpDebt = person1Balance;
+    plan.liabilities.person2HecsHelpDebt = person2Balance;
+    plan.liabilities.person1StslBalance = person1Balance;
+    plan.liabilities.person2StslBalance = person2Balance;
+    plan.liabilities.hecsHelpDebt = person1Balance + person2Balance;
+    plan.liabilities.unassignedStslBalance = unassignedBalance;
+    plan.liabilities.stslOwnerConfirmationNeeded = unassignedBalance > 0;
+  }
+
+  function normaliseRentalPropertyData() {
+    if (!Array.isArray(plan.incomeItems)) plan.incomeItems = [];
+    if (!Array.isArray(plan.liabilityItems)) plan.liabilityItems = [];
+    const rentalLoanIds = new Set(plan.liabilityItems.filter((item) => item.type === "rentalPropertyLoan").map((item) => String(item.id)));
+    const rentalIncomeById = new Map(plan.incomeItems.filter((item) => item.type === "rentalNetCashIncome").map((item) => [String(item.id), item]));
+    plan.incomeItems.forEach((item) => {
+      if (item.type !== "rentalNetCashIncome") return;
+      item.frequency = "annually";
+      item.rentalCashflowTreatment = item.rentalCashflowTreatment === "beforeInterest" ? "beforeInterest" : "afterInterest";
+      item.linkedLoanIds = linkedLoanIds(item).filter((id) => rentalLoanIds.has(id));
+    });
+    plan.liabilityItems.forEach((item) => {
+      if (item.type !== "rentalPropertyLoan") return;
+      item.owner = item.owner || "joint";
+      item.repaymentType = item.repaymentType === "interestOnly" ? "interestOnly" : "principalAndInterest";
+      item.additionalPrincipalFrequency = item.additionalPrincipalFrequency || "annually";
+      item.unlinkedRentalCashflowTreatment = item.unlinkedRentalCashflowTreatment || "unconfirmed";
+      const linkedIncome = item.linkedRentalIncomeId ? rentalIncomeById.get(String(item.linkedRentalIncomeId)) : null;
+      if (linkedIncome && item.id && !linkedLoanIds(linkedIncome).includes(String(item.id))) {
+        linkedIncome.linkedLoanIds = [...linkedLoanIds(linkedIncome), String(item.id)];
+      }
+    });
   }
 
   function hasFinancialPlanData(currentPlan = plan) {
@@ -1352,11 +1555,12 @@
   function ensureCollectionData() {
     if (!Array.isArray(plan.incomeItems)) {
       plan.incomeItems = [
-        { id: "income-person-1", name: plan.income.person1IncomeName || `${personDisplayName(1)} income`, amount: plan.income.person1Income || 0, frequency: plan.income.person1Frequency || "fortnightly" },
-        { id: "income-person-2", name: plan.income.person2IncomeName || `${personDisplayName(2)} income`, amount: plan.income.person2Income || 0, frequency: plan.income.person2Frequency || "fortnightly" },
-        { id: "income-other", name: plan.income.otherIncomeName || "Other Income", amount: plan.income.otherIncome || 0, frequency: plan.income.otherIncomeFrequency || "annually" },
+        { id: "income-person-1", name: plan.income.person1IncomeName || `${personDisplayName(1)} income`, type: "salaryWages", owner: "person1", amount: plan.income.person1Income || 0, frequency: plan.income.person1Frequency || "fortnightly" },
+        { id: "income-person-2", name: plan.income.person2IncomeName || `${personDisplayName(2)} income`, type: "salaryWages", owner: "person2", amount: plan.income.person2Income || 0, frequency: plan.income.person2Frequency || "fortnightly" },
+        { id: "income-other", name: plan.income.otherIncomeName || "Other Income", type: "other", owner: "joint", amount: plan.income.otherIncome || 0, frequency: plan.income.otherIncomeFrequency || "annually" },
       ];
     }
+    normaliseIncomeItems();
     if (!Array.isArray(plan.assetItems)) {
       plan.assetItems = [
         { id: "asset-home", name: "Home", category: "home", value: plan.assets.homeValue || 0 },
@@ -1382,7 +1586,6 @@
           repaymentFrequency: "monthly",
           termYears: plan.liabilities.remainingLoanTermYears || 0,
         },
-        { id: "liability-stsl", name: "Study and Training Support Loan", type: "hecsHelp", owner: "person1", subtype: "HECS-HELP", balance: plan.liabilities.hecsHelpDebt || 0, interestRatePct: 0, repayment: 0, repaymentFrequency: "monthly", termYears: 0, lastUpdated: "", note: "" },
         { id: "liability-credit-card", name: "Credit Card", type: "creditCard", balance: plan.liabilities.creditCardBalance || 0, interestRatePct: plan.liabilities.creditCardInterestRatePct || 19.99, repayment: plan.liabilities.creditCardMonthlyRepayment || 0, repaymentFrequency: "monthly", termYears: 0, creditLimit: plan.liabilities.creditCardLimit || 0 },
         { id: "liability-other", name: "Other debts", type: "otherDebt", balance: plan.liabilities.otherDebts || 0, interestRatePct: 0, repayment: 0, repaymentFrequency: "monthly", termYears: 0 },
       ];
@@ -1390,14 +1593,8 @@
     if (plan.liabilityItems.length && !plan.liabilityItems.some((item) => item.type === "creditCard") && (Number(plan.liabilities.creditCardBalance) || Number(plan.liabilities.creditCardLimit))) {
       plan.liabilityItems.push({ id: "liability-credit-card", name: "Credit Card", type: "creditCard", balance: plan.liabilities.creditCardBalance || 0, interestRatePct: plan.liabilities.creditCardInterestRatePct || 19.99, repayment: plan.liabilities.creditCardMonthlyRepayment || 0, repaymentFrequency: "monthly", termYears: 0, creditLimit: plan.liabilities.creditCardLimit || 0 });
     }
-    plan.liabilityItems.forEach((item) => {
-      if (item.type === "stsl") item.type = "hecsHelp";
-      if (item.type === "hecsHelp") {
-        if (!item.name || /HECS|HELP/i.test(item.name)) item.name = "Study and Training Support Loan";
-        if (!item.owner) item.owner = "person1";
-        if (!item.subtype) item.subtype = "HECS-HELP";
-      }
-    });
+    normaliseStslLiabilities();
+    normaliseRentalPropertyData();
     if (!Array.isArray(plan.expenseItems)) {
       plan.expenseItems = [
         { id: "expense-living", name: plan.expenses.livingName || "Living costs", category: "living", amount: plan.expenses.livingCosts || 0, frequency: plan.expenses.livingFrequency || "monthly" },
@@ -1437,19 +1634,28 @@
   function syncCollectionsToLegacy() {
     ensureCollectionData();
     const incomes = plan.incomeItems;
-    const firstIncome = incomes[0] || {};
-    const secondIncome = incomes[1] || {};
-    const otherAnnualIncome = incomes.slice(2).reduce((total, item) => total + annualValue(item.amount, item.frequency), 0);
+    normaliseIncomeItems();
+    const person1SalaryItems = incomes.filter((item) => item.type === "salaryWages" && item.owner === "person1");
+    const person2SalaryItems = incomes.filter((item) => item.type === "salaryWages" && item.owner === "person2");
+    const firstIncome = person1SalaryItems[0] || incomes.find((item) => item.owner === "person1") || {};
+    const secondIncome = person2SalaryItems[0] || incomes.find((item) => item.owner === "person2") || {};
+    const person1SalaryAnnual = person1SalaryItems.reduce((total, item) => total + annualValue(item.amount, item.frequency), 0);
+    const person2SalaryAnnual = person2SalaryItems.reduce((total, item) => total + annualValue(item.amount, item.frequency), 0);
+    const otherAnnualIncome = incomes
+      .filter((item) => item.type !== "salaryWages")
+      .reduce((total, item) => total + annualValue(item.amount, item.frequency), 0);
 
     plan.income.person1IncomeName = firstIncome.name || "";
-    plan.income.person1Income = Number(firstIncome.amount) || 0;
-    plan.income.person1Frequency = firstIncome.frequency || "annually";
+    plan.income.person1Income = person1SalaryAnnual;
+    plan.income.person1Frequency = "annually";
     plan.income.person2IncomeName = secondIncome.name || "";
-    plan.income.person2Income = Number(secondIncome.amount) || 0;
-    plan.income.person2Frequency = secondIncome.frequency || "annually";
+    plan.income.person2Income = person2SalaryAnnual;
+    plan.income.person2Frequency = "annually";
     plan.income.otherIncomeName = "Other Income";
     plan.income.otherIncome = otherAnnualIncome;
     plan.income.otherIncomeFrequency = "annually";
+    const employerSuper = CALC.employerSuperSummary?.(plan);
+    if (employerSuper) plan.investing.employerSuperContributions = employerSuper.totalEffective;
 
     syncDefaultPersonCollectionLabels();
     const assets = plan.assetItems;
@@ -1485,13 +1691,15 @@
     plan.liabilities.monthlyRepayment = homeLoanRepaymentAnnual / 12;
     plan.liabilities.remainingLoanTermYears = homeLoans.reduce((max, item) => Math.max(max, Number(item.termYears) || 0), 0);
     const stslLiabilities = liabilities.filter((item) => item.type === "hecsHelp" || item.type === "stsl");
-    plan.liabilities.hecsHelpDebt = stslLiabilities.reduce((total, item) => total + (Number(item.balance) || 0), 0);
     plan.liabilities.person1HecsHelpDebt = stslLiabilities
-      .filter((item) => item.owner === "person1" || (!item.owner && !plan.liabilities.person2HecsHelpDebt))
+      .filter((item) => item.owner === "person1")
       .reduce((total, item) => total + (Number(item.balance) || 0), 0);
     plan.liabilities.person2HecsHelpDebt = stslLiabilities
       .filter((item) => item.owner === "person2")
       .reduce((total, item) => total + (Number(item.balance) || 0), 0);
+    plan.liabilities.person1StslBalance = plan.liabilities.person1HecsHelpDebt;
+    plan.liabilities.person2StslBalance = plan.liabilities.person2HecsHelpDebt;
+    plan.liabilities.hecsHelpDebt = plan.liabilities.person1HecsHelpDebt + plan.liabilities.person2HecsHelpDebt;
     const creditCards = liabilities.filter((item) => item.type === "creditCard");
     plan.liabilities.creditCardBalance = creditCards.reduce((total, item) => total + (Number(item.balance) || 0), 0);
     plan.liabilities.creditCardInterestRatePct = plan.liabilities.creditCardBalance > 0
@@ -1499,6 +1707,7 @@
       : (creditCards[0]?.interestRatePct || 19.99);
     plan.liabilities.creditCardMonthlyRepayment = creditCards.reduce((total, item) => total + annualValue(item.repayment, item.repaymentFrequency || "monthly"), 0) / 12;
     plan.liabilities.creditCardLimit = creditCards.reduce((total, item) => total + (Number(item.creditLimit) || 0), 0);
+    plan.liabilities.rentalPropertyLoanBalance = liabilities.filter((item) => item.type === "rentalPropertyLoan").reduce((total, item) => total + (Number(item.balance) || 0), 0);
     plan.liabilities.otherDebts = liabilities.filter((item) => item.type === "otherDebt").reduce((total, item) => total + (Number(item.balance) || 0), 0);
     plan.expenses.mortgageRepayments = plan.liabilities.monthlyRepayment;
 
@@ -1949,7 +2158,8 @@
         currentNetWorth: numberValue(result.currentNetWorth),
         currentFinancialIndependenceAssets: numberValue(result.financialIndependenceAssets),
         accessibleInvestmentAssets: numberValue(result.accessibleInvestmentAssets),
-        estimatedAnnualPassiveIncome: numberValue(result.financialIndependenceAssets * (numberValue(investing.safeWithdrawalRatePct) / 100)),
+        estimatedAnnualPassiveIncome: numberValue(result.annualPassiveIncome),
+        passiveIncomeBreakdown: result.passiveIncomeBreakdown || {},
         financialFreedomProgressPct: numberValue(result.financialFreedomScore),
         estimatedFinancialIndependenceAge: firstProjectedAgeAtProgress(result, 75),
         estimatedFinancialFreedomAge: estimatedFreedomAge,
@@ -2996,15 +3206,184 @@
     `).join("");
   }
 
+  function employerSuperPanelHtml() {
+    const result = CALC.calculatePlan(plan);
+    const employerSuper = result.employerSuperContributions || CALC.employerSuperSummary?.(plan) || {};
+    const ratePercent = ((Number(employerSuper.rate) || 0.12) * 100).toFixed(0);
+    const person1Name = personDisplayName(1);
+    const person2Name = personDisplayName(2);
+    const concessionalCap = Number(employerSuper.concessionalCap || result.taxConfiguration?.concessionalSuperCap) || 30000;
+    const person1ContributionTotal = Number(employerSuper.person1Amount) || 0;
+    const person2ContributionTotal = Number(employerSuper.person2Amount) || 0;
+    const householdExtraSuper = Number(plan.investing.extraSuperContributions) || 0;
+    const hasSecondPerson = Boolean(plan.personal.person2Name || plan.personal.person2Age || person2ContributionTotal);
+    const capWarnings = [];
+    if (person1ContributionTotal > concessionalCap) capWarnings.push(`${person1Name}'s estimated employer super exceeds the standard concessional cap of ${money(concessionalCap)}.`);
+    if (person2ContributionTotal > concessionalCap) capWarnings.push(`${person2Name}'s estimated employer super exceeds the standard concessional cap of ${money(concessionalCap)}.`);
+    if (householdExtraSuper > 0 && (person1ContributionTotal + person2ContributionTotal + householdExtraSuper) > concessionalCap * (hasSecondPerson ? 2 : 1)) {
+      capWarnings.push(`Total employer super plus extra super contributions may exceed the standard concessional contribution cap. The app warns only; it does not reduce contributions automatically.`);
+    }
+    const summaryCard = (label, value, extraClass = "") => `
+      <article class="summary-tile employer-super-summary-card ${extraClass}">
+        <span>${escapeHtml(label)}</span>
+        <strong>${escapeHtml(value)}</strong>
+      </article>
+    `;
+    const overrideCard = (personKey, name, calculatedAmount, overrideAmount, enabled) => `
+      <article class="employer-super-override-card">
+        <div>
+          <h4>${escapeHtml(name)}</h4>
+          <p>Calculated amount: <strong>${money(calculatedAmount || 0)}</strong></p>
+        </div>
+        <label class="toggle-field employer-super-toggle">
+          <span class="field-label">Override calculated amount</span>
+          <input class="toggle-input" data-path="investing.${personKey}EmployerSuperOverrideEnabled" data-type="boolean" type="checkbox"${enabled ? " checked" : ""}>
+        </label>
+        ${enabled ? `
+          <label>
+            <span class="field-label">${escapeHtml(name)} override amount</span>
+            <input class="field-input employer-super-amount-input" data-path="investing.${personKey}EmployerSuperOverride" data-type="number" type="number" step="1000" value="${escapeHtml(overrideAmount ?? "")}">
+          </label>
+          <button class="btn" type="button" data-employer-super-reset="${escapeHtml(personKey)}">Use calculated amount</button>
+        ` : ""}
+      </article>
+    `;
+    return `
+      <article class="form-item-card employer-super-panel" data-employer-super-panel>
+        <div class="card-subheading employer-super-heading">
+          <h3 class="field-label-with-info">Estimated employer super contributions ${infoButtonHtml("employerSuperEstimate", "Estimated employer super contributions")}</h3>
+          <p>Automatically calculated as salary and wages x ${ratePercent}%.</p>
+        </div>
+        <div class="employer-super-summary-grid mt-4">
+          ${summaryCard(`${person1Name} estimated employer super`, money(employerSuper.person1Amount || 0))}
+          ${summaryCard(`${person2Name} estimated employer super`, money(employerSuper.person2Amount || 0))}
+          ${summaryCard("Household estimated employer super", money(employerSuper.totalEffective || 0), "household-super-card")}
+        </div>
+        ${capWarnings.length ? `<p class="tax-note mt-3"><strong>Contribution cap warning:</strong> ${escapeHtml(capWarnings.join(" "))}</p>` : ""}
+        ${employerSuper.hasOverride ? `<p class="field-help mt-3">Manual override is active. Calculated amount before override: ${money(employerSuper.totalCalculated || 0)}.</p>` : ""}
+        <div class="employer-super-override-grid mt-4">
+          ${overrideCard("person1", person1Name, employerSuper.person1Calculated, plan.investing.person1EmployerSuperOverride, plan.investing.person1EmployerSuperOverrideEnabled)}
+          ${overrideCard("person2", person2Name, employerSuper.person2Calculated, plan.investing.person2EmployerSuperOverride, plan.investing.person2EmployerSuperOverrideEnabled)}
+        </div>
+        <p class="field-help mt-3">${escapeHtml(employerSuperInfoText())}</p>
+      </article>
+    `;
+  }
+
+  function appendEmployerSuperPanel(containerId) {
+    const container = document.getElementById("employerSuperPanelMount") || document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = "";
+    container.insertAdjacentHTML("beforeend", employerSuperPanelHtml());
+  }
+
+  function refreshEmployerSuperPanels() {
+    document.querySelectorAll("[data-employer-super-panel]").forEach((panel) => {
+      panel.outerHTML = employerSuperPanelHtml();
+    });
+  }
+
+  function rentalPropertyLoanItems() {
+    ensureCollectionData();
+    return (plan.liabilityItems || []).filter((item) => item.type === "rentalPropertyLoan");
+  }
+
+  function rentalIncomeItems() {
+    ensureCollectionData();
+    return (plan.incomeItems || []).filter((item) => item.type === "rentalNetCashIncome");
+  }
+
+  function linkedLoanIds(item) {
+    if (Array.isArray(item.linkedLoanIds)) return item.linkedLoanIds.map((id) => String(id));
+    if (typeof item.linkedLoanIds === "string") return item.linkedLoanIds.split(",").map((id) => id.trim()).filter(Boolean);
+    return item.linkedLoanId ? [String(item.linkedLoanId)] : [];
+  }
+
+  function updateRentalIncomeLoanLink(input) {
+    ensureCollectionData();
+    const income = plan.incomeItems.find((item) => String(item.id) === String(input.dataset.rentalLoanLink));
+    if (!income || income.type !== "rentalNetCashIncome") return;
+    const loanId = String(input.dataset.loanId || "");
+    if (!loanId) {
+      income.linkedLoanIds = [];
+      income.linkedLoanId = "";
+    } else {
+      const linked = new Set(linkedLoanIds(income));
+      if (input.checked) linked.add(loanId);
+      else linked.delete(loanId);
+      income.linkedLoanIds = [...linked];
+      income.linkedLoanId = income.linkedLoanIds.length === 1 ? income.linkedLoanIds[0] : "";
+    }
+    plan.liabilityItems.forEach((loan) => {
+      if (loan.type !== "rentalPropertyLoan") return;
+      if (loan.linkedRentalIncomeId === income.id && !linkedLoanIds(income).includes(String(loan.id))) loan.linkedRentalIncomeId = "";
+      if (linkedLoanIds(income).includes(String(loan.id))) loan.linkedRentalIncomeId = income.id;
+    });
+    generatedWeeklyPlanner = null;
+    if (weeklyPlan) {
+      markWeeklyTimingReviewRequired();
+      saveWeeklyPlan();
+    }
+    syncCollectionsToLegacy();
+    autosavePlan();
+    renderAll();
+  }
+
+  function rentalLoanLinkControls(item) {
+    const loans = rentalPropertyLoanItems();
+    if (!loans.length) {
+      return `<p class="field-help mt-3">No rental property loans have been added yet. Add a liability and classify it as Rental property loan to link it here.</p>`;
+    }
+    const linked = new Set(linkedLoanIds(item));
+    return `
+      <div class="rental-loan-link-list mt-4">
+        <span class="field-label">Linked rental property loan</span>
+        <label class="checkbox-row">
+          <input type="checkbox" data-rental-loan-link="${escapeHtml(item.id)}" data-loan-id="" ${linked.size ? "" : "checked"}>
+          <span>No linked loan</span>
+        </label>
+        ${loans.map((loan) => `
+          <label class="checkbox-row">
+            <input type="checkbox" data-rental-loan-link="${escapeHtml(item.id)}" data-loan-id="${escapeHtml(loan.id)}"${linked.has(String(loan.id)) ? " checked" : ""}>
+            <span>${escapeHtml(loan.name || "Rental property loan")}</span>
+          </label>
+        `).join("")}
+      </div>
+    `;
+  }
+
+  function rentalIncomeLinkOptions(selected = "") {
+    return [["", "No linked rental income"], ...rentalIncomeItems().map((item) => [item.id, item.propertyName || item.name || "Rental property"])]
+      .map(([value, label]) => `<option value="${escapeHtml(value)}"${selected === value ? " selected" : ""}>${escapeHtml(label)}</option>`)
+      .join("");
+  }
+
+  function rentalIncomeLinkOptionPairs() {
+    return [["", "No linked rental income"], ...rentalIncomeItems().map((item) => [item.id, item.propertyName || item.name || "Rental property"])];
+  }
+
+  function rentalLoanBreakdownTiles(item) {
+    const breakdown = CALC.getAnnualLoanBreakdown?.(item);
+    if (!breakdown) return "";
+    return `
+      <div class="summary-grid mt-4">
+        ${summaryTile("Annual repayment", money(breakdown.annualRepayments))}
+        ${summaryTile("Estimated interest", money(breakdown.annualInterest))}
+        ${summaryTile("Estimated principal", money(breakdown.annualPrincipal), "", "rentalLoanPrincipal")}
+      </div>
+    `;
+  }
+
   function dynamicInput(collection, item, key, label, options = {}) {
     const rawValue = item[key] ?? "";
     const isBlankNumber = options.kind !== "text" && options.type !== "select" && Number(rawValue) === 0 && rawValue !== "0";
     const value = isBlankNumber ? "" : rawValue;
     const common = `data-collection="${collection}" data-id="${item.id}" data-key="${key}"`;
+    const infoButton = infoButtonHtml(options.infoKey, label);
     if (options.type === "select") {
       return `
         <label>
-          <span class="field-label">${escapeHtml(label)}</span>
+          <span class="field-label field-label-with-info">${escapeHtml(label)}${infoButton}</span>
           <select class="field-input" ${common} data-type="text">${optionList(options.options, value)}</select>
         </label>
       `;
@@ -3012,7 +3391,7 @@
     if (options.type === "checkbox") {
       return `
         <label class="toggle-field">
-          <span class="field-label">${escapeHtml(label)}</span>
+          <span class="field-label field-label-with-info">${escapeHtml(label)}${infoButton}</span>
           <input class="toggle-input" ${common} data-type="boolean" type="checkbox"${rawValue ? " checked" : ""}>
         </label>
       `;
@@ -3020,7 +3399,7 @@
     const inputType = options.kind === "text" ? "text" : "number";
     return `
       <label>
-        <span class="field-label">${escapeHtml(label)}</span>
+        <span class="field-label field-label-with-info">${escapeHtml(label)}${infoButton}</span>
         <input class="field-input" ${common} data-type="${options.kind || "number"}" type="${inputType}" step="${options.step || "1"}" value="${escapeHtml(value)}" placeholder="${escapeHtml(options.placeholder || "")}">
       </label>
     `;
@@ -3049,20 +3428,42 @@
   }
 
   function incomeCard(item, index) {
+    const type = normaliseIncomeType(item.type, index);
+    const owner = normaliseIncomeOwner(item.owner, type, index);
+    item.type = type;
+    item.owner = owner;
+    const typeLabel = incomeTypeLabels[type] || "Income";
+    const ownerLabel = owner === "joint" ? "Joint" : personDisplayName(owner === "person2" ? 2 : 1);
+    const rentalFields = type === "rentalNetCashIncome" ? `
+          ${dynamicInput("incomeItems", item, "name", "Income description", { kind: "text", placeholder: "e.g. Rental property cashflow" })}
+          ${dynamicInput("incomeItems", item, "type", "Income type", { type: "select", options: incomeTypeOptions, infoKey: "rentalNetCashIncome" })}
+          ${dynamicInput("incomeItems", item, "propertyName", "Property name or description", { kind: "text", placeholder: "e.g. Smith Street rental" })}
+          ${dynamicInput("incomeItems", item, "owner", "Income owner", { type: "select", options: incomeOwnerOptions(type) })}
+          ${dynamicInput("incomeItems", item, "amount", "Annual net cash income", { step: "100", infoKey: "rentalNetCashIncome" })}
+          ${dynamicInput("incomeItems", item, "rentalCashflowTreatment", "Rental cashflow treatment", { type: "select", options: rentalCashflowTreatmentOptions })}
+          ${dynamicInput("incomeItems", item, "note", "Optional notes", { kind: "text", placeholder: "Optional context" })}
+        ` : `
+          ${dynamicInput("incomeItems", item, "name", "Income name", { kind: "text", placeholder: "e.g. Salary, rent, dividends" })}
+          ${dynamicInput("incomeItems", item, "type", "Income type", { type: "select", options: incomeTypeOptions })}
+          ${dynamicInput("incomeItems", item, "owner", "Income owner", { type: "select", options: incomeOwnerOptions(type) })}
+          ${dynamicInput("incomeItems", item, "amount", "Gross amount", { step: "100", placeholder: "Amount for the selected frequency" })}
+          ${dynamicInput("incomeItems", item, "frequency", "Frequency", { type: "select", options: frequencies })}
+          ${type === "other" ? dynamicInput("incomeItems", item, "isPassiveIncome", "Passive income", { type: "checkbox", infoKey: "passiveIncome" }) : ""}
+        `;
     return `
       <article class="form-item-card dynamic-item-card">
         <div class="item-card-title">
           <div>
             <span>Income ${index + 1}</span>
             <h4>${escapeHtml(item.name || "Income")}</h4>
+            <small>${escapeHtml(typeLabel)} - ${escapeHtml(ownerLabel)}</small>
           </div>
           ${removeButton("incomeItems", item.id)}
         </div>
         <div class="input-grid mt-4">
-          ${dynamicInput("incomeItems", item, "name", "Income name", { kind: "text", placeholder: "e.g. Salary, rent, dividends" })}
-          ${dynamicInput("incomeItems", item, "amount", "Amount", { step: "100" })}
-          ${dynamicInput("incomeItems", item, "frequency", "Frequency", { type: "select", options: frequencies })}
+          ${rentalFields}
         </div>
+        ${type === "rentalNetCashIncome" ? `${rentalLoanLinkControls(item)}<p class="field-help mt-3">${escapeHtml(goalInfoCopy.rentalNetCashIncome.body)}</p>` : ""}
       </article>
     `;
   }
@@ -3088,31 +3489,33 @@
 
   function liabilityCard(item, index) {
     if (item.type === "hecsHelp" || item.type === "stsl") {
-      const stsl = CALC.calculatePlan(plan).stslRepaymentEstimate || CALC.calculatePlan(plan).helpRepaymentEstimate;
+      const result = CALC.calculatePlan(plan);
+      const stsl = result.stslRepaymentEstimate || result.helpRepaymentEstimate;
       const ownerKey = item.owner === "person2" ? "person2" : "person1";
+      const personNumber = ownerKey === "person2" ? 2 : 1;
+      item.owner = ownerKey;
+      item.name = stslLiabilityName(personNumber);
       const ownerEstimate = stsl?.[ownerKey] || {};
       return `
         <article class="form-item-card dynamic-item-card">
           <div class="item-card-title">
             <div>
               <span>STSL estimate</span>
-              <h4>${escapeHtml(item.name || "Study and Training Support Loan")}</h4>
+              <h4>${escapeHtml(stslLiabilityName(personNumber))}</h4>
             </div>
-            ${removeButton("liabilityItems", item.id)}
           </div>
           <div class="input-grid mt-4">
-            ${dynamicInput("liabilityItems", item, "owner", "Owner", { type: "select", options: stslOwnerOptions() })}
-            ${dynamicInput("liabilityItems", item, "balance", "Current STSL balance", { step: "1000" })}
+            ${dynamicInput("liabilityItems", item, "balance", `${personDisplayName(personNumber)} - STSL balance`, { step: "1000" })}
             ${dynamicInput("liabilityItems", item, "subtype", "Optional subtype", { kind: "text", placeholder: "e.g. HECS-HELP, VET Student Loan" })}
             ${dynamicInput("liabilityItems", item, "lastUpdated", "Last updated", { kind: "text", placeholder: "e.g. July 2026" })}
             ${dynamicInput("liabilityItems", item, "note", "Optional note", { kind: "text", placeholder: "Optional context" })}
           </div>
           <div class="summary-grid mt-4">
-            ${summaryTile(`${personDisplayName(ownerKey === "person2" ? 2 : 1)} repayment income`, money(ownerEstimate.repaymentIncome || 0))}
+            ${summaryTile(`${personDisplayName(personNumber)} repayment income`, money(ownerEstimate.repaymentIncome || 0))}
             ${summaryTile("Estimated annual STSL compulsory repayment", money(ownerEstimate.annualRepayment || 0))}
-            ${summaryTile("Estimated years until repaid", stsl.estimatedYearsToRepay ? `${stsl.estimatedYearsToRepay.toFixed(1)} years` : "No compulsory repayment estimated")}
+            ${summaryTile("Estimated years until repaid", ownerEstimate.annualRepayment && item.balance ? `${(Number(item.balance) / ownerEstimate.annualRepayment).toFixed(1)} years` : "No compulsory repayment estimated")}
           </div>
-          <p class="field-help mt-3">STSL includes relevant government study and training loans such as HECS-HELP, HELP, VET Student Loans and other covered loan programs. The balance affects net worth; compulsory repayment is estimated from income and the person's STSL selection.</p>
+          <p class="field-help mt-3">STSL includes relevant government study and training loans such as HECS-HELP, HELP, VET Student Loans and other covered loan programs. This field belongs only to ${escapeHtml(personDisplayName(personNumber))}. Clear that person's STSL checkbox in Income if they do not have this debt.</p>
         </article>
       `;
     }
@@ -3137,6 +3540,23 @@
         </article>
       `;
     }
+    const isRentalLoan = item.type === "rentalPropertyLoan";
+    const linkedIncomeId = item.linkedRentalIncomeId || "";
+    const rentalLinkedFromIncome = isRentalLoan && rentalIncomeItems().some((income) => linkedLoanIds(income).includes(String(item.id)));
+    const rentalLinkText = rentalLinkedFromIncome
+      ? `<p class="field-help mt-3">This loan is linked from a rental property income entry. The income entry controls whether principal only or full repayment is deducted from household cashflow.</p>`
+      : "";
+    const unlinkedWarning = isRentalLoan && !linkedIncomeId && !rentalLinkedFromIncome
+      ? `<p class="tax-note mt-3"><strong>Rental loan not linked:</strong> This rental property loan is not linked to a rental property income entry. Confirm whether its interest has already been included in the rental cashflow amount.</p>`
+      : "";
+    const rentalFields = isRentalLoan ? `
+          ${dynamicInput("liabilityItems", item, "owner", "Loan owner", { type: "select", options: incomeOwnerOptions("other") })}
+          ${dynamicInput("liabilityItems", item, "repaymentType", "Repayment type", { type: "select", options: rentalLoanRepaymentTypeOptions })}
+          ${dynamicInput("liabilityItems", item, "linkedRentalIncomeId", "Linked rental property income", { type: "select", options: rentalIncomeLinkOptionPairs() })}
+          ${!linkedIncomeId && !rentalLinkedFromIncome ? dynamicInput("liabilityItems", item, "unlinkedRentalCashflowTreatment", "Unlinked rental cashflow treatment", { type: "select", options: unlinkedRentalCashflowTreatmentOptions }) : ""}
+          ${item.repaymentType === "interestOnly" ? dynamicInput("liabilityItems", item, "additionalPrincipalRepayment", "Additional principal repayment", { step: "100" }) : ""}
+          ${item.repaymentType === "interestOnly" ? dynamicInput("liabilityItems", item, "additionalPrincipalFrequency", "Additional principal frequency", { type: "select", options: frequencies }) : ""}
+        ` : "";
     return `
       <article class="form-item-card dynamic-item-card">
         <div class="item-card-title">
@@ -3154,7 +3574,9 @@
           ${dynamicInput("liabilityItems", item, "repayment", "Repayment amount", { step: "100" })}
           ${dynamicInput("liabilityItems", item, "repaymentFrequency", "Repayment frequency", { type: "select", options: frequencies })}
           ${dynamicInput("liabilityItems", item, "termYears", "Remaining term (years)", { step: "1" })}
+          ${rentalFields}
         </div>
+        ${isRentalLoan ? `${rentalLoanBreakdownTiles(item)}${rentalLinkText}${unlinkedWarning}<p class="field-help mt-3">Rental property loans can be linked to rental property net cash income so loan interest is not counted twice in household cashflow.</p>` : ""}
       </article>
     `;
   }
@@ -3248,12 +3670,15 @@
   function renderLiabilityCollection(containerId) {
     const container = document.getElementById(containerId);
     if (!container) return;
+    const stslWarning = plan.liabilities?.stslOwnerConfirmationNeeded
+      ? `<div class="tax-note mb-4"><strong>Confirm STSL owner:</strong> ${money(plan.liabilities.unassignedStslBalance || 0)} of existing Study and Training Support Loan balance could not be assigned safely. Select the correct person's STSL checkbox in Income, then enter the balance for that person below.</div>`
+      : "";
     container.innerHTML = collectionShell({
       title: "Liabilities / Loans",
-      description: "Add each loan or liability. Study and Training Support Loan balances are assigned to a person; compulsory repayments are estimated from income.",
+      description: "Add each loan or liability. Study and Training Support Loan balances appear separately for each person who has selected an STSL debt in Income.",
       addLabel: "Add liability",
       collection: "liabilityItems",
-      body: plan.liabilityItems.map(liabilityCard).join(""),
+      body: stslWarning + plan.liabilityItems.map(liabilityCard).join(""),
     });
   }
 
@@ -3318,7 +3743,6 @@
       { label: "Financial Freedom target age", path: "personal.fullRetirementAge", infoKey: "financialFreedomTargetAge" },
       { label: "Annual Lifestyle Spending Needed for Financial Freedom", path: "personal.targetAnnualSpending", step: "1000", infoKey: "annualLifestyleSpending" },
       { label: "Annual investing target", path: "investing.annualInvestingTarget", step: "1000", infoKey: "annualInvestingTarget" },
-      { label: "Employer super contributions", path: "investing.employerSuperContributions", step: "1000" },
       { label: "Extra super contributions", path: "investing.extraSuperContributions", step: "1000", infoKey: "extraSuperContributions" },
     ];
     const assumptionFields = [
@@ -3338,6 +3762,7 @@
     ];
 
     renderForm("personalForm", [...aboutFields, ...goalFields]);
+    appendEmployerSuperPanel("personalForm");
     renderAssetCollection("assetsForm");
     renderLiabilityCollection("liabilitiesForm");
     renderLiabilityCollection("loanForm");
@@ -3352,16 +3777,17 @@
     renderForm("superForm", [
       { label: superDisplayName(1), path: "assets.superPerson1", step: "1000" },
       { label: superDisplayName(2), path: "assets.superPerson2", step: "1000" },
-      { label: "Employer super contributions", path: "investing.employerSuperContributions", step: "1000" },
       { label: "Extra super contributions", path: "investing.extraSuperContributions", step: "1000", infoKey: "extraSuperContributions" },
       { label: "Expected super return (%)", path: "investing.expectedSuperReturnPct", step: "0.1" },
     ]);
+    appendEmployerSuperPanel("superForm");
     renderForm("wizardAboutForm", aboutFields);
     renderIncomeCollection("wizardIncomeForm");
     renderAssetCollection("wizardAssetsForm");
     renderLiabilityCollection("wizardLoansForm");
     renderExpenseCollection("wizardExpensesForm");
     renderForm("wizardGoalsForm", goalFields);
+    appendEmployerSuperPanel("wizardGoalsForm");
     renderGoalCollection("wizardGoalExamples");
     renderForm("wizardDownsizingForm", downsizingFields);
     renderForm("wizardAssumptionsReview", assumptionFields);
@@ -3447,6 +3873,7 @@
   }
 
   function annualPassiveIncome(result) {
+    if (Number.isFinite(Number(result.annualPassiveIncome))) return Math.round(Number(result.annualPassiveIncome));
     return Math.round((Number(result.financialIndependenceAssets) || 0) * safeWithdrawalRate());
   }
 
@@ -3631,7 +4058,7 @@
           <span class="metric-label">Target lifestyle funded</span>
           <strong>${plainPercent(percent)} of target lifestyle funded</strong>
         </div>
-        <p id="freedomPassiveText" class="progress-caption">Based on projected investment and passive income compared with your target annual lifestyle cost.</p>
+        <p id="freedomPassiveText" class="progress-caption">Based on passive income recorded in your plan compared with your target annual lifestyle cost.</p>
       </div>
       <div class="stage-actions">
         <span class="metric-label">What moves you forward</span>
@@ -3655,19 +4082,21 @@
       metricCard("Final Projected Surplus", money(annualSurplus), annualSurplus >= 0 ? "status-green" : "status-amber", "Estimated money left after tax, Medicare, STSL compulsory repayments, living costs, loan repayments, investing and extra super."),
       metricCard("Investments", money(result.investmentBalance), "", "Projected investment balance includes contributions and earnings over time."),
       metricCard("Super", money(result.superannuationBalance), "status-green", "Tracked separately from other investments."),
-      metricCard("Target Lifestyle Funded", plainPercent(percent), percent >= 75 ? "status-green" : "", "Based on projected investment and passive income compared with your target annual lifestyle cost."),
+      metricCard("Target Lifestyle Funded", plainPercent(percent), percent >= 75 ? "status-green" : "", "Based on passive income recorded in your plan compared with your target annual lifestyle cost."),
     ].join("");
     document.getElementById("secondMetricGrid").innerHTML = [
       metricCard("Your Current Financial Stage", stage.name),
       metricCard(stageInfo.nextStage ? `Progress Toward ${stageInfo.nextStage.name}` : "Financial Freedom Achieved", stageInfo.nextStage ? plainPercent(stageInfo.progressToNext) : "100%"),
       metricCard("Debt Balance", money(result.totalLiabilities), result.totalLiabilities <= result.totalAssets * 0.5 ? "status-green" : "status-amber"),
       metricCard("Monthly Surplus / Deficit", money(monthlySurplus), monthlySurplus >= 0 ? "status-green" : "status-amber"),
-      metricCard("Annual Passive Income Estimate", money(passiveIncome), "", "This estimates the annual income your investments may generate without selling assets."),
+      metricCard("Annual Passive Income", money(passiveIncome), "", "This is based on income items classified as passive, including net rental property cashflow.", "passiveIncome"),
       metricCard("Annual Living Expenses", money(livingExpenses), "", "This is calculated from your recurring expense items and excludes investing and loan principal repayments."),
       metricCard("Accessible Investments", money(result.accessibleInvestmentAssets)),
       metricCard("Highest Priority", highestRecommendation(result)),
       weeklyHealthCheckCard(result),
     ].join("");
+    const passiveBreakdown = document.getElementById("dashboardPassiveIncomeBreakdown");
+    if (passiveBreakdown) passiveBreakdown.innerHTML = passiveIncomeBreakdownHtml(result, { showOwners: true });
     document.getElementById("celebrationGrid").innerHTML = celebrationItems(result).slice(0, 6).map((item) => `
       <span class="celebration-pill">${escapeHtml(item.label)}</span>
     `).join("");
@@ -3991,7 +4420,11 @@
     const help = result.stslRepaymentEstimate || result.helpRepaymentEstimate;
     const tiles = [
       summaryTile("Outstanding STSL Balance", money(help.balance)),
+      summaryTile(`${personDisplayName(1)} STSL Balance`, money(help.person1?.balance || 0)),
+      summaryTile(`${personDisplayName(2)} STSL Balance`, money(help.person2?.balance || 0)),
       summaryTile("Estimated Repayment Income", money(help.repaymentIncome)),
+      summaryTile(`${personDisplayName(1)} Annual STSL Compulsory Repayment`, money(help.person1?.annualRepayment || 0)),
+      summaryTile(`${personDisplayName(2)} Annual STSL Compulsory Repayment`, money(help.person2?.annualRepayment || 0)),
       summaryTile("Estimated Annual STSL Compulsory Repayment", money(help.annualRepayment)),
       summaryTile("Estimated Years Until Loan Repaid", help.estimatedYearsToRepay ? `${help.estimatedYearsToRepay.toFixed(1)} years` : "No compulsory repayment estimated"),
     ].join("") + `<p class="tax-note mt-4">STSL estimate uses repayment income and is capped at the current balance when a balance has been entered.</p>`;
@@ -4029,10 +4462,94 @@
     `;
   }
 
+  function rentalCashflowSummaryHtml(result, options = {}) {
+    const summary = result?.rentalPropertyCashflow;
+    if (!summary || (!summary.propertyResults?.length && !summary.confirmedUnlinked?.length && !summary.warnings?.length)) return "";
+    const totalLabel = summary.annualHouseholdDebtDeduction === summary.annualLoanPrincipal
+      ? "Rental loan principal repayments"
+      : "Rental loan cashflow deduction";
+    const propertyRows = (summary.propertyResults || []).map((item) => `
+      <article class="mini-card rental-property-row">
+        <span>${escapeHtml(item.name || "Rental property")}</span>
+        <strong>${money(item.householdCashflowContribution)}</strong>
+        <small>${item.treatment === "beforeInterest" ? "Before interest: full linked repayments deducted." : "After interest: linked principal only deducted."}</small>
+      </article>
+    `).join("");
+    const confirmedRows = (summary.confirmedUnlinked || []).map((item) => `
+      <article class="mini-card rental-property-row">
+        <span>${escapeHtml(item.loan?.name || "Unlinked rental property loan")}</span>
+        <strong>-${money(item.householdDebtDeduction)}</strong>
+        <small>${item.treatment === "beforeInterest" ? "Confirmed before-interest treatment." : "Confirmed after-interest treatment."}</small>
+      </article>
+    `).join("");
+    const warningRows = (summary.warnings || []).map((warning) => `<p class="tax-note mt-3">${escapeHtml(warning)}</p>`).join("");
+    return `
+      <section class="rental-cashflow-card${options.compact ? " rental-cashflow-card-compact" : ""}">
+        <div class="card-subheading">
+          <h3>Rental property cashflow</h3>
+          <p>Linked rental loans only deduct principal separately when rental cash income is entered after loan interest.</p>
+        </div>
+        <div class="summary-grid mt-3">
+          ${summaryTile("Rental property net cash income", money(summary.annualNetRentalIncome))}
+          ${summaryTile(totalLabel, `-${money(summary.annualHouseholdDebtDeduction)}`)}
+          ${summaryTile("Net contribution to household cashflow", money(summary.annualHouseholdCashflowContribution), summary.annualHouseholdCashflowContribution >= 0 ? "status-green" : "status-amber")}
+          ${summaryTile("Estimated rental loan interest", money(summary.annualLoanInterest))}
+        </div>
+        ${propertyRows || confirmedRows ? `<div class="summary-grid mt-3">${propertyRows}${confirmedRows}</div>` : ""}
+        ${warningRows}
+      </section>
+    `;
+  }
+
+  function passiveIncomeBreakdownHtml(result, options = {}) {
+    const summary = result?.passiveIncomeBreakdown;
+    if (!summary) return "";
+    const rentalRows = (summary.rentalProperties || []).map((property) => `
+      <div class="table-row cashflow-row passive-income-rental-row">
+        <span>${escapeHtml(property.name || "Rental property")} net cash income</span>
+        <strong>${money(property.annualNetRentalCashIncome)}</strong>
+      </div>
+      <div class="table-row cashflow-row passive-income-rental-row">
+        <span>Less rental-loan ${property.treatment === "beforeInterest" ? "repayments" : "principal repayments"}</span>
+        <strong>-${money(property.householdDebtDeduction)}</strong>
+      </div>
+      <div class="table-row cashflow-row cashflow-row-final passive-income-rental-row">
+        <span>Passive rental cashflow</span>
+        <strong>${money(property.passiveRentalCashflow)}</strong>
+      </div>
+    `).join("");
+    return `
+      <section class="passive-income-card${options.compact ? " passive-income-card-compact" : ""}">
+        <div class="card-subheading">
+          <h3 class="field-label-with-info">Passive income ${infoButtonHtml("passiveIncome", "Passive Income")}</h3>
+          <p>Income that may help fund the target lifestyle without salary or wages.</p>
+        </div>
+        <div class="summary-grid mt-3">
+          ${summaryTile("Interest", money(summary.interest))}
+          ${summaryTile("Dividends", money(summary.dividends))}
+          ${summaryTile("Distribution income", money(summary.distributions))}
+          ${summaryTile("Net rental property cashflow", money(summary.rental))}
+          ${summaryTile("Other passive income", money(summary.otherPassive))}
+          ${summaryTile("Total passive income", money(summary.total), summary.total > 0 ? "status-green" : "", "passiveIncome")}
+        </div>
+        ${rentalRows ? `<div class="table-list mt-3">${rentalRows}</div>` : ""}
+        ${options.showOwners ? `
+          <div class="summary-grid mt-3">
+            ${summaryTile(`${personDisplayName(1)} passive income`, money(summary.person1))}
+            ${summaryTile(`${personDisplayName(2)} passive income`, money(summary.person2))}
+            ${summaryTile("Joint passive income", money(summary.joint))}
+          </div>
+        ` : ""}
+      </section>
+    `;
+  }
+
   function renderCashflow(result) {
     document.getElementById("cashflowTable").innerHTML = cashflowRows(result).map(([label, value]) => `
       ${cashflowRowHtml(label, value)}
     `).join("");
+    const rentalContainer = document.getElementById("rentalCashflowSummary");
+    if (rentalContainer) rentalContainer.innerHTML = rentalCashflowSummaryHtml(result);
   }
 
   function renderLoan(result) {
@@ -4124,8 +4641,12 @@
     container.innerHTML = [
       summaryTile("Target FI Capital", money(result.targetCapital), "", "targetFiCapital"),
       summaryTile("Current FI Assets", money(result.financialIndependenceAssets), "", "currentFiAssets"),
+      summaryTile("Current annual passive income", money(annualPassiveIncome(result)), "", "passiveIncome"),
+      summaryTile("Target lifestyle funded", plainPercent(freedomPercent(result))),
       summaryTile("Annual Lifestyle Spending Needed for Financial Freedom", money(plan.personal.targetAnnualSpending), "", "annualLifestyleSpending"),
     ].join("");
+    const passiveContainer = document.getElementById("goalsPassiveIncomeBreakdown");
+    if (passiveContainer) passiveContainer.innerHTML = passiveIncomeBreakdownHtml(result, { compact: true, showOwners: true });
     renderEngagementFullJourney(result);
   }
 
@@ -7165,7 +7686,7 @@
     const summaryNarrative = `
       <div class="report-narrative-box">
         <p>Your current net worth is approximately <strong>${money(result.currentNetWorth)}</strong>. Of this amount, approximately <strong>${money(result.financialIndependenceAssets)}</strong> is currently counted as Financial Independence (FI) assets capable of supporting your future lifestyle.</p>
-        <p>Based on annual lifestyle spending of <strong>${money(plan.personal.targetAnnualSpending)}</strong>, your estimated Financial Freedom target is <strong>${money(result.targetCapital)}</strong>. You are currently <strong>${plainPercent(percent)}</strong> of the way toward this target.</p>
+        <p>Based on annual lifestyle spending of <strong>${money(plan.personal.targetAnnualSpending)}</strong>, your estimated Financial Freedom target is <strong>${money(result.targetCapital)}</strong>. Your currently identified passive income funds approximately <strong>${plainPercent(percent)}</strong> of that target lifestyle.</p>
         <p>${escapeHtml(financialHealth)}</p>
       </div>
     `;
@@ -7202,6 +7723,8 @@
           ${summaryTile("Net cashflow", money(result.finalProjectedCashSurplus), result.finalProjectedCashSurplus >= 0 ? "status-green" : "status-amber")}
           ${summaryTile("Total assets", money(result.totalAssets))}
           ${summaryTile("Total liabilities", money(result.totalLiabilities))}
+          ${Number((result.stslRepaymentEstimate || result.helpRepaymentEstimate)?.person1?.balance || 0) > 0 ? summaryTile(`${personDisplayName(1)} STSL balance`, money((result.stslRepaymentEstimate || result.helpRepaymentEstimate).person1.balance)) : ""}
+          ${Number((result.stslRepaymentEstimate || result.helpRepaymentEstimate)?.person2?.balance || 0) > 0 ? summaryTile(`${personDisplayName(2)} STSL balance`, money((result.stslRepaymentEstimate || result.helpRepaymentEstimate).person2.balance)) : ""}
           ${summaryTile("Net worth", money(result.currentNetWorth))}
           ${summaryTile("Current FI assets", money(result.financialIndependenceAssets))}
           ${summaryTile("Current investment portfolio", money(result.investmentBalance))}
@@ -7226,27 +7749,29 @@
             ["Remaining cash surplus", result.finalProjectedCashSurplus],
           ].map(([label, value]) => cashflowRowHtml(label, value)).join("")}
         </div>
+        ${rentalCashflowSummaryHtml(result, { compact: true })}
         <p class="report-narrative">Cashflow is estimated from gross income, then reduced by tax, Medicare levy, STSL compulsory repayments where applicable, living expenses, debt repayments, investing and extra super contributions.</p>
         <p class="report-narrative">The remaining cash surplus is the amount left after the planned spending and wealth-building amounts entered in the app.</p>
         <div class="${cashflowTone}"><strong>${cashflowHeading}</strong><p>${cashflowText}</p></div>
       `, "report-page-break report-compact-section")}
 
-      ${reportSection("Target Lifestyle Funding", "This section estimates how close your current FI assets are to funding your chosen lifestyle.", `
+      ${reportSection("Target Lifestyle Funding", "This section estimates how much of your chosen lifestyle is currently supported by income classified as passive.", `
         <div class="summary-grid">
           ${summaryTile("Current FI assets", money(result.financialIndependenceAssets))}
           ${summaryTile("Target FI assets", money(result.targetCapital))}
           ${summaryTile("Gap to target", money(gap))}
           ${summaryTile("Target lifestyle funded", plainPercent(percent))}
-          ${summaryTile("Estimated annual passive income", money(annualPassiveIncome(result)))}
+          ${summaryTile("Current annual passive income", money(annualPassiveIncome(result)), "", "passiveIncome")}
           ${summaryTile("10-year investment balance", money(investmentAtYear(result, 10)))}
           ${summaryTile("10-year debt estimate", money(projectedDebtAtYear(result, 10)))}
         </div>
+        ${passiveIncomeBreakdownHtml(result, { compact: true, showOwners: true })}
         ${reportProgressBar(percent)}
         <div class="report-chart-grid mt-4">
           <article class="report-chart-card report-chart-wide">
             <h3>Target lifestyle funding</h3>
             <svg id="reportProgressChart" class="chart" viewBox="0 0 760 280" role="img" aria-label="Report target lifestyle funding progress"></svg>
-            <p>Progress compares current FI assets with the estimated target FI assets. The visual chart is capped at 100% where projected FI assets exceed the selected target.</p>
+            <p>Current progress compares passive income recorded in the plan with the annual lifestyle target. Future projected progress continues to use the app's existing FI asset projection.</p>
           </article>
         </div>
       `, "report-page-break")}
@@ -7790,6 +8315,10 @@
 
   function syncCollectionInputs(collection, id, key, value) {
     document.querySelectorAll(`[data-collection="${collection}"][data-id="${id}"][data-key="${key}"]`).forEach((input) => {
+      if (input.type === "checkbox") {
+        input.checked = Boolean(value);
+        return;
+      }
       if (input.value !== String(value ?? "")) input.value = value ?? "";
     });
   }
@@ -7797,7 +8326,7 @@
   function addCollectionItem(collection) {
     ensureCollectionData();
     const defaults = {
-      incomeItems: { id: makeId("income"), name: "Other Income", amount: 0, frequency: "annually" },
+      incomeItems: { id: makeId("income"), name: "Other Income", type: "other", owner: "joint", amount: 0, frequency: "annually" },
       assetItems: { id: makeId("asset"), name: "New asset", category: "cash", value: 0 },
       liabilityItems: { id: makeId("liability"), name: "New liability", type: "otherDebt", balance: 0, interestRatePct: 0, repayment: 0, repaymentFrequency: "monthly", termYears: 0 },
       expenseItems: { id: makeId("expense"), name: "New expense", category: "other", amount: 0, frequency: "monthly" },
@@ -8299,6 +8828,30 @@
         if (!item) return;
         const value = target.dataset.type === "boolean" ? target.checked : target.dataset.type === "text" ? target.value : Number(target.value);
         item[target.dataset.key] = value;
+        if (target.dataset.collection === "incomeItems") {
+          item.type = normaliseIncomeType(item.type, plan.incomeItems.indexOf(item));
+          item.owner = normaliseIncomeOwner(item.owner, item.type, plan.incomeItems.indexOf(item));
+          if (item.type === "rentalNetCashIncome") {
+            item.frequency = "annually";
+            item.rentalCashflowTreatment = item.rentalCashflowTreatment === "beforeInterest" ? "beforeInterest" : "afterInterest";
+            if (!Array.isArray(item.linkedLoanIds)) item.linkedLoanIds = linkedLoanIds(item);
+          }
+        }
+        if (target.dataset.collection === "liabilityItems") {
+          if (item.type === "rentalPropertyLoan") {
+            item.owner = item.owner || "joint";
+            item.repaymentType = item.repaymentType === "interestOnly" ? "interestOnly" : "principalAndInterest";
+            item.additionalPrincipalFrequency = item.additionalPrincipalFrequency || "annually";
+            item.unlinkedRentalCashflowTreatment = item.unlinkedRentalCashflowTreatment || "unconfirmed";
+          } else {
+            (plan.incomeItems || []).forEach((income) => {
+              if (income.type !== "rentalNetCashIncome") return;
+              income.linkedLoanIds = linkedLoanIds(income).filter((id) => String(id) !== String(item.id));
+              if (String(income.linkedLoanId || "") === String(item.id)) income.linkedLoanId = "";
+            });
+          }
+          normaliseRentalPropertyData();
+        }
         generatedWeeklyPlanner = null;
         if (weeklyPlan) {
           markWeeklyTimingReviewRequired();
@@ -8310,6 +8863,13 @@
         if (target.dataset.collection === "liabilityItems" && target.dataset.key === "type") {
           renderAll();
           return;
+        }
+        if (target.dataset.collection === "incomeItems" && (target.dataset.key === "type" || target.dataset.key === "owner")) {
+          renderAll();
+          return;
+        }
+        if (target.dataset.collection === "incomeItems" && (target.dataset.key === "amount" || target.dataset.key === "frequency")) {
+          refreshEmployerSuperPanels();
         }
         renderOutputs();
         return;
@@ -8340,12 +8900,30 @@
         setPath(plan, "liabilities.monthlyRepayment", value);
         syncInputs("liabilities.monthlyRepayment", value);
       }
+      if (target.dataset.path === "income.person1HasStslDebt" || target.dataset.path === "income.person2HasStslDebt") {
+        syncCollectionsToLegacy();
+        autosavePlan();
+        renderAll();
+        return;
+      }
+      if (target.dataset.path?.startsWith("investing.person") && target.dataset.path.includes("EmployerSuperOverride")) {
+        syncCollectionsToLegacy();
+        autosavePlan();
+        renderForms();
+        renderOutputs();
+        return;
+      }
       autosavePlan();
       renderOutputs();
     });
 
     document.addEventListener("change", (event) => {
       const target = event.target;
+      const rentalLoanLink = target.closest("[data-rental-loan-link]");
+      if (rentalLoanLink) {
+        updateRentalIncomeLoanLink(rentalLoanLink);
+        return;
+      }
       if (target.id === "aiInsightsConsent") {
         aiInsightsUi.consentAccepted = Boolean(target.checked);
         renderAiInsightsModal();
@@ -8433,6 +9011,20 @@
       if (summaryJump) {
         event.preventDefault();
         jumpToSummaryTarget(summaryJump);
+        return;
+      }
+
+      const employerSuperReset = event.target.closest("[data-employer-super-reset]");
+      if (employerSuperReset) {
+        event.preventDefault();
+        const owner = employerSuperReset.dataset.employerSuperReset === "person2" ? "person2" : "person1";
+        plan.investing[`${owner}EmployerSuperOverrideEnabled`] = false;
+        plan.investing[`${owner}EmployerSuperOverride`] = 0;
+        syncCollectionsToLegacy();
+        autosavePlan();
+        renderForms();
+        renderOutputs();
+        updateSaveStatus("Employer super estimate reset to calculated amount.");
         return;
       }
 
