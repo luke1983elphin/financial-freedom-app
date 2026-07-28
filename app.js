@@ -4322,8 +4322,11 @@
               <button class="btn" type="button" data-engagement-action="sample">Load Sample Plan</button>
             </div>
           </div>
-          <div class="engagement-empty-preview" aria-label="Financial Journey preview after setup">
-            ${engagementPlaceholderCardsHtml()}
+          <div class="engagement-empty-preview-shell" aria-label="Financial Journey preview after setup">
+            <h3>What your plan will show</h3>
+            <div class="engagement-empty-preview">
+              ${engagementPlaceholderCardsHtml()}
+            </div>
           </div>
         </section>
       `;
@@ -4343,8 +4346,11 @@
               <button class="btn btn-primary" type="button" data-engagement-action="setup">Continue Setup</button>
             </div>
           </div>
-          <div class="engagement-empty-preview" aria-label="Financial Journey preview after setup">
-            ${engagementPlaceholderCardsHtml()}
+          <div class="engagement-empty-preview-shell" aria-label="Financial Journey preview after setup">
+            <h3>What your plan will show</h3>
+            <div class="engagement-empty-preview">
+              ${engagementPlaceholderCardsHtml()}
+            </div>
           </div>
         </section>
       `;
