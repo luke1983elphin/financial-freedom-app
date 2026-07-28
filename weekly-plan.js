@@ -313,6 +313,28 @@
     const items = [];
     const netIncome = estimatedNetIncomeAnnuals(plan, result);
     const salarySacrificeAlreadyDeducted = toNumber(netIncome.household?.allocatedExtraSuper ?? netIncome.household?.totalSalarySacrifice);
+    const rentalSummary = global.FFSCalculator?.calculateRentalCashflowSummary?.(plan);
+    const rentalLoanCashflowById = new Map();
+    (rentalSummary?.propertyResults || []).forEach((property) => {
+      (property.loanBreakdowns || []).forEach((breakdown) => {
+        if (!breakdown.loanId) return;
+        rentalLoanCashflowById.set(String(breakdown.loanId), {
+          annualDeduction: property.treatment === "beforeInterest" ? breakdown.annualRepayments : breakdown.annualPrincipal,
+          treatment: property.treatment,
+          label: property.treatment === "beforeInterest" ? "repayment" : "principal repayment",
+          source: "linked-rental-income",
+        });
+      });
+    });
+    (rentalSummary?.confirmedUnlinked || []).forEach((item) => {
+      if (!item.loan?.id) return;
+      rentalLoanCashflowById.set(String(item.loan.id), {
+        annualDeduction: item.householdDebtDeduction,
+        treatment: item.treatment,
+        label: item.treatment === "beforeInterest" ? "repayment" : "principal repayment",
+        source: "confirmed-unlinked-rental-loan",
+      });
+    });
     const addItem = (item) => {
       const normalised = normaliseTimingItem(item);
       if (normalised.amount > 0) items.push(normalised);
@@ -379,6 +401,30 @@
 
     (plan.liabilityItems || []).forEach((item) => {
       if (item.type === "hecsHelp") return;
+      if (item.type === "rentalPropertyLoan") {
+        const rentalDeduction = rentalLoanCashflowById.get(String(item.id || ""));
+        if (rentalDeduction) {
+          const frequency = rentalDeduction.treatment === "afterInterest" && item.repaymentType === "interestOnly"
+            ? normaliseFrequency(item.additionalPrincipalFrequency || item.repaymentFrequency, "annually")
+            : normaliseFrequency(item.repaymentFrequency, "monthly");
+          addItem({
+            id: `timing-liability-${item.id}`,
+            sourceId: item.id,
+            description: `${displayName(item, "Rental property loan")} ${rentalDeduction.label}`,
+            amount: amountFromAnnual(rentalDeduction.annualDeduction, frequency),
+            frequency,
+            firstDate: firstDateFor(settings, item.id, settings.startDate),
+            type: "bill",
+            treatment: "pay-on-date",
+            active: true,
+            estimated: true,
+            note: rentalDeduction.treatment === "afterInterest"
+              ? "Principal-only cashflow amount because linked rental property income is entered after loan interest."
+              : "Full repayment cashflow amount because linked rental property income is entered before loan interest.",
+          });
+          return;
+        }
+      }
       const frequency = normaliseFrequency(item.repaymentFrequency, "monthly");
       addItem({
         id: `timing-liability-${item.id}`,
