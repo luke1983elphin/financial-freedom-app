@@ -18,6 +18,9 @@
   const AI_INSIGHTS_ENDPOINT = "/api/ai-insights";
   const AI_INSIGHTS_DEFAULT_MAX_GENERATIONS = 5;
   const AI_INSIGHTS_DEFAULT_COOLDOWN_MS = 60000;
+  const FINANCIAL_SNAPSHOT_CALCULATION_VERSION = "financial-snapshot-v1";
+  const AUTOMATIC_SNAPSHOT_MIN_DAYS = 30;
+  const SNAPSHOT_MATERIAL_CHANGE_AMOUNT = 1000;
   const ENGAGEMENT_JOURNEY_ENABLED = window.FFS_ENGAGEMENT_JOURNEY_ENABLED !== false;
   console.info(`Weekly Plan editor build: ${WEEKLY_EDITOR_BUILD_ID}`);
   const frequencies = [
@@ -279,6 +282,14 @@
   let editingTimingItemId = null;
   let timingEditDraft = null;
   let weeklyPlanRenderCount = 0;
+  let selectedProgressSnapshotId = restoredDraftUi.selectedProgressSnapshotId || "";
+  let isHistoricalSnapshotEditorOpen = false;
+  let editingHistoricalSnapshotId = "";
+  let historicalSnapshotDraft = null;
+  let progressAiState = {
+    isLoading: false,
+    error: "",
+  };
   const weeklyActualDrafts = new Map();
   let engagementMissionExpanded = false;
   let aiInsightsConfig = {
@@ -1899,6 +1910,7 @@
       activeView,
       activeWizardStep,
       activeWeeklyPlanTab,
+      selectedProgressSnapshotId,
       hasOpenedWorkspace,
       hasCreatedPersonalPlan: Boolean(userState.hasCreatedPersonalPlan),
       scenarioName: document.getElementById("scenarioName")?.value ?? restoredDraftUi.scenarioName ?? "",
@@ -2298,6 +2310,613 @@
     };
   }
 
+  function isoDateOnly(value = new Date()) {
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return new Date().toISOString().slice(0, 10);
+    return date.toISOString().slice(0, 10);
+  }
+
+  function monthsAgoDate(months = 12) {
+    const date = new Date();
+    date.setMonth(date.getMonth() - Number(months || 12));
+    return isoDateOnly(date);
+  }
+
+  function monthDifference(fromDate, toDate = new Date()) {
+    const from = new Date(`${fromDate}T00:00:00`);
+    const to = toDate instanceof Date ? toDate : new Date(toDate);
+    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return 0;
+    return Math.max(0, Math.round((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24 * 30.4375)));
+  }
+
+  function snapshotDefaults() {
+    return {
+      id: "",
+      planId: normalisePlanId(activePlanId),
+      snapshotDate: monthsAgoDate(12),
+      source: "manual",
+      label: "12 months ago",
+      household: {
+        person1Age: numberValue(plan.personal?.person1Age),
+        person2Age: numberValue(plan.personal?.person2Age),
+        dependants: numberValue(plan.personal?.dependants),
+      },
+      assets: {
+        homeValue: 0,
+        investmentPropertyValue: 0,
+        cash: 0,
+        offsetBalance: 0,
+        sharesEtfs: 0,
+        managedFunds: 0,
+        cryptocurrency: 0,
+        otherInvestments: 0,
+        otherAssets: 0,
+      },
+      liabilities: {
+        homeLoan: 0,
+        investmentPropertyLoans: 0,
+        investmentLoans: 0,
+        personalLoans: 0,
+        carLoans: 0,
+        creditCards: 0,
+        otherLiabilities: 0,
+        person1StslBalance: 0,
+        person2StslBalance: 0,
+      },
+      income: {
+        person1EmploymentIncome: 0,
+        person2EmploymentIncome: 0,
+        interestIncome: 0,
+        dividendIncome: 0,
+        rentalIncome: 0,
+        distributionIncome: 0,
+        otherIncome: 0,
+        annualNetIncome: 0,
+      },
+      expenses: {
+        annualLifestyleSpending: 0,
+        annualMortgageRepayments: 0,
+        otherAnnualDebtRepayments: 0,
+        annualInvestmentContributions: 0,
+        annualSuperContributions: 0,
+        annualCashSurplus: 0,
+      },
+      superannuation: {
+        person1Super: 0,
+        person2Super: 0,
+      },
+      goals: {
+        targetRetirementAge: numberValue(plan.personal?.fullRetirementAge),
+        targetRetirementSpending: numberValue(plan.personal?.targetAnnualSpending),
+        emergencyFundTarget: 0,
+        financialIndependenceTarget: 0,
+      },
+      calculated: {},
+      calculationVersion: FINANCIAL_SNAPSHOT_CALCULATION_VERSION,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  function snapshotFromCurrentPlan(result = CALC.calculatePlan(plan), source = "automatic", overrides = {}) {
+    syncCollectionsToLegacy();
+    const sourcePlan = result.plan || plan;
+    const assets = sourcePlan.assets || {};
+    const liabilities = sourcePlan.liabilities || {};
+    const incomeBreakdown = result.incomeBreakdown || {};
+    const passive = result.passiveIncomeBreakdown || {};
+    const snapshot = {
+      ...snapshotDefaults(),
+      id: overrides.id || makeId("snapshot"),
+      planId: normalisePlanId(activePlanId),
+      snapshotDate: overrides.snapshotDate || isoDateOnly(),
+      source,
+      label: overrides.label || (source === "automatic" ? "Automatic snapshot" : "Current position"),
+      household: {
+        person1Age: numberValue(sourcePlan.personal?.person1Age),
+        person2Age: numberValue(sourcePlan.personal?.person2Age),
+        dependants: numberValue(sourcePlan.personal?.dependants),
+      },
+      income: {
+        person1EmploymentIncome: numberValue(result.person1SalaryWages),
+        person2EmploymentIncome: numberValue(result.person2SalaryWages),
+        interestIncome: numberValue(passive.interest),
+        dividendIncome: numberValue(passive.dividends),
+        rentalIncome: numberValue(passive.rental),
+        distributionIncome: numberValue(passive.distributions),
+        otherIncome: numberValue(incomeBreakdown.otherIncome) - numberValue(passive.interest) - numberValue(passive.dividends) - numberValue(passive.rental) - numberValue(passive.distributions),
+        annualNetIncome: numberValue(result.netIncomeAfterTaxHelp),
+      },
+      expenses: {
+        annualLifestyleSpending: numberValue(result.annualLivingExpenses),
+        annualMortgageRepayments: numberValue(result.annualMortgageRepayments),
+        otherAnnualDebtRepayments: numberValue(result.annualDebtRepayments) - numberValue(result.annualMortgageRepayments),
+        annualInvestmentContributions: numberValue(result.annualInvestmentContributions),
+        annualSuperContributions: numberValue(result.annualExtraSuperContributions + result.employerSuperContributions?.totalEffective),
+        annualCashSurplus: numberValue(result.finalProjectedCashSurplus),
+      },
+      assets: {
+        homeValue: numberValue(assets.homeValue),
+        investmentPropertyValue: numberValue(assets.otherPropertyValue),
+        cash: numberValue(assets.cash),
+        offsetBalance: numberValue(assets.offsetBalance),
+        sharesEtfs: numberValue(assets.sharesEtfs),
+        managedFunds: categoryTotal(sourcePlan.assetItems, ["managedFund", "managedFunds"]),
+        cryptocurrency: numberValue(assets.crypto),
+        otherInvestments: categoryTotal(sourcePlan.assetItems, ["other"]),
+        otherAssets: numberValue(assets.vehiclesPersonalAssets),
+      },
+      liabilities: {
+        homeLoan: numberValue(liabilities.homeLoanBalance),
+        investmentPropertyLoans: numberValue(result.rentalPropertyLoanBalance),
+        investmentLoans: categoryTotal(sourcePlan.liabilityItems, ["investmentLoan"], "balance"),
+        personalLoans: categoryTotal(sourcePlan.liabilityItems, ["personalLoan"], "balance"),
+        carLoans: categoryTotal(sourcePlan.liabilityItems, ["vehicleLoan"], "balance"),
+        creditCards: numberValue(liabilities.creditCardBalance),
+        otherLiabilities: numberValue(liabilities.otherDebts),
+        person1StslBalance: numberValue(liabilities.person1StslBalance || liabilities.person1HecsHelpDebt),
+        person2StslBalance: numberValue(liabilities.person2StslBalance || liabilities.person2HecsHelpDebt),
+      },
+      superannuation: {
+        person1Super: numberValue(assets.superPerson1),
+        person2Super: numberValue(assets.superPerson2),
+      },
+      goals: {
+        targetRetirementAge: numberValue(sourcePlan.personal?.fullRetirementAge),
+        targetRetirementSpending: numberValue(sourcePlan.personal?.targetAnnualSpending),
+        emergencyFundTarget: numberValue((sourcePlan.goalItems || []).find((item) => /emergency/i.test(item.name || ""))?.target || 0),
+        financialIndependenceTarget: numberValue(result.targetCapital),
+      },
+      createdAt: overrides.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      calculationVersion: FINANCIAL_SNAPSHOT_CALCULATION_VERSION,
+    };
+    return recalculateSnapshot(snapshot);
+  }
+
+  function recalculateSnapshot(snapshot) {
+    const safe = {
+      ...snapshotDefaults(),
+      ...snapshot,
+      household: { ...snapshotDefaults().household, ...(snapshot.household || {}) },
+      income: { ...snapshotDefaults().income, ...(snapshot.income || {}) },
+      expenses: { ...snapshotDefaults().expenses, ...(snapshot.expenses || {}) },
+      assets: { ...snapshotDefaults().assets, ...(snapshot.assets || {}) },
+      liabilities: { ...snapshotDefaults().liabilities, ...(snapshot.liabilities || {}) },
+      superannuation: { ...snapshotDefaults().superannuation, ...(snapshot.superannuation || {}) },
+      goals: { ...snapshotDefaults().goals, ...(snapshot.goals || {}) },
+    };
+    safe.id = safe.id || makeId("snapshot");
+    safe.planId = normalisePlanId(safe.planId || activePlanId);
+    safe.snapshotDate = isoDateOnly(safe.snapshotDate || monthsAgoDate(12));
+    safe.source = ["manual", "automatic", "saved-plan", "imported"].includes(safe.source) ? safe.source : "manual";
+    const totalSuper = numberValue(safe.superannuation.person1Super) + numberValue(safe.superannuation.person2Super);
+    const totalAssets = numberValue(safe.assets.homeValue)
+      + numberValue(safe.assets.investmentPropertyValue)
+      + numberValue(safe.assets.cash)
+      + numberValue(safe.assets.offsetBalance)
+      + numberValue(safe.assets.sharesEtfs)
+      + numberValue(safe.assets.managedFunds)
+      + numberValue(safe.assets.cryptocurrency)
+      + numberValue(safe.assets.otherInvestments)
+      + numberValue(safe.assets.otherAssets)
+      + totalSuper;
+    const totalLiabilities = numberValue(safe.liabilities.homeLoan)
+      + numberValue(safe.liabilities.investmentPropertyLoans)
+      + numberValue(safe.liabilities.investmentLoans)
+      + numberValue(safe.liabilities.personalLoans)
+      + numberValue(safe.liabilities.carLoans)
+      + numberValue(safe.liabilities.creditCards)
+      + numberValue(safe.liabilities.otherLiabilities)
+      + numberValue(safe.liabilities.person1StslBalance)
+      + numberValue(safe.liabilities.person2StslBalance);
+    const liquidAssets = numberValue(safe.assets.cash) + numberValue(safe.assets.offsetBalance);
+    const investmentAssets = numberValue(safe.assets.investmentPropertyValue)
+      + numberValue(safe.assets.sharesEtfs)
+      + numberValue(safe.assets.managedFunds)
+      + numberValue(safe.assets.cryptocurrency)
+      + numberValue(safe.assets.otherInvestments);
+    const investmentDebt = numberValue(safe.liabilities.investmentPropertyLoans) + numberValue(safe.liabilities.investmentLoans);
+    const consumerDebt = numberValue(safe.liabilities.personalLoans)
+      + numberValue(safe.liabilities.carLoans)
+      + numberValue(safe.liabilities.creditCards)
+      + numberValue(safe.liabilities.otherLiabilities);
+    const annualGrossIncome = numberValue(safe.income.person1EmploymentIncome)
+      + numberValue(safe.income.person2EmploymentIncome)
+      + numberValue(safe.income.interestIncome)
+      + numberValue(safe.income.dividendIncome)
+      + numberValue(safe.income.rentalIncome)
+      + numberValue(safe.income.distributionIncome)
+      + numberValue(safe.income.otherIncome);
+    const annualDebtRepayments = numberValue(safe.expenses.annualMortgageRepayments) + numberValue(safe.expenses.otherAnnualDebtRepayments);
+    const passiveIncome = numberValue(safe.income.interestIncome)
+      + numberValue(safe.income.dividendIncome)
+      + numberValue(safe.income.rentalIncome)
+      + numberValue(safe.income.distributionIncome);
+    const annualNetIncome = numberValue(safe.income.annualNetIncome) || annualGrossIncome;
+    const annualCashSurplus = numberValue(safe.expenses.annualCashSurplus);
+    const annualLifestyleSpending = numberValue(safe.expenses.annualLifestyleSpending);
+    const fiTarget = numberValue(safe.goals.financialIndependenceTarget);
+    safe.calculated = {
+      totalAssets,
+      totalLiabilities,
+      netWorth: totalAssets - totalLiabilities,
+      liquidAssets,
+      investmentAssets,
+      totalSuper,
+      homeEquity: numberValue(safe.assets.homeValue) - numberValue(safe.liabilities.homeLoan),
+      investmentDebt,
+      consumerDebt,
+      annualGrossIncome,
+      annualNetIncome,
+      annualLifestyleSpending,
+      annualDebtRepayments,
+      annualCashSurplus,
+      passiveIncome,
+      emergencyFundMonths: annualLifestyleSpending > 0 ? liquidAssets / (annualLifestyleSpending / 12) : 0,
+      debtToAssetRatio: totalAssets > 0 ? (totalLiabilities / totalAssets) * 100 : 0,
+      savingsRate: annualNetIncome > 0 ? (annualCashSurplus / annualNetIncome) * 100 : 0,
+      financialIndependenceProgress: fiTarget > 0 ? ((liquidAssets + investmentAssets + totalSuper) / fiTarget) * 100 : 0,
+    };
+    safe.calculationVersion = safe.calculationVersion || FINANCIAL_SNAPSHOT_CALCULATION_VERSION;
+    safe.createdAt = safe.createdAt || new Date().toISOString();
+    safe.updatedAt = safe.updatedAt || safe.createdAt;
+    safe.hash = simpleHash({
+      snapshotDate: safe.snapshotDate,
+      calculated: safe.calculated,
+      assets: safe.assets,
+      liabilities: safe.liabilities,
+      income: safe.income,
+      expenses: safe.expenses,
+      superannuation: safe.superannuation,
+      goals: safe.goals,
+    });
+    return safe;
+  }
+
+  function loadFinancialSnapshots(planId = activePlanId) {
+    if (isDemoActive()) return [];
+    try {
+      const raw = localStorage.getItem(currentSnapshotKey(planId));
+      const parsed = raw ? JSON.parse(raw) : [];
+      return (Array.isArray(parsed) ? parsed : [])
+        .map(recalculateSnapshot)
+        .filter((snapshot) => snapshot.planId === normalisePlanId(planId))
+        .sort((a, b) => new Date(a.snapshotDate) - new Date(b.snapshotDate));
+    } catch {
+      return [];
+    }
+  }
+
+  function saveFinancialSnapshots(snapshots, message = "") {
+    if (isDemoActive()) {
+      updateSaveStatus("Sample Plan history is temporary and was not saved to your personal snapshots.");
+      return;
+    }
+    const clean = (Array.isArray(snapshots) ? snapshots : [])
+      .map(recalculateSnapshot)
+      .filter((snapshot) => snapshot.planId === normalisePlanId(activePlanId));
+    localStorage.setItem(currentSnapshotKey(), JSON.stringify(clean));
+    if (message) updateSaveStatus(message);
+  }
+
+  function selectedProgressSnapshot() {
+    const snapshots = loadFinancialSnapshots();
+    if (!snapshots.length) return null;
+    const selected = snapshots.find((snapshot) => snapshot.id === selectedProgressSnapshotId);
+    if (selected) return selected;
+    const latest = snapshots[snapshots.length - 1];
+    selectedProgressSnapshotId = latest.id;
+    return latest;
+  }
+
+  function snapshotCoreHash(snapshot) {
+    return simpleHash({
+      calculated: snapshot.calculated,
+      assets: snapshot.assets,
+      liabilities: snapshot.liabilities,
+      income: snapshot.income,
+      expenses: snapshot.expenses,
+      superannuation: snapshot.superannuation,
+      goals: snapshot.goals,
+    });
+  }
+
+  function materialSnapshotChange(previous, next) {
+    if (!previous) return true;
+    const metrics = ["netWorth", "totalAssets", "totalLiabilities", "investmentAssets", "totalSuper", "annualCashSurplus"];
+    return metrics.some((key) => Math.abs(numberValue(next.calculated?.[key]) - numberValue(previous.calculated?.[key])) >= SNAPSHOT_MATERIAL_CHANGE_AMOUNT);
+  }
+
+  function maybeCreateAutomaticFinancialSnapshot(result = CALC.calculatePlan(plan), trigger = "automatic") {
+    if (isDemoActive() || isBlankPlan(plan)) return null;
+    const snapshots = loadFinancialSnapshots();
+    const current = snapshotFromCurrentPlan(result, "automatic", { label: trigger === "report" ? "Report snapshot" : "Automatic snapshot" });
+    const todayDuplicate = snapshots.find((snapshot) => snapshot.snapshotDate === current.snapshotDate && snapshot.source === "automatic" && snapshotCoreHash(snapshot) === snapshotCoreHash(current));
+    if (todayDuplicate) return todayDuplicate;
+    const automaticSnapshots = snapshots.filter((snapshot) => snapshot.source === "automatic").sort((a, b) => new Date(b.snapshotDate) - new Date(a.snapshotDate));
+    const last = automaticSnapshots[0];
+    const daysSinceLast = last ? (new Date(current.snapshotDate).getTime() - new Date(last.snapshotDate).getTime()) / (1000 * 60 * 60 * 24) : Infinity;
+    if (last && daysSinceLast < AUTOMATIC_SNAPSHOT_MIN_DAYS && !materialSnapshotChange(last, current)) return last;
+    const next = [...snapshots.filter((snapshot) => snapshot.id !== current.id), current];
+    saveFinancialSnapshots(next);
+    return current;
+  }
+
+  function saveCurrentPositionSnapshot() {
+    const result = CALC.calculatePlan(plan);
+    const snapshot = snapshotFromCurrentPlan(result, "manual", {
+      label: `Current position - ${new Date().toLocaleDateString("en-AU")}`,
+      snapshotDate: isoDateOnly(),
+    });
+    const snapshots = loadFinancialSnapshots();
+    const existing = snapshots.find((item) => item.snapshotDate === snapshot.snapshotDate && item.source === "manual" && snapshotCoreHash(item) === snapshotCoreHash(snapshot));
+    const nextSnapshot = existing || snapshot;
+    selectedProgressSnapshotId = nextSnapshot.id;
+    saveFinancialSnapshots(existing ? snapshots : [...snapshots, nextSnapshot], "Current position saved as a snapshot.");
+    renderFinancialProgress(result);
+    renderFinancialProgressDashboardCard(result);
+  }
+
+  function createManualSnapshotDraft(months = 12) {
+    const draft = snapshotDefaults();
+    draft.id = makeId("snapshot");
+    draft.snapshotDate = monthsAgoDate(months);
+    draft.label = months === 3 ? "3 months ago" : months === 6 ? "6 months ago" : months === 12 ? "12 months ago" : "Custom date";
+    return recalculateSnapshot(draft);
+  }
+
+  function snapshotPathValue(snapshot, path) {
+    return path.split(".").reduce((current, key) => current?.[key], snapshot);
+  }
+
+  function setSnapshotPath(snapshot, path, value) {
+    const keys = path.split(".");
+    let cursor = snapshot;
+    keys.slice(0, -1).forEach((key) => {
+      cursor[key] = cursor[key] && typeof cursor[key] === "object" ? cursor[key] : {};
+      cursor = cursor[key];
+    });
+    cursor[keys.at(-1)] = value;
+  }
+
+  function saveHistoricalSnapshotDraft() {
+    if (!historicalSnapshotDraft) historicalSnapshotDraft = createManualSnapshotDraft(12);
+    const snapshot = recalculateSnapshot({
+      ...historicalSnapshotDraft,
+      source: "manual",
+      updatedAt: new Date().toISOString(),
+    });
+    const snapshots = loadFinancialSnapshots();
+    const next = editingHistoricalSnapshotId
+      ? snapshots.map((item) => item.id === editingHistoricalSnapshotId ? snapshot : item)
+      : [...snapshots, snapshot];
+    selectedProgressSnapshotId = snapshot.id;
+    isHistoricalSnapshotEditorOpen = false;
+    editingHistoricalSnapshotId = "";
+    historicalSnapshotDraft = null;
+    saveFinancialSnapshots(next, "Historical snapshot saved.");
+    renderOutputs();
+  }
+
+  function deleteFinancialSnapshot(snapshotId) {
+    const snapshot = loadFinancialSnapshots().find((item) => item.id === snapshotId);
+    if (!snapshot) return;
+    if (!window.confirm(`Delete the snapshot "${snapshot.label || snapshot.snapshotDate}"? This will not change your current plan.`)) return;
+    const next = loadFinancialSnapshots().filter((item) => item.id !== snapshotId);
+    if (selectedProgressSnapshotId === snapshotId) selectedProgressSnapshotId = next.at(-1)?.id || "";
+    saveFinancialSnapshots(next, "Snapshot deleted.");
+    renderOutputs();
+  }
+
+  function renameFinancialSnapshot(snapshotId) {
+    const snapshots = loadFinancialSnapshots();
+    const snapshot = snapshots.find((item) => item.id === snapshotId);
+    if (!snapshot) return;
+    const label = window.prompt("Snapshot name", snapshot.label || snapshot.snapshotDate);
+    if (label === null) return;
+    snapshot.label = label.trim() || snapshot.label;
+    snapshot.updatedAt = new Date().toISOString();
+    saveFinancialSnapshots(snapshots, "Snapshot renamed.");
+    renderOutputs();
+  }
+
+  function editFinancialSnapshot(snapshotId) {
+    const snapshot = loadFinancialSnapshots().find((item) => item.id === snapshotId);
+    if (!snapshot) return;
+    historicalSnapshotDraft = recalculateSnapshot(JSON.parse(JSON.stringify(snapshot)));
+    editingHistoricalSnapshotId = snapshotId;
+    isHistoricalSnapshotEditorOpen = true;
+    renderFinancialProgress(CALC.calculatePlan(plan));
+  }
+
+  function changeFinancialSnapshotDate(snapshotId) {
+    const snapshots = loadFinancialSnapshots();
+    const snapshot = snapshots.find((item) => item.id === snapshotId);
+    if (!snapshot) return;
+    const nextDate = window.prompt("Comparison date", snapshot.snapshotDate);
+    if (!nextDate) return;
+    snapshot.snapshotDate = isoDateOnly(nextDate);
+    snapshot.updatedAt = new Date().toISOString();
+    saveFinancialSnapshots(snapshots, "Snapshot date updated.");
+    renderOutputs();
+  }
+
+  function compareValue(label, historical, current, options = {}) {
+    const h = numberValue(historical);
+    const c = numberValue(current);
+    const change = c - h;
+    const percentChange = h !== 0 ? (change / Math.abs(h)) * 100 : null;
+    const betterWhen = options.betterWhen || "increase";
+    let tone = "neutral";
+    if (Math.abs(change) > 0.5) {
+      if (betterWhen === "increase") tone = change > 0 ? "positive" : "negative";
+      else if (betterWhen === "decrease") tone = change < 0 ? "positive" : "negative";
+      else tone = "context";
+    }
+    return {
+      key: options.key || label.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+      label,
+      historical: h,
+      current: c,
+      change,
+      percentChange,
+      tone,
+      category: options.category || "Overall",
+      explanation: options.explanation || "",
+    };
+  }
+
+  function buildFinancialComparison(historicalSnapshot, result = CALC.calculatePlan(plan)) {
+    if (!historicalSnapshot) return null;
+    const historical = recalculateSnapshot(historicalSnapshot);
+    const current = snapshotFromCurrentPlan(result, "automatic", { id: "current-position", label: "Current position", snapshotDate: isoDateOnly() });
+    const rows = [
+      compareValue("Total assets", historical.calculated.totalAssets, current.calculated.totalAssets, { category: "Overall Position", betterWhen: "increase" }),
+      compareValue("Total liabilities", historical.calculated.totalLiabilities, current.calculated.totalLiabilities, { category: "Overall Position", betterWhen: "decrease" }),
+      compareValue("Net worth", historical.calculated.netWorth, current.calculated.netWorth, { category: "Overall Position", betterWhen: "increase" }),
+      compareValue("Liquid assets", historical.calculated.liquidAssets, current.calculated.liquidAssets, { category: "Overall Position", betterWhen: "context", explanation: "Cash may fall because it has been invested or used to reduce debt." }),
+      compareValue("Home equity", historical.calculated.homeEquity, current.calculated.homeEquity, { category: "Overall Position", betterWhen: "increase" }),
+      compareValue("Investment assets", historical.calculated.investmentAssets, current.calculated.investmentAssets, { category: "Assets", betterWhen: "increase" }),
+      compareValue("Superannuation", historical.calculated.totalSuper, current.calculated.totalSuper, { category: "Superannuation", betterWhen: "increase" }),
+      compareValue("Cash and offset balances", historical.calculated.liquidAssets, current.calculated.liquidAssets, { category: "Assets", betterWhen: "context" }),
+      compareValue("Home loan balance", historical.liabilities.homeLoan, current.liabilities.homeLoan, { category: "Liabilities", betterWhen: "decrease" }),
+      compareValue("Investment debt", historical.calculated.investmentDebt, current.calculated.investmentDebt, { category: "Liabilities", betterWhen: "context" }),
+      compareValue("Consumer debt", historical.calculated.consumerDebt, current.calculated.consumerDebt, { category: "Liabilities", betterWhen: "decrease" }),
+      compareValue("Credit card debt", historical.liabilities.creditCards, current.liabilities.creditCards, { category: "Liabilities", betterWhen: "decrease" }),
+      compareValue(`${personDisplayName(1)} STSL balance`, historical.liabilities.person1StslBalance, current.liabilities.person1StslBalance, { category: "Liabilities", betterWhen: "decrease" }),
+      compareValue(`${personDisplayName(2)} STSL balance`, historical.liabilities.person2StslBalance, current.liabilities.person2StslBalance, { category: "Liabilities", betterWhen: "decrease" }),
+      compareValue("Debt-to-asset ratio", historical.calculated.debtToAssetRatio, current.calculated.debtToAssetRatio, { category: "Liabilities", betterWhen: "decrease" }),
+      compareValue("Gross household income", historical.calculated.annualGrossIncome, current.calculated.annualGrossIncome, { category: "Income", betterWhen: "context" }),
+      compareValue("Net household income", historical.calculated.annualNetIncome, current.calculated.annualNetIncome, { category: "Income", betterWhen: "increase" }),
+      compareValue("Passive income", historical.calculated.passiveIncome, current.calculated.passiveIncome, { category: "Income", betterWhen: "increase" }),
+      compareValue("Lifestyle spending", historical.calculated.annualLifestyleSpending, current.calculated.annualLifestyleSpending, { category: "Expenses", betterWhen: "context" }),
+      compareValue("Debt repayments", historical.calculated.annualDebtRepayments, current.calculated.annualDebtRepayments, { category: "Expenses", betterWhen: "context" }),
+      compareValue("Investment contributions", historical.expenses.annualInvestmentContributions, current.expenses.annualInvestmentContributions, { category: "Investments", betterWhen: "context" }),
+      compareValue("Superannuation contributions", historical.expenses.annualSuperContributions, current.expenses.annualSuperContributions, { category: "Superannuation", betterWhen: "context" }),
+      compareValue("Annual cash surplus", historical.calculated.annualCashSurplus, current.calculated.annualCashSurplus, { category: "Cashflow", betterWhen: "increase" }),
+      compareValue("Savings rate", historical.calculated.savingsRate, current.calculated.savingsRate, { category: "Cashflow", betterWhen: "increase" }),
+      compareValue("Emergency fund months", historical.calculated.emergencyFundMonths, current.calculated.emergencyFundMonths, { category: "Financial Security", betterWhen: "increase" }),
+      compareValue("Passive-income coverage", historical.calculated.annualLifestyleSpending ? historical.calculated.passiveIncome / historical.calculated.annualLifestyleSpending * 100 : 0, current.calculated.annualLifestyleSpending ? current.calculated.passiveIncome / current.calculated.annualLifestyleSpending * 100 : 0, { category: "Financial Security", betterWhen: "increase" }),
+      compareValue("Financial independence progress", historical.calculated.financialIndependenceProgress, current.calculated.financialIndependenceProgress, { category: "Financial Independence", betterWhen: "increase" }),
+    ];
+    const fromDate = historical.snapshotDate;
+    const toDate = current.snapshotDate;
+    return {
+      historical,
+      current,
+      rows,
+      fromDate,
+      toDate,
+      monthsElapsed: monthDifference(fromDate, toDate),
+      keyMovements: rows.filter((row) => ["Net worth", "Total liabilities", "Investment assets", "Superannuation", "Annual cash surplus", "Financial independence progress"].includes(row.label)),
+    };
+  }
+
+  function changeText(row, options = {}) {
+    if (!row) return "";
+    const isPercentMetric = /rate|ratio|progress|months|coverage/i.test(row.label);
+    const value = isPercentMetric && !options.forceMoney ? `${row.change >= 0 ? "+" : ""}${row.change.toFixed(1)}${/months/i.test(row.label) ? " months" : "%"}` : `${row.change >= 0 ? "up " : "down "}${money(Math.abs(row.change))}`;
+    if (row.percentChange === null) return row.historical === 0 ? `${value} - new since the comparison date` : value;
+    return `${value}${!isPercentMetric ? ` (${row.percentChange >= 0 ? "+" : ""}${row.percentChange.toFixed(1)}%)` : ""}`;
+  }
+
+  function rulesBasedProgressSummary(comparison) {
+    if (!comparison) return [];
+    const byLabel = Object.fromEntries(comparison.rows.map((row) => [row.label, row]));
+    const summaries = [];
+    const netWorth = byLabel["Net worth"];
+    if (netWorth) summaries.push(`Net worth is ${changeText(netWorth)}, moving from ${money(netWorth.historical)} to ${money(netWorth.current)}.`);
+    const debt = byLabel["Total liabilities"];
+    if (debt && debt.change !== 0) summaries.push(`Total debt is ${debt.change < 0 ? "lower" : "higher"} by ${money(Math.abs(debt.change))}.`);
+    const investments = byLabel["Investment assets"];
+    if (investments && investments.change !== 0) summaries.push(`Investment assets are ${investments.change >= 0 ? "up" : "down"} by ${money(Math.abs(investments.change))}.`);
+    const superRow = byLabel["Superannuation"];
+    if (superRow && superRow.change !== 0) summaries.push(`Superannuation is ${superRow.change >= 0 ? "up" : "down"} by ${money(Math.abs(superRow.change))}.`);
+    const cashflow = byLabel["Annual cash surplus"];
+    if (cashflow && cashflow.change !== 0) summaries.push(`Annual cash surplus is ${cashflow.change >= 0 ? "higher" : "lower"} by ${money(Math.abs(cashflow.change))}.`);
+    const fi = byLabel["Financial independence progress"];
+    if (fi && Math.abs(fi.change) >= 0.1) summaries.push(`Financial independence progress moved from ${plainPercent(fi.historical)} to ${plainPercent(fi.current)}.`);
+    return summaries;
+  }
+
+  function progressMilestones(comparison) {
+    if (!comparison) return [];
+    const rows = Object.fromEntries(comparison.rows.map((row) => [row.label, row]));
+    const milestones = [];
+    if (comparison.historical.source === "manual") milestones.push("First historical snapshot completed");
+    if (rows["Net worth"]?.change > 0) milestones.push("Net worth increased");
+    if (rows["Home loan balance"]?.change <= -10000) milestones.push("Home loan reduced by at least $10,000");
+    if (rows["Consumer debt"]?.historical > 0 && rows["Consumer debt"]?.current <= 0) milestones.push("Consumer debt cleared");
+    if (comparison.current.calculated.emergencyFundMonths >= 3 && comparison.historical.calculated.emergencyFundMonths < 3) milestones.push("Emergency fund reached three months");
+    if (comparison.current.calculated.emergencyFundMonths >= 6 && comparison.historical.calculated.emergencyFundMonths < 6) milestones.push("Emergency fund reached six months");
+    if (rows["Passive income"]?.change > 0) milestones.push("Passive income increased");
+    if (rows["Financial independence progress"]?.change >= 5) milestones.push("Financial independence progress increased by at least 5%");
+    [25, 50, 75, 100].forEach((threshold) => {
+      if (comparison.historical.calculated.financialIndependenceProgress < threshold && comparison.current.calculated.financialIndependenceProgress >= threshold) {
+        milestones.push(`Financial independence progress reached ${threshold}%`);
+      }
+    });
+    return milestones;
+  }
+
+  function progressComparisonForAi(comparison) {
+    if (!comparison) return null;
+    const row = (label) => comparison.rows.find((item) => item.label === label) || {};
+    return {
+      comparisonPeriod: {
+        fromDate: comparison.fromDate,
+        toDate: comparison.toDate,
+        monthsElapsed: comparison.monthsElapsed,
+      },
+      historical: {
+        netWorth: comparison.historical.calculated.netWorth,
+        totalAssets: comparison.historical.calculated.totalAssets,
+        totalLiabilities: comparison.historical.calculated.totalLiabilities,
+        investments: comparison.historical.calculated.investmentAssets,
+        superannuation: comparison.historical.calculated.totalSuper,
+        cash: comparison.historical.calculated.liquidAssets,
+        homeLoan: comparison.historical.liabilities.homeLoan,
+        consumerDebt: comparison.historical.calculated.consumerDebt,
+        passiveIncome: comparison.historical.calculated.passiveIncome,
+        lifestyleSpending: comparison.historical.calculated.annualLifestyleSpending,
+        cashSurplus: comparison.historical.calculated.annualCashSurplus,
+        emergencyFundMonths: comparison.historical.calculated.emergencyFundMonths,
+        savingsRate: comparison.historical.calculated.savingsRate,
+        financialIndependenceProgress: comparison.historical.calculated.financialIndependenceProgress,
+      },
+      current: {
+        netWorth: comparison.current.calculated.netWorth,
+        totalAssets: comparison.current.calculated.totalAssets,
+        totalLiabilities: comparison.current.calculated.totalLiabilities,
+        investments: comparison.current.calculated.investmentAssets,
+        superannuation: comparison.current.calculated.totalSuper,
+        cash: comparison.current.calculated.liquidAssets,
+        homeLoan: comparison.current.liabilities.homeLoan,
+        consumerDebt: comparison.current.calculated.consumerDebt,
+        passiveIncome: comparison.current.calculated.passiveIncome,
+        lifestyleSpending: comparison.current.calculated.annualLifestyleSpending,
+        cashSurplus: comparison.current.calculated.annualCashSurplus,
+        emergencyFundMonths: comparison.current.calculated.emergencyFundMonths,
+        savingsRate: comparison.current.calculated.savingsRate,
+        financialIndependenceProgress: comparison.current.calculated.financialIndependenceProgress,
+      },
+      movements: {
+        netWorthChange: row("Net worth").change,
+        debtChange: row("Total liabilities").change,
+        investmentChange: row("Investment assets").change,
+        superChange: row("Superannuation").change,
+        cashChange: row("Cash and offset balances").change,
+        passiveIncomeChange: row("Passive income").change,
+        spendingChange: row("Lifestyle spending").change,
+        surplusChange: row("Annual cash surplus").change,
+        emergencyFundChange: row("Emergency fund months").change,
+        savingsRateChange: row("Savings rate").change,
+        financialIndependenceProgressChange: row("Financial independence progress").change,
+      },
+    };
+  }
+
   function stableStringify(value) {
     if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
     if (value && typeof value === "object") {
@@ -2636,6 +3255,7 @@
 
   function manualSavePlan() {
     syncCollectionsToLegacy();
+    maybeCreateAutomaticFinancialSnapshot(CALC.calculatePlan(plan), "manual-save");
     saveCurrentPlanAsScenario({ promptForName: true });
   }
 
@@ -2755,6 +3375,7 @@
       plan: migratePlanData(plan),
       scenarios: loadScenarios(),
       weeklyPlan: weeklyPlan ? window.FFSWeeklyPlan.migrate(weeklyPlan) : null,
+      snapshots: isDemoActive() ? [] : loadFinancialSnapshots(),
       ui: collectDraftUi(),
       userState,
     };
@@ -2772,6 +3393,7 @@
       plan: migratePlanData(rawPlan),
       scenarios: migrateScenarioList(payload.scenarios || []),
       weeklyPlan: payload.weeklyPlan ? window.FFSWeeklyPlan.migrate(payload.weeklyPlan) : null,
+      snapshots: Array.isArray(payload.snapshots) ? payload.snapshots.map(recalculateSnapshot) : [],
       ui: payload.ui && typeof payload.ui === "object" ? payload.ui : {},
       userState: payload.userState && typeof payload.userState === "object" ? payload.userState : {},
       exportedAt: payload.exportedAt || "",
@@ -2802,6 +3424,7 @@
       markPersonalPlanCreated();
     }
     saveScenarios(imported.scenarios);
+    if (imported.snapshots?.length) saveFinancialSnapshots(imported.snapshots.map((snapshot) => ({ ...snapshot, planId: activePlanId })));
     if (weeklyPlan) saveWeeklyPlan();
     else {
       localStorage.removeItem(currentPersonalWeeklyPlanKey());
@@ -3210,6 +3833,9 @@
       "weekly-plan": "weeklyplan",
       weekly: "weeklyplan",
       weeklyplan: "weeklyplan",
+      progress: "progress",
+      "financial-progress": "progress",
+      "track-progress": "progress",
       goals: "goals",
       investments: "investments",
       super: "super",
@@ -4296,6 +4922,523 @@
       points: [{ x: 0, y: percent }, ...result.financialFreedomProgressProjection.map((row) => ({ x: row.year, y: row.progress }))],
     }], { xMarks: [0, 10, 20, 30], xLabel: (mark) => `${mark}y`, yLabel: (value) => `${Math.round(value)}%` });
     renderAssumptions(result);
+    renderFinancialProgressDashboardCard(result);
+  }
+
+  function progressToneClass(tone) {
+    if (tone === "positive") return "status-green";
+    if (tone === "negative") return "status-amber";
+    return "";
+  }
+
+  function financialProgressDashboardCard(result) {
+    const snapshot = selectedProgressSnapshot();
+    if (!snapshot) {
+      return `
+        <article class="card financial-progress-card">
+          <div class="card-heading">
+            <div>
+              <span class="metric-label">Financial Progress</span>
+              <h3>Track Your Progress</h3>
+              <span>Save a previous position or current snapshot to compare your progress over time.</span>
+            </div>
+            <button class="btn btn-primary" type="button" data-view="progress">Open Financial Progress</button>
+          </div>
+          <div class="progress-action-row mt-4">
+            <button class="btn" type="button" data-progress-action="new-manual" data-months="12">Add 12-month snapshot</button>
+            <button class="btn" type="button" data-progress-action="save-current">Save Current Position as Snapshot</button>
+          </div>
+        </article>
+      `;
+    }
+    const comparison = buildFinancialComparison(snapshot, result);
+    const movementRows = comparison.keyMovements.slice(0, 6);
+    return `
+      <article class="card financial-progress-card">
+        <div class="card-heading">
+          <div>
+            <span class="metric-label">Financial Progress</span>
+            <h3>Your progress since ${escapeHtml(new Date(`${comparison.fromDate}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" }))}</h3>
+            <span>${escapeHtml(snapshot.label || snapshot.snapshotDate)} - ${escapeHtml(snapshot.source.replace("-", " "))}</span>
+          </div>
+          <button class="btn btn-primary" type="button" data-view="progress">View Full Progress</button>
+        </div>
+        <div class="summary-grid mt-4">
+          ${movementRows.map((row) => summaryTile(row.label, changeText(row), progressToneClass(row.tone))).join("")}
+        </div>
+        <div class="progress-action-row mt-4">
+          <button class="btn" type="button" data-view="progress">Change comparison period</button>
+          <button class="btn" type="button" data-progress-action="save-current">Save Current Position</button>
+        </div>
+      </article>
+    `;
+  }
+
+  function renderFinancialProgressDashboardCard(result) {
+    const container = document.getElementById("financialProgressDashboardCard");
+    if (!container) return;
+    if (isDemoActive()) {
+      container.innerHTML = `
+        <article class="card financial-progress-card">
+          <span class="metric-label">Financial Progress</span>
+          <h3>Sample Plan history is separate</h3>
+          <p class="field-help">Sample Plan data is not saved to your personal financial history.</p>
+        </article>
+      `;
+      return;
+    }
+    container.innerHTML = financialProgressDashboardCard(result);
+  }
+
+  function historicalField(path, label, options = {}) {
+    const rawValue = snapshotPathValue(historicalSnapshotDraft || snapshotDefaults(), path);
+    const value = options.kind === "text" ? String(rawValue || "") : (Number(rawValue) || "");
+    const type = options.type || (options.kind === "text" ? "text" : "number");
+    return `
+      <label>
+        <span class="field-label">${escapeHtml(label)}</span>
+        <input class="field-input" type="${type}" step="${options.step || "100"}" data-historical-field="${escapeHtml(path)}" value="${escapeHtml(value)}">
+      </label>
+    `;
+  }
+
+  function historicalSnapshotEditorHtml() {
+    if (!isHistoricalSnapshotEditorOpen) return "";
+    if (!historicalSnapshotDraft) historicalSnapshotDraft = createManualSnapshotDraft(12);
+    return `
+      <article class="card financial-progress-editor">
+        <div class="card-heading">
+          <div>
+            <span class="metric-label">Manual historical position</span>
+            <h3>${editingHistoricalSnapshotId ? "Edit Historical Snapshot" : "Add Historical Position"}</h3>
+            <span>Enter only the values you know. Missing values will be shown as not recorded in the comparison.</span>
+          </div>
+        </div>
+        <div class="input-grid mt-4">
+          ${historicalField("label", "Snapshot name", { kind: "text", type: "text" })}
+          ${historicalField("snapshotDate", "Comparison date", { kind: "text", type: "date" })}
+        </div>
+        ${historicalEditorCategory("Assets", [
+          ["assets.homeValue", "Home value"],
+          ["assets.investmentPropertyValue", "Investment property value"],
+          ["assets.cash", "Cash"],
+          ["assets.offsetBalance", "Offset account balance"],
+          ["assets.sharesEtfs", "Shares and ETFs"],
+          ["assets.managedFunds", "Managed funds"],
+          ["assets.cryptocurrency", "Cryptocurrency"],
+          ["assets.otherInvestments", "Other investments"],
+          ["assets.otherAssets", "Other assets"],
+          ["superannuation.person1Super", `${personDisplayName(1)} superannuation`],
+          ["superannuation.person2Super", `${personDisplayName(2)} superannuation`],
+        ])}
+        ${historicalEditorCategory("Liabilities", [
+          ["liabilities.homeLoan", "Home loan"],
+          ["liabilities.investmentPropertyLoans", "Investment property loans"],
+          ["liabilities.investmentLoans", "Other investment loans"],
+          ["liabilities.personalLoans", "Personal loans"],
+          ["liabilities.carLoans", "Car loans"],
+          ["liabilities.creditCards", "Credit cards"],
+          ["liabilities.otherLiabilities", "Other liabilities"],
+          ["liabilities.person1StslBalance", `${personDisplayName(1)} STSL balance`],
+          ["liabilities.person2StslBalance", `${personDisplayName(2)} STSL balance`],
+        ])}
+        ${historicalEditorCategory("Income", [
+          ["income.person1EmploymentIncome", `${personDisplayName(1)} employment income`],
+          ["income.person2EmploymentIncome", `${personDisplayName(2)} employment income`],
+          ["income.interestIncome", "Interest income"],
+          ["income.dividendIncome", "Dividend income"],
+          ["income.rentalIncome", "Rental income"],
+          ["income.distributionIncome", "Trust or business distributions"],
+          ["income.otherIncome", "Other income"],
+          ["income.annualNetIncome", "Annual net income"],
+        ])}
+        ${historicalEditorCategory("Expenses and Cashflow", [
+          ["expenses.annualLifestyleSpending", "Annual lifestyle spending"],
+          ["expenses.annualMortgageRepayments", "Annual mortgage repayments"],
+          ["expenses.otherAnnualDebtRepayments", "Other annual debt repayments"],
+          ["expenses.annualInvestmentContributions", "Annual investment contributions"],
+          ["expenses.annualSuperContributions", "Annual superannuation contributions"],
+          ["expenses.annualCashSurplus", "Annual cash surplus"],
+        ])}
+        ${historicalEditorCategory("Financial Goals", [
+          ["goals.targetRetirementAge", "Target retirement age"],
+          ["goals.targetRetirementSpending", "Target retirement spending"],
+          ["goals.emergencyFundTarget", "Emergency fund target"],
+          ["goals.financialIndependenceTarget", "Financial independence target"],
+        ])}
+        <div class="progress-action-row mt-4">
+          <button class="btn btn-primary" type="button" data-progress-action="save-manual">Save Historical Snapshot</button>
+          <button class="btn" type="button" data-progress-action="cancel-manual">Cancel</button>
+        </div>
+      </article>
+    `;
+  }
+
+  function historicalEditorCategory(title, fields) {
+    return `
+      <details class="historical-category" open>
+        <summary>${escapeHtml(title)}</summary>
+        <div class="input-grid mt-4">
+          ${fields.map(([path, label]) => historicalField(path, label)).join("")}
+        </div>
+      </details>
+    `;
+  }
+
+  function snapshotManagementHtml(snapshots) {
+    if (!snapshots.length) return `<p class="field-help">No saved snapshots yet. Add a historical position or save the current position to begin comparing progress.</p>`;
+    return `
+      <div class="snapshot-list">
+        ${snapshots.map((snapshot) => `
+          <article class="snapshot-row${snapshot.id === selectedProgressSnapshotId ? " active" : ""}">
+            <div>
+              <strong>${escapeHtml(snapshot.label || snapshot.snapshotDate)}</strong>
+              <small>${escapeHtml(snapshot.snapshotDate)} - ${escapeHtml(snapshot.source.replace("-", " "))} - ${escapeHtml(snapshot.calculationVersion || "snapshot")}</small>
+            </div>
+            <div class="snapshot-actions">
+              <button class="btn" type="button" data-progress-action="select-snapshot" data-snapshot-id="${escapeHtml(snapshot.id)}">Compare</button>
+              <button class="btn" type="button" data-progress-action="rename-snapshot" data-snapshot-id="${escapeHtml(snapshot.id)}">Rename</button>
+              <button class="btn" type="button" data-progress-action="date-snapshot" data-snapshot-id="${escapeHtml(snapshot.id)}">Change date</button>
+              ${snapshot.source === "manual" ? `<button class="btn" type="button" data-progress-action="edit-snapshot" data-snapshot-id="${escapeHtml(snapshot.id)}">Edit</button>` : ""}
+              <button class="btn remove-button" type="button" data-progress-action="delete-snapshot" data-snapshot-id="${escapeHtml(snapshot.id)}">Delete</button>
+            </div>
+          </article>
+        `).join("")}
+      </div>
+    `;
+  }
+
+  function comparisonSummaryHtml(comparison) {
+    if (!comparison) return "";
+    const netWorth = comparison.rows.find((row) => row.label === "Net worth");
+    const summaryItems = rulesBasedProgressSummary(comparison);
+    return `
+      <article class="card financial-progress-summary">
+        <div class="card-heading">
+          <div>
+            <span class="metric-label">Progress Summary</span>
+            <h3>${escapeHtml(comparison.monthsElapsed || "Custom")} month comparison</h3>
+            <span>${escapeHtml(comparison.fromDate)} to ${escapeHtml(comparison.toDate)}</span>
+          </div>
+        </div>
+        <div class="summary-grid mt-4">
+          ${summaryTile("Opening net worth", money(comparison.historical.calculated.netWorth))}
+          ${summaryTile("Current net worth", money(comparison.current.calculated.netWorth))}
+          ${summaryTile("Net movement", changeText(netWorth), progressToneClass(netWorth?.tone))}
+          ${summaryTile("Percentage movement", netWorth?.percentChange === null ? "New since comparison date" : `${netWorth.percentChange >= 0 ? "+" : ""}${netWorth.percentChange.toFixed(1)}%`)}
+        </div>
+        <div class="report-narrative-box mt-4">
+          ${summaryItems.slice(0, 4).map((item) => `<p>${escapeHtml(item)}</p>`).join("")}
+        </div>
+      </article>
+    `;
+  }
+
+  function comparisonHighlightsHtml(comparison) {
+    if (!comparison) return "";
+    const positives = comparison.rows.filter((row) => row.tone === "positive").sort((a, b) => Math.abs(b.change) - Math.abs(a.change)).slice(0, 5);
+    const negatives = comparison.rows.filter((row) => row.tone === "negative").sort((a, b) => Math.abs(b.change) - Math.abs(a.change)).slice(0, 5);
+    const highlights = (title, items, empty) => `
+      <article class="card">
+        <h3>${escapeHtml(title)}</h3>
+        ${items.length ? `<div class="mini-grid mt-4">${items.map((row) => summaryTile(row.label, changeText(row), progressToneClass(row.tone))).join("")}</div>` : `<p class="field-help mt-3">${escapeHtml(empty)}</p>`}
+      </article>
+    `;
+    return `
+      <div class="grid gap-4 xl:grid-cols-2">
+        ${highlights("Key Improvements", positives, "No clear positive movements were identified from the recorded comparison values.")}
+        ${highlights("Areas to Review", negatives, "No material backward movements were identified from the recorded comparison values.")}
+      </div>
+    `;
+  }
+
+  function categoryComparisonHtml(comparison) {
+    if (!comparison) return "";
+    const categories = [...new Set(comparison.rows.map((row) => row.category))];
+    return `
+      <article class="card">
+        <div class="card-heading">
+          <div>
+            <span class="metric-label">Category Comparisons</span>
+            <h3>Detailed movements</h3>
+            <span>Dollar movement is current value less historical value. Percentages are hidden where the historical value was zero.</span>
+          </div>
+        </div>
+        <div class="comparison-category-list mt-4">
+          ${categories.map((category) => `
+            <details class="comparison-category" ${category === "Overall Position" ? "open" : ""}>
+              <summary>${escapeHtml(category)}</summary>
+              <div class="comparison-row-list">
+                ${comparison.rows.filter((row) => row.category === category).map((row) => `
+                  <div class="comparison-row ${progressToneClass(row.tone)}">
+                    <span>${escapeHtml(row.label)}${row.explanation ? `<small>${escapeHtml(row.explanation)}</small>` : ""}</span>
+                    <strong>${money(row.historical)}</strong>
+                    <strong>${money(row.current)}</strong>
+                    <strong>${row.change >= 0 ? "+" : ""}${money(row.change)}</strong>
+                    <strong>${row.percentChange === null ? "New / not recorded" : `${row.percentChange >= 0 ? "+" : ""}${row.percentChange.toFixed(1)}%`}</strong>
+                  </div>
+                `).join("")}
+              </div>
+            </details>
+          `).join("")}
+        </div>
+      </article>
+    `;
+  }
+
+  function timelineHtml(snapshots, result) {
+    const points = [...snapshots, snapshotFromCurrentPlan(result, "automatic", { id: "current-position", label: "Current", snapshotDate: isoDateOnly() })]
+      .map(recalculateSnapshot)
+      .sort((a, b) => new Date(a.snapshotDate) - new Date(b.snapshotDate));
+    if (points.length < 3) return "";
+    const metric = (label, key) => `
+      <article class="mini-card">
+        <span>${escapeHtml(label)}</span>
+        <div class="timeline-points">
+          ${points.map((snapshot) => `<small><b>${escapeHtml(new Date(`${snapshot.snapshotDate}T00:00:00`).toLocaleDateString("en-AU", { month: "short", year: "2-digit" }))}</b> ${money(snapshot.calculated[key])}</small>`).join("")}
+        </div>
+      </article>
+    `;
+    return `
+      <article class="card">
+        <div class="card-heading">
+          <div>
+            <span class="metric-label">Timeline</span>
+            <h3>Snapshot trend</h3>
+            <span>Shown when at least three snapshots are available.</span>
+          </div>
+        </div>
+        <div class="mini-grid mt-4">
+          ${metric("Net worth", "netWorth")}
+          ${metric("Total debt", "totalLiabilities")}
+          ${metric("Investment assets", "investmentAssets")}
+          ${metric("Superannuation", "totalSuper")}
+          ${metric("Cash surplus", "annualCashSurplus")}
+        </div>
+      </article>
+    `;
+  }
+
+  function progressAiHtml(comparison) {
+    if (!comparison) return "";
+    const report = comparison.historical.progressAiInsight;
+    const fallback = rulesBasedProgressSummary(comparison);
+    return `
+      <article class="card progress-ai-card">
+        <div class="card-heading">
+          <div>
+            <span class="metric-label">AI Progress Insight</span>
+            <h3>Progress Since Your Last Review</h3>
+            <span>Rules-based results are shown immediately. AI is optional and uses only calculated comparison data.</span>
+          </div>
+          <button class="btn" type="button" data-progress-action="ai-progress" ${progressAiState.isLoading ? "disabled" : ""}>${progressAiState.isLoading ? "Refreshing..." : "Refresh AI Insight"}</button>
+        </div>
+        ${progressAiState.error ? `<p class="ai-error mt-3">${escapeHtml(progressAiState.error)}</p>` : ""}
+        ${report ? `
+          <div class="report-narrative-box mt-4">
+            <p><strong>${escapeHtml(report.summary || "Progress insight")}</strong></p>
+            ${["keyImprovements", "areasToReview", "progressTowardGoals", "nextReviewActions"].map((key) => report[key]?.length ? `
+              <h4>${escapeHtml(key === "keyImprovements" ? "Key improvements" : key === "areasToReview" ? "Areas to review" : key === "progressTowardGoals" ? "Progress toward goals" : "Next review actions")}</h4>
+              <ul>${report[key].map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+            ` : "").join("")}
+            <p class="field-help">${escapeHtml(report.disclaimer || "Educational modelling only. Not financial advice.")}</p>
+          </div>
+        ` : `
+          <div class="report-narrative-box mt-4">
+            ${fallback.slice(0, 5).map((item) => `<p>${escapeHtml(item)}</p>`).join("")}
+            <p class="field-help">AI insight has not been generated yet, or the AI service is unavailable.</p>
+          </div>
+        `}
+      </article>
+    `;
+  }
+
+  function progressMilestonesHtml(comparison) {
+    const milestones = progressMilestones(comparison);
+    if (!milestones.length) return "";
+    return `
+      <article class="card">
+        <span class="metric-label">Progress milestones</span>
+        <div class="celebration-grid mt-4">
+          ${milestones.map((item) => `<span class="celebration-pill">${escapeHtml(item)}</span>`).join("")}
+        </div>
+      </article>
+    `;
+  }
+
+  function renderFinancialProgress(result) {
+    const root = document.getElementById("financialProgressRoot");
+    if (!root) return;
+    if (isDemoActive()) {
+      root.innerHTML = `
+        <article class="card">
+          <h3>You are viewing the Sample Plan</h3>
+          <p>Sample Plan data is not saved into your personal financial history. Return to your plan to view or save snapshots.</p>
+          <button class="btn btn-primary mt-4" type="button" data-sample-action="return">Return to My Plan</button>
+        </article>
+      `;
+      return;
+    }
+    const snapshots = loadFinancialSnapshots();
+    const snapshot = selectedProgressSnapshot();
+    const comparison = snapshot ? buildFinancialComparison(snapshot, result) : null;
+    root.innerHTML = `
+      <div class="card financial-progress-controls">
+        <div class="card-heading">
+          <div>
+            <span class="metric-label">Financial Progress</span>
+            <h3>Compare your financial position over time</h3>
+            <span>Snapshots are saved in this browser for your current personal plan only.</span>
+          </div>
+        </div>
+        <div class="progress-period-actions mt-4">
+          <button class="btn" type="button" data-progress-action="new-manual" data-months="3">3 months ago</button>
+          <button class="btn" type="button" data-progress-action="new-manual" data-months="6">6 months ago</button>
+          <button class="btn btn-primary" type="button" data-progress-action="new-manual" data-months="12">Add 12-month position</button>
+          <button class="btn" type="button" data-progress-action="new-manual" data-months="0">Custom date</button>
+          <button class="btn" type="button" data-progress-action="save-current">Save Current Position as Snapshot</button>
+        </div>
+        <div class="input-grid mt-4">
+          <label>
+            <span class="field-label">Select comparison snapshot</span>
+            <select class="field-input" data-progress-snapshot-select>
+              <option value="">${snapshots.length ? "Select snapshot" : "No snapshots saved yet"}</option>
+              ${snapshots.map((item) => `<option value="${escapeHtml(item.id)}"${item.id === selectedProgressSnapshotId ? " selected" : ""}>${escapeHtml(item.label || item.snapshotDate)} - ${escapeHtml(item.snapshotDate)} (${escapeHtml(item.source)})</option>`).join("")}
+            </select>
+          </label>
+        </div>
+        <details class="mt-4" ${snapshots.length ? "" : "open"}>
+          <summary>Manage saved snapshots</summary>
+          ${snapshotManagementHtml(snapshots)}
+        </details>
+      </div>
+      ${historicalSnapshotEditorHtml()}
+      ${comparison ? `
+        ${comparisonSummaryHtml(comparison)}
+        ${comparisonHighlightsHtml(comparison)}
+        ${progressMilestonesHtml(comparison)}
+        ${categoryComparisonHtml(comparison)}
+        ${timelineHtml(snapshots, result)}
+        ${progressAiHtml(comparison)}
+      ` : `
+        <article class="card">
+          <h3>No comparison selected yet</h3>
+          <p>Add a historical position or save a current snapshot to start tracking your financial progress.</p>
+        </article>
+      `}
+    `;
+  }
+
+  function handleFinancialProgressAction(button) {
+    const action = button.dataset.progressAction;
+    const snapshotId = button.dataset.snapshotId || "";
+    if (action === "new-manual") {
+      const months = Number(button.dataset.months);
+      historicalSnapshotDraft = createManualSnapshotDraft(months || 12);
+      if (!months) historicalSnapshotDraft.snapshotDate = isoDateOnly();
+      editingHistoricalSnapshotId = "";
+      isHistoricalSnapshotEditorOpen = true;
+      renderFinancialProgress(CALC.calculatePlan(plan));
+      return;
+    }
+    if (action === "save-current") {
+      saveCurrentPositionSnapshot();
+      return;
+    }
+    if (action === "save-manual") {
+      saveHistoricalSnapshotDraft();
+      return;
+    }
+    if (action === "cancel-manual") {
+      isHistoricalSnapshotEditorOpen = false;
+      editingHistoricalSnapshotId = "";
+      historicalSnapshotDraft = null;
+      renderFinancialProgress(CALC.calculatePlan(plan));
+      return;
+    }
+    if (action === "select-snapshot") {
+      selectedProgressSnapshotId = snapshotId;
+      saveDraft();
+      renderOutputs();
+      return;
+    }
+    if (action === "rename-snapshot") {
+      renameFinancialSnapshot(snapshotId);
+      return;
+    }
+    if (action === "date-snapshot") {
+      changeFinancialSnapshotDate(snapshotId);
+      return;
+    }
+    if (action === "edit-snapshot") {
+      editFinancialSnapshot(snapshotId);
+      return;
+    }
+    if (action === "delete-snapshot") {
+      deleteFinancialSnapshot(snapshotId);
+      return;
+    }
+    if (action === "ai-progress") {
+      generateProgressAiInsight();
+    }
+  }
+
+  function validateProgressInsight(report) {
+    if (!report || typeof report !== "object") return null;
+    const list = (items) => Array.isArray(items) ? items.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 8) : [];
+    const summary = String(report.summary || "").trim();
+    if (!summary) return null;
+    return {
+      generatedAt: report.generatedAt || new Date().toISOString(),
+      summary,
+      keyImprovements: list(report.keyImprovements),
+      areasToReview: list(report.areasToReview),
+      progressTowardGoals: list(report.progressTowardGoals),
+      nextReviewActions: list(report.nextReviewActions),
+      disclaimer: String(report.disclaimer || "Educational modelling only. Not personal financial advice.").trim(),
+    };
+  }
+
+  async function generateProgressAiInsight() {
+    const snapshot = selectedProgressSnapshot();
+    const comparison = snapshot ? buildFinancialComparison(snapshot, CALC.calculatePlan(plan)) : null;
+    if (!comparison) return;
+    if (!aiInsightsConfig.enabled) {
+      progressAiState.error = "AI Insights is not enabled in this environment. The rules-based progress summary remains available.";
+      renderFinancialProgress(CALC.calculatePlan(plan));
+      return;
+    }
+    progressAiState = { isLoading: true, error: "" };
+    renderFinancialProgress(CALC.calculatePlan(plan));
+    try {
+      const response = await fetch(AI_INSIGHTS_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          type: "progress",
+          progressComparison: progressComparisonForAi(comparison),
+          requestedAt: new Date().toISOString(),
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "The AI progress insight could not be generated.");
+      const report = validateProgressInsight(payload.progressInsights);
+      if (!report) throw new Error("The AI progress response could not be read safely.");
+      const snapshots = loadFinancialSnapshots();
+      const next = snapshots.map((item) => item.id === snapshot.id ? { ...item, progressAiInsight: report } : item);
+      saveFinancialSnapshots(next, "AI progress insight refreshed.");
+      progressAiState = { isLoading: false, error: "" };
+      renderOutputs();
+    } catch (error) {
+      progressAiState = {
+        isLoading: false,
+        error: error.message || "AI progress insight was unavailable. The rules-based summary is still shown.",
+      };
+      renderFinancialProgress(CALC.calculatePlan(plan));
+    }
   }
 
   function thisWeekProgressAmount() {
@@ -7835,6 +8978,29 @@
     `;
   }
 
+  function financialProgressReportSectionHtml(result) {
+    const snapshot = selectedProgressSnapshot();
+    if (!snapshot) return "";
+    const comparison = buildFinancialComparison(snapshot, result);
+    if (!comparison) return "";
+    const row = (label) => comparison.rows.find((item) => item.label === label);
+    const explanation = comparison.historical.progressAiInsight?.summary || rulesBasedProgressSummary(comparison).slice(0, 2).join(" ");
+    return reportSection("Financial Progress", "A comparison between the selected historical snapshot and the current plan.", `
+      <div class="summary-grid">
+        ${summaryTile("Comparison timeframe", `${comparison.fromDate} to ${comparison.toDate}`)}
+        ${summaryTile("Historical net worth", money(comparison.historical.calculated.netWorth))}
+        ${summaryTile("Current net worth", money(comparison.current.calculated.netWorth))}
+        ${summaryTile("Net worth movement", changeText(row("Net worth")), progressToneClass(row("Net worth")?.tone))}
+        ${summaryTile("Total debt movement", changeText(row("Total liabilities")), progressToneClass(row("Total liabilities")?.tone))}
+        ${summaryTile("Investment movement", changeText(row("Investment assets")), progressToneClass(row("Investment assets")?.tone))}
+        ${summaryTile("Superannuation movement", changeText(row("Superannuation")), progressToneClass(row("Superannuation")?.tone))}
+        ${summaryTile("Cash surplus movement", changeText(row("Annual cash surplus")), progressToneClass(row("Annual cash surplus")?.tone))}
+        ${summaryTile("FI progress movement", changeText(row("Financial independence progress")), progressToneClass(row("Financial independence progress")?.tone))}
+      </div>
+      <p class="report-narrative">${escapeHtml(explanation || "Historical progress has been calculated from the selected snapshot and the current plan.")}</p>
+    `, "report-page-break report-compact-section");
+  }
+
   function renderReports(result) {
     const container = document.getElementById("financialReportBody");
     if (!container) return;
@@ -7860,6 +9026,8 @@
     const tenYearProgressText = tenYearProgress > 100
       ? "Projected FI assets exceed the selected target in the 10-year view, based on the assumptions entered."
       : `Projected target lifestyle funding is ${plainPercent(tenYearProgress)} in 10 years, based on the assumptions entered.`;
+    if (activeView === "reports") maybeCreateAutomaticFinancialSnapshot(result, "report");
+    const progressReportSection = financialProgressReportSectionHtml(result);
 
     const summaryNarrative = `
       <div class="report-narrative-box">
@@ -7893,6 +9061,8 @@
           ${reportTopActionList(recommendations)}
         </div>
       `, "report-executive")}
+
+      ${progressReportSection}
 
       ${reportSection("Current Financial Position", "A clean summary of income, expenses, assets, liabilities and the assets currently counted toward Financial Independence.", `
         <div class="summary-grid">
@@ -8667,6 +9837,7 @@
     safeRenderModule("Home preview", () => updatePreview(result));
     safeRenderModule("AI Insights card", () => renderAiInsightsHomeCard(result));
     safeRenderModule("Dashboard", () => renderDashboard(result));
+    safeRenderModule("Financial Progress", () => renderFinancialProgress(result));
     safeRenderModule("Cashflow", () => renderCashflow(result));
     safeRenderModule("Loans", () => renderLoan(result));
     safeRenderModule("Investments", () => renderInvestments(result));
@@ -8936,6 +10107,13 @@
         updateWeeklyTimingDraftFromInput(target);
         return;
       }
+      if (target.dataset.historicalField !== undefined) {
+        if (!historicalSnapshotDraft) historicalSnapshotDraft = createManualSnapshotDraft(12);
+        const value = target.type === "number" ? Number(target.value) || 0 : target.value;
+        setSnapshotPath(historicalSnapshotDraft, target.dataset.historicalField, value);
+        historicalSnapshotDraft.updatedAt = new Date().toISOString();
+        return;
+      }
       if (target.dataset.weeklySetup !== undefined) {
         ensurePlanSettings(plan);
         const current = plan.reportSettings.weeklyPlanSetup || {};
@@ -9124,6 +10302,20 @@
         renderAiInsightsModal();
         return;
       }
+      if (target.dataset.historicalField !== undefined) {
+        if (!historicalSnapshotDraft) historicalSnapshotDraft = createManualSnapshotDraft(12);
+        const value = target.type === "number" ? Number(target.value) || 0 : target.value;
+        setSnapshotPath(historicalSnapshotDraft, target.dataset.historicalField, value);
+        historicalSnapshotDraft.updatedAt = new Date().toISOString();
+        return;
+      }
+      if (target.dataset.progressSnapshotSelect !== undefined) {
+        selectedProgressSnapshotId = target.value || "";
+        saveDraft();
+        renderFinancialProgress(CALC.calculatePlan(plan));
+        renderFinancialProgressDashboardCard(CALC.calculatePlan(plan));
+        return;
+      }
       if (target.closest("[data-timing-editor]")) {
         updateWeeklyTimingDraftFromInput(target);
       }
@@ -9199,6 +10391,13 @@
         event.preventDefault();
         closeAiInsightsModal();
         navigateToSection(aiScenarioTarget.dataset.aiScenarioTarget || "decision");
+        return;
+      }
+
+      const progressAction = event.target.closest("[data-progress-action]");
+      if (progressAction) {
+        event.preventDefault();
+        handleFinancialProgressAction(progressAction);
         return;
       }
 
