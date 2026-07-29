@@ -8,7 +8,7 @@ import {
   deriveJourneyStage,
 } from "../lib/engagement.ts";
 
-test("lifestyle funding percentage is capped for display but preserves raw progress", () => {
+test("Financial Freedom progress is capped for display but preserves raw progress", () => {
   const result = calculateLifestyleFundingPercentage({
     financialIndependenceAssets: 3_000_000,
     safeWithdrawalRatePct: 4,

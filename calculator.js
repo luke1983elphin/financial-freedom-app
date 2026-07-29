@@ -1435,6 +1435,67 @@
     return options.sort((a, b) => b.score - a.score);
   }
 
+  function assetItemTotal(plan = {}, categories = []) {
+    const wanted = new Set(categories);
+    return (Array.isArray(plan.assetItems) ? plan.assetItems : [])
+      .filter((item) => wanted.has(item.type) || wanted.has(item.category))
+      .reduce((total, item) => total + nonNegative(item.value ?? item.balance ?? item.amount), 0);
+  }
+
+  function liabilityItemTotal(plan = {}, categories = []) {
+    const wanted = new Set(categories);
+    return (Array.isArray(plan.liabilityItems) ? plan.liabilityItems : [])
+      .filter((item) => wanted.has(item.type) || wanted.has(item.category))
+      .reduce((total, item) => total + nonNegative(item.balance ?? item.value ?? item.amount), 0);
+  }
+
+  function calculateNetFiAssetSummary({
+    plan = {},
+    currentAge = 0,
+    superBalance,
+    rentalPropertyDebt,
+    downsizingBoost = 0,
+    projectedInvestmentBalance,
+    projectedSuperBalance,
+    includeSuperOverride,
+  } = {}) {
+    const assets = plan.assets || {};
+    const grossLiquidInvestmentAssets = roundCurrency(
+      (Number.isFinite(Number(projectedInvestmentBalance))
+        ? nonNegative(projectedInvestmentBalance)
+        : nonNegative(assets.cash)
+          + nonNegative(assets.sharesEtfs)
+          + nonNegative(assets.crypto)
+          + assetItemTotal(plan, ["shares", "share", "etf", "managedFund", "managedFunds", "investmentBond", "investmentBonds", "crypto", "cryptocurrency", "businessInvestment", "privateInvestment", "otherInvestment", "other"]))
+      + nonNegative(assets.offsetBalance)
+      + downsizingBoost,
+    );
+    const otherInvestmentDebt = liabilityItemTotal(plan, ["investmentLoan", "shareInvestmentLoan", "managedFundLoan"]);
+    const liquidInvestmentAssets = roundCurrency(Math.max(0, grossLiquidInvestmentAssets - otherInvestmentDebt));
+    const investmentPropertyGrossValue = roundCurrency(nonNegative(assets.otherPropertyValue) + assetItemTotal(plan, ["rentalProperty", "investmentProperty"]));
+    const investmentPropertyDebt = roundCurrency(nonNegative(rentalPropertyDebt) || liabilityItemTotal(plan, ["rentalPropertyLoan"]));
+    const investmentPropertyEquity = roundCurrency(Math.max(0, investmentPropertyGrossValue - investmentPropertyDebt));
+    const availableSuperBalance = roundCurrency(Number.isFinite(Number(projectedSuperBalance))
+      ? nonNegative(projectedSuperBalance)
+      : nonNegative(superBalance));
+    const superIncludedInNetFiAssets = includeSuperOverride ?? (nonNegative(currentAge) >= SUPER_ACCESS_AGE);
+    const superIncludedAmount = superIncludedInNetFiAssets ? availableSuperBalance : 0;
+    const netFiAssets = roundCurrency(liquidInvestmentAssets + investmentPropertyEquity + superIncludedAmount);
+    return {
+      grossLiquidInvestmentAssets,
+      liquidInvestmentAssets,
+      otherInvestmentDebt,
+      investmentPropertyGrossValue,
+      investmentPropertyDebt,
+      investmentPropertyEquity,
+      superBalance: availableSuperBalance,
+      superIncludedInNetFiAssets,
+      superIncludedAmount,
+      netFiAssets,
+      totalIncomeProducingAssets: roundCurrency(liquidInvestmentAssets + investmentPropertyEquity + availableSuperBalance),
+    };
+  }
+
   function calculatePlan(planInput) {
     const plan = clonePlan(planInput);
     const loan = calculateLoanSummary(plan);
@@ -1488,31 +1549,30 @@
       nonNegative(plan.assets.superPerson1)
       + nonNegative(plan.assets.superPerson2),
     );
-    const accessibleInvestmentAssets = roundCurrency(
-      nonNegative(plan.assets.offsetBalance)
-      + nonNegative(plan.assets.cash)
-      + nonNegative(plan.assets.sharesEtfs)
-      + nonNegative(plan.assets.crypto)
-      + downsizingBoost,
-    );
+    const currentFiAssetSummary = calculateNetFiAssetSummary({
+      plan,
+      currentAge,
+      superBalance: superannuationBalance,
+      rentalPropertyDebt: rentalPropertyLoanBalance,
+      downsizingBoost,
+    });
+    const accessibleInvestmentAssets = currentFiAssetSummary.liquidInvestmentAssets;
     const investmentBalance = roundCurrency(
       nonNegative(plan.assets.cash)
       + nonNegative(plan.assets.sharesEtfs)
       + nonNegative(plan.assets.crypto)
       + downsizingBoost,
     );
-    const liquidInvestmentAssets = accessibleInvestmentAssets;
-    const investmentPropertyGrossValue = nonNegative(plan.assets.otherPropertyValue);
-    const investmentPropertyDebt = rentalPropertyLoanBalance;
-    const investmentPropertyEquity = roundCurrency(Math.max(0, investmentPropertyGrossValue - investmentPropertyDebt));
-    const includeInvestmentPropertyEquityInFi = Boolean(plan.assets.includeInvestmentPropertyEquityInFi || plan.investing.includeInvestmentPropertyEquityInFi);
-    const superAccessibleToday = currentAge >= SUPER_ACCESS_AGE ? superannuationBalance : 0;
-    const accessibleFICapital = roundCurrency(
-      liquidInvestmentAssets
-      + superAccessibleToday
-      + (includeInvestmentPropertyEquityInFi ? investmentPropertyEquity : 0),
-    );
-    const totalIncomeProducingAssets = roundCurrency(liquidInvestmentAssets + investmentPropertyEquity + superannuationBalance);
+    const liquidInvestmentAssets = currentFiAssetSummary.liquidInvestmentAssets;
+    const grossLiquidInvestmentAssets = currentFiAssetSummary.grossLiquidInvestmentAssets;
+    const otherInvestmentDebt = currentFiAssetSummary.otherInvestmentDebt;
+    const investmentPropertyGrossValue = currentFiAssetSummary.investmentPropertyGrossValue;
+    const investmentPropertyDebt = currentFiAssetSummary.investmentPropertyDebt;
+    const investmentPropertyEquity = currentFiAssetSummary.investmentPropertyEquity;
+    const includeInvestmentPropertyEquityInFi = investmentPropertyEquity > 0;
+    const superAccessibleToday = currentFiAssetSummary.superIncludedAmount;
+    const accessibleFICapital = currentFiAssetSummary.netFiAssets;
+    const totalIncomeProducingAssets = currentFiAssetSummary.totalIncomeProducingAssets;
     const financialIndependenceAssets = accessibleFICapital;
     const incomeSummary = incomeBreakdown(plan);
     const person1AnnualIncome = incomeSummary.person1Taxable;
@@ -1690,7 +1750,8 @@
       + netExtraSuperContributions
       + firstYearMortgagePrincipalReduction,
     );
-    const safeWithdrawalRate = annualRate(plan.investing.safeWithdrawalRatePct);
+    const enteredSafeWithdrawalRate = annualRate(plan.investing.safeWithdrawalRatePct);
+    const safeWithdrawalRate = enteredSafeWithdrawalRate > 0 ? enteredSafeWithdrawalRate : 0.04;
     const expectedInvestmentReturn = annualRate(plan.investing.expectedInvestmentReturnPct);
     const expectedSuperReturn = annualRate(plan.investing.expectedSuperReturnPct);
     const inflation = annualRate(plan.investing.inflationPct);
@@ -1717,6 +1778,12 @@
     });
     const targetAnnualLifestyleSpending = nonNegative(plan.personal.targetAnnualSpending);
     const targetCapital = safeWithdrawalRate > 0 ? targetAnnualLifestyleSpending / safeWithdrawalRate : 0;
+    const estimatedSustainableIncomeFromCurrentFiAssets = roundCurrency(financialIndependenceAssets * safeWithdrawalRate);
+    const passiveIncomeCoveragePercent = targetAnnualLifestyleSpending > 0 ? Math.max(0, roundRatio(annualPassiveIncome / targetAnnualLifestyleSpending * 100)) : 0;
+    const lifestyleFundingPercent = targetAnnualLifestyleSpending > 0 ? Math.max(0, roundRatio(estimatedSustainableIncomeFromCurrentFiAssets / targetAnnualLifestyleSpending * 100)) : 0;
+    const financialFreedomProgressRaw = targetCapital > 0 ? Math.max(0, roundRatio(financialIndependenceAssets / targetCapital * 100)) : 0;
+    const financialFreedomScore = Math.min(100, financialFreedomProgressRaw);
+    const fiTargetRemaining = roundCurrency(Math.max(0, targetCapital - financialIndependenceAssets));
     const milestones = [
       {
         label: "Building Wealth",
@@ -1739,8 +1806,15 @@
     ].map((item) => {
       const investment = rowAtAge(investmentProjection, item.age);
       const superRow = rowAtAge(superProjection, item.age);
-      const superAccessible = item.age >= SUPER_ACCESS_AGE ? superRow.closingBalance : 0;
-      const projectedFiAssets = roundCurrency(investment.closingBalance + superAccessible);
+      const projectedFiSummary = calculateNetFiAssetSummary({
+        plan,
+        currentAge: item.age,
+        superBalance: superannuationBalance,
+        projectedSuperBalance: superRow.closingBalance,
+        rentalPropertyDebt: rentalPropertyLoanBalance,
+        projectedInvestmentBalance: investment.closingBalance,
+      });
+      const projectedFiAssets = projectedFiSummary.netFiAssets;
       const requiredCapital = roundCurrency(targetCapital * item.coverage);
       return {
         ...item,
@@ -1781,8 +1855,6 @@
         firstYearDraw: maximumLifestyleDraw(totalRetirementAssets, expectedInvestmentReturn, inflation),
       }),
     ];
-    const lifestyleFundingPercent = targetAnnualLifestyleSpending > 0 ? Math.max(0, roundRatio(annualPassiveIncome / targetAnnualLifestyleSpending * 100)) : 0;
-    const financialFreedomScore = Math.min(100, lifestyleFundingPercent);
     const netWorthProjection = investmentProjection.map((row, index) => {
       const year = index + 1;
       const residenceValue = plan.downsizing?.enabled && nonNegative(plan.downsizing.futurePropertyValue) > 0
@@ -1795,13 +1867,33 @@
       return { year, age: currentAge + year, closingBalance };
     });
     const financialFreedomProgressProjection = investmentProjection.map((row, index) => {
-      const superAccessible = row.age >= SUPER_ACCESS_AGE ? superProjection[index].closingBalance : 0;
-      const projectedAssets = roundCurrency(row.closingBalance + nonNegative(plan.assets.offsetBalance) + superAccessible);
+      const projectedFiSummary = calculateNetFiAssetSummary({
+        plan,
+        currentAge: row.age,
+        superBalance: superannuationBalance,
+        projectedSuperBalance: superProjection[index].closingBalance,
+        rentalPropertyDebt: rentalPropertyLoanBalance,
+        projectedInvestmentBalance: row.closingBalance,
+      });
       return {
         year: row.year,
         age: row.age,
-        progress: targetCapital > 0 ? Math.min(200, roundRatio(projectedAssets / targetCapital * 100)) : 0,
+        netFiAssets: projectedFiSummary.netFiAssets,
+        estimatedSustainableIncome: roundCurrency(projectedFiSummary.netFiAssets * safeWithdrawalRate),
+        progress: targetCapital > 0 ? Math.min(200, roundRatio(projectedFiSummary.netFiAssets / targetCapital * 100)) : 0,
       };
+    });
+    const targetProjectionAge = nonNegative(plan.personal.fullRetirementAge) || currentAge;
+    const targetProjectionYear = Math.max(0, Math.min(30, Math.round(targetProjectionAge - currentAge)));
+    const targetInvestmentRow = targetProjectionYear > 0 ? investmentProjection[targetProjectionYear - 1] : { closingBalance: investmentBalance, age: currentAge, year: 0 };
+    const targetSuperRow = targetProjectionYear > 0 ? superProjection[targetProjectionYear - 1] : { closingBalance: superannuationBalance };
+    const targetAgeFiAssetSummary = calculateNetFiAssetSummary({
+      plan,
+      currentAge: targetProjectionAge,
+      superBalance: superannuationBalance,
+      projectedSuperBalance: targetSuperRow?.closingBalance || superannuationBalance,
+      rentalPropertyDebt: rentalPropertyLoanBalance,
+      projectedInvestmentBalance: targetInvestmentRow?.closingBalance || investmentBalance,
     });
     const people = {
       person1: {
@@ -1863,7 +1955,9 @@
       currentNetWorth,
       investmentBalance,
       accessibleInvestmentAssets,
+      grossLiquidInvestmentAssets,
       liquidInvestmentAssets,
+      otherInvestmentDebt,
       investmentPropertyGrossValue,
       investmentPropertyDebt,
       investmentPropertyEquity,
@@ -1872,13 +1966,13 @@
       totalIncomeProducingAssets,
       fiAssetPolicy: {
         includeInvestmentPropertyEquityInFi,
-        note: includeInvestmentPropertyEquityInFi
-          ? "Investment-property equity is included in FI capital by user selection; gross property value is reduced by linked rental-property debt."
-          : "Investment-property equity is reported separately and excluded from FI capital unless the user explicitly includes it. The family home is excluded unless a downsizing strategy is enabled.",
+        superIncludedInCurrentNetFiAssets: currentFiAssetSummary.superIncludedInNetFiAssets,
+        note: "Financial Freedom progress uses current net FI assets divided by target FI assets. FI assets include liquid investment assets and net rental/investment-property equity, exclude the family home and personal-use assets, and include super only once it is accessible in the model.",
       },
       superannuationBalance,
       superAccessibleToday,
       superAccessAge: SUPER_ACCESS_AGE,
+      currentNetFiAssets: financialIndependenceAssets,
       financialIndependenceAssets,
       effectiveMortgageBalance: loan.offsetBenefit.effectiveLoanBalance,
       annualGrossIncome,
@@ -1891,7 +1985,15 @@
       otherAnnualIncome,
       passiveIncomeBreakdown: passiveIncomeSummary,
       annualPassiveIncome,
+      passiveIncomeCoveragePercent,
       lifestyleFundingPercent,
+      estimatedSustainableIncomeFromCurrentFiAssets,
+      financialFreedomProgressRaw,
+      financialFreedomProgressDisplay: financialFreedomScore,
+      fiTargetRemaining,
+      targetAgeNetFiAssets: targetAgeFiAssetSummary.netFiAssets,
+      targetAgeEstimatedSustainableIncome: roundCurrency(targetAgeFiAssetSummary.netFiAssets * safeWithdrawalRate),
+      targetAgeSuperIncludedInNetFiAssets: targetAgeFiAssetSummary.superIncludedInNetFiAssets,
       annualExpenses,
       annualLivingExpenses,
       annualCoreLivingExpenses,
@@ -1993,6 +2095,7 @@
     calculateRentalPropertyCashflow,
     calculateRentalCashflowSummary,
     passiveIncomeBreakdown,
+    calculateNetFiAssetSummary,
     amortiseLoan,
     calculateOffsetBenefit,
     calculateLoanSummary,

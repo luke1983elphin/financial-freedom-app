@@ -186,7 +186,15 @@
     },
     financialStage: {
       title: "Financial stages",
-      body: "The stage shows where your plan appears to sit today. Stage progress looks at practical steps such as positive cashflow, emergency savings, debt control and investment progress. Lifestyle funding is separate: it compares passive income or FI assets with your target annual lifestyle cost.",
+      body: "The stage shows where your plan appears to sit today. Stage progress is based primarily on current net FI assets compared with target FI assets, while cashflow, emergency savings and debt control help explain what may move you forward. Passive income is shown separately.",
+    },
+    financialFreedomProgress: {
+      title: "Financial Freedom Progress",
+      body: "Financial Freedom progress compares your current net Financial Independence assets with your target FI assets. It includes income-producing and investable assets, excludes personal-use assets such as your home and vehicles, and deducts linked investment debt.",
+    },
+    sustainableIncome: {
+      title: "Estimated sustainable income",
+      body: "This estimates the annual income your current net FI assets may support using the selected withdrawal rate. It is separate from actual passive income currently recorded in your plan.",
     },
     stslDebt: {
       title: "Study and Training Support Loan",
@@ -344,18 +352,18 @@
   const freedomStages = [
     {
       min: 0,
-      nextAt: 25,
+      nextAt: 10,
       name: "Building the Foundation",
       explanation: "Establishing positive cashflow, building emergency savings and gaining control over debt.",
     },
     {
-      min: 25,
-      nextAt: 75,
+      min: 10,
+      nextAt: 40,
       name: "Building Wealth",
       explanation: "Regularly reducing debt, investing and increasing long-term financial assets.",
     },
     {
-      min: 75,
+      min: 40,
       nextAt: 100,
       name: "Financial Independence",
       explanation: "Investments and passive income can fund a meaningful portion of the household's lifestyle.",
@@ -370,7 +378,8 @@
 
   function freedomPercent(result) {
     if (!result.targetCapital) return 0;
-    if (Number.isFinite(Number(result.lifestyleFundingPercent))) return Number(result.lifestyleFundingPercent);
+    if (Number.isFinite(Number(result.financialFreedomProgressRaw))) return Number(result.financialFreedomProgressRaw);
+    if (Number.isFinite(Number(result.financialFreedomScore))) return Number(result.financialFreedomScore);
     return (Number(result.financialIndependenceAssets) || 0) / result.targetCapital * 100;
   }
 
@@ -391,13 +400,13 @@
     const totalAssets = Number(result.totalAssets) || 0;
     const totalDebt = Number(result.totalLiabilities) || 0;
     const debtRatio = totalAssets > 0 ? totalDebt / totalAssets : totalDebt > 0 ? 1 : 0;
-    const investmentAssets = Number(result.accessibleInvestmentAssets || 0);
+    const investmentAssets = Number(result.financialIndependenceAssets || result.accessibleInvestmentAssets || 0);
     const insufficient = !annualLifestyle && !result.targetCapital && !result.annualGrossIncome && !totalAssets;
     let stageIndex = 0;
     if (insufficient) stageIndex = 0;
     else if (lifestylePercent >= 100) stageIndex = 3;
-    else if (lifestylePercent >= 75) stageIndex = 2;
-    else if (surplus > 0 && investmentAssets > 0 && (cash >= emergencyTarget * 0.5 || debtRatio <= 0.75)) stageIndex = 1;
+    else if (lifestylePercent >= 40) stageIndex = 2;
+    else if (lifestylePercent > 10) stageIndex = 1;
     const stage = freedomStages[stageIndex];
     const nextStage = freedomStages[stageIndex + 1] || null;
     let progressToNext = 100;
@@ -410,9 +419,9 @@
       const investmentProgress = investmentAssets > 0 ? 1 : 0;
       progressToNext = Math.round((emergencyProgress * 0.35 + cashflowProgress * 0.3 + debtProgress * 0.2 + investmentProgress * 0.15) * 100);
     } else if (stageIndex === 1) {
-      progressToNext = Math.round(Math.min(100, Math.max(0, lifestylePercent / 75 * 100)));
+      progressToNext = Math.round(Math.min(100, Math.max(0, (lifestylePercent - 10) / 30 * 100)));
     } else if (stageIndex === 2) {
-      progressToNext = Math.round(Math.min(100, Math.max(0, (lifestylePercent - 75) / 25 * 100)));
+      progressToNext = Math.round(Math.min(100, Math.max(0, (lifestylePercent - 40) / 60 * 100)));
     }
     const actions = [];
     if (insufficient) {
@@ -515,13 +524,13 @@
   function engagementProgress(result) {
     const targetSpending = Number(plan.personal.targetAnnualSpending || result.annualLivingExpenses) || 0;
     const withdrawalRate = safeWithdrawalRate();
-    const sustainableIncome = Number.isFinite(Number(result.annualPassiveIncome))
-      ? Number(result.annualPassiveIncome)
+    const sustainableIncome = Number.isFinite(Number(result.estimatedSustainableIncomeFromCurrentFiAssets))
+      ? Number(result.estimatedSustainableIncomeFromCurrentFiAssets)
       : (Number(result.financialIndependenceAssets) || 0) * withdrawalRate;
-    const fiRaw = targetSpending > 0 ? sustainableIncome / targetSpending * 100 : 0;
-    const ffRaw = Number(result.targetCapital) > 0
-      ? fiRaw
-      : fiRaw;
+    const fiRaw = Number.isFinite(Number(result.financialFreedomProgressRaw))
+      ? Number(result.financialFreedomProgressRaw)
+      : targetSpending > 0 ? sustainableIncome / targetSpending * 100 : 0;
+    const ffRaw = fiRaw;
     return {
       targetSpending,
       sustainableIncome,
@@ -1036,7 +1045,7 @@
   }
 
   function safeWithdrawalRate() {
-    return (Number(plan.investing.safeWithdrawalRatePct) || 0) / 100;
+    return (Number(plan.investing.safeWithdrawalRatePct) || 4) / 100;
   }
 
   function makeId(prefix) {
@@ -1160,9 +1169,11 @@
   }
 
   function projectedFiAssetsAtYear(result, year) {
+    const projectionRow = result.financialFreedomProgressProjection[Math.max(0, year - 1)];
+    if (projectionRow && Number.isFinite(Number(projectionRow.netFiAssets))) return roundForDisplay(projectionRow.netFiAssets);
     const row = result.investmentProjection[Math.max(0, year - 1)];
     const superAccessible = row?.age >= result.superAccessAge ? superAtYear(result, year) : 0;
-    return roundForDisplay((row?.closingBalance || 0) + (Number(result.plan.assets.offsetBalance) || 0) + superAccessible);
+    return roundForDisplay((row?.closingBalance || 0) + (Number(result.plan.assets.offsetBalance) || 0) + (Number(result.investmentPropertyEquity) || 0) + superAccessible);
   }
 
   function projectedDebtAtYear(result, year) {
@@ -2292,7 +2303,12 @@
         currentNetWorth: numberValue(result.currentNetWorth),
         currentFinancialIndependenceAssets: numberValue(result.financialIndependenceAssets),
         accessibleInvestmentAssets: numberValue(result.accessibleInvestmentAssets),
+        currentNetFiAssets: numberValue(result.currentNetFiAssets || result.financialIndependenceAssets),
+        targetFiAssets: numberValue(result.targetCapital),
+        gapToFinancialFreedom: numberValue(result.fiTargetRemaining),
+        estimatedSustainableIncomeFromCurrentFiAssets: numberValue(result.estimatedSustainableIncomeFromCurrentFiAssets),
         estimatedAnnualPassiveIncome: numberValue(result.annualPassiveIncome),
+        passiveIncomeCoveragePct: numberValue(result.passiveIncomeCoveragePercent),
         passiveIncomeBreakdown: result.passiveIncomeBreakdown || {},
         financialFreedomProgressPct: numberValue(result.financialFreedomScore),
         estimatedFinancialIndependenceAge: firstProjectedAgeAtProgress(result, 75),
@@ -2519,12 +2535,14 @@
       + numberValue(safe.liabilities.person1StslBalance)
       + numberValue(safe.liabilities.person2StslBalance);
     const liquidAssets = numberValue(safe.assets.cash) + numberValue(safe.assets.offsetBalance);
-    const investmentAssets = numberValue(safe.assets.investmentPropertyValue)
+    const investmentPropertyEquity = Math.max(0, numberValue(safe.assets.investmentPropertyValue) - numberValue(safe.liabilities.investmentPropertyLoans));
+    const investmentAssets = investmentPropertyEquity
       + numberValue(safe.assets.sharesEtfs)
       + numberValue(safe.assets.managedFunds)
       + numberValue(safe.assets.cryptocurrency)
       + numberValue(safe.assets.otherInvestments);
     const investmentDebt = numberValue(safe.liabilities.investmentPropertyLoans) + numberValue(safe.liabilities.investmentLoans);
+    const netFiAssets = Math.max(0, liquidAssets + investmentAssets - numberValue(safe.liabilities.investmentLoans));
     const consumerDebt = numberValue(safe.liabilities.personalLoans)
       + numberValue(safe.liabilities.carLoans)
       + numberValue(safe.liabilities.creditCards)
@@ -2551,6 +2569,8 @@
       netWorth: totalAssets - totalLiabilities,
       liquidAssets,
       investmentAssets,
+      investmentPropertyEquity,
+      netFiAssets,
       totalSuper,
       homeEquity: numberValue(safe.assets.homeValue) - numberValue(safe.liabilities.homeLoan),
       investmentDebt,
@@ -2564,7 +2584,7 @@
       emergencyFundMonths: annualLifestyleSpending > 0 ? liquidAssets / (annualLifestyleSpending / 12) : 0,
       debtToAssetRatio: totalAssets > 0 ? (totalLiabilities / totalAssets) * 100 : 0,
       savingsRate: annualNetIncome > 0 ? (annualCashSurplus / annualNetIncome) * 100 : 0,
-      financialIndependenceProgress: fiTarget > 0 ? ((liquidAssets + investmentAssets + totalSuper) / fiTarget) * 100 : 0,
+      financialIndependenceProgress: fiTarget > 0 ? (netFiAssets / fiTarget) * 100 : 0,
     };
     safe.calculationVersion = safe.calculationVersion || CALCULATION_VERSION;
     safe.snapshotSchemaVersion = safe.snapshotSchemaVersion || FINANCIAL_SNAPSHOT_CALCULATION_VERSION;
@@ -2788,6 +2808,8 @@
       compareValue("Liquid assets", historical.calculated.liquidAssets, current.calculated.liquidAssets, { category: "Overall Position", betterWhen: "context", explanation: "Cash may fall because it has been invested or used to reduce debt." }),
       compareValue("Home equity", historical.calculated.homeEquity, current.calculated.homeEquity, { category: "Overall Position", betterWhen: "increase" }),
       compareValue("Investment assets", historical.calculated.investmentAssets, current.calculated.investmentAssets, { category: "Assets", betterWhen: "increase" }),
+      compareValue("Net FI assets", historical.calculated.netFiAssets, current.calculated.netFiAssets, { category: "Financial Independence", betterWhen: "increase", explanation: "Current net FI assets exclude personal-use assets and deduct linked investment debt." }),
+      compareValue("FI target assets", historical.goals.financialIndependenceTarget, current.goals.financialIndependenceTarget, { category: "Financial Independence", betterWhen: "context" }),
       compareValue("Superannuation", historical.calculated.totalSuper, current.calculated.totalSuper, { category: "Superannuation", betterWhen: "increase" }),
       compareValue("Cash and offset balances", historical.calculated.liquidAssets, current.calculated.liquidAssets, { category: "Assets", betterWhen: "context" }),
       compareValue("Home loan balance", historical.liabilities.homeLoan, current.liabilities.homeLoan, { category: "Liabilities", betterWhen: "decrease" }),
@@ -2808,7 +2830,7 @@
       compareValue("Savings rate", historical.calculated.savingsRate, current.calculated.savingsRate, { category: "Cashflow", betterWhen: "increase" }),
       compareValue("Emergency fund months", historical.calculated.emergencyFundMonths, current.calculated.emergencyFundMonths, { category: "Financial Security", betterWhen: "increase" }),
       compareValue("Passive-income coverage", historical.calculated.annualLifestyleSpending ? historical.calculated.passiveIncome / historical.calculated.annualLifestyleSpending * 100 : 0, current.calculated.annualLifestyleSpending ? current.calculated.passiveIncome / current.calculated.annualLifestyleSpending * 100 : 0, { category: "Financial Security", betterWhen: "increase" }),
-      compareValue("Financial independence progress", historical.calculated.financialIndependenceProgress, current.calculated.financialIndependenceProgress, { category: "Financial Independence", betterWhen: "increase" }),
+      compareValue("Financial Freedom progress", historical.calculated.financialIndependenceProgress, current.calculated.financialIndependenceProgress, { category: "Financial Independence", betterWhen: "increase" }),
     ];
     const fromDate = historical.snapshotDate;
     const toDate = current.snapshotDate;
@@ -2819,7 +2841,7 @@
       fromDate,
       toDate,
       monthsElapsed: monthDifference(fromDate, toDate),
-      keyMovements: rows.filter((row) => ["Net worth", "Total liabilities", "Investment assets", "Superannuation", "Annual cash surplus", "Financial independence progress"].includes(row.label)),
+      keyMovements: rows.filter((row) => ["Net worth", "Total liabilities", "Net FI assets", "Investment assets", "Superannuation", "Annual cash surplus", "Financial Freedom progress"].includes(row.label)),
     };
   }
 
@@ -2845,8 +2867,8 @@
     if (superRow && superRow.change !== 0) summaries.push(`Superannuation is ${superRow.change >= 0 ? "up" : "down"} by ${money(Math.abs(superRow.change))}.`);
     const cashflow = byLabel["Annual cash surplus"];
     if (cashflow && cashflow.change !== 0) summaries.push(`Annual cash surplus is ${cashflow.change >= 0 ? "higher" : "lower"} by ${money(Math.abs(cashflow.change))}.`);
-    const fi = byLabel["Financial independence progress"];
-    if (fi && Math.abs(fi.change) >= 0.1) summaries.push(`Financial independence progress moved from ${plainPercent(fi.historical)} to ${plainPercent(fi.current)}.`);
+    const fi = byLabel["Financial Freedom progress"];
+    if (fi && Math.abs(fi.change) >= 0.1) summaries.push(`Financial Freedom progress moved from ${plainPercent(fi.historical)} to ${plainPercent(fi.current)}.`);
     return summaries;
   }
 
@@ -2861,10 +2883,10 @@
     if (comparison.current.calculated.emergencyFundMonths >= 3 && comparison.historical.calculated.emergencyFundMonths < 3) milestones.push("Emergency fund reached three months");
     if (comparison.current.calculated.emergencyFundMonths >= 6 && comparison.historical.calculated.emergencyFundMonths < 6) milestones.push("Emergency fund reached six months");
     if (rows["Passive income"]?.change > 0) milestones.push("Passive income increased");
-    if (rows["Financial independence progress"]?.change >= 5) milestones.push("Financial independence progress increased by at least 5%");
+    if (rows["Financial Freedom progress"]?.change >= 5) milestones.push("Financial Freedom progress increased by at least 5%");
     [25, 50, 75, 100].forEach((threshold) => {
       if (comparison.historical.calculated.financialIndependenceProgress < threshold && comparison.current.calculated.financialIndependenceProgress >= threshold) {
-        milestones.push(`Financial independence progress reached ${threshold}%`);
+        milestones.push(`Financial Freedom progress reached ${threshold}%`);
       }
     });
     return milestones;
@@ -2884,6 +2906,7 @@
         totalAssets: comparison.historical.calculated.totalAssets,
         totalLiabilities: comparison.historical.calculated.totalLiabilities,
         investments: comparison.historical.calculated.investmentAssets,
+        netFiAssets: comparison.historical.calculated.netFiAssets,
         superannuation: comparison.historical.calculated.totalSuper,
         cash: comparison.historical.calculated.liquidAssets,
         homeLoan: comparison.historical.liabilities.homeLoan,
@@ -2900,6 +2923,7 @@
         totalAssets: comparison.current.calculated.totalAssets,
         totalLiabilities: comparison.current.calculated.totalLiabilities,
         investments: comparison.current.calculated.investmentAssets,
+        netFiAssets: comparison.current.calculated.netFiAssets,
         superannuation: comparison.current.calculated.totalSuper,
         cash: comparison.current.calculated.liquidAssets,
         homeLoan: comparison.current.liabilities.homeLoan,
@@ -2915,6 +2939,8 @@
         netWorthChange: row("Net worth").change,
         debtChange: row("Total liabilities").change,
         investmentChange: row("Investment assets").change,
+        netFiAssetsChange: row("Net FI assets").change,
+        fiTargetChange: row("FI target assets").change,
         superChange: row("Superannuation").change,
         cashChange: row("Cash and offset balances").change,
         passiveIncomeChange: row("Passive income").change,
@@ -2922,7 +2948,7 @@
         surplusChange: row("Annual cash surplus").change,
         emergencyFundChange: row("Emergency fund months").change,
         savingsRateChange: row("Savings rate").change,
-        financialIndependenceProgressChange: row("Financial independence progress").change,
+        financialIndependenceProgressChange: row("Financial Freedom progress").change,
       },
     };
   }
@@ -4680,7 +4706,7 @@
 
   function annualPassiveIncome(result) {
     if (Number.isFinite(Number(result.annualPassiveIncome))) return Math.round(Number(result.annualPassiveIncome));
-    return Math.round((Number(result.financialIndependenceAssets) || 0) * safeWithdrawalRate());
+    return 0;
   }
 
   function nextMilestone(result, percent) {
@@ -4794,7 +4820,7 @@
         ${metricCard("Current stage", stage.name)}
         ${metricCard("Annual passive income", money(passive))}
         ${metricCard("Annual lifestyle target", money(target))}
-        ${metricCard("Target lifestyle funded", plainPercent(percent))}
+        ${metricCard("Financial Freedom progress", plainPercent(percent), "", "Current net FI assets divided by target FI assets.", "financialFreedomProgress")}
       </div>
       <button class="btn btn-primary mt-4 w-full justify-center" type="button" data-view="dashboard">View Dashboard</button>
     `;
@@ -4842,7 +4868,7 @@
       ? "Enter your own details or load a fictional sample plan to see the dashboard come alive."
       : "See how today's decisions shape tomorrow's financial freedom.";
     document.getElementById("heroScore").textContent = plainPercent(percent);
-    document.querySelector(".score-ring span").textContent = "Lifestyle funded";
+    document.querySelector(".score-ring span").textContent = "FI progress";
     document.querySelector(".score-ring").style.borderColor = percent >= 100 ? "#bdebd7" : percent >= 75 ? "#f3d08c" : "#dbe4ee";
     document.querySelector(".freedom-stage-card").innerHTML = `
       <div class="stage-heading-row">
@@ -4861,10 +4887,10 @@
       </div>
       <div class="stage-progress-block">
         <div>
-          <span class="metric-label">Target lifestyle funded</span>
-          <strong>${plainPercent(percent)} of target lifestyle funded</strong>
+          <span class="metric-label">Financial Freedom progress</span>
+          <strong>${plainPercent(percent)} of target FI assets</strong>
         </div>
-        <p id="freedomPassiveText" class="progress-caption">Based on passive income recorded in your plan compared with your target annual lifestyle cost.</p>
+        <p id="freedomPassiveText" class="progress-caption">Based on current net FI assets compared with your target FI assets. Passive income is shown separately.</p>
       </div>
       <div class="stage-actions">
         <span class="metric-label">What moves you forward</span>
@@ -4888,16 +4914,19 @@
       metricCard("Final Projected Surplus", money(annualSurplus), annualSurplus >= 0 ? "status-green" : "status-amber", "Estimated money left after tax, Medicare, STSL compulsory repayments, living costs, loan repayments, investing and extra super."),
       metricCard("Investments", money(result.investmentBalance), "", "Projected investment balance includes contributions and earnings over time."),
       metricCard("Super", money(result.superannuationBalance), "status-green", "Tracked separately from other investments."),
-      metricCard("Target Lifestyle Funded", plainPercent(percent), percent >= 75 ? "status-green" : "", "Based on passive income recorded in your plan compared with your target annual lifestyle cost."),
+      metricCard("Financial Freedom Progress", plainPercent(percent), percent >= 75 ? "status-green" : "", "Based on current net FI assets divided by target FI assets.", "financialFreedomProgress"),
     ].join("");
     document.getElementById("secondMetricGrid").innerHTML = [
       metricCard("Your Current Financial Stage", stage.name),
       metricCard(stageInfo.nextStage ? `Progress Toward ${stageInfo.nextStage.name}` : "Financial Freedom Achieved", stageInfo.nextStage ? plainPercent(stageInfo.progressToNext) : "100%"),
       metricCard("Debt Balance", money(result.totalLiabilities), result.totalLiabilities <= result.totalAssets * 0.5 ? "status-green" : "status-amber"),
       metricCard("Monthly Surplus / Deficit", money(monthlySurplus), monthlySurplus >= 0 ? "status-green" : "status-amber"),
+      metricCard("Current Net FI Assets", money(result.financialIndependenceAssets), "", "Income-producing and investable assets counted toward Financial Freedom, net of linked investment debt.", "currentFiAssets"),
+      metricCard("Target FI Assets", money(result.targetCapital), "", "Annual lifestyle spending divided by the selected withdrawal rate.", "targetFiAssets"),
+      metricCard("Remaining Required", money(result.fiTargetRemaining ?? Math.max(0, result.targetCapital - result.financialIndependenceAssets))),
+      metricCard("Estimated Sustainable Income", money(result.estimatedSustainableIncomeFromCurrentFiAssets), "", "Current net FI assets multiplied by the selected withdrawal rate.", "sustainableIncome"),
       metricCard("Annual Passive Income", money(passiveIncome), "", "This is based on income items classified as passive, including net rental property cashflow.", "passiveIncome"),
       metricCard("Annual Living Expenses", money(livingExpenses), "", "This is calculated from your recurring expense items and excludes investing and loan principal repayments."),
-      metricCard("Accessible Investments", money(result.accessibleInvestmentAssets)),
       metricCard("Highest Priority", highestRecommendation(result)),
       weeklyHealthCheckCard(result),
     ].join("");
@@ -5983,7 +6012,7 @@
       summaryTile("Target FI Capital", money(result.targetCapital), "", "targetFiCapital"),
       summaryTile("Current FI Assets", money(result.financialIndependenceAssets), "", "currentFiAssets"),
       summaryTile("Current annual passive income", money(annualPassiveIncome(result)), "", "passiveIncome"),
-      summaryTile("Target lifestyle funded", plainPercent(freedomPercent(result))),
+      summaryTile("Financial Freedom progress", plainPercent(freedomPercent(result)), "", "financialFreedomProgress"),
       summaryTile("Annual Lifestyle Spending Needed for Financial Freedom", money(plan.personal.targetAnnualSpending), "", "annualLifestyleSpending"),
     ].join("");
     const passiveContainer = document.getElementById("goalsPassiveIncomeBreakdown");
@@ -8627,7 +8656,7 @@
   function reportProgressBar(percent) {
     const capped = Math.min(100, Math.max(0, Number(percent) || 0));
     return `
-      <div class="report-progress-bar" aria-label="Target lifestyle funding progress">
+      <div class="report-progress-bar" aria-label="Financial Freedom progress">
         <span style="width:${capped}%"></span>
       </div>
       <p class="report-small-note">Visual progress is capped at 100%. The calculated progress shown in the figures may be higher where projected Financial Independence assets exceed the selected target.</p>
@@ -8949,7 +8978,7 @@
             <div><span>Debt balance</span><strong>${money(metrics.debtNow)}</strong></div>
             <div><span>Investment balance</span><strong>${money(metrics.investments10)}</strong></div>
             <div><span>Superannuation balance</span><strong>${money(metrics.super10)}</strong></div>
-            <div><span>Target lifestyle funded</span><strong>${plainPercent(metrics.progress)}</strong></div>
+            <div><span>Financial Freedom progress</span><strong>${plainPercent(metrics.progress)}</strong></div>
             <div><span>Estimated Financial Freedom age</span><strong>${escapeHtml(metrics.financialFreedomAge)}</strong></div>
           </div>
         </article>
@@ -9015,7 +9044,7 @@
         ${summaryTile("Investment movement", changeText(row("Investment assets")), progressToneClass(row("Investment assets")?.tone))}
         ${summaryTile("Superannuation movement", changeText(row("Superannuation")), progressToneClass(row("Superannuation")?.tone))}
         ${summaryTile("Cash surplus movement", changeText(row("Annual cash surplus")), progressToneClass(row("Annual cash surplus")?.tone))}
-        ${summaryTile("FI progress movement", changeText(row("Financial independence progress")), progressToneClass(row("Financial independence progress")?.tone))}
+        ${summaryTile("FI progress movement", changeText(row("Financial Freedom progress")), progressToneClass(row("Financial Freedom progress")?.tone))}
       </div>
       <p class="report-narrative">${escapeHtml(explanation || "Historical progress has been calculated from the selected snapshot and the current plan.")}</p>
     `, "report-page-break report-compact-section");
@@ -9044,15 +9073,15 @@
       : "The model shows a positive cash buffer after tax, STSL compulsory repayments, spending, debt repayments and planned wealth-building contributions.";
     const tenYearProgress = progressAtYear(result, 10);
     const tenYearProgressText = tenYearProgress > 100
-      ? "Projected FI assets exceed the selected target in the 10-year view, based on the assumptions entered."
-      : `Projected target lifestyle funding is ${plainPercent(tenYearProgress)} in 10 years, based on the assumptions entered.`;
+      ? "Projected net FI assets exceed the selected target in the 10-year view, based on the assumptions entered."
+      : `Projected Financial Freedom progress is ${plainPercent(tenYearProgress)} in 10 years, based on the assumptions entered.`;
     if (activeView === "reports") maybeCreateAutomaticFinancialSnapshot(result, "report");
     const progressReportSection = financialProgressReportSectionHtml(result);
 
     const summaryNarrative = `
       <div class="report-narrative-box">
         <p>Your current net worth is approximately <strong>${money(result.currentNetWorth)}</strong>. Of this amount, approximately <strong>${money(result.financialIndependenceAssets)}</strong> is currently counted as Financial Independence (FI) assets capable of supporting your future lifestyle.</p>
-        <p>Based on annual lifestyle spending of <strong>${money(plan.personal.targetAnnualSpending)}</strong>, your estimated Financial Freedom target is <strong>${money(result.targetCapital)}</strong>. Your currently identified passive income funds approximately <strong>${plainPercent(percent)}</strong> of that target lifestyle.</p>
+        <p>Based on annual lifestyle spending of <strong>${money(plan.personal.targetAnnualSpending)}</strong>, your estimated Financial Freedom target is <strong>${money(result.targetCapital)}</strong>. Your current net FI assets represent approximately <strong>${plainPercent(percent)}</strong> of that target.</p>
         <p>${escapeHtml(financialHealth)}</p>
       </div>
     `;
@@ -9067,7 +9096,7 @@
       ${reportSection("Executive Summary", "A concise overview of your current financial position, progress and estimated future outcome.", `
         ${summaryNarrative}
         <div class="summary-grid mt-4">
-          ${summaryTile("Target lifestyle funded", plainPercent(percent))}
+          ${summaryTile("Financial Freedom progress", plainPercent(percent))}
           ${summaryTile("Current financial stage", stage.name)}
           ${summaryTile("Current annual surplus", money(annualFinalSurplus), annualFinalSurplus >= 0 ? "status-green" : "status-amber")}
           ${summaryTile("Current investment amount", money(result.investmentBalance))}
@@ -9123,12 +9152,13 @@
         <div class="${cashflowTone}"><strong>${cashflowHeading}</strong><p>${cashflowText}</p></div>
       `, "report-page-break report-compact-section")}
 
-      ${reportSection("Target Lifestyle Funding", "This section estimates how much of your chosen lifestyle is currently supported by income classified as passive.", `
+      ${reportSection("Financial Freedom Progress", "This section compares current net FI assets with the target assets needed to support your chosen lifestyle. Passive income is shown separately as supporting context.", `
         <div class="summary-grid">
           ${summaryTile("Current FI assets", money(result.financialIndependenceAssets))}
           ${summaryTile("Target FI assets", money(result.targetCapital))}
           ${summaryTile("Gap to target", money(gap))}
-          ${summaryTile("Target lifestyle funded", plainPercent(percent))}
+          ${summaryTile("Financial Freedom progress", plainPercent(percent))}
+          ${summaryTile("Estimated sustainable income", money(result.estimatedSustainableIncomeFromCurrentFiAssets), "", "sustainableIncome")}
           ${summaryTile("Current annual passive income", money(annualPassiveIncome(result)), "", "passiveIncome")}
           ${summaryTile("10-year investment balance", money(investmentAtYear(result, 10)))}
           ${summaryTile("10-year debt estimate", money(projectedDebtAtYear(result, 10)))}
@@ -9137,9 +9167,9 @@
         ${reportProgressBar(percent)}
         <div class="report-chart-grid mt-4">
           <article class="report-chart-card report-chart-wide">
-            <h3>Target lifestyle funding</h3>
-            <svg id="reportProgressChart" class="chart" viewBox="0 0 760 280" role="img" aria-label="Report target lifestyle funding progress"></svg>
-            <p>Current progress compares passive income recorded in the plan with the annual lifestyle target. Future projected progress continues to use the app's existing FI asset projection.</p>
+            <h3>Financial Freedom progress</h3>
+            <svg id="reportProgressChart" class="chart" viewBox="0 0 760 280" role="img" aria-label="Report Financial Freedom progress"></svg>
+            <p>Current progress compares current net FI assets with target FI assets. Future projected progress includes super from the age it becomes accessible in the model.</p>
           </article>
         </div>
       `, "report-page-break")}
@@ -9205,7 +9235,7 @@
         <div class="report-outcome-box">
           <h3>Current estimated outcome</h3>
           <div class="summary-grid mt-4">
-            ${summaryTile("Target lifestyle funded", plainPercent(percent))}
+            ${summaryTile("Financial Freedom progress", plainPercent(percent))}
             ${summaryTile("Estimated Financial Freedom age", estimatedFreedomAge)}
             ${summaryTile("Target FI capital", money(result.targetCapital))}
             ${summaryTile("Current FI assets", money(result.financialIndependenceAssets))}
@@ -9257,7 +9287,7 @@
     const percent = freedomPercent(result);
     const stage = financialStageInfo(result).stage;
     const rows = [
-      { label: "Target lifestyle funded", value: plainPercent(percent) },
+      { label: "Financial Freedom progress", value: plainPercent(percent) },
       { label: "Current stage", value: stage.name },
       { label: "Accessible investments", value: money(result.accessibleInvestmentAssets) },
       { label: "Super from age 60", value: money(result.superannuationBalance) },
@@ -9327,7 +9357,7 @@
         summaryTile("Projected investment balance in 10 years", `${money(investmentAtYear(result, 10))} -> ${money(investmentAtYear(revisedResult, 10))}`),
         summaryTile("Projected FI assets in 10 years", `${money(currentFiAssets10)} -> ${money(revisedFiAssets10)}`),
         summaryTile("Projected passive income in 10 years", `${money(currentPassive10)} -> ${money(revisedPassive10)}`),
-        summaryTile("Target lifestyle funded", `${plainPercent(freedomPercent(result))} -> ${plainPercent(freedomPercent(revisedResult))}`),
+        summaryTile("Financial Freedom progress", `${plainPercent(freedomPercent(result))} -> ${plainPercent(freedomPercent(revisedResult))}`),
         summaryTile("Target age outcome", `${targetAgeOutcome(result)} -> ${targetAgeOutcome(revisedResult)}`),
         summaryTile("Relevant milestone", revisedMilestone.text)
       );
@@ -9346,7 +9376,7 @@
       summaryTile("Estimated debt repayment timing", `${formatLoanTiming(result.loan)} -> ${formatLoanTiming(revisedResult.loan)}`),
       summaryTile("Estimated interest saved", interestSaved === null ? "Add loan balance, rate and repayment to estimate" : money(interestSaved)),
       summaryTile("Future annual cashflow after debt is repaid", money(futureAnnualCashflow)),
-      summaryTile("Target lifestyle funded", `${plainPercent(freedomPercent(result))} -> ${plainPercent(freedomPercent(revisedResult))}`),
+      summaryTile("Financial Freedom progress", `${plainPercent(freedomPercent(result))} -> ${plainPercent(freedomPercent(revisedResult))}`),
       summaryTile("Target age outcome", `${targetAgeOutcome(result)} -> ${targetAgeOutcome(revisedResult)}`)
     );
     return tiles;
@@ -9410,7 +9440,7 @@
       summaryTile("1-year net worth", `${money(netWorthAtYear(result, 1))} -> ${money(netWorthAtYear(adjustedResult, 1))}`),
       summaryTile("2-year net worth", `${money(netWorthAtYear(result, 2))} -> ${money(netWorthAtYear(adjustedResult, 2))}`),
       summaryTile("Long-term net worth", `${money(longTermNetWorth(result))} -> ${money(longTermNetWorth(adjustedResult))}`),
-      summaryTile("Target lifestyle funded", `${plainPercent(freedomPercent(result))} -> ${plainPercent(freedomPercent(adjustedResult))}`),
+      summaryTile("Financial Freedom progress", `${plainPercent(freedomPercent(result))} -> ${plainPercent(freedomPercent(adjustedResult))}`),
     ].join("");
   }
 
@@ -9541,7 +9571,7 @@
               <div class="table-row"><span>Debt balance</span><strong>${money(item.debtBalance)}</strong></div>
               <div class="table-row"><span>Investment balance</span><strong>${money(item.investmentBalance)}</strong></div>
               <div class="table-row"><span>Super balance</span><strong>${money(item.superBalance)}</strong></div>
-              <div class="table-row"><span>Target lifestyle funded</span><strong>${plainPercent(item.freedomProgress)}</strong></div>
+              <div class="table-row"><span>Financial Freedom progress</span><strong>${plainPercent(item.freedomProgress)}</strong></div>
               <div class="table-row"><span>Target age outcome</span><strong>${escapeHtml(item.targetAge)}</strong></div>
             </div>
           </article>
@@ -9651,7 +9681,7 @@
               <h3 class="font-black text-navy">${escapeHtml(scenario.name)}</h3>
               <p>${escapeHtml(scenario.notes || "No notes")}</p>
               <p>Saved ${new Date(scenario.savedAt).toLocaleString()}</p>
-              <p class="mt-2 font-bold text-slate-600">Target lifestyle funded ${plainPercent(freedomPercent(scenarioResult))} · Net worth ${money(scenarioResult.currentNetWorth)}</p>
+              <p class="mt-2 font-bold text-slate-600">Financial Freedom progress ${plainPercent(freedomPercent(scenarioResult))} · Net worth ${money(scenarioResult.currentNetWorth)}</p>
             </div>
             <div class="summary-grid">
               ${summaryTile("Current age", summary.currentAge)}
@@ -9660,7 +9690,7 @@
               ${summaryTile("Living expenses", money(summary.livingExpenses))}
               ${summaryTile("Net assets", money(summary.netAssets))}
               ${summaryTile("Projected financial freedom age", summary.projectedFreedomAge)}
-              ${summaryTile("Target lifestyle funded", plainPercent(summary.freedomProgress))}
+              ${summaryTile("Financial Freedom progress", plainPercent(summary.freedomProgress))}
             </div>
             <div class="flex flex-wrap gap-2">
               <button class="btn" type="button" data-load-scenario="${scenario.id}">Load</button>

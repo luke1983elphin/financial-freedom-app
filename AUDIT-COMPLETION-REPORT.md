@@ -21,12 +21,15 @@ Audit copy only. Do not merge this package to main without separate review.
 - `calculator.js:539` `employerSuperForSalaryItem`
 - `calculator.js:747` `calculateRentalPropertyCashflow`
 - `calculator.js:879` `passiveIncomeBreakdown`
+- `calculator.js:1452` `calculateNetFiAssetSummary`
 - `calculator.js:1295` `personTaxAdjustmentInputs`
 - `calculator.js:1308` `householdTaxEstimate`
 - `calculator.js:1438` `calculatePlan`
-- `calculator.js:1504` FI asset category outputs
+- `calculator.js:1530` FI asset category outputs
 - `calculator.js:1562` authoritative `stslRepaymentIncome`
 - `app.js:195` hospital-cover info note
+- `app.js:176` Financial Freedom progress and sustainable-income info notes
+- `app.js:371` asset-based Financial Freedom progress selector
 - `app.js:5743` part-year MLS assumption display
 - `app.js:5770` cashflow rows
 - `app.js:5805` rental cashflow summary
@@ -148,19 +151,41 @@ Passive-income totals use `rentalPassiveIncomeBeforePrincipal`. Household cash s
 
 ### FI Asset Categories
 
+Added central net-FI-assets selector:
+
+`calculateNetFiAssetSummary(...)`
+
+Primary Financial Freedom Progress now uses:
+
+`Financial Freedom Progress = current net FI assets / target FI assets * 100`
+
+`Target FI assets = annual lifestyle spending needed for Financial Freedom / sustainable withdrawal rate`
+
+The display percentage is capped at 100%, while `financialFreedomProgressRaw` preserves the uncapped calculation.
+
 Added outputs:
 
 - `liquidInvestmentAssets`
+- `grossLiquidInvestmentAssets`
+- `otherInvestmentDebt`
 - `investmentPropertyGrossValue`
 - `investmentPropertyDebt`
 - `investmentPropertyEquity`
 - `accessibleFICapital`
+- `currentNetFiAssets`
+- `financialFreedomProgressRaw`
+- `financialFreedomProgressDisplay`
+- `fiTargetRemaining`
+- `estimatedSustainableIncomeFromCurrentFiAssets`
+- `passiveIncomeCoveragePercent`
+- `targetAgeNetFiAssets`
+- `targetAgeEstimatedSustainableIncome`
 - `superannuationBalance`
 - `totalIncomeProducingAssets`
 
-Documented property-equity rule:
+Current net FI assets include liquid investment assets, net rental/investment-property equity and income-producing assets, net of linked investment debt. They exclude the family home, home loan, vehicles and other personal-use assets. Super is excluded from current net FI assets before modelled access age and included in future projections from the age it becomes accessible.
 
-Investment-property equity is excluded from FI capital unless `includeInvestmentPropertyEquityInFi` is selected. Gross property value is never counted without deducting rental-property debt. The family home is excluded unless a downsizing strategy is enabled.
+Passive income remains a separate supporting metric. It no longer drives the primary Financial Freedom Progress percentage.
 
 ## Household Reconciliation Example
 
@@ -187,8 +212,8 @@ Rental split:
 
 FI asset split:
 
-- Accessible FI capital: `$195,000`
-- Total income-producing assets: `$795,000`
+- Current net FI assets: calculated from liquid investment assets plus net investment-property equity, net of linked investment debt
+- Total income-producing assets: includes current net FI assets plus superannuation tracked separately where not yet accessible
 
 ## Test Files Included
 
@@ -210,7 +235,7 @@ The package script now uses `node --experimental-strip-types` for the `.ts` test
 
 Local runtime note:
 
-The Codex runtime used for this audit does not include `npm.exe` on PATH. The final captured run therefore uses `pnpm test`, which executes the same `scripts.test` command that plain `npm test` will execute when npm is available. `test-output-report.txt` includes the `where npm` result and the successful script output.
+The Codex runtime used for this audit does not include `npm.exe` on PATH. The final captured run therefore uses `pnpm test` after adding the bundled Node directory to PATH, which executes the same `scripts.test` command that plain `npm test` will execute when npm is available. `test-output-report.txt` includes the successful script output.
 
 Final packaged run:
 
@@ -231,5 +256,10 @@ Total: 37 passed, 0 failed.
 - Missing MLS information is no longer treated as zero.
 - Passive rental income is shown separately from principal repayments.
 - Household cash surplus uses rental cashflow after principal.
-- Dashboard, reports, financial progress and AI summaries read the central `calculatePlan` result fields.
+- Financial Freedom Progress is based on current net FI assets divided by target FI assets, not passive income.
+- Passive income, passive-income coverage and estimated sustainable income are displayed separately as supporting metrics.
+- Investment property values are counted only as net equity after linked rental-property debt.
+- Family home value and home loan balance do not affect current net FI assets.
+- Super is excluded before modelled access age and appears in future progress rows from access age.
+- Dashboard, goals, reports, saved scenarios, financial progress history and AI summaries read the central `calculatePlan` result fields.
 - Weekly planner/export consumers should use the same central `calculatePlan` output; no separate rental/STSL/MLS formula was added in this audit correction.

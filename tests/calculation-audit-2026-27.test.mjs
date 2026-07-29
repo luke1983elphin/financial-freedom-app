@@ -414,33 +414,81 @@ test("rental cashflow uses linked loan treatment without deducting loan interest
   assert.equal(result.passiveIncomeBreakdown.rental, 7000);
 });
 
-test("FI asset categories separate liquid assets, property equity and superannuation", () => {
+test("Financial Freedom progress uses net FI assets while passive income stays separate", () => {
   const { CALC, plan } = basePlan();
   plan.personal.person1Age = 45;
-  plan.assets.offsetBalance = 20000;
-  plan.assets.cash = 30000;
-  plan.assets.sharesEtfs = 100000;
-  plan.assets.crypto = 5000;
+  plan.personal.fullRetirementAge = 55;
+  plan.personal.targetAnnualSpending = 100000;
+  plan.investing.safeWithdrawalRatePct = 4;
+  plan.assets.homeValue = 900000;
+  plan.liabilities.homeLoanBalance = 700000;
+  plan.assets.offsetBalance = 0;
+  plan.assets.cash = 0;
+  plan.assets.sharesEtfs = 750000;
+  plan.assets.crypto = 0;
   plan.assets.otherPropertyValue = 600000;
-  plan.assets.superPerson1 = 150000;
-  plan.assets.superPerson2 = 50000;
+  plan.assets.superPerson1 = 400000;
+  plan.assets.superPerson2 = 100000;
   plan.liabilityItems = [
     { id: "rental-loan", type: "rentalPropertyLoan", balance: 350000 },
   ];
   let result = CALC.calculatePlan(plan);
-  assert.equal(result.liquidInvestmentAssets, 155000);
+  assert.equal(result.targetCapital, 2500000);
+  assert.equal(result.liquidInvestmentAssets, 750000);
   assert.equal(result.investmentPropertyGrossValue, 600000);
   assert.equal(result.investmentPropertyDebt, 350000);
   assert.equal(result.investmentPropertyEquity, 250000);
-  assert.equal(result.superannuationBalance, 200000);
-  assert.equal(result.accessibleFICapital, 155000);
-  assert.equal(result.totalIncomeProducingAssets, 605000);
-  assert.equal(result.includeInvestmentPropertyEquityInFi, false);
+  assert.equal(result.superannuationBalance, 500000);
+  assert.equal(result.financialIndependenceAssets, 1000000);
+  assert.equal(result.currentNetFiAssets, 1000000);
+  assert.equal(result.financialFreedomProgressRaw, 40);
+  assert.equal(result.financialFreedomScore, 40);
+  assert.equal(result.lifestyleFundingPercent, 40);
+  assert.equal(result.estimatedSustainableIncomeFromCurrentFiAssets, 40000);
+  assert.equal(result.passiveIncomeCoveragePercent, 0);
+  assert.equal(result.annualPassiveIncome, 0);
+  assert.equal(result.totalIncomeProducingAssets, 1500000);
+  assert.equal(result.includeInvestmentPropertyEquityInFi, true);
 
-  plan.assets.includeInvestmentPropertyEquityInFi = true;
+  plan.liabilityItems.push({ id: "share-loan", type: "investmentLoan", balance: 100000 });
   result = CALC.calculatePlan(plan);
-  assert.equal(result.accessibleFICapital, 405000);
-  assert.equal(result.financialIndependenceAssets, 405000);
+  assert.equal(result.otherInvestmentDebt, 100000);
+  assert.equal(result.liquidInvestmentAssets, 650000);
+  assert.equal(result.financialIndependenceAssets, 900000);
+  assert.equal(result.financialFreedomProgressRaw, 36);
+
+  plan.personal.person1Age = 61;
+  result = CALC.calculatePlan(plan);
+  assert.equal(result.fiAssetPolicy.superIncludedInCurrentNetFiAssets, true);
+  assert.equal(result.financialIndependenceAssets, 1400000);
+  assert.equal(result.financialFreedomProgressRaw, 56);
+
+  plan.personal.targetAnnualSpending = 10000;
+  result = CALC.calculatePlan(plan);
+  assert.equal(result.financialFreedomProgressRaw, 560);
+  assert.equal(result.financialFreedomScore, 100);
+
+  plan.personal.targetAnnualSpending = 0;
+  result = CALC.calculatePlan(plan);
+  assert.equal(result.targetCapital, 0);
+  assert.equal(result.financialFreedomProgressRaw, 0);
+  assert.equal(result.financialFreedomProgressProjection[0].progress, 0);
+
+  const futurePlan = CALC.emptyPlan();
+  futurePlan.incomeItems = [];
+  futurePlan.expenseItems = [];
+  futurePlan.assetItems = [];
+  futurePlan.liabilityItems = [];
+  futurePlan.personal.person1Age = 58;
+  futurePlan.personal.fullRetirementAge = 60;
+  futurePlan.personal.targetAnnualSpending = 100000;
+  futurePlan.investing.safeWithdrawalRatePct = 4;
+  futurePlan.assets.superPerson1 = 300000;
+  const futureResult = CALC.calculatePlan(futurePlan);
+  assert.equal(futureResult.financialIndependenceAssets, 0);
+  assert.equal(futureResult.financialFreedomProgressRaw, 0);
+  assert.ok(futureResult.financialFreedomProgressProjection.find((row) => row.age >= 60).netFiAssets >= 300000);
+  assert.ok(futureResult.targetAgeNetFiAssets >= 300000);
 });
 
 test("saved records and snapshots retain calculation version metadata", () => {
