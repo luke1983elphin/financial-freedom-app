@@ -84,12 +84,18 @@
   const incomeTypeOptions = [
     ["salaryWages", "Salary or wages"],
     ["interest", "Interest"],
-    ["rentalNetCashIncome", "Rental property net cash income"],
+    ["rentalNetCashIncome", "Rental property net taxable profit after interest"],
     ["dividends", "Dividends"],
     ["distributions", "Distribution income"],
-    ["other", "Other"],
+    ["other", "Other taxable income"],
   ];
   const incomeTypeLabels = Object.fromEntries(incomeTypeOptions);
+  const investmentLoanAssetCategoryOptions = [
+    ["rental_property", "Rental property"],
+    ["shares", "Shares or managed investments"],
+    ["business", "Business"],
+    ["other", "Other investment asset"],
+  ];
   const rentalCashflowTreatmentOptions = [
     ["afterInterest", "Net cash income after interest"],
     ["beforeInterest", "Net operating cash income before interest"],
@@ -186,8 +192,8 @@
       body: "Eligible private patient hospital cover may affect Medicare levy surcharge estimates. Extras-only policies generally do not prevent Medicare levy surcharge exposure.",
     },
     rentalNetCashIncome: {
-      title: "Rental property net cash income",
-      body: "Enter the property's expected annual cash income after rental property operating expenses and rental loan interest. Where a rental loan is linked, only the principal component of the loan repayments will be deducted separately from household cash surplus. This avoids counting the loan interest twice.",
+      title: "Rental property net taxable profit after interest",
+      body: "Enter the property's expected annual taxable profit after deductible interest. This is for income-tax calculations and may differ from the property's cash surplus because principal loan repayments are not tax deductible.",
     },
     rentalLoanPrincipal: {
       title: "Rental loan principal",
@@ -199,7 +205,7 @@
     },
     employerSuperEstimate: {
       title: "Estimated employer super contributions",
-      body: "Estimated employer super contributions are calculated from the salary and wages entered for this person using the current Australian employer super guarantee rate of 12%. Actual contributions may differ because of contribution limits, maximum contribution bases, salary-packaging arrangements, employment conditions or excluded earnings.",
+      body: "Employer super is estimated using the applicable compulsory super guarantee rate on eligible employment earnings. Your actual employer contribution may differ because of earnings definitions, contribution limits, salary packaging, awards or employment arrangements. You can override the estimate.",
     },
     investmentReturn: {
       title: "Investment Return",
@@ -1313,7 +1319,10 @@
 
   function normaliseIncomeType(value, index = 0) {
     const text = String(value || "").trim();
-    if (["salaryWages", "salary", "wages", "employment"].includes(text)) return "salaryWages";
+    if (["salaryWages", "salary_wages", "salary", "wages", "employment"].includes(text)) return "salaryWages";
+    if (["rentalNetCashIncome", "rental_net_profit", "rentalNetProfit", "rental"].includes(text)) return "rentalNetCashIncome";
+    if (["distribution_income", "distributionIncome", "distributions"].includes(text)) return "distributions";
+    if (["other_taxable_income", "otherTaxableIncome", "other"].includes(text)) return "other";
     if (incomeTypeOptions.some(([option]) => option === text)) return text;
     return index < 2 ? "salaryWages" : "other";
   }
@@ -1360,7 +1369,7 @@
   function employerSuperInfoText() {
     const summary = CALC.employerSuperSummary?.(plan) || {};
     const rate = (Number(summary.rate) || 0.12) * 100;
-    return `Estimated employer super contributions are calculated from salary and wages using the current Australian employer super guarantee rate of ${rate.toFixed(rate % 1 ? 1 : 0)}%. Actual contributions may differ because of contribution limits, maximum contribution bases, salary-packaging arrangements, employment conditions or excluded earnings.`;
+    return `Employer super is estimated using the applicable compulsory super guarantee rate of ${rate.toFixed(rate % 1 ? 1 : 0)}% on eligible employment earnings. Your actual employer contribution may differ because of earnings definitions, contribution limits, maximum contribution bases, salary packaging, awards or employment arrangements. You can override the estimate.`;
   }
 
   function isDefaultIncomeName(value, personNumber) {
@@ -1387,6 +1396,20 @@
       item.type = normaliseIncomeType(item.type || item.incomeType, index);
       item.owner = normaliseIncomeOwner(item.owner || item.incomeOwner, item.type, index);
       if (item.type === "salaryWages" && item.owner === "joint") item.owner = index === 1 ? "person2" : "person1";
+      if (item.owner === "joint") {
+        const p1 = Number(item.person1AllocationPercentage ?? item.person1AllocationPct);
+        const p2 = Number(item.person2AllocationPercentage ?? item.person2AllocationPct);
+        if (!p1 && !p2) {
+          item.person1AllocationPercentage = 50;
+          item.person2AllocationPercentage = 50;
+        } else if (p1 && !p2) {
+          item.person1AllocationPercentage = p1;
+          item.person2AllocationPercentage = Math.max(0, 100 - p1);
+        } else if (p2 && !p1) {
+          item.person1AllocationPercentage = Math.max(0, 100 - p2);
+          item.person2AllocationPercentage = p2;
+        }
+      }
       if (item.type === "rentalNetCashIncome") {
         item.frequency = "annually";
         item.rentalCashflowTreatment = item.rentalCashflowTreatment === "beforeInterest" ? "beforeInterest" : "afterInterest";
@@ -1485,14 +1508,30 @@
       item.linkedLoanIds = linkedLoanIds(item).filter((id) => rentalLoanIds.has(id));
     });
     plan.liabilityItems.forEach((item) => {
-      if (item.type !== "rentalPropertyLoan") return;
-      item.owner = item.owner || "joint";
-      item.repaymentType = item.repaymentType === "interestOnly" ? "interestOnly" : "principalAndInterest";
-      item.additionalPrincipalFrequency = item.additionalPrincipalFrequency || "annually";
-      item.unlinkedRentalCashflowTreatment = item.unlinkedRentalCashflowTreatment || "unconfirmed";
-      const linkedIncome = item.linkedRentalIncomeId ? rentalIncomeById.get(String(item.linkedRentalIncomeId)) : null;
-      if (linkedIncome && item.id && !linkedLoanIds(linkedIncome).includes(String(item.id))) {
-        linkedIncome.linkedLoanIds = [...linkedLoanIds(linkedIncome), String(item.id)];
+      if (item.type === "rentalPropertyLoan") {
+        item.owner = item.owner || "joint";
+        item.repaymentType = item.repaymentType === "interestOnly" ? "interestOnly" : "principalAndInterest";
+        item.additionalPrincipalFrequency = item.additionalPrincipalFrequency || "annually";
+        item.unlinkedRentalCashflowTreatment = item.unlinkedRentalCashflowTreatment || "unconfirmed";
+        item.investmentLink = {
+          assetCategory: "rental_property",
+          linkedAssetId: item.linkedAssetId || item.investmentLink?.linkedAssetId || "",
+          description: item.investmentLinkDescription || item.investmentLink?.description || "",
+        };
+        const linkedIncome = item.linkedRentalIncomeId ? rentalIncomeById.get(String(item.linkedRentalIncomeId)) : null;
+        if (linkedIncome && item.id && !linkedLoanIds(linkedIncome).includes(String(item.id))) {
+          linkedIncome.linkedLoanIds = [...linkedLoanIds(linkedIncome), String(item.id)];
+        }
+      }
+      if (item.type === "investmentLoan") {
+        item.investmentAssetCategory = item.investmentAssetCategory || item.investmentLink?.assetCategory || "other";
+        item.linkedAssetId = item.linkedAssetId || item.investmentLink?.linkedAssetId || "";
+        item.investmentLinkDescription = item.investmentLinkDescription || item.investmentLink?.description || "";
+        item.investmentLink = {
+          assetCategory: item.investmentAssetCategory,
+          linkedAssetId: item.linkedAssetId,
+          description: item.investmentLinkDescription,
+        };
       }
     });
   }
@@ -1639,9 +1678,10 @@
     const person2SalaryItems = incomes.filter((item) => item.type === "salaryWages" && item.owner === "person2");
     const firstIncome = person1SalaryItems[0] || incomes.find((item) => item.owner === "person1") || {};
     const secondIncome = person2SalaryItems[0] || incomes.find((item) => item.owner === "person2") || {};
-    const person1SalaryAnnual = person1SalaryItems.reduce((total, item) => total + annualValue(item.amount, item.frequency), 0);
-    const person2SalaryAnnual = person2SalaryItems.reduce((total, item) => total + annualValue(item.amount, item.frequency), 0);
-    const otherAnnualIncome = incomes
+    const incomeSummary = CALC.incomeBreakdown?.(plan) || {};
+    const person1SalaryAnnual = Number(incomeSummary.person1Salary) || person1SalaryItems.reduce((total, item) => total + annualValue(item.amount, item.frequency), 0);
+    const person2SalaryAnnual = Number(incomeSummary.person2Salary) || person2SalaryItems.reduce((total, item) => total + annualValue(item.amount, item.frequency), 0);
+    const otherAnnualIncome = Number(incomeSummary.otherIncome) || incomes
       .filter((item) => item.type !== "salaryWages")
       .reduce((total, item) => total + annualValue(item.amount, item.frequency), 0);
 
@@ -2249,10 +2289,10 @@
         investmentReturnPct: numberValue(investing.expectedInvestmentReturnPct),
         inflationPct: numberValue(investing.inflationPct),
         superReturnPct: numberValue(investing.expectedSuperReturnPct),
-        employerSuperContributions: numberValue(investing.employerSuperContributions),
+        employerSuperContributions: numberValue(result.employerSuperContributions?.totalEffective ?? investing.employerSuperContributions),
         safeWithdrawalRatePct: numberValue(investing.safeWithdrawalRatePct),
-        taxYear: "2026-27",
-        medicareLevyPct: 2,
+        taxYear: result.taxConfiguration?.taxYear || result.taxEstimate?.taxYear || "2026-27",
+        medicareLevyPct: (Number(result.taxConfiguration?.medicareLevyRate) || 0.02) * 100,
         concessionalSuperContributionsTaxPct: 15,
       },
     };
@@ -3336,6 +3376,7 @@
           ${summaryCard(`${person1Name} estimated employer super`, money(employerSuper.person1Amount || 0))}
           ${summaryCard(`${person2Name} estimated employer super`, money(employerSuper.person2Amount || 0))}
           ${summaryCard("Household estimated employer super", money(employerSuper.totalEffective || 0), "household-super-card")}
+          ${summaryCard("Maximum contribution base", money(employerSuper.maximumContributionBase || result.taxConfiguration?.employerSuperMaximumContributionBase || 0))}
         </div>
         ${capWarnings.length ? `<p class="tax-note mt-3"><strong>Contribution cap warning:</strong> ${escapeHtml(capWarnings.join(" "))}</p>` : ""}
         ${employerSuper.hasOverride ? `<p class="field-help mt-3">Manual override is active. Calculated amount before override: ${money(employerSuper.totalCalculated || 0)}.</p>` : ""}
@@ -3505,6 +3546,42 @@
     return `<button class="btn remove-button" type="button" data-remove-collection="${collection}" data-id="${id}">Remove</button>`;
   }
 
+  function incomeAllocationFields(item, owner) {
+    if (owner !== "joint") return "";
+    const p1 = Number(item.person1AllocationPercentage) || 0;
+    const p2 = Number(item.person2AllocationPercentage) || 0;
+    const total = p1 + p2;
+    const warning = Math.round(total) !== 100
+      ? `<p class="tax-note mt-3"><strong>Check ownership:</strong> Joint income percentages should total 100%.</p>`
+      : "";
+    return `
+      ${dynamicInput("incomeItems", item, "person1AllocationPercentage", `${personDisplayName(1)} ownership %`, { step: "1" })}
+      ${dynamicInput("incomeItems", item, "person2AllocationPercentage", `${personDisplayName(2)} ownership %`, { step: "1" })}
+      ${warning}
+    `;
+  }
+
+  function dividendTaxFields(item, type) {
+    if (type !== "dividends") return "";
+    return `
+      ${dynamicInput("incomeItems", item, "cashDividend", "Cash dividend received", { step: "100" })}
+      ${dynamicInput("incomeItems", item, "frankingCredits", "Franking credits", { step: "100" })}
+      ${dynamicInput("incomeItems", item, "totalTaxableGrossedUpDividend", "Total taxable grossed-up dividend", { step: "100" })}
+    `;
+  }
+
+  function investmentAssetLinkOptionPairs(category = "") {
+    const assets = Array.isArray(plan.assetItems) ? plan.assetItems : [];
+    const filtered = assets.filter((asset) => {
+      if (!category) return true;
+      if (category === "rental_property") return asset.category === "otherProperty";
+      if (category === "shares") return ["shares", "crypto"].includes(asset.category);
+      if (category === "business") return asset.category === "other";
+      return true;
+    });
+    return [["", "No specific linked asset"], ...filtered.map((asset) => [asset.id, asset.name || "Investment asset"])];
+  }
+
   function incomeCard(item, index) {
     const type = normaliseIncomeType(item.type, index);
     const owner = normaliseIncomeOwner(item.owner, type, index);
@@ -3517,15 +3594,18 @@
           ${dynamicInput("incomeItems", item, "type", "Income type", { type: "select", options: incomeTypeOptions, infoKey: "rentalNetCashIncome" })}
           ${dynamicInput("incomeItems", item, "propertyName", "Property name or description", { kind: "text", placeholder: "e.g. Smith Street rental" })}
           ${dynamicInput("incomeItems", item, "owner", "Income owner", { type: "select", options: incomeOwnerOptions(type) })}
-          ${dynamicInput("incomeItems", item, "amount", "Annual net cash income", { step: "100", infoKey: "rentalNetCashIncome" })}
+          ${incomeAllocationFields(item, owner)}
+          ${dynamicInput("incomeItems", item, "amount", "Annual net taxable profit after deductible interest", { step: "100", infoKey: "rentalNetCashIncome" })}
           ${dynamicInput("incomeItems", item, "rentalCashflowTreatment", "Rental cashflow treatment", { type: "select", options: rentalCashflowTreatmentOptions })}
           ${dynamicInput("incomeItems", item, "note", "Optional notes", { kind: "text", placeholder: "Optional context" })}
         ` : `
           ${dynamicInput("incomeItems", item, "name", "Income name", { kind: "text", placeholder: "e.g. Salary, rent, dividends" })}
           ${dynamicInput("incomeItems", item, "type", "Income type", { type: "select", options: incomeTypeOptions })}
           ${dynamicInput("incomeItems", item, "owner", "Income owner", { type: "select", options: incomeOwnerOptions(type) })}
+          ${incomeAllocationFields(item, owner)}
           ${dynamicInput("incomeItems", item, "amount", "Gross amount", { step: "100", placeholder: "Amount for the selected frequency" })}
           ${dynamicInput("incomeItems", item, "frequency", "Frequency", { type: "select", options: frequencies })}
+          ${dividendTaxFields(item, type)}
           ${type === "other" ? dynamicInput("incomeItems", item, "isPassiveIncome", "Passive income", { type: "checkbox", infoKey: "passiveIncome" }) : ""}
         `;
     return `
@@ -3619,6 +3699,7 @@
       `;
     }
     const isRentalLoan = item.type === "rentalPropertyLoan";
+    const isInvestmentLoan = item.type === "investmentLoan";
     const linkedIncomeId = item.linkedRentalIncomeId || "";
     const rentalLinkedFromIncome = isRentalLoan && rentalIncomeItems().some((income) => linkedLoanIds(income).includes(String(item.id)));
     const rentalLinkText = rentalLinkedFromIncome
@@ -3634,6 +3715,11 @@
           ${!linkedIncomeId && !rentalLinkedFromIncome ? dynamicInput("liabilityItems", item, "unlinkedRentalCashflowTreatment", "Unlinked rental cashflow treatment", { type: "select", options: unlinkedRentalCashflowTreatmentOptions }) : ""}
           ${item.repaymentType === "interestOnly" ? dynamicInput("liabilityItems", item, "additionalPrincipalRepayment", "Additional principal repayment", { step: "100" }) : ""}
           ${item.repaymentType === "interestOnly" ? dynamicInput("liabilityItems", item, "additionalPrincipalFrequency", "Additional principal frequency", { type: "select", options: frequencies }) : ""}
+        ` : "";
+    const investmentFields = isInvestmentLoan ? `
+          ${dynamicInput("liabilityItems", item, "investmentAssetCategory", "What does this loan relate to?", { type: "select", options: investmentLoanAssetCategoryOptions })}
+          ${dynamicInput("liabilityItems", item, "linkedAssetId", "Linked asset", { type: "select", options: investmentAssetLinkOptionPairs(item.investmentAssetCategory) })}
+          ${dynamicInput("liabilityItems", item, "investmentLinkDescription", "Optional link description", { kind: "text", placeholder: "e.g. Portfolio margin loan" })}
         ` : "";
     return `
       <article class="form-item-card dynamic-item-card">
@@ -3653,8 +3739,10 @@
           ${dynamicInput("liabilityItems", item, "repaymentFrequency", "Repayment frequency", { type: "select", options: frequencies })}
           ${dynamicInput("liabilityItems", item, "termYears", "Remaining term (years)", { step: "1" })}
           ${rentalFields}
+          ${investmentFields}
         </div>
         ${isRentalLoan ? `${rentalLoanBreakdownTiles(item)}${rentalLinkText}${unlinkedWarning}<p class="field-help mt-3">Rental property loans can be linked to rental property net cash income so loan interest is not counted twice in household cashflow.</p>` : ""}
+        ${isInvestmentLoan ? `<p class="field-help mt-3">Investment loans can be linked to the asset they relate to. Principal repayments are tracked separately from interest and are not automatically treated as tax deductible.</p>` : ""}
       </article>
     `;
   }
@@ -4528,7 +4616,7 @@
       ["Less: Medicare levy", -result.taxEstimate.medicareLevy],
       ["Less: Medicare levy surcharge", -result.taxEstimate.medicareLevySurcharge],
       ["Less: Estimated STSL compulsory repayment", -result.helpRepaymentEstimate.annualRepayment],
-      ["Net income after tax and STSL", result.netIncomeAfterTaxHelp],
+      ["Net income after Income Tax, Medicare Levy, Medicare Levy Surcharge and STSL", result.netIncomeAfterTaxHelp],
       ["Less: Living expenses", -result.annualCoreLivingExpenses],
       ["Less: Loan repayments", -result.annualDebtRepayments],
       ["Less: Other regular expenses", -result.annualOtherRegularExpenses],
@@ -4541,8 +4629,11 @@
 
   function cashflowRowHtml(label, value) {
     const finalClass = label === "Final projected cash surplus" ? " cashflow-row-final" : "";
+    const tooltip = label.startsWith("Net income after")
+      ? ` title="Includes income tax, Medicare levy, Medicare Levy Surcharge, STSL compulsory repayment and final estimated net income."`
+      : "";
     return `
-      <div class="table-row cashflow-row${finalClass}">
+      <div class="table-row cashflow-row${finalClass}"${tooltip}>
         <span>${escapeHtml(label)}</span>
         <strong>${money(value)}</strong>
       </div>
@@ -7981,7 +8072,7 @@
       { label: "Accessible investments", value: money(result.accessibleInvestmentAssets) },
       { label: "Super from age 60", value: money(result.superannuationBalance) },
       { label: "Annual Income", value: money(result.annualGrossIncome) },
-      { label: "Net income after tax and STSL", value: money(result.netIncomeAfterTaxHelp) },
+      { label: "Net income after tax, Medicare and STSL", value: money(result.netIncomeAfterTaxHelp) },
       { label: "Annual Living Expenses", value: money(result.annualLivingExpenses) },
       { label: "Annual Loan Repayments", value: money(result.annualDebtRepayments) },
       { label: "Annual Surplus", value: money(result.cashSurplusBeforeInvesting) },
@@ -8930,6 +9021,15 @@
             item.repaymentType = item.repaymentType === "interestOnly" ? "interestOnly" : "principalAndInterest";
             item.additionalPrincipalFrequency = item.additionalPrincipalFrequency || "annually";
             item.unlinkedRentalCashflowTreatment = item.unlinkedRentalCashflowTreatment || "unconfirmed";
+          } else if (item.type === "investmentLoan") {
+            item.investmentAssetCategory = item.investmentAssetCategory || item.investmentLink?.assetCategory || "other";
+            item.linkedAssetId = item.linkedAssetId || item.investmentLink?.linkedAssetId || "";
+            item.investmentLinkDescription = item.investmentLinkDescription || item.investmentLink?.description || "";
+            item.investmentLink = {
+              assetCategory: item.investmentAssetCategory,
+              linkedAssetId: item.linkedAssetId,
+              description: item.investmentLinkDescription,
+            };
           } else {
             (plan.incomeItems || []).forEach((income) => {
               if (income.type !== "rentalNetCashIncome") return;
@@ -8947,7 +9047,7 @@
         syncCollectionInputs(target.dataset.collection, target.dataset.id, target.dataset.key, value);
         syncCollectionsToLegacy();
         autosavePlan();
-        if (target.dataset.collection === "liabilityItems" && target.dataset.key === "type") {
+        if (target.dataset.collection === "liabilityItems" && (target.dataset.key === "type" || target.dataset.key === "investmentAssetCategory")) {
           renderAll();
           return;
         }
@@ -8972,6 +9072,14 @@
       }
       if (!target.dataset.path) return;
       const value = target.dataset.type === "boolean" ? target.checked : target.dataset.type === "text" ? target.value : Number(target.value);
+      if ((target.dataset.path === "income.person1HasStslDebt" || target.dataset.path === "income.person2HasStslDebt") && value === false) {
+        const personNumber = target.dataset.path.includes("person2") ? 2 : 1;
+        const balance = Number(plan.liabilities?.[`${personKey(personNumber)}StslBalance`]) || Number(plan.liabilities?.[`${personKey(personNumber)}HecsHelpDebt`]) || 0;
+        if (balance > 0 && !window.confirm(`Remove ${personDisplayName(personNumber)}'s linked STSL liability balance from the plan?`)) {
+          target.checked = true;
+          return;
+        }
+      }
       setPath(plan, target.dataset.path, value);
       generatedWeeklyPlanner = null;
       if (weeklyPlan) {
