@@ -1,0 +1,85 @@
+﻿Command requested: npm test
+Local Codex runtime note: npm.exe is not installed or on PATH in this environment. The package.json test script was executed with pnpm test, which runs the same scripts.test command that plain npm test will run when npm is available.
+
+=== where npm ===
+INFO: Could not find files for the given pattern(s).
+
+=== pnpm test ===
+$ node --experimental-strip-types tests/calculations.test.ts && node --experimental-strip-types tests/engagement.test.ts && node tests/financial-freedom-tax-integration.test.mjs && node tests/financial-progress-history.test.mjs && node tests/calculation-audit-2026-27.test.mjs
+✔ a 30-year loan does not project beyond 360 months (11.2702ms)
+✔ loan balance reduces each month when repayment exceeds interest (1.5882ms)
+✔ repayments stop once loan reaches zero (6.8818ms)
+✔ offset reduces interest charged (2.1056ms)
+✔ returns a warning when repayment is less than monthly interest (1.7858ms)
+✔ investment projection compounds contributions (1.0858ms)
+✔ super projection separates employer and extra contributions (5.1814ms)
+✔ quarterly income and expense frequencies convert correctly (1.2171ms)
+✔ sample household dashboard calculates offset and cashflow (11.9285ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 84.9442
+✔ lifestyle funding percentage is capped for display but preserves raw progress (3.6101ms)
+✔ goal progress handles zero targets and overfunded goals safely (2.6162ms)
+✔ weekly streak counts consecutive completed weeks from the latest completed week (2.9711ms)
+✔ journey stage is derived from financial progress and practical readiness (2.2519ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 43.5917
+✔ STSL repayments are person-specific and capped by remaining balance (65.0018ms)
+✔ joint income allocation uses the entered ownership percentages (28.7531ms)
+✔ dividends use franking credits for taxable income but cash amount for household cash income (23.5941ms)
+✔ employer super is calculated from salary and wages only and uses the configured cap (26.8815ms)
+✔ manual employer super override is preserved until reset by the user (31.1185ms)
+✔ Medicare levy surcharge is separate and depends on cover status (41.5743ms)
+✔ passive income includes only passive categories and flagged other income (26.6776ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 276.8399
+✔ financial progress view is wired into the application shell (7.0763ms)
+✔ financial snapshots use a stable plan-scoped storage path and avoid demo saves (3.1938ms)
+✔ snapshot import and export preserve progress history without replacing plan data (1.4115ms)
+✔ progress AI route is separate from plan insights and validates structured output (0.6625ms)
+✔ financial progress styles include responsive comparison layouts (0.8418ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 57.4679
+✔ 2026-27 resident tax helper uses the audited resident bracket table before offsets and Medicare (13.5623ms)
+✔ LITO reduces income tax only and is capped at income tax before Medicare (5.2171ms)
+✔ 2026-27 STSL repayments use marginal thresholds and cap at remaining balance (6.8997ms)
+✔ STSL balances and repayments remain person-specific in the full plan (33.8778ms)
+✔ STSL repayment income includes allocated investment income, franking credits and rental taxable income (25.5911ms)
+✔ Medicare levy surcharge separates threshold income, surcharge base and whole-family cover (8.5378ms)
+✔ missing MLS cover information remains incomplete in the full plan rather than becoming a false zero (18.4033ms)
+✔ employer super is calculated from salary only and supports package-inclusive salary items (19.5347ms)
+✔ passive income and dividend tax treatment do not double count franking credits or employment income (20.3589ms)
+✔ rental cashflow uses linked loan treatment without deducting loan interest twice (27.2145ms)
+✔ FI asset categories separate liquid assets, property equity and superannuation (28.2307ms)
+✔ saved records and snapshots retain calculation version metadata (7.1497ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 244.35

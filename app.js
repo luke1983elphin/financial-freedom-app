@@ -1,6 +1,8 @@
 (function bootFinancialFreedomApp() {
   const DATA = window.FFS_DATA;
   const CALC = window.FFSCalculator;
+  const CALCULATION_VERSION = CALC?.CALCULATION_VERSION || "2026.27.1";
+  const FINANCIAL_YEAR = CALC?.FINANCIAL_YEAR || "2026-27";
   const DRAFT_KEY = "ffs-current-plan-v3-mobile-dashboard-ux-test";
   const LAST_SAVED_KEY = "ffs-current-plan-last-saved-v3-mobile-dashboard-ux-test";
   const SCENARIO_KEY = "ffs-scenarios-v3-mobile-dashboard-ux-test";
@@ -192,7 +194,7 @@
     },
     hospitalCover: {
       title: "Eligible private patient hospital cover",
-      body: "Eligible private patient hospital cover may affect Medicare levy surcharge estimates. Extras-only policies generally do not prevent Medicare levy surcharge exposure.",
+      body: "Eligible private patient hospital cover may affect Medicare levy surcharge estimates. Extras-only policies generally do not prevent Medicare levy surcharge exposure. Part-year MLS results assume entered family members' covered days overlap unless actual coverage dates are collected.",
     },
     rentalNetCashIncome: {
       title: "Rental property net taxable profit after interest",
@@ -204,7 +206,7 @@
     },
     passiveIncome: {
       title: "Passive Income",
-      body: "Passive income includes interest, dividends, distributions, net rental property cashflow and other income identified as passive. Salary and wages are excluded. For rental properties, linked loan principal repayments are deducted because loan interest is already included in net rental cash income.",
+      body: "Passive income includes interest, dividends, distributions, rental cash income before principal repayments and other income identified as passive. Salary and wages are excluded. For rental properties, linked loan principal repayments are shown separately because loan interest may already be included in net rental cash income.",
     },
     employerSuperEstimate: {
       title: "Estimated employer super contributions",
@@ -1896,6 +1898,8 @@
       source,
       planId,
       savedAt: scenario.savedAt || new Date().toISOString(),
+      calculationVersion: scenario.calculationVersion || scenario.plan?.calculationVersion || CALCULATION_VERSION,
+      financialYear: scenario.financialYear || FINANCIAL_YEAR,
       plan: ensurePlanIdentity(scenarioPlan, { source: source === "sample" ? "sample" : "personal", planId }),
     };
   }
@@ -2392,7 +2396,9 @@
         financialIndependenceTarget: 0,
       },
       calculated: {},
-      calculationVersion: FINANCIAL_SNAPSHOT_CALCULATION_VERSION,
+      calculationVersion: CALCULATION_VERSION,
+      snapshotSchemaVersion: FINANCIAL_SNAPSHOT_CALCULATION_VERSION,
+      financialYear: FINANCIAL_YEAR,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -2469,7 +2475,9 @@
       },
       createdAt: overrides.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      calculationVersion: FINANCIAL_SNAPSHOT_CALCULATION_VERSION,
+      calculationVersion: CALCULATION_VERSION,
+      snapshotSchemaVersion: FINANCIAL_SNAPSHOT_CALCULATION_VERSION,
+      financialYear: FINANCIAL_YEAR,
     };
     return recalculateSnapshot(snapshot);
   }
@@ -2558,7 +2566,9 @@
       savingsRate: annualNetIncome > 0 ? (annualCashSurplus / annualNetIncome) * 100 : 0,
       financialIndependenceProgress: fiTarget > 0 ? ((liquidAssets + investmentAssets + totalSuper) / fiTarget) * 100 : 0,
     };
-    safe.calculationVersion = safe.calculationVersion || FINANCIAL_SNAPSHOT_CALCULATION_VERSION;
+    safe.calculationVersion = safe.calculationVersion || CALCULATION_VERSION;
+    safe.snapshotSchemaVersion = safe.snapshotSchemaVersion || FINANCIAL_SNAPSHOT_CALCULATION_VERSION;
+    safe.financialYear = safe.financialYear || FINANCIAL_YEAR;
     safe.createdAt = safe.createdAt || new Date().toISOString();
     safe.updatedAt = safe.updatedAt || safe.createdAt;
     safe.hash = simpleHash({
@@ -3140,6 +3150,8 @@
     const payload = {
       version: 4,
       appVersion: APP_VERSION,
+      calculationVersion: CALCULATION_VERSION,
+      financialYear: FINANCIAL_YEAR,
       savedAt,
       planId: normalisePlanId(activePlanId),
       plan: planSnapshot,
@@ -3360,6 +3372,8 @@
       app: "Financial Freedom",
       type: "financial-freedom-plan-export",
       appVersion: APP_VERSION,
+      calculationVersion: CALCULATION_VERSION,
+      financialYear: FINANCIAL_YEAR,
       schemaVersion: EXPORT_SCHEMA_VERSION,
       exportedAt: new Date().toISOString(),
       planId: isDemoActive() ? DEMO_PLAN_ID : normalisePlanId(activePlanId),
@@ -5724,8 +5738,9 @@
       ["Super return", `${Number(plan.investing.expectedSuperReturnPct || 0).toFixed(1)}% per year estimate`],
       ["Inflation", `${Number(plan.investing.inflationPct || 0).toFixed(1)}% per year estimate`],
       ["Wage growth", `${Number(plan.investing.wageGrowthPct || 0).toFixed(1)}% per year estimate`],
-      ["Medicare levy", `${Math.round((result.taxEstimate.medicareLevyRate || 0) * 100)}% estimate`],
+      ["Estimated Medicare levy", `Simplified ${Math.round((result.taxEstimate.medicareLevyRate || 0) * 100)}% calculation`],
       ["Medicare levy surcharge", result.taxEstimate.medicareLevySurchargeEstimate?.cannotConfirm ? "Cover status incomplete" : `${percentFromRatio(result.taxEstimate.medicareLevySurchargeEstimate?.rate || 0)} estimate`],
+      ...(result.taxEstimate.medicareLevySurchargeEstimate?.partYearOverlapAssumption ? [["Part-year MLS assumption", result.taxEstimate.medicareLevySurchargeEstimate.partYearOverlapAssumption]] : []),
       ["STSL compulsory repayment assumptions", `Estimated above $69,528 repayment income and capped by current balance when entered`],
       ["Concessional contributions tax", "15% applied before money is invested in super"],
       ["Safe withdrawal rate", `${Number(plan.investing.safeWithdrawalRatePct || 0).toFixed(1)}% estimate`],
@@ -5753,11 +5768,14 @@
   }
 
   function cashflowRows(result) {
+    const mlsValue = result.taxEstimate.medicareLevySurchargeEstimate?.cannotConfirm
+      ? "MLS not included - complete private hospital cover information"
+      : -result.taxEstimate.medicareLevySurcharge;
     return [
       ["Gross income", result.annualGrossIncome],
       [`Less: Estimated income tax (${result.taxEstimate.taxYear})`, -result.taxEstimate.incomeTax],
-      ["Less: Medicare levy", -result.taxEstimate.medicareLevy],
-      ["Less: Medicare levy surcharge", -result.taxEstimate.medicareLevySurcharge],
+      ["Less: Estimated Medicare levy - simplified 2% calculation", -result.taxEstimate.medicareLevy],
+      ["Less: Medicare levy surcharge", mlsValue],
       ["Less: Estimated STSL compulsory repayment", -result.helpRepaymentEstimate.annualRepayment],
       ["Net income after Income Tax, Medicare Levy, Medicare Levy Surcharge and STSL", result.netIncomeAfterTaxHelp],
       ["Less: Living expenses", -result.annualCoreLivingExpenses],
@@ -5775,10 +5793,11 @@
     const tooltip = label.startsWith("Net income after")
       ? ` title="Includes income tax, Medicare levy, Medicare Levy Surcharge, STSL compulsory repayment and final estimated net income."`
       : "";
+    const renderedValue = typeof value === "string" ? escapeHtml(value) : money(value);
     return `
       <div class="table-row cashflow-row${finalClass}"${tooltip}>
         <span>${escapeHtml(label)}</span>
-        <strong>${money(value)}</strong>
+        <strong>${renderedValue}</strong>
       </div>
     `;
   }
@@ -5792,7 +5811,7 @@
     const propertyRows = (summary.propertyResults || []).map((item) => `
       <article class="mini-card rental-property-row">
         <span>${escapeHtml(item.name || "Rental property")}</span>
-        <strong>${money(item.householdCashflowContribution)}</strong>
+        <strong>${money(item.rentalHouseholdCashflowAfterPrincipal ?? item.householdCashflowContribution)}</strong>
         <small>${item.treatment === "beforeInterest" ? "Before interest: full linked repayments deducted." : "After interest: linked principal only deducted."}</small>
       </article>
     `).join("");
@@ -5812,6 +5831,7 @@
         </div>
         <div class="summary-grid mt-3">
           ${summaryTile("Rental property net cash income", money(summary.annualNetRentalIncome))}
+          ${summaryTile("Passive rental income before principal", money(summary.annualRentalPassiveIncomeBeforePrincipal))}
           ${summaryTile(totalLabel, `-${money(summary.annualHouseholdDebtDeduction)}`)}
           ${summaryTile("Net contribution to household cashflow", money(summary.annualHouseholdCashflowContribution), summary.annualHouseholdCashflowContribution >= 0 ? "status-green" : "status-amber")}
           ${summaryTile("Estimated rental loan interest", money(summary.annualLoanInterest))}
@@ -5827,16 +5847,16 @@
     if (!summary) return "";
     const rentalRows = (summary.rentalProperties || []).map((property) => `
       <div class="table-row cashflow-row passive-income-rental-row">
-        <span>${escapeHtml(property.name || "Rental property")} net cash income</span>
-        <strong>${money(property.annualNetRentalCashIncome)}</strong>
+        <span>${escapeHtml(property.name || "Rental property")} passive income before principal</span>
+        <strong>${money(property.rentalPassiveIncomeBeforePrincipal ?? property.passiveRentalCashflow)}</strong>
       </div>
       <div class="table-row cashflow-row passive-income-rental-row">
-        <span>Less rental-loan ${property.treatment === "beforeInterest" ? "repayments" : "principal repayments"}</span>
-        <strong>-${money(property.householdDebtDeduction)}</strong>
+        <span>Less rental-loan principal repayments</span>
+        <strong>-${money(property.rentalPrincipalRepayments ?? property.annualLoanPrincipal)}</strong>
       </div>
       <div class="table-row cashflow-row cashflow-row-final passive-income-rental-row">
-        <span>Passive rental cashflow</span>
-        <strong>${money(property.passiveRentalCashflow)}</strong>
+        <span>Net household cashflow after principal</span>
+        <strong>${money(property.rentalHouseholdCashflowAfterPrincipal ?? property.passiveRentalCashflow)}</strong>
       </div>
     `).join("");
     return `
@@ -5849,7 +5869,7 @@
           ${summaryTile("Interest", money(summary.interest))}
           ${summaryTile("Dividends", money(summary.dividends))}
           ${summaryTile("Distribution income", money(summary.distributions))}
-          ${summaryTile("Net rental property cashflow", money(summary.rental))}
+          ${summaryTile("Passive rental income before principal", money(summary.rental))}
           ${summaryTile("Other passive income", money(summary.otherPassive))}
           ${summaryTile("Total passive income", money(summary.total), summary.total > 0 ? "status-green" : "", "passiveIncome")}
         </div>
@@ -9087,8 +9107,8 @@
           ${[
             ["Gross income", result.annualGrossIncome],
             [`Less: Estimated income tax (${result.taxEstimate.taxYear})`, -result.taxEstimate.incomeTax],
-            ["Less: Medicare levy", -result.taxEstimate.medicareLevy],
-            ["Less: Medicare levy surcharge", -result.taxEstimate.medicareLevySurcharge],
+            ["Less: Estimated Medicare levy - simplified 2% calculation", -result.taxEstimate.medicareLevy],
+            ["Less: Medicare levy surcharge", result.taxEstimate.medicareLevySurchargeEstimate?.cannotConfirm ? "MLS not included - complete private hospital cover information" : -result.taxEstimate.medicareLevySurcharge],
             ...(Number(result.helpRepaymentEstimate.annualRepayment) > 0 ? [["Less: Estimated STSL compulsory repayment", -result.helpRepaymentEstimate.annualRepayment]] : []),
             ["Less: Living expenses", -result.annualLivingExpenses],
             ["Less: Debt repayments", -result.annualDebtRepayments],
@@ -9580,6 +9600,8 @@
       name,
       notes,
       savedAt: new Date().toISOString(),
+      calculationVersion: CALCULATION_VERSION,
+      financialYear: FINANCIAL_YEAR,
       plan: planSnapshot,
       summary: scenarioSummary(planSnapshot, resultSnapshot),
     };
@@ -10064,6 +10086,8 @@
       name: `Copy ${scenarios.length + 1}`,
       notes: "Duplicated from the current plan.",
       savedAt: new Date().toISOString(),
+      calculationVersion: CALCULATION_VERSION,
+      financialYear: FINANCIAL_YEAR,
       plan: planSnapshot,
       summary: scenarioSummary(planSnapshot),
     };

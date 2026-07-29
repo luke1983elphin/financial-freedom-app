@@ -1,10 +1,12 @@
 (function attachCalculator(global) {
+  const CALCULATION_VERSION = "2026.27.1";
+  const FINANCIAL_YEAR = "2026-27";
   const MONTHS_PER_YEAR = 12;
   const CHECKPOINT_YEARS = [5, 10, 20, 30];
   const SUPER_ACCESS_AGE = 60;
   const SUPER_CONTRIBUTIONS_TAX_RATE = 0.15;
   const DAYS_PER_YEAR = 365;
-  const DEFAULT_TAX_YEAR = "2026-27";
+  const DEFAULT_TAX_YEAR = FINANCIAL_YEAR;
   const FINANCIAL_YEAR_CONFIGS = {
     "2026-27": {
       taxYear: "2026-27",
@@ -23,7 +25,7 @@
         threshold: 69528,
         brackets: [
           { threshold: 69528, upper: 129717, baseRepayment: 0, marginalRate: 0.15 },
-          { threshold: 129717, upper: 186050, baseRepayment: 9028.5, marginalRate: 0.17 },
+          { threshold: 129717, upper: 186050, baseRepayment: 9028, marginalRate: 0.17 },
           { threshold: 186050, totalIncomeRate: 0.10 },
         ],
       },
@@ -31,6 +33,7 @@
         single: [105000, 123000, 164000],
         family: [210000, 246000, 328000],
         dependentChildIncrement: 1500,
+        individualLowIncomeSpouseThreshold: 27222,
         rates: [0, 0.01, 0.0125, 0.015],
       },
     },
@@ -81,18 +84,28 @@
     }, 0));
   }
 
-  function individualTaxEstimate(taxableIncome, includeMedicare = true) {
+  function calculateLITO(taxableIncome) {
     const income = nonNegative(taxableIncome);
-    const baseTax = taxBeforeMedicare(income);
-    const medicareLevy = includeMedicare ? roundCurrency(income * MEDICARE_LEVY_RATE) : 0;
-    return roundCurrency(baseTax + medicareLevy);
+    if (income <= 37500) return 700;
+    if (income <= 45000) return roundCurrency(Math.max(0, 700 - (income - 37500) * 0.05));
+    if (income <= 66667) return roundCurrency(Math.max(0, 325 - (income - 45000) * 0.015));
+    return 0;
+  }
+
+  function individualTaxEstimate(taxableIncome, includeMedicare = true) {
+    const breakdown = individualTaxBreakdown(taxableIncome);
+    return roundCurrency(breakdown.incomeTax + (includeMedicare ? breakdown.medicareLevy : 0));
   }
 
   function individualTaxBreakdown(taxableIncome) {
     const income = nonNegative(taxableIncome);
-    const incomeTax = taxBeforeMedicare(income);
+    const incomeTaxBeforeOffsets = taxBeforeMedicare(income);
+    const lito = roundCurrency(Math.min(calculateLITO(income), incomeTaxBeforeOffsets));
+    const incomeTax = roundCurrency(Math.max(0, incomeTaxBeforeOffsets - lito));
     const medicareLevy = roundCurrency(income * MEDICARE_LEVY_RATE);
     return {
+      incomeTaxBeforeOffsets,
+      lito,
       incomeTax,
       medicareLevy,
       totalTax: roundCurrency(incomeTax + medicareLevy),
@@ -201,21 +214,78 @@
     return null;
   }
 
+  function hasValue(value) {
+    return value !== undefined && value !== null && value !== "";
+  }
+
+  function calculatePersonSTSLRepaymentIncome({
+    taxableIncomeBeforeFHSSAdjustments,
+    reportableFringeBenefits,
+    reportableEmployerSuperContributions,
+    personalDeductibleSuperContributions,
+    totalNetInvestmentLosses,
+    exemptForeignEmploymentIncome,
+  } = {}) {
+    return roundCurrency(
+      nonNegative(taxableIncomeBeforeFHSSAdjustments)
+      + nonNegative(reportableFringeBenefits)
+      + nonNegative(reportableEmployerSuperContributions)
+      + nonNegative(personalDeductibleSuperContributions)
+      + nonNegative(totalNetInvestmentLosses)
+      + nonNegative(exemptForeignEmploymentIncome),
+    );
+  }
+
+  function calculatePersonMLSIncomeForThreshold({
+    taxableIncome,
+    reportableFringeBenefits,
+    reportableEmployerSuperContributions,
+    totalNetInvestmentLosses,
+    familyTrustDistributionTax,
+    otherMLSAdjustments,
+  } = {}) {
+    return roundCurrency(
+      nonNegative(taxableIncome)
+      + nonNegative(reportableFringeBenefits)
+      + nonNegative(reportableEmployerSuperContributions)
+      + nonNegative(totalNetInvestmentLosses)
+      + nonNegative(familyTrustDistributionTax)
+      + nonNegative(otherMLSAdjustments),
+    );
+  }
+
+  function calculatePersonMLSSurchargeBase({ taxableIncome, explicitSurchargeBase } = {}) {
+    return roundCurrency(hasValue(explicitSurchargeBase) ? nonNegative(explicitSurchargeBase) : nonNegative(taxableIncome));
+  }
+
   function calculateMedicareLevySurcharge({
     person1TaxableIncome,
     person2TaxableIncome,
+    person1MLSIncomeForThreshold,
+    person2MLSIncomeForThreshold,
+    person1MLSSurchargeBase,
+    person2MLSSurchargeBase,
     person1CoverStatus,
     person2CoverStatus,
+    dependantsHospitalCoverStatus,
     person1CoveredDays,
     person2CoveredDays,
+    dependantsCoveredDays,
     dependants,
     hasPartner,
+    spouseForFullYear,
   }) {
-    const p1Income = nonNegative(person1TaxableIncome);
-    const p2Income = nonNegative(person2TaxableIncome);
-    const family = Boolean(hasPartner || p2Income > 0 || nonNegative(dependants) > 0);
-    const householdIncome = roundCurrency(p1Income + p2Income);
-    const childIncrement = family ? Math.max(0, nonNegative(dependants) - 1) * MLS_THRESHOLDS_2026_27.dependentChildIncrement : 0;
+    const p1Taxable = nonNegative(person1TaxableIncome);
+    const p2Taxable = nonNegative(person2TaxableIncome);
+    const p1ThresholdIncome = hasValue(person1MLSIncomeForThreshold) ? nonNegative(person1MLSIncomeForThreshold) : p1Taxable;
+    const p2ThresholdIncome = hasValue(person2MLSIncomeForThreshold) ? nonNegative(person2MLSIncomeForThreshold) : p2Taxable;
+    const p1Base = calculatePersonMLSSurchargeBase({ taxableIncome: p1Taxable, explicitSurchargeBase: person1MLSSurchargeBase });
+    const p2Base = calculatePersonMLSSurchargeBase({ taxableIncome: p2Taxable, explicitSurchargeBase: person2MLSSurchargeBase });
+    const childCount = Math.max(0, Math.round(nonNegative(dependants)));
+    const family = Boolean(hasPartner || p2ThresholdIncome > 0 || childCount > 0);
+    const spouseFullYear = Boolean(hasPartner) && spouseForFullYear !== false;
+    const householdIncome = roundCurrency(p1ThresholdIncome + p2ThresholdIncome);
+    const childIncrement = family ? Math.max(0, childCount - 1) * MLS_THRESHOLDS_2026_27.dependentChildIncrement : 0;
     const thresholds = (family ? MLS_THRESHOLDS_2026_27.family : MLS_THRESHOLDS_2026_27.single).map((value) => value + childIncrement);
     const tier = householdIncome > thresholds[2] ? 3
       : householdIncome > thresholds[1] ? 2
@@ -223,16 +293,55 @@
           : 0;
     const rate = MLS_THRESHOLDS_2026_27.rates[tier] || 0;
     const p1Days = hospitalCoverDays(person1CoverStatus, person1CoveredDays);
-    const p2Days = family ? hospitalCoverDays(person2CoverStatus, person2CoveredDays) : DAYS_PER_YEAR;
-    const incomplete = rate > 0 && (p1Days === null || p2Days === null);
-    const p1UncoveredFraction = p1Days === null ? 0 : Math.max(0, DAYS_PER_YEAR - p1Days) / DAYS_PER_YEAR;
-    const p2UncoveredFraction = p2Days === null ? 0 : Math.max(0, DAYS_PER_YEAR - p2Days) / DAYS_PER_YEAR;
-    const person1Surcharge = roundCurrency(p1Income * rate * p1UncoveredFraction);
-    const person2Surcharge = roundCurrency(p2Income * rate * p2UncoveredFraction);
+    const p2Days = family && hasPartner ? hospitalCoverDays(person2CoverStatus, person2CoveredDays) : DAYS_PER_YEAR;
+    const dependantsDays = family && childCount > 0 ? hospitalCoverDays(dependantsHospitalCoverStatus, dependantsCoveredDays) : DAYS_PER_YEAR;
+    const requiredCoverInputs = [p1Days, p2Days, dependantsDays];
+    const incomplete = rate > 0 && requiredCoverInputs.some((value) => value === null);
+    if (incomplete) {
+      return {
+        taxYear: TAX_YEAR,
+        status: "incomplete",
+        cannotConfirm: true,
+        family,
+        householdIncome,
+        person1MLSIncomeForThreshold: roundCurrency(p1ThresholdIncome),
+        person2MLSIncomeForThreshold: roundCurrency(p2ThresholdIncome),
+        person1MLSSurchargeBase: roundCurrency(p1Base),
+        person2MLSSurchargeBase: roundCurrency(p2Base),
+        thresholds,
+        tier,
+        rate,
+        person1Surcharge: null,
+        person2Surcharge: null,
+        annualSurcharge: null,
+        uncoveredFraction: null,
+        note: "MLS not included - complete private hospital cover information.",
+      };
+    }
+    const wholeFamilyCoveredDays = Math.min(p1Days ?? 0, p2Days ?? DAYS_PER_YEAR, dependantsDays ?? DAYS_PER_YEAR);
+    const uncoveredFraction = rate > 0 ? Math.max(0, DAYS_PER_YEAR - wholeFamilyCoveredDays) / DAYS_PER_YEAR : 0;
+    const lowIncomeSpouseThreshold = nonNegative(MLS_THRESHOLDS_2026_27.individualLowIncomeSpouseThreshold);
+    const person1LowIncomeSpouseExempt = Boolean(family && hasPartner && spouseFullYear && p1ThresholdIncome <= lowIncomeSpouseThreshold);
+    const person2LowIncomeSpouseExempt = Boolean(family && hasPartner && spouseFullYear && p2ThresholdIncome <= lowIncomeSpouseThreshold);
+    const person1Surcharge = person1LowIncomeSpouseExempt ? 0 : roundCurrency(p1Base * rate * uncoveredFraction);
+    const person2Surcharge = person2LowIncomeSpouseExempt ? 0 : roundCurrency((family && hasPartner ? p2Base : 0) * rate * uncoveredFraction);
+    const hasPartYearCover = person1CoverStatus === "partial-year"
+      || person2CoverStatus === "partial-year"
+      || dependantsHospitalCoverStatus === "partial-year";
+    const partYearOverlapNote = "Part-year MLS estimates assume the entered family members' covered days overlap unless actual coverage dates are collected.";
     return {
       taxYear: TAX_YEAR,
+      status: "complete",
       family,
+      spouseForFullYear: spouseFullYear,
       householdIncome,
+      person1MLSIncomeForThreshold: roundCurrency(p1ThresholdIncome),
+      person2MLSIncomeForThreshold: roundCurrency(p2ThresholdIncome),
+      person1MLSSurchargeBase: roundCurrency(p1Base),
+      person2MLSSurchargeBase: roundCurrency(p2Base),
+      individualLowIncomeSpouseThreshold: lowIncomeSpouseThreshold,
+      person1LowIncomeSpouseExempt,
+      person2LowIncomeSpouseExempt,
       thresholds,
       tier,
       rate,
@@ -240,9 +349,12 @@
       person2Surcharge,
       annualSurcharge: roundCurrency(person1Surcharge + person2Surcharge),
       cannotConfirm: incomplete,
-      note: incomplete
-        ? "Medicare levy surcharge cannot yet be confirmed because household or cover information is incomplete."
-        : "Estimated using eligible private patient hospital cover status, household income and 2026-27 thresholds.",
+      uncoveredFraction: roundRatio(uncoveredFraction),
+      partYearOverlapAssumption: hasPartYearCover ? partYearOverlapNote : "",
+      note: [
+        "Estimated using eligible private patient hospital cover status, household income and 2026-27 thresholds.",
+        hasPartYearCover ? partYearOverlapNote : "",
+      ].filter(Boolean).join(" "),
     };
   }
 
@@ -261,6 +373,8 @@
     person2HasStslDebt,
     person1HasHelpDebt,
     person2HasHelpDebt,
+    person1StslRepaymentIncome,
+    person2StslRepaymentIncome,
   }) {
     const gross1 = nonNegative(person1Income);
     const gross2 = nonNegative(person2Income);
@@ -275,8 +389,10 @@
     const p2OtherDeductions = nonNegative(person2PayrollDeductions);
     const p1Taxable = roundCurrency(Math.max(0, gross1 - p1Sacrifice));
     const p2Taxable = roundCurrency(Math.max(0, gross2 - p2Sacrifice));
-    const p1RepaymentIncome = roundCurrency(p1Taxable + p1Sacrifice);
-    const p2RepaymentIncome = roundCurrency(p2Taxable + p2Sacrifice);
+    const p1PayrollRepaymentIncome = roundCurrency(p1Taxable + p1Sacrifice);
+    const p2PayrollRepaymentIncome = roundCurrency(p2Taxable + p2Sacrifice);
+    const p1RepaymentIncome = hasValue(person1StslRepaymentIncome) ? nonNegative(person1StslRepaymentIncome) : p1PayrollRepaymentIncome;
+    const p2RepaymentIncome = hasValue(person2StslRepaymentIncome) ? nonNegative(person2StslRepaymentIncome) : p2PayrollRepaymentIncome;
     const helpBalance = nonNegative(helpDebt);
     const explicitHelp1 = nonNegative(person1HelpDebt);
     const explicitHelp2 = nonNegative(person2HelpDebt);
@@ -394,14 +510,46 @@
 
   function incomeCashAnnualAmount(item = {}) {
     const type = normaliseIncomeType(item.type || item.incomeType);
+    if (type === "salaryWages") return salaryCashEarningsAnnualAmount(item);
     if (type === "dividends" && (nonNegative(item.cashDividend) > 0 || nonNegative(item.frankingCredits) > 0 || nonNegative(item.totalTaxableGrossedUpDividend) > 0)) {
       return roundCurrency(annualize(nonNegative(item.cashDividend) || nonNegative(item.amount), item.frequency || "annually"));
     }
     return roundCurrency(annualize(item.amount, item.frequency || "annually"));
   }
 
+  function salaryPackageIncludesEmployerSuper(item = {}) {
+    return item.salaryIncludesEmployerSuper === true
+      || item.salaryPackageIncludesSuper === true
+      || item.packageIncludesEmployerSuper === true;
+  }
+
+  function salaryCashEarningsAnnualAmount(item = {}, superRate = EMPLOYER_SUPER_RATE) {
+    const packageAmount = roundCurrency(annualize(item.amount, item.frequency || "annually"));
+    if (!salaryPackageIncludesEmployerSuper(item)) return packageAmount;
+    return roundCurrency(packageAmount / (1 + nonNegative(superRate)));
+  }
+
+  function qualifyingEarningsAnnualAmount(item = {}, superRate = EMPLOYER_SUPER_RATE) {
+    if (item.qualifyingEarningsOverrideEnabled === true || item.useQualifyingEarningsOverride === true) {
+      return roundCurrency(annualize(item.qualifyingEarningsAmount, item.qualifyingEarningsFrequency || item.frequency || "annually"));
+    }
+    return salaryCashEarningsAnnualAmount(item, superRate);
+  }
+
+  function employerSuperForSalaryItem(item = {}, superRate = EMPLOYER_SUPER_RATE, maximumContributionBase = EMPLOYER_SUPER_MAXIMUM_CONTRIBUTION_BASE) {
+    const qualifyingEarnings = qualifyingEarningsAnnualAmount(item, superRate);
+    if (salaryPackageIncludesEmployerSuper(item) && item.qualifyingEarningsOverrideEnabled !== true && item.useQualifyingEarningsOverride !== true) {
+      const cashEarnings = salaryCashEarningsAnnualAmount(item, superRate);
+      const packageAmount = roundCurrency(annualize(item.amount, item.frequency || "annually"));
+      return roundCurrency(Math.max(0, packageAmount - cashEarnings));
+    }
+    const cappedEarnings = maximumContributionBase > 0 ? Math.min(nonNegative(qualifyingEarnings), nonNegative(maximumContributionBase)) : nonNegative(qualifyingEarnings);
+    return roundCurrency(cappedEarnings * nonNegative(superRate));
+  }
+
   function incomeTaxableAnnualAmount(item = {}) {
     const type = normaliseIncomeType(item.type || item.incomeType);
+    if (type === "salaryWages") return salaryCashEarningsAnnualAmount(item);
     if (type === "dividends") {
       const grossedUp = nonNegative(item.totalTaxableGrossedUpDividend ?? item.grossedUpDividend);
       if (grossedUp > 0) return roundCurrency(annualize(grossedUp, item.frequency || "annually"));
@@ -484,14 +632,12 @@
 
   function calculateEmployerSuperForPerson(personId, incomes = [], superRate = EMPLOYER_SUPER_RATE, maximumContributionBase = EMPLOYER_SUPER_MAXIMUM_CONTRIBUTION_BASE) {
     const owner = personId === "person2" ? "person2" : "person1";
-    const salary = (Array.isArray(incomes) ? incomes : []).reduce((total, item, index) => {
+    return roundCurrency((Array.isArray(incomes) ? incomes : []).reduce((total, item, index) => {
       const type = normaliseIncomeType(item.type || item.incomeType, index);
       const incomeOwner = normaliseIncomeOwner(item.owner || item.incomeOwner, type, index);
       if (type !== "salaryWages" || incomeOwner !== owner) return total;
-      return total + annualize(item.amount, item.frequency || "annually");
-    }, 0);
-    const cappedSalary = maximumContributionBase > 0 ? Math.min(nonNegative(salary), nonNegative(maximumContributionBase)) : nonNegative(salary);
-    return roundCurrency(cappedSalary * nonNegative(superRate));
+      return total + employerSuperForSalaryItem(item, superRate, maximumContributionBase);
+    }, 0));
   }
 
   function employerSuperSummary(plan = {}) {
@@ -606,6 +752,11 @@
     const annualLoanInterest = roundCurrency(loanBreakdowns.reduce((total, item) => total + item.annualInterest, 0));
     const annualLoanPrincipal = roundCurrency(loanBreakdowns.reduce((total, item) => total + item.annualPrincipal, 0));
     const householdDebtDeduction = treatment === "beforeInterest" ? annualLoanRepayments : annualLoanPrincipal;
+    const rentalPassiveIncomeBeforePrincipal = roundCurrency(treatment === "beforeInterest"
+      ? annualNetRentalCashIncome - annualLoanInterest
+      : annualNetRentalCashIncome);
+    const rentalPrincipalRepayments = roundCurrency(annualLoanPrincipal);
+    const rentalHouseholdCashflowAfterPrincipal = roundCurrency(rentalPassiveIncomeBeforePrincipal - rentalPrincipalRepayments);
     return {
       id: propertyIncome.id || "",
       name: propertyIncome.propertyName || propertyIncome.name || "Rental property",
@@ -619,7 +770,10 @@
       annualLoanInterest,
       annualLoanPrincipal,
       householdDebtDeduction: roundCurrency(householdDebtDeduction),
-      householdCashflowContribution: roundCurrency(annualNetRentalCashIncome - householdDebtDeduction),
+      rentalPassiveIncomeBeforePrincipal,
+      rentalPrincipalRepayments,
+      rentalHouseholdCashflowAfterPrincipal,
+      householdCashflowContribution: rentalHouseholdCashflowAfterPrincipal,
     };
   }
 
@@ -651,12 +805,15 @@
       .map((loan) => {
         const breakdown = getAnnualLoanBreakdown(loan);
         const treatment = loan.unlinkedRentalCashflowTreatment === "beforeInterest" ? "beforeInterest" : "afterInterest";
-        return {
-          loan,
-          breakdown,
-          treatment,
-          householdDebtDeduction: treatment === "beforeInterest" ? breakdown.annualRepayments : breakdown.annualPrincipal,
-        };
+      return {
+        loan,
+        breakdown,
+        treatment,
+        householdDebtDeduction: treatment === "beforeInterest" ? breakdown.annualRepayments : breakdown.annualPrincipal,
+        rentalPassiveIncomeBeforePrincipal: treatment === "beforeInterest" ? -breakdown.annualInterest : 0,
+        rentalPrincipalRepayments: breakdown.annualPrincipal,
+        rentalHouseholdCashflowAfterPrincipal: treatment === "beforeInterest" ? -breakdown.annualRepayments : -breakdown.annualPrincipal,
+      };
       });
     unlinkedRentalLoans
       .filter((loan) => !loan.unlinkedRentalCashflowTreatment || loan.unlinkedRentalCashflowTreatment === "unconfirmed")
@@ -682,6 +839,9 @@
       annualLoanRepayments: roundCurrency(propertyResults.reduce((total, item) => total + item.annualLoanRepayments, 0) + confirmedUnlinked.reduce((total, item) => total + item.breakdown.annualRepayments, 0)),
       annualLoanInterest,
       annualLoanPrincipal,
+      annualRentalPassiveIncomeBeforePrincipal: roundCurrency(propertyResults.reduce((total, item) => total + item.rentalPassiveIncomeBeforePrincipal, 0) + confirmedUnlinked.reduce((total, item) => total + item.rentalPassiveIncomeBeforePrincipal, 0)),
+      annualRentalPrincipalRepayments: roundCurrency(propertyResults.reduce((total, item) => total + item.rentalPrincipalRepayments, 0) + confirmedUnlinked.reduce((total, item) => total + item.rentalPrincipalRepayments, 0)),
+      annualRentalHouseholdCashflowAfterPrincipal: roundCurrency(propertyResults.reduce((total, item) => total + item.rentalHouseholdCashflowAfterPrincipal, 0) + confirmedUnlinked.reduce((total, item) => total + item.rentalHouseholdCashflowAfterPrincipal, 0)),
       annualHouseholdDebtDeduction: roundCurrency(propertyDebtDeduction + confirmedUnlinkedDebtDeduction),
       annualHouseholdCashflowContribution: roundCurrency(propertyResults.reduce((total, item) => total + item.householdCashflowContribution, 0) - confirmedUnlinkedDebtDeduction),
     };
@@ -730,7 +890,7 @@
       else if (type === "other" && hasPassiveOtherIncomeFlag(item)) addPassiveIncomeAmount(summary, "otherPassive", annualAmount, owner);
     });
     (rentalSummary.propertyResults || []).forEach((property) => {
-      const passiveAmount = roundCurrency(property.householdCashflowContribution);
+      const passiveAmount = roundCurrency(property.rentalPassiveIncomeBeforePrincipal);
       addPassiveIncomeAmount(summary, "rental", passiveAmount, normaliseIncomeOwner(property.owner, "rentalNetCashIncome"));
       summary.rentalProperties.push({
         id: property.id,
@@ -742,6 +902,9 @@
         annualLoanInterest: property.annualLoanInterest,
         annualLoanPrincipal: property.annualLoanPrincipal,
         householdDebtDeduction: property.householdDebtDeduction,
+        rentalPassiveIncomeBeforePrincipal: property.rentalPassiveIncomeBeforePrincipal,
+        rentalPrincipalRepayments: property.rentalPrincipalRepayments,
+        rentalHouseholdCashflowAfterPrincipal: property.rentalHouseholdCashflowAfterPrincipal,
         passiveRentalCashflow: passiveAmount,
       });
     });
@@ -837,6 +1000,8 @@
         person2HospitalCoverStatus: "",
         person1HospitalCoverDays: 0,
         person2HospitalCoverDays: 0,
+        dependantsHospitalCoverStatus: "",
+        dependantsHospitalCoverDays: 0,
       },
       expenses: {
         livingName: "",
@@ -1099,6 +1264,47 @@
     return roundCurrency((startingBalance - targetPresentValue) / annuityFactor);
   }
 
+  function personAdjustmentValue(plan = {}, personKey = "person1", suffixes = []) {
+    const prefixes = personKey === "person2" ? ["person2", "p2"] : ["person1", "p1"];
+    const sources = [plan.income || {}, plan.tax || {}, plan.assumptions || {}, plan.investing || {}];
+    for (const source of sources) {
+      for (const prefix of prefixes) {
+        for (const suffix of suffixes) {
+          const key = `${prefix}${suffix}`;
+          if (hasValue(source[key])) return nonNegative(source[key]);
+        }
+      }
+    }
+    return 0;
+  }
+
+  function optionalPersonAdjustmentValue(plan = {}, personKey = "person1", suffixes = []) {
+    const prefixes = personKey === "person2" ? ["person2", "p2"] : ["person1", "p1"];
+    const sources = [plan.income || {}, plan.tax || {}, plan.assumptions || {}, plan.investing || {}];
+    for (const source of sources) {
+      for (const prefix of prefixes) {
+        for (const suffix of suffixes) {
+          const key = `${prefix}${suffix}`;
+          if (hasValue(source[key])) return nonNegative(source[key]);
+        }
+      }
+    }
+    return undefined;
+  }
+
+  function personTaxAdjustmentInputs(plan = {}, personKey = "person1") {
+    return {
+      reportableFringeBenefits: personAdjustmentValue(plan, personKey, ["ReportableFringeBenefits", "FringeBenefits"]),
+      reportableEmployerSuperContributions: personAdjustmentValue(plan, personKey, ["ReportableEmployerSuperContributions", "ReportableSuperContributions"]),
+      personalDeductibleSuperContributions: personAdjustmentValue(plan, personKey, ["PersonalDeductibleSuperContributions", "DeductibleSuperContributions"]),
+      totalNetInvestmentLosses: personAdjustmentValue(plan, personKey, ["TotalNetInvestmentLosses", "NetInvestmentLosses"]),
+      exemptForeignEmploymentIncome: personAdjustmentValue(plan, personKey, ["ExemptForeignEmploymentIncome"]),
+      familyTrustDistributionTax: personAdjustmentValue(plan, personKey, ["FamilyTrustDistributionTax"]),
+      otherMLSAdjustments: personAdjustmentValue(plan, personKey, ["OtherMLSAdjustments", "MlsAdjustments", "MLSAdjustments"]),
+      mlsSurchargeBase: optionalPersonAdjustmentValue(plan, personKey, ["MLSSurchargeBase", "MlsSurchargeBase"]),
+    };
+  }
+
   function householdTaxEstimate({
     person1Income,
     person2Income,
@@ -1106,10 +1312,17 @@
     extraConcessionalSuper,
     dependants,
     hasPartner,
+    person1MLSIncomeForThreshold,
+    person2MLSIncomeForThreshold,
+    person1MLSSurchargeBase,
+    person2MLSSurchargeBase,
     person1HospitalCoverStatus,
     person2HospitalCoverStatus,
+    dependantsHospitalCoverStatus,
     person1HospitalCoverDays,
     person2HospitalCoverDays,
+    dependantsHospitalCoverDays,
+    spouseForFullYear,
   }) {
     const sharedOtherIncome = nonNegative(otherIncome) / 2;
     const person1TaxableBefore = roundCurrency(nonNegative(person1Income) + sharedOtherIncome);
@@ -1128,13 +1341,22 @@
     const medicareLevySurcharge = calculateMedicareLevySurcharge({
       person1TaxableIncome: person1TaxableAfter,
       person2TaxableIncome: person2TaxableAfter,
+      person1MLSIncomeForThreshold,
+      person2MLSIncomeForThreshold,
+      person1MLSSurchargeBase,
+      person2MLSSurchargeBase,
       person1CoverStatus: person1HospitalCoverStatus,
       person2CoverStatus: person2HospitalCoverStatus,
+      dependantsHospitalCoverStatus,
       person1CoveredDays: person1HospitalCoverDays,
       person2CoveredDays: person2HospitalCoverDays,
+      dependantsCoveredDays: dependantsHospitalCoverDays,
       dependants,
       hasPartner,
+      spouseForFullYear,
     });
+    const mlsAnnualSurcharge = medicareLevySurcharge.cannotConfirm ? null : medicareLevySurcharge.annualSurcharge;
+    const mlsForTotals = nonNegative(mlsAnnualSurcharge);
     const grossContribution = nonNegative(extraConcessionalSuper);
     const contributionsTax = roundCurrency(grossContribution * SUPER_CONTRIBUTIONS_TAX_RATE);
     const netInvested = roundCurrency(grossContribution - contributionsTax);
@@ -1142,6 +1364,8 @@
     const afterTaxCashflowCost = roundCurrency(Math.max(0, grossContribution - personalTaxSaving));
     const marginalRate = Math.max(marginalTaxRate(person1TaxableBefore), marginalTaxRate(person2TaxableBefore));
     return {
+      calculationVersion: CALCULATION_VERSION,
+      financialYear: FINANCIAL_YEAR,
       taxYear: TAX_YEAR,
       person1TaxableBefore,
       person2TaxableBefore,
@@ -1151,10 +1375,12 @@
       taxableIncomeAfterExtraSuper: roundCurrency(person1TaxableAfter + person2TaxableAfter),
       totalTaxBefore,
       totalTaxAfter,
-      totalTax: roundCurrency(totalTaxAfter + medicareLevySurcharge.annualSurcharge),
+      totalTax: roundCurrency(totalTaxAfter + mlsForTotals),
       incomeTax,
       medicareLevy,
-      medicareLevySurcharge: medicareLevySurcharge.annualSurcharge,
+      medicareLevyEstimateType: "simplified-2-percent",
+      medicareLevyNote: "Estimated Medicare levy - simplified 2% calculation. Low-income reductions, family reductions and exemptions are not fully modelled in this audit copy.",
+      medicareLevySurcharge: mlsAnnualSurcharge,
       medicareLevySurchargeEstimate: medicareLevySurcharge,
       marginalTaxRate: marginalRate,
       medicareLevyRate: MEDICARE_LEVY_RATE,
@@ -1275,8 +1501,19 @@
       + nonNegative(plan.assets.crypto)
       + downsizingBoost,
     );
+    const liquidInvestmentAssets = accessibleInvestmentAssets;
+    const investmentPropertyGrossValue = nonNegative(plan.assets.otherPropertyValue);
+    const investmentPropertyDebt = rentalPropertyLoanBalance;
+    const investmentPropertyEquity = roundCurrency(Math.max(0, investmentPropertyGrossValue - investmentPropertyDebt));
+    const includeInvestmentPropertyEquityInFi = Boolean(plan.assets.includeInvestmentPropertyEquityInFi || plan.investing.includeInvestmentPropertyEquityInFi);
     const superAccessibleToday = currentAge >= SUPER_ACCESS_AGE ? superannuationBalance : 0;
-    const financialIndependenceAssets = roundCurrency(accessibleInvestmentAssets + superAccessibleToday);
+    const accessibleFICapital = roundCurrency(
+      liquidInvestmentAssets
+      + superAccessibleToday
+      + (includeInvestmentPropertyEquityInFi ? investmentPropertyEquity : 0),
+    );
+    const totalIncomeProducingAssets = roundCurrency(liquidInvestmentAssets + investmentPropertyEquity + superannuationBalance);
+    const financialIndependenceAssets = accessibleFICapital;
     const incomeSummary = incomeBreakdown(plan);
     const person1AnnualIncome = incomeSummary.person1Taxable;
     const person2AnnualIncome = incomeSummary.person2Taxable;
@@ -1301,6 +1538,41 @@
     const person2HasStsl = !hasExplicitStslSelection && (legacyOwnerFallback || legacyPersonBalanceFallback)
       ? fallbackPerson2HasStsl
       : booleanWithLegacy(plan.income.person2HasStslDebt, plan.income.person2HasHelpDebt, false);
+    const extraSuperSplitForTax = splitAdditionalContribution(plan.investing.extraSuperContributions, person1AnnualIncome, person2AnnualIncome);
+    const person1TaxableAfterExtraSuper = roundCurrency(Math.max(0, person1AnnualIncome - extraSuperSplitForTax.person1));
+    const person2TaxableAfterExtraSuper = roundCurrency(Math.max(0, person2AnnualIncome - extraSuperSplitForTax.person2));
+    const person1TaxAdjustments = personTaxAdjustmentInputs(plan, "person1");
+    const person2TaxAdjustments = personTaxAdjustmentInputs(plan, "person2");
+    const person1MLSIncomeForThreshold = calculatePersonMLSIncomeForThreshold({
+      taxableIncome: person1TaxableAfterExtraSuper,
+      ...person1TaxAdjustments,
+    });
+    const person2MLSIncomeForThreshold = calculatePersonMLSIncomeForThreshold({
+      taxableIncome: person2TaxableAfterExtraSuper,
+      ...person2TaxAdjustments,
+    });
+    const person1MLSSurchargeBase = calculatePersonMLSSurchargeBase({
+      taxableIncome: person1TaxableAfterExtraSuper,
+      explicitSurchargeBase: person1TaxAdjustments.mlsSurchargeBase,
+    });
+    const person2MLSSurchargeBase = calculatePersonMLSSurchargeBase({
+      taxableIncome: person2TaxableAfterExtraSuper,
+      explicitSurchargeBase: person2TaxAdjustments.mlsSurchargeBase,
+    });
+    const stslRepaymentIncome = {
+      person1: calculatePersonSTSLRepaymentIncome({
+        taxableIncomeBeforeFHSSAdjustments: person1TaxableAfterExtraSuper,
+        ...person1TaxAdjustments,
+        personalDeductibleSuperContributions: roundCurrency(person1TaxAdjustments.personalDeductibleSuperContributions + extraSuperSplitForTax.person1),
+      }),
+      person2: calculatePersonSTSLRepaymentIncome({
+        taxableIncomeBeforeFHSSAdjustments: person2TaxableAfterExtraSuper,
+        ...person2TaxAdjustments,
+        personalDeductibleSuperContributions: roundCurrency(person2TaxAdjustments.personalDeductibleSuperContributions + extraSuperSplitForTax.person2),
+      }),
+    };
+    const person1StslRepayment = estimateStudyLoanRepayment(stslRepaymentIncome.person1, person1StslBalance, person1HasStsl);
+    const person2StslRepayment = estimateStudyLoanRepayment(stslRepaymentIncome.person2, person2StslBalance, person2HasStsl);
     const taxEstimate = householdTaxEstimate({
       person1Income: person1AnnualIncome,
       person2Income: person2AnnualIncome,
@@ -1308,10 +1580,17 @@
       extraConcessionalSuper: plan.investing.extraSuperContributions,
       dependants: plan.personal.dependants,
       hasPartner: Boolean(plan.personal.person2Name || plan.personal.person2Age || person2AnnualIncome),
+      person1MLSIncomeForThreshold,
+      person2MLSIncomeForThreshold,
+      person1MLSSurchargeBase,
+      person2MLSSurchargeBase,
       person1HospitalCoverStatus: plan.income.person1HospitalCoverStatus,
       person2HospitalCoverStatus: plan.income.person2HospitalCoverStatus,
+      dependantsHospitalCoverStatus: plan.income.dependantsHospitalCoverStatus,
       person1HospitalCoverDays: plan.income.person1HospitalCoverDays,
       person2HospitalCoverDays: plan.income.person2HospitalCoverDays,
+      dependantsHospitalCoverDays: plan.income.dependantsHospitalCoverDays,
+      spouseForFullYear: plan.personal.spouseForFullYear ?? plan.income.spouseForFullYear ?? true,
     });
     const helpRepaymentIncome = calculateHelpRepaymentIncome({
       person1Income: person1AnnualIncome,
@@ -1334,35 +1613,49 @@
       person2HasStslDebt: person2HasStsl,
       person1HasHelpDebt: plan.income.person1HasHelpDebt,
       person2HasHelpDebt: plan.income.person2HasHelpDebt,
+      person1StslRepaymentIncome: stslRepaymentIncome.person1,
+      person2StslRepaymentIncome: stslRepaymentIncome.person2,
     });
+    payrollEstimate.person1.stslCompulsoryRepayment = person1StslRepayment.annualRepayment;
+    payrollEstimate.person1.helpRepayment = person1StslRepayment.annualRepayment;
+    payrollEstimate.person1.repaymentIncome = stslRepaymentIncome.person1;
+    payrollEstimate.person1.stslProjectedClosingBalance = roundCurrency(Math.max(0, person1StslBalance - person1StslRepayment.annualRepayment));
+    payrollEstimate.person2.stslCompulsoryRepayment = person2StslRepayment.annualRepayment;
+    payrollEstimate.person2.helpRepayment = person2StslRepayment.annualRepayment;
+    payrollEstimate.person2.repaymentIncome = stslRepaymentIncome.person2;
+    payrollEstimate.person2.stslProjectedClosingBalance = roundCurrency(Math.max(0, person2StslBalance - person2StslRepayment.annualRepayment));
+    payrollEstimate.household.stslCompulsoryRepayment = roundCurrency(person1StslRepayment.annualRepayment + person2StslRepayment.annualRepayment);
+    payrollEstimate.household.helpRepayment = payrollEstimate.household.stslCompulsoryRepayment;
+    payrollEstimate.household.totalStslCompulsoryRepayments = payrollEstimate.household.stslCompulsoryRepayment;
     const helpRepaymentEstimate = {
       balance: totalStudyLoanBalance,
-      repaymentIncome: helpRepaymentIncome.estimatedRepaymentIncome,
-      annualRepayment: payrollEstimate.household.stslCompulsoryRepayment,
-      monthlyRepayment: roundCurrency(payrollEstimate.household.stslCompulsoryRepayment / MONTHS_PER_YEAR),
+      repaymentIncome: roundCurrency(stslRepaymentIncome.person1 + stslRepaymentIncome.person2),
+      annualRepayment: roundCurrency(person1StslRepayment.annualRepayment + person2StslRepayment.annualRepayment),
+      monthlyRepayment: roundCurrency((person1StslRepayment.annualRepayment + person2StslRepayment.annualRepayment) / MONTHS_PER_YEAR),
+      personLevelRepaymentIncome: stslRepaymentIncome,
       person1: {
         hasDebt: person1HasStsl,
         openingBalance: person1StslBalance,
         balance: person1StslBalance,
-        repaymentIncome: payrollEstimate.person1.repaymentIncome,
-        annualRepayment: payrollEstimate.person1.stslCompulsoryRepayment,
-        projectedClosingBalance: payrollEstimate.person1.stslProjectedClosingBalance,
-        effectOnNetIncome: payrollEstimate.person1.stslCompulsoryRepayment,
+        repaymentIncome: stslRepaymentIncome.person1,
+        annualRepayment: person1StslRepayment.annualRepayment,
+        projectedClosingBalance: roundCurrency(Math.max(0, person1StslBalance - person1StslRepayment.annualRepayment)),
+        effectOnNetIncome: person1StslRepayment.annualRepayment,
       },
       person2: {
         hasDebt: person2HasStsl,
         openingBalance: person2StslBalance,
         balance: person2StslBalance,
-        repaymentIncome: payrollEstimate.person2.repaymentIncome,
-        annualRepayment: payrollEstimate.person2.stslCompulsoryRepayment,
-        projectedClosingBalance: payrollEstimate.person2.stslProjectedClosingBalance,
-        effectOnNetIncome: payrollEstimate.person2.stslCompulsoryRepayment,
+        repaymentIncome: stslRepaymentIncome.person2,
+        annualRepayment: person2StslRepayment.annualRepayment,
+        projectedClosingBalance: roundCurrency(Math.max(0, person2StslBalance - person2StslRepayment.annualRepayment)),
+        effectOnNetIncome: person2StslRepayment.annualRepayment,
       },
-      projectedClosingBalance: roundCurrency(Math.max(0, totalStudyLoanBalance - payrollEstimate.household.stslCompulsoryRepayment)),
-      estimatedYearsToRepay: payrollEstimate.household.stslCompulsoryRepayment > 0 && totalStudyLoanBalance > 0
-        ? roundRatio(totalStudyLoanBalance / payrollEstimate.household.stslCompulsoryRepayment)
+      projectedClosingBalance: roundCurrency(Math.max(0, totalStudyLoanBalance - person1StslRepayment.annualRepayment - person2StslRepayment.annualRepayment)),
+      estimatedYearsToRepay: (person1StslRepayment.annualRepayment + person2StslRepayment.annualRepayment) > 0 && totalStudyLoanBalance > 0
+        ? roundRatio(totalStudyLoanBalance / (person1StslRepayment.annualRepayment + person2StslRepayment.annualRepayment))
         : null,
-      note: "Estimate only. STSL compulsory repayments are based on each selected person's repayment income and are capped by entered balances when available.",
+      note: "Estimate only. STSL compulsory repayments use each selected person's repayment income, including allocated taxable investment income and available reportable adjustments, and are capped by entered balances when available.",
     };
     const expenseBreakdown = annualExpenseBreakdown(plan);
     const annualCoreLivingExpenses = expenseBreakdown.living;
@@ -1373,8 +1666,9 @@
     const annualCreditCardRepayments = roundCurrency(nonNegative(plan.liabilities.creditCardMonthlyRepayment) * MONTHS_PER_YEAR);
     const annualRentalLoanCashflowRepayments = roundCurrency(rentalPropertyCashflow.annualHouseholdDebtDeduction);
     const annualDebtRepayments = roundCurrency(annualMortgageRepayments + annualCreditCardRepayments + annualRentalLoanCashflowRepayments);
-    const estimatedTaxAndHelp = roundCurrency(taxEstimate.incomeTax + taxEstimate.medicareLevy + taxEstimate.medicareLevySurcharge + helpRepaymentEstimate.annualRepayment);
-    const netIncomeAfterTaxHelp = roundCurrency(annualGrossIncome - taxEstimate.incomeTax - taxEstimate.medicareLevy - taxEstimate.medicareLevySurcharge - helpRepaymentEstimate.annualRepayment);
+    const medicareLevySurchargeForCashflow = nonNegative(taxEstimate.medicareLevySurcharge);
+    const estimatedTaxAndHelp = roundCurrency(taxEstimate.incomeTax + taxEstimate.medicareLevy + medicareLevySurchargeForCashflow + helpRepaymentEstimate.annualRepayment);
+    const netIncomeAfterTaxHelp = roundCurrency(annualGrossIncome - taxEstimate.incomeTax - taxEstimate.medicareLevy - medicareLevySurchargeForCashflow - helpRepaymentEstimate.annualRepayment);
     const annualInvestmentContributions = roundCurrency(nonNegative(plan.investing.annualInvestingTarget));
     const annualExtraSuperContributions = roundCurrency(nonNegative(plan.investing.extraSuperContributions));
     const cashSurplusBeforeInvesting = roundCurrency(netIncomeAfterTaxHelp - annualCoreLivingExpenses - annualDebtRepayments - annualOtherRegularExpenses);
@@ -1559,6 +1853,8 @@
     };
 
     return {
+      calculationVersion: CALCULATION_VERSION,
+      financialYear: FINANCIAL_YEAR,
       plan,
       people,
       loan,
@@ -1567,6 +1863,19 @@
       currentNetWorth,
       investmentBalance,
       accessibleInvestmentAssets,
+      liquidInvestmentAssets,
+      investmentPropertyGrossValue,
+      investmentPropertyDebt,
+      investmentPropertyEquity,
+      includeInvestmentPropertyEquityInFi,
+      accessibleFICapital,
+      totalIncomeProducingAssets,
+      fiAssetPolicy: {
+        includeInvestmentPropertyEquityInFi,
+        note: includeInvestmentPropertyEquityInFi
+          ? "Investment-property equity is included in FI capital by user selection; gross property value is reduced by linked rental-property debt."
+          : "Investment-property equity is reported separately and excluded from FI capital unless the user explicitly includes it. The family home is excluded unless a downsizing strategy is enabled.",
+      },
       superannuationBalance,
       superAccessibleToday,
       superAccessAge: SUPER_ACCESS_AGE,
@@ -1616,8 +1925,15 @@
       payrollEstimate,
       helpRepaymentEstimate,
       stslRepaymentEstimate: helpRepaymentEstimate,
+      stslRepaymentIncome,
+      personTaxAdjustments: {
+        person1: person1TaxAdjustments,
+        person2: person2TaxAdjustments,
+      },
       helpRepaymentIncome,
       taxConfiguration: {
+        calculationVersion: CALCULATION_VERSION,
+        financialYear: FINANCIAL_YEAR,
         taxYear: TAX_YEAR,
         financialYearConfig: ACTIVE_CONFIG,
         availableFinancialYears: Object.keys(FINANCIAL_YEAR_CONFIGS),
@@ -1650,16 +1966,26 @@
   }
 
   global.FFSCalculator = {
+    CALCULATION_VERSION,
+    FINANCIAL_YEAR,
     emptyPlan,
     clonePlan,
     annualize,
     annualRecurringExpenses,
     financialYearConfigs: FINANCIAL_YEAR_CONFIGS,
+    calculateResidentIncomeTax2026_27: taxBeforeMedicare,
+    calculateLITO,
+    individualTaxBreakdown,
     individualTaxEstimate,
     marginalTaxRate,
     estimateHelpRepayment,
+    calculatePersonSTSLRepaymentIncome,
+    calculatePersonMLSIncomeForThreshold,
+    calculatePersonMLSSurchargeBase,
+    calculateMedicareLevySurcharge,
     calculateHelpRepaymentIncome,
     calculatePayrollEstimate,
+    qualifyingEarningsAnnualAmount,
     calculateEmployerSuperForPerson,
     employerSuperSummary,
     incomeBreakdown,
