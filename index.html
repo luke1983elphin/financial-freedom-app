@@ -315,6 +315,7 @@
 
                 <div class="dashboard-card-grid dashboard-card-grid-secondary mt-6" id="secondMetricGrid"></div>
                 <div id="dashboardPassiveIncomeBreakdown" class="mt-4"></div>
+                <div id="financialProgressDashboardCard" class="mt-4"></div>
 
                 <div class="dashboard-chart-grid mt-6 grid gap-4 xl:grid-cols-2">
                   <article class="card">
@@ -359,6 +360,14 @@
                   <p class="mt-2 text-sm text-slate-500">These are starting assumptions only. You can change them at any time.</p>
                   <div id="assumptionsList" class="summary-grid mt-4"></div>
                 </details>
+              </section>
+
+              <section class="view-section hidden" data-view-panel="progress">
+                <div class="section-heading">
+                  <h2>Financial Progress</h2>
+                  <p>Compare a previous financial position with your current plan. This is optional and does not change your current financial plan.</p>
+                </div>
+                <div id="financialProgressRoot"></div>
               </section>
 
               <section class="view-section hidden" data-view-panel="cashflow">
@@ -671,7 +680,10 @@
                     <h3>Financial Freedom Report</h3>
                     <p>Generated from the current plan and saved scenarios.</p>
                   </div>
-                  <button class="btn btn-primary" type="button" id="reportPrintButton">Print / Export</button>
+                  <div class="report-toolbar-actions">
+                    <button class="btn" type="button" data-view="progress">Track Your Progress</button>
+                    <button class="btn btn-primary" type="button" id="reportPrintButton">Print / Export</button>
+                  </div>
                 </div>
 
                 <div id="financialReportBody" class="report-document"></div>

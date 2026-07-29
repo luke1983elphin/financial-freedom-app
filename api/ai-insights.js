@@ -140,6 +140,32 @@ function validateInsights(report) {
   };
 }
 
+function validateProgressComparison(comparison) {
+  if (!comparison || typeof comparison !== "object") return "Missing progress comparison.";
+  const requiredObjects = ["comparisonPeriod", "historical", "current", "movements"];
+  const missing = requiredObjects.filter((key) => !comparison[key] || typeof comparison[key] !== "object");
+  if (missing.length) return `Missing progress comparison sections: ${missing.join(", ")}.`;
+  if (!comparison.comparisonPeriod.fromDate || !comparison.comparisonPeriod.toDate) return "Missing comparison dates.";
+  if (!Number.isFinite(safeNumber(comparison.current.netWorth)) && !Number.isFinite(safeNumber(comparison.historical.netWorth))) return "Missing net worth comparison.";
+  return "";
+}
+
+function validateProgressInsights(report) {
+  if (!report || typeof report !== "object") return null;
+  const list = (items, limit = 8) => normaliseStringList(items, limit);
+  const summary = String(report.summary || "").trim();
+  if (!summary) return null;
+  return {
+    generatedAt: new Date().toISOString(),
+    summary,
+    keyImprovements: list(report.keyImprovements),
+    areasToReview: list(report.areasToReview),
+    progressTowardGoals: list(report.progressTowardGoals),
+    nextReviewActions: list(report.nextReviewActions),
+    disclaimer: DISCLAIMER,
+  };
+}
+
 function systemPrompt() {
   return [
     "You are generating private beta Financial Freedom Insights for an Australian household financial modelling app.",
@@ -169,6 +195,35 @@ function userPrompt(planSummary) {
       disclaimer: DISCLAIMER,
     },
     planSummary,
+  });
+}
+
+function progressSystemPrompt() {
+  return [
+    "You are analysing a household's financial progress between two dates in an Australian financial modelling app.",
+    "Use only the structured comparison values supplied by the application. Do not invent values, causes, events or assumptions.",
+    "Explain improvements and areas to review in plain English for users who are not financially experienced.",
+    "Distinguish facts from possible explanations. Where the cause of a movement is unknown, say it cannot be determined from the entered information.",
+    "Do not recommend specific financial products, investments, lenders, insurers or superannuation funds.",
+    "Do not provide personal financial advice or promise future outcomes.",
+    "Use cautious wording such as 'may', 'could', 'consider reviewing' and 'based on the information entered'.",
+    "Return only valid JSON matching the requested schema. No Markdown.",
+  ].join(" ");
+}
+
+function progressUserPrompt(progressComparison) {
+  return JSON.stringify({
+    task: "Generate a structured Progress Since Your Last Review insight from app-calculated comparison data.",
+    responseSchema: {
+      generatedAt: "ISO date string",
+      summary: "Two-sentence summary using actual supplied figures.",
+      keyImprovements: ["string"],
+      areasToReview: ["string"],
+      progressTowardGoals: ["string"],
+      nextReviewActions: ["string"],
+      disclaimer: DISCLAIMER,
+    },
+    progressComparison,
   });
 }
 
@@ -210,6 +265,44 @@ async function callOpenAi(planSummary) {
   }
 }
 
+async function callOpenAiProgress(progressComparison) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), Number(process.env.AI_INSIGHTS_TIMEOUT_MS || 30000));
+  try {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: DEFAULT_MODEL,
+        temperature: 0.2,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: progressSystemPrompt() },
+          { role: "user", content: progressUserPrompt(progressComparison) },
+        ],
+      }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const message = response.status === 429
+        ? "The private beta usage limit is busy. Please try again shortly."
+        : "The AI progress insight service was not available. Please try again later.";
+      const error = new Error(message);
+      error.status = response.status;
+      throw error;
+    }
+    const content = payload.choices?.[0]?.message?.content;
+    if (!content) return null;
+    return validateProgressInsights(JSON.parse(content));
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export default async function aiInsightsHandler(req, res) {
   if (req.method === "GET") {
     return sendJson(res, 200, {
@@ -234,6 +327,21 @@ export default async function aiInsightsHandler(req, res) {
   if (Buffer.byteLength(JSON.stringify(body || {}), "utf8") > MAX_REQUEST_BYTES) {
     return sendJson(res, 413, { error: "Request too large." });
   }
+  if (body.type === "progress") {
+    const progressComparison = sanitize(body.progressComparison);
+    const validationError = validateProgressComparison(progressComparison);
+    if (validationError) return sendJson(res, 400, { error: validationError });
+    try {
+      let progressInsights = await callOpenAiProgress(progressComparison);
+      if (!progressInsights) progressInsights = await callOpenAiProgress(progressComparison);
+      if (!progressInsights) return sendJson(res, 502, { error: "The AI progress response could not be read safely. Please try again." });
+      return sendJson(res, 200, { progressInsights });
+    } catch (error) {
+      if (error.name === "AbortError") return sendJson(res, 408, { error: "The AI progress insight timed out. Please try again." });
+      return sendJson(res, error.status === 429 ? 429 : 502, { error: error.message || "The AI progress insight could not be generated." });
+    }
+  }
+
   const planSummary = sanitize(body.planSummary);
   const validationError = validatePlanSummary(planSummary);
   if (validationError) return sendJson(res, 400, { error: validationError });
