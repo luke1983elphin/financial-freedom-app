@@ -1435,11 +1435,55 @@
     return options.sort((a, b) => b.score - a.score);
   }
 
-  function assetItemTotal(plan = {}, categories = []) {
+  function assetRecordCategory(item = {}) {
+    return String(item.category || item.type || "").trim();
+  }
+
+  function assetRecordValue(item = {}) {
+    return nonNegative(item.currentValue ?? item.value ?? item.balance ?? item.amount);
+  }
+
+  function assetRecordIncludesInFi(item = {}) {
+    return item.includeInFI !== false
+      && item.includeInFi !== false
+      && item.includeInFiAssets !== false
+      && item.excludeFromFI !== true
+      && item.excludeFromFi !== true
+      && item.isPersonalUse !== true;
+  }
+
+  function canonicalAssetRecords(plan = {}, categories = []) {
     const wanted = new Set(categories);
-    return (Array.isArray(plan.assetItems) ? plan.assetItems : [])
-      .filter((item) => wanted.has(item.type) || wanted.has(item.category))
-      .reduce((total, item) => total + nonNegative(item.value ?? item.balance ?? item.amount), 0);
+    const records = new Map();
+    (Array.isArray(plan.assetItems) ? plan.assetItems : []).forEach((item, index) => {
+      const category = assetRecordCategory(item);
+      if (!wanted.has(category) || !assetRecordIncludesInFi(item)) return;
+      const value = assetRecordValue(item);
+      const stableId = item.assetId || item.id || item.uid || item.key || `${category}:${String(item.name || item.description || "").trim().toLowerCase()}:${index}`;
+      const existing = records.get(stableId);
+      if (!existing || value > 0 || assetRecordValue(existing) <= 0) {
+        records.set(stableId, { ...item, category, value, canonicalAssetId: String(stableId) });
+      }
+    });
+    return Array.from(records.values());
+  }
+
+  function assetItemTotal(plan = {}, categories = []) {
+    return roundCurrency(canonicalAssetRecords(plan, categories)
+      .reduce((total, item) => total + assetRecordValue(item), 0));
+  }
+
+  function canonicalAssetAmount(plan = {}, categories = [], legacyAmount = 0) {
+    const records = canonicalAssetRecords(plan, categories);
+    const detailedTotal = roundCurrency(records.reduce((total, item) => total + assetRecordValue(item), 0));
+    const hasDetailedValue = records.some((item) => assetRecordValue(item) > 0);
+    return {
+      amount: hasDetailedValue ? detailedTotal : nonNegative(legacyAmount),
+      detailedTotal,
+      legacyAmount: nonNegative(legacyAmount),
+      source: hasDetailedValue ? "assetItems" : "legacy",
+      records,
+    };
   }
 
   function liabilityItemTotal(plan = {}, categories = []) {
@@ -1460,28 +1504,57 @@
     includeSuperOverride,
   } = {}) {
     const assets = plan.assets || {};
-    const grossLiquidInvestmentAssets = roundCurrency(
-      (Number.isFinite(Number(projectedInvestmentBalance))
-        ? nonNegative(projectedInvestmentBalance)
-        : nonNegative(assets.cash)
-          + nonNegative(assets.sharesEtfs)
-          + nonNegative(assets.crypto)
-          + assetItemTotal(plan, ["shares", "share", "etf", "managedFund", "managedFunds", "investmentBond", "investmentBonds", "crypto", "cryptocurrency", "businessInvestment", "privateInvestment", "otherInvestment", "other"]))
-      + nonNegative(assets.offsetBalance)
-      + downsizingBoost,
+    const cashAsset = canonicalAssetAmount(plan, ["cash"], assets.cash);
+    const offsetAsset = canonicalAssetAmount(plan, ["offset"], assets.offsetBalance);
+    const sharesAsset = canonicalAssetAmount(plan, ["shares", "share", "etf"], assets.sharesEtfs);
+    const cryptoAsset = canonicalAssetAmount(plan, ["crypto", "cryptocurrency"], assets.crypto ?? assets.cryptocurrency);
+    const managedFundAsset = canonicalAssetAmount(plan, ["managedFund", "managedFunds"], assets.managedFunds);
+    const investmentBondAsset = canonicalAssetAmount(plan, ["investmentBond", "investmentBonds"], assets.investmentBonds);
+    const otherInvestableAsset = canonicalAssetAmount(
+      plan,
+      ["businessInvestment", "privateInvestment", "otherInvestment", "other"],
+      nonNegative(assets.businessInvestments) + nonNegative(assets.privateInvestments) + nonNegative(assets.otherInvestmentAssets),
     );
+    const investmentProjectionStartingBalance = roundCurrency(Number.isFinite(Number(projectedInvestmentBalance))
+      ? nonNegative(projectedInvestmentBalance)
+      : cashAsset.amount
+        + sharesAsset.amount
+        + cryptoAsset.amount
+        + managedFundAsset.amount
+        + investmentBondAsset.amount
+        + otherInvestableAsset.amount
+        + downsizingBoost);
+    const grossLiquidInvestmentAssets = roundCurrency(investmentProjectionStartingBalance + offsetAsset.amount);
     const otherInvestmentDebt = liabilityItemTotal(plan, ["investmentLoan", "shareInvestmentLoan", "managedFundLoan"]);
     const liquidInvestmentAssets = roundCurrency(Math.max(0, grossLiquidInvestmentAssets - otherInvestmentDebt));
-    const investmentPropertyGrossValue = roundCurrency(nonNegative(assets.otherPropertyValue) + assetItemTotal(plan, ["rentalProperty", "investmentProperty"]));
+    const investmentPropertyAsset = canonicalAssetAmount(plan, ["otherProperty", "rentalProperty", "investmentProperty"], assets.otherPropertyValue);
+    const investmentPropertyGrossValue = roundCurrency(investmentPropertyAsset.amount);
     const investmentPropertyDebt = roundCurrency(nonNegative(rentalPropertyDebt) || liabilityItemTotal(plan, ["rentalPropertyLoan"]));
     const investmentPropertyEquity = roundCurrency(Math.max(0, investmentPropertyGrossValue - investmentPropertyDebt));
     const availableSuperBalance = roundCurrency(Number.isFinite(Number(projectedSuperBalance))
       ? nonNegative(projectedSuperBalance)
-      : nonNegative(superBalance));
+      : Number.isFinite(Number(superBalance))
+        ? nonNegative(superBalance)
+        : nonNegative(assets.superPerson1) + nonNegative(assets.superPerson2));
     const superIncludedInNetFiAssets = includeSuperOverride ?? (nonNegative(currentAge) >= SUPER_ACCESS_AGE);
     const superIncludedAmount = superIncludedInNetFiAssets ? availableSuperBalance : 0;
     const netFiAssets = roundCurrency(liquidInvestmentAssets + investmentPropertyEquity + superIncludedAmount);
     return {
+      canonicalAssetSource: {
+        cash: cashAsset.source,
+        offset: offsetAsset.source,
+        sharesEtfs: sharesAsset.source,
+        crypto: cryptoAsset.source,
+        investmentProperty: investmentPropertyAsset.source,
+      },
+      cashFiAssets: cashAsset.amount,
+      offsetFiAssets: offsetAsset.amount,
+      sharesEtfsFiAssets: sharesAsset.amount,
+      cryptoFiAssets: cryptoAsset.amount,
+      managedFundFiAssets: managedFundAsset.amount,
+      investmentBondFiAssets: investmentBondAsset.amount,
+      otherInvestableFiAssets: otherInvestableAsset.amount,
+      investmentProjectionStartingBalance,
       grossLiquidInvestmentAssets,
       liquidInvestmentAssets,
       otherInvestmentDebt,
@@ -1494,6 +1567,10 @@
       netFiAssets,
       totalIncomeProducingAssets: roundCurrency(liquidInvestmentAssets + investmentPropertyEquity + availableSuperBalance),
     };
+  }
+
+  function calculateNetFIAssets(financialData = {}) {
+    return calculateNetFiAssetSummary(financialData).netFiAssets;
   }
 
   function calculatePlan(planInput) {
@@ -1558,10 +1635,7 @@
     });
     const accessibleInvestmentAssets = currentFiAssetSummary.liquidInvestmentAssets;
     const investmentBalance = roundCurrency(
-      nonNegative(plan.assets.cash)
-      + nonNegative(plan.assets.sharesEtfs)
-      + nonNegative(plan.assets.crypto)
-      + downsizingBoost,
+      currentFiAssetSummary.investmentProjectionStartingBalance,
     );
     const liquidInvestmentAssets = currentFiAssetSummary.liquidInvestmentAssets;
     const grossLiquidInvestmentAssets = currentFiAssetSummary.grossLiquidInvestmentAssets;
@@ -1760,7 +1834,7 @@
       return monthIndex + 1 > loan.payoffMonth ? nonNegative(plan.liabilities.monthlyRepayment || plan.expenses.mortgageRepayments) : 0;
     });
     const investmentProjection = projectBalance({
-      startingBalance: nonNegative(plan.assets.cash) + nonNegative(plan.assets.sharesEtfs) + nonNegative(plan.assets.crypto) + downsizingBoost,
+      startingBalance: investmentBalance,
       annualContribution: plan.investing.annualInvestingTarget,
       expectedReturn: expectedInvestmentReturn,
       years: 30,
@@ -1955,6 +2029,15 @@
       currentNetWorth,
       investmentBalance,
       accessibleInvestmentAssets,
+      canonicalAssetSource: currentFiAssetSummary.canonicalAssetSource,
+      cashFiAssets: currentFiAssetSummary.cashFiAssets,
+      offsetFiAssets: currentFiAssetSummary.offsetFiAssets,
+      sharesEtfsFiAssets: currentFiAssetSummary.sharesEtfsFiAssets,
+      cryptoFiAssets: currentFiAssetSummary.cryptoFiAssets,
+      managedFundFiAssets: currentFiAssetSummary.managedFundFiAssets,
+      investmentBondFiAssets: currentFiAssetSummary.investmentBondFiAssets,
+      otherInvestableFiAssets: currentFiAssetSummary.otherInvestableFiAssets,
+      investmentProjectionStartingBalance: currentFiAssetSummary.investmentProjectionStartingBalance,
       grossLiquidInvestmentAssets,
       liquidInvestmentAssets,
       otherInvestmentDebt,
@@ -2096,6 +2179,7 @@
     calculateRentalCashflowSummary,
     passiveIncomeBreakdown,
     calculateNetFiAssetSummary,
+    calculateNetFIAssets,
     amortiseLoan,
     calculateOffsetBenefit,
     calculateLoanSummary,

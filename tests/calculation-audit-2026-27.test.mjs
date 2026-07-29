@@ -491,6 +491,78 @@ test("Financial Freedom progress uses net FI assets while passive income stays s
   assert.ok(futureResult.targetAgeNetFiAssets >= 300000);
 });
 
+test("Net FI assets count shares and crypto once across legacy fields and canonical asset records", () => {
+  function resultFor({ legacyShares = 0, legacyCrypto = 0, assetItems = [] } = {}) {
+    const { CALC, plan } = basePlan();
+    plan.personal.person1Age = 45;
+    plan.personal.targetAnnualSpending = 100000;
+    plan.investing.safeWithdrawalRatePct = 4;
+    plan.assets.cash = 30000;
+    plan.assets.sharesEtfs = legacyShares;
+    plan.assets.crypto = legacyCrypto;
+    plan.assetItems = assetItems;
+    return { CALC, plan, result: CALC.calculatePlan(plan) };
+  }
+
+  assert.equal(resultFor({ legacyShares: 100000 }).result.financialIndependenceAssets, 130000);
+  assert.equal(resultFor({ assetItems: [{ id: "shares-a", category: "shares", value: 100000 }] }).result.financialIndependenceAssets, 130000);
+  let duplicateShares = resultFor({
+    legacyShares: 100000,
+    assetItems: [{ id: "asset-shares", category: "shares", value: 100000 }],
+  }).result;
+  assert.equal(duplicateShares.financialIndependenceAssets, 130000);
+  assert.equal(duplicateShares.canonicalAssetSource.sharesEtfs, "assetItems");
+
+  assert.equal(resultFor({ legacyCrypto: 20000 }).result.financialIndependenceAssets, 50000);
+  assert.equal(resultFor({ assetItems: [{ id: "crypto-a", category: "crypto", value: 20000 }] }).result.financialIndependenceAssets, 50000);
+  let duplicateCrypto = resultFor({
+    legacyCrypto: 20000,
+    assetItems: [{ id: "asset-crypto", category: "crypto", value: 20000 }],
+  }).result;
+  assert.equal(duplicateCrypto.financialIndependenceAssets, 50000);
+  assert.equal(duplicateCrypto.canonicalAssetSource.crypto, "assetItems");
+
+  const bothLegacyAndRecords = resultFor({
+    legacyShares: 100000,
+    legacyCrypto: 20000,
+    assetItems: [
+      { id: "asset-shares", category: "shares", value: 100000 },
+      { id: "asset-crypto", category: "crypto", value: 20000 },
+    ],
+  }).result;
+  assert.equal(bothLegacyAndRecords.grossLiquidInvestmentAssets, 150000);
+  assert.equal(bothLegacyAndRecords.financialIndependenceAssets, 150000);
+  assert.equal(bothLegacyAndRecords.financialFreedomProgressRaw, 6);
+
+  const duplicateAssetRecord = resultFor({
+    legacyShares: 100000,
+    assetItems: [
+      { id: "shares-same", category: "shares", value: 100000 },
+      { id: "shares-same", category: "shares", value: 100000 },
+    ],
+  }).result;
+  assert.equal(duplicateAssetRecord.financialIndependenceAssets, 130000);
+
+  const separatePortfolios = resultFor({
+    legacyShares: 100000,
+    assetItems: [
+      { id: "shares-vanguard", category: "shares", value: 60000 },
+      { id: "shares-broker-2", category: "shares", value: 40000 },
+    ],
+  }).result;
+  assert.equal(separatePortfolios.financialIndependenceAssets, 130000);
+
+  const { CALC, plan } = resultFor({
+    legacyShares: 100000,
+    legacyCrypto: 20000,
+    assetItems: [
+      { id: "asset-shares", category: "shares", value: 100000 },
+      { id: "asset-crypto", category: "crypto", value: 20000 },
+    ],
+  });
+  assert.equal(CALC.calculateNetFIAssets({ plan, currentAge: 45 }), 150000);
+});
+
 test("saved records and snapshots retain calculation version metadata", () => {
   const appSource = readFileSync(APP_PATH, "utf8");
   assert.match(appSource, /const CALCULATION_VERSION = CALC\?\.CALCULATION_VERSION \|\| "2026\.27\.1"/);

@@ -2238,12 +2238,12 @@
     const otherDebtsFromCollections = liabilityItems
       .filter((item) => !["homeLoan", "creditCard", "hecsHelp"].includes(item.type))
       .reduce((total, item) => total + numberValue(item.balance), 0);
-    const cashAndOffsets = numberValue(assets.cash)
-      + numberValue(assets.offsetBalance)
-      + categoryTotal(assetItems, ["cash", "offset"]);
-    const investmentsOutsideSuper = numberValue(assets.sharesEtfs)
-      + numberValue(assets.crypto)
-      + categoryTotal(assetItems, ["shares", "crypto", "other"]);
+    const cashAndOffsets = numberValue(result.cashFiAssets) + numberValue(result.offsetFiAssets);
+    const investmentsOutsideSuper = numberValue(result.sharesEtfsFiAssets)
+      + numberValue(result.cryptoFiAssets)
+      + numberValue(result.managedFundFiAssets)
+      + numberValue(result.investmentBondFiAssets)
+      + numberValue(result.otherInvestableFiAssets);
     const superannuation = numberValue(assets.superPerson1)
       + numberValue(assets.superPerson2)
       + categoryTotal(assetItems, ["super"]);
@@ -2282,7 +2282,7 @@
       assets: {
         source: "user-entered",
         home: numberValue(assets.homeValue || categoryTotal(assetItems, ["home"])),
-        otherProperty: numberValue(assets.otherPropertyValue || categoryTotal(assetItems, ["otherProperty"])),
+        otherProperty: numberValue(result.investmentPropertyGrossValue || assets.otherPropertyValue || categoryTotal(assetItems, ["otherProperty"])),
         cashAndOffsets,
         investmentsOutsideSuper,
         superannuation,
@@ -2462,10 +2462,10 @@
         investmentPropertyValue: numberValue(assets.otherPropertyValue),
         cash: numberValue(assets.cash),
         offsetBalance: numberValue(assets.offsetBalance),
-        sharesEtfs: numberValue(assets.sharesEtfs),
-        managedFunds: categoryTotal(sourcePlan.assetItems, ["managedFund", "managedFunds"]),
-        cryptocurrency: numberValue(assets.crypto),
-        otherInvestments: categoryTotal(sourcePlan.assetItems, ["other"]),
+        sharesEtfs: numberValue(result.sharesEtfsFiAssets ?? assets.sharesEtfs),
+        managedFunds: numberValue(result.managedFundFiAssets ?? categoryTotal(sourcePlan.assetItems, ["managedFund", "managedFunds"])),
+        cryptocurrency: numberValue(result.cryptoFiAssets ?? assets.crypto),
+        otherInvestments: numberValue(result.otherInvestableFiAssets ?? categoryTotal(sourcePlan.assetItems, ["other"])),
         otherAssets: numberValue(assets.vehiclesPersonalAssets),
       },
       liabilities: {
@@ -5960,7 +5960,7 @@
     lineChart("investmentChart", [{
       label: "Investment balance",
       color: "#0f9f6e",
-      points: [{ x: 0, y: plan.assets.cash + plan.assets.sharesEtfs + plan.assets.crypto + (result.downsizingInvestmentBoost || 0) }, ...result.investmentProjection.map((row) => ({ x: row.year, y: row.closingBalance }))],
+      points: [{ x: 0, y: result.investmentBalance }, ...result.investmentProjection.map((row) => ({ x: row.year, y: row.closingBalance }))],
     }], { height: 260, xMarks: [0, 10, 20, 30], xLabel: (mark) => `${mark}y` });
   }
 

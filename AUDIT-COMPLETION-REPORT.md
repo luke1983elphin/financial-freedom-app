@@ -21,7 +21,9 @@ Audit copy only. Do not merge this package to main without separate review.
 - `calculator.js:539` `employerSuperForSalaryItem`
 - `calculator.js:747` `calculateRentalPropertyCashflow`
 - `calculator.js:879` `passiveIncomeBreakdown`
-- `calculator.js:1452` `calculateNetFiAssetSummary`
+- `calculator.js:1452` `canonicalAssetRecords`
+- `calculator.js:1477` `calculateNetFiAssetSummary`
+- `calculator.js:1549` `calculateNetFIAssets`
 - `calculator.js:1295` `personTaxAdjustmentInputs`
 - `calculator.js:1308` `householdTaxEstimate`
 - `calculator.js:1438` `calculatePlan`
@@ -155,6 +157,18 @@ Added central net-FI-assets selector:
 
 `calculateNetFiAssetSummary(...)`
 
+Added direct helper:
+
+`calculateNetFIAssets(...)`
+
+Double-count source fixed:
+
+The previous Net FI Assets implementation added `assets.sharesEtfs` and `assets.crypto`, then also added matching detailed `assetItems` categories. The app mirrors `assetItems` back into those legacy fields for saved-plan compatibility, so legacy plans containing both shapes could count the same shares or crypto twice.
+
+New canonical source rule:
+
+Detailed `assetItems` are the canonical source for shares, ETFs, managed funds, crypto, cash, offset and investment property where a non-zero detailed record exists. Legacy fields such as `assets.sharesEtfs` and `assets.crypto` are fallback-only when no detailed value exists for that category. Duplicate detailed records with the same stable asset ID are counted once; genuinely separate holdings with different IDs remain counted separately.
+
 Primary Financial Freedom Progress now uses:
 
 `Financial Freedom Progress = current net FI assets / target FI assets * 100`
@@ -168,6 +182,10 @@ Added outputs:
 - `liquidInvestmentAssets`
 - `grossLiquidInvestmentAssets`
 - `otherInvestmentDebt`
+- `canonicalAssetSource`
+- `sharesEtfsFiAssets`
+- `cryptoFiAssets`
+- `investmentProjectionStartingBalance`
 - `investmentPropertyGrossValue`
 - `investmentPropertyDebt`
 - `investmentPropertyEquity`
@@ -243,9 +261,9 @@ Final packaged run:
 - Engagement helpers: 4 passed
 - Tax integration: 7 passed
 - Financial progress history: 5 passed
-- Second-pass audit regressions: 12 passed
+- Second-pass audit regressions: 13 passed
 
-Total: 37 passed, 0 failed.
+Total: 38 passed, 0 failed.
 
 ## Confirmations
 
@@ -257,6 +275,9 @@ Total: 37 passed, 0 failed.
 - Passive rental income is shown separately from principal repayments.
 - Household cash surplus uses rental cashflow after principal.
 - Financial Freedom Progress is based on current net FI assets divided by target FI assets, not passive income.
+- Shares and crypto are counted once using canonical asset records, with legacy mirror fields used only as fallback values.
+- Legacy saved plans that contain both `assetItems` and `assets.sharesEtfs` / `assets.crypto` no longer double count those holdings.
+- Separate share portfolios with different stable IDs remain counted as separate legitimate assets.
 - Passive income, passive-income coverage and estimated sustainable income are displayed separately as supporting metrics.
 - Investment property values are counted only as net equity after linked rental-property debt.
 - Family home value and home loan balance do not affect current net FI assets.
