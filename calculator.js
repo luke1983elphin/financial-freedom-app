@@ -3,30 +3,48 @@
   const CHECKPOINT_YEARS = [5, 10, 20, 30];
   const SUPER_ACCESS_AGE = 60;
   const SUPER_CONTRIBUTIONS_TAX_RATE = 0.15;
-  const EMPLOYER_SUPER_RATE = 0.12;
-  const CONCESSIONAL_SUPER_CAP = 30000;
-  const MEDICARE_LEVY_RATE = 0.02;
-  const TAX_YEAR = "2026-27";
-  const HELP_THRESHOLD = 69528;
   const DAYS_PER_YEAR = 365;
-  const MLS_THRESHOLDS_2026_27 = {
-    single: [105000, 123000, 164000],
-    family: [210000, 246000, 328000],
-    dependentChildIncrement: 1500,
-    rates: [0, 0.01, 0.0125, 0.015],
+  const DEFAULT_TAX_YEAR = "2026-27";
+  const FINANCIAL_YEAR_CONFIGS = {
+    "2026-27": {
+      taxYear: "2026-27",
+      employerSuperRate: 0.12,
+      employerSuperMaximumContributionBase: 270830,
+      concessionalSuperCap: 32500,
+      medicareLevyRate: 0.02,
+      taxBrackets: [
+        { threshold: 0, rate: 0 },
+        { threshold: 18200, rate: 0.15 },
+        { threshold: 45000, rate: 0.30 },
+        { threshold: 135000, rate: 0.37 },
+        { threshold: 190000, rate: 0.45 },
+      ],
+      stsl: {
+        threshold: 69528,
+        brackets: [
+          { threshold: 69528, upper: 129717, baseRepayment: 0, marginalRate: 0.15 },
+          { threshold: 129717, upper: 186050, baseRepayment: 9028.5, marginalRate: 0.17 },
+          { threshold: 186050, totalIncomeRate: 0.10 },
+        ],
+      },
+      medicareLevySurcharge: {
+        single: [105000, 123000, 164000],
+        family: [210000, 246000, 328000],
+        dependentChildIncrement: 1500,
+        rates: [0, 0.01, 0.0125, 0.015],
+      },
+    },
   };
-  const TAX_BRACKETS_2026_27 = [
-    { threshold: 0, rate: 0 },
-    { threshold: 18200, rate: 0.15 },
-    { threshold: 45000, rate: 0.30 },
-    { threshold: 135000, rate: 0.37 },
-    { threshold: 190000, rate: 0.45 },
-  ];
-  const HELP_REPAYMENT_BRACKETS_2026_27 = [
-    { threshold: 69528, upper: 129717, baseRepayment: 0, marginalRate: 0.15 },
-    { threshold: 129717, upper: 186050, baseRepayment: 9028.5, marginalRate: 0.17 },
-    { threshold: 186050, totalIncomeRate: 0.10 },
-  ];
+  const TAX_YEAR = DEFAULT_TAX_YEAR;
+  const ACTIVE_CONFIG = FINANCIAL_YEAR_CONFIGS[TAX_YEAR];
+  const EMPLOYER_SUPER_RATE = ACTIVE_CONFIG.employerSuperRate;
+  const EMPLOYER_SUPER_MAXIMUM_CONTRIBUTION_BASE = ACTIVE_CONFIG.employerSuperMaximumContributionBase;
+  const CONCESSIONAL_SUPER_CAP = ACTIVE_CONFIG.concessionalSuperCap;
+  const MEDICARE_LEVY_RATE = ACTIVE_CONFIG.medicareLevyRate;
+  const HELP_THRESHOLD = ACTIVE_CONFIG.stsl.threshold;
+  const MLS_THRESHOLDS_2026_27 = ACTIVE_CONFIG.medicareLevySurcharge;
+  const TAX_BRACKETS_2026_27 = ACTIVE_CONFIG.taxBrackets;
+  const HELP_REPAYMENT_BRACKETS_2026_27 = ACTIVE_CONFIG.stsl.brackets;
   const STATUS = { GREEN: "green", AMBER: "amber", RED: "red" };
 
   function number(value) {
@@ -131,15 +149,18 @@
     }
 
     const uncappedRepayment = Math.max(0, calculatedRepayment);
-    const annualRepayment = roundCurrency(currentBalance > 0 ? Math.min(currentBalance, uncappedRepayment) : uncappedRepayment);
+    const annualRepayment = roundCurrency(hasDebt && currentBalance > 0 ? Math.min(currentBalance, uncappedRepayment) : 0);
+    const projectedClosingBalance = roundCurrency(Math.max(0, currentBalance - annualRepayment));
     const effectiveRate = income > 0 ? roundRatio(annualRepayment / income) : 0;
     return {
+      openingBalance: currentBalance,
       balance: currentBalance,
       repaymentIncome: income,
       rate: effectiveRate,
       marginalRate,
       annualRepayment,
       monthlyRepayment: roundCurrency(annualRepayment / MONTHS_PER_YEAR),
+      projectedClosingBalance,
       estimatedYearsToRepay: annualRepayment > 0 ? roundRatio(currentBalance / annualRepayment) : null,
       balanceKnown: currentBalance > 0,
       note: "Estimate only. STSL compulsory repayments use repayment income, marginal 2026-27 rates and are capped at the current balance when a balance is entered.",
@@ -269,8 +290,10 @@
     const p2HasStsl = booleanWithLegacy(person2HasStslDebt, person2HasHelpDebt, p2HelpDebt > 0);
     const p1Help = estimateStudyLoanRepayment(p1RepaymentIncome, p1HelpDebt, p1HasStsl).annualRepayment;
     const p2Help = estimateStudyLoanRepayment(p2RepaymentIncome, p2HelpDebt, p2HasStsl).annualRepayment;
-    const buildPerson = (gross, taxableIncome, repaymentIncome, allocatedExtraSuper, otherPayrollDeductions, helpRepayment) => {
+    const buildPerson = (gross, taxableIncome, repaymentIncome, allocatedExtraSuper, otherPayrollDeductions, helpRepayment, openingStslBalance) => {
       const tax = individualTaxBreakdown(taxableIncome);
+      const stslOpeningBalance = nonNegative(openingStslBalance);
+      const stslProjectedClosingBalance = roundCurrency(Math.max(0, stslOpeningBalance - nonNegative(helpRepayment)));
       return {
         grossEmploymentIncome: roundCurrency(gross),
         taxableIncome: roundCurrency(taxableIncome),
@@ -280,14 +303,16 @@
         medicareLevy: tax.medicareLevy,
         helpRepayment: roundCurrency(helpRepayment),
         stslCompulsoryRepayment: roundCurrency(helpRepayment),
+        stslOpeningBalance,
+        stslProjectedClosingBalance,
         allocatedExtraSuper: roundCurrency(allocatedExtraSuper),
         salarySacrifice: roundCurrency(allocatedExtraSuper),
         otherPayrollDeductions: roundCurrency(otherPayrollDeductions),
         estimatedNetEmploymentIncome: roundCurrency(Math.max(0, gross - tax.incomeTax - tax.medicareLevy - helpRepayment - allocatedExtraSuper - otherPayrollDeductions)),
       };
     };
-    const person1 = buildPerson(gross1, p1Taxable, p1RepaymentIncome, p1Sacrifice, p1OtherDeductions, p1Help);
-    const person2 = buildPerson(gross2, p2Taxable, p2RepaymentIncome, p2Sacrifice, p2OtherDeductions, p2Help);
+    const person1 = buildPerson(gross1, p1Taxable, p1RepaymentIncome, p1Sacrifice, p1OtherDeductions, p1Help, p1HelpDebt);
+    const person2 = buildPerson(gross2, p2Taxable, p2RepaymentIncome, p2Sacrifice, p2OtherDeductions, p2Help, p2HelpDebt);
     return {
       person1,
       person2,
@@ -321,8 +346,11 @@
 
   function normaliseIncomeType(value, index = 0) {
     const text = String(value || "").trim();
-    if (["salaryWages", "salary", "wages", "employment"].includes(text)) return "salaryWages";
-    if (["interest", "rentalNetCashIncome", "dividends", "distributions", "other"].includes(text)) return text;
+    if (["salaryWages", "salary_wages", "salary", "wages", "employment"].includes(text)) return "salaryWages";
+    if (["rentalNetCashIncome", "rental_net_profit", "rentalNetProfit", "rental"].includes(text)) return "rentalNetCashIncome";
+    if (["distribution_income", "distributionIncome", "distributions"].includes(text)) return "distributions";
+    if (["other_taxable_income", "otherTaxableIncome", "other"].includes(text)) return "other";
+    if (["interest", "dividends"].includes(text)) return text;
     return index < 2 ? "salaryWages" : "other";
   }
 
@@ -340,11 +368,19 @@
     if (items.length) {
       return items.map((item, index) => {
         const type = normaliseIncomeType(item.type || item.incomeType, index);
+        const owner = normaliseIncomeOwner(item.owner || item.incomeOwner, type, index);
+        const person1AllocationPercentage = number(item.person1AllocationPercentage ?? item.person1AllocationPct);
+        const person2AllocationPercentage = number(item.person2AllocationPercentage ?? item.person2AllocationPct);
         return {
           ...item,
           type,
-          owner: normaliseIncomeOwner(item.owner || item.incomeOwner, type, index),
+          owner,
           amount: number(item.amount),
+          cashDividend: number(item.cashDividend),
+          frankingCredits: number(item.frankingCredits),
+          totalTaxableGrossedUpDividend: number(item.totalTaxableGrossedUpDividend ?? item.grossedUpDividend),
+          person1AllocationPercentage,
+          person2AllocationPercentage,
           frequency: type === "rentalNetCashIncome" ? "annually" : item.frequency || "annually",
         };
       });
@@ -356,24 +392,77 @@
     ];
   }
 
+  function incomeCashAnnualAmount(item = {}) {
+    const type = normaliseIncomeType(item.type || item.incomeType);
+    if (type === "dividends" && (nonNegative(item.cashDividend) > 0 || nonNegative(item.frankingCredits) > 0 || nonNegative(item.totalTaxableGrossedUpDividend) > 0)) {
+      return roundCurrency(annualize(nonNegative(item.cashDividend) || nonNegative(item.amount), item.frequency || "annually"));
+    }
+    return roundCurrency(annualize(item.amount, item.frequency || "annually"));
+  }
+
+  function incomeTaxableAnnualAmount(item = {}) {
+    const type = normaliseIncomeType(item.type || item.incomeType);
+    if (type === "dividends") {
+      const grossedUp = nonNegative(item.totalTaxableGrossedUpDividend ?? item.grossedUpDividend);
+      if (grossedUp > 0) return roundCurrency(annualize(grossedUp, item.frequency || "annually"));
+      const cashDividend = nonNegative(item.cashDividend);
+      const frankingCredits = nonNegative(item.frankingCredits);
+      if (cashDividend > 0 || frankingCredits > 0) {
+        return roundCurrency(annualize(cashDividend + frankingCredits, item.frequency || "annually"));
+      }
+    }
+    return incomeCashAnnualAmount(item);
+  }
+
+  function incomeAllocation(item = {}) {
+    const type = normaliseIncomeType(item.type || item.incomeType);
+    const owner = normaliseIncomeOwner(item.owner || item.incomeOwner, type);
+    if (owner === "person1") return { person1: 1, person2: 0 };
+    if (owner === "person2") return { person1: 0, person2: 1 };
+    let p1 = number(item.person1AllocationPercentage ?? item.person1AllocationPct);
+    let p2 = number(item.person2AllocationPercentage ?? item.person2AllocationPct);
+    if (p1 <= 0 && p2 <= 0) {
+      p1 = 50;
+      p2 = 50;
+    } else if (p1 > 0 && p2 <= 0) {
+      p2 = Math.max(0, 100 - p1);
+    } else if (p2 > 0 && p1 <= 0) {
+      p1 = Math.max(0, 100 - p2);
+    }
+    const total = p1 + p2;
+    if (total <= 0) return { person1: 0.5, person2: 0.5 };
+    return {
+      person1: roundRatio(p1 / total),
+      person2: roundRatio(p2 / total),
+    };
+  }
+
   function incomeBreakdown(plan = {}) {
     return normalisedIncomeItems(plan).reduce((summary, item) => {
-      const annualAmount = roundCurrency(annualize(item.amount, item.frequency));
+      const annualAmount = incomeCashAnnualAmount(item);
+      const taxableAmount = incomeTaxableAnnualAmount(item);
       const owner = normaliseIncomeOwner(item.owner, item.type);
       const type = normaliseIncomeType(item.type);
+      const allocation = incomeAllocation(item);
       summary.total = roundCurrency(summary.total + annualAmount);
+      summary.taxableTotal = roundCurrency(summary.taxableTotal + taxableAmount);
       if (type === "salaryWages") {
         if (owner === "person2") summary.person2Salary = roundCurrency(summary.person2Salary + annualAmount);
         else summary.person1Salary = roundCurrency(summary.person1Salary + annualAmount);
       } else if (owner === "person1") {
         summary.person1Other = roundCurrency(summary.person1Other + annualAmount);
+        summary.person1TaxableOther = roundCurrency(summary.person1TaxableOther + taxableAmount);
       } else if (owner === "person2") {
         summary.person2Other = roundCurrency(summary.person2Other + annualAmount);
+        summary.person2TaxableOther = roundCurrency(summary.person2TaxableOther + taxableAmount);
       } else {
         summary.jointOther = roundCurrency(summary.jointOther + annualAmount);
+        summary.jointOtherTaxable = roundCurrency(summary.jointOtherTaxable + taxableAmount);
+        summary.person1TaxableOther = roundCurrency(summary.person1TaxableOther + taxableAmount * allocation.person1);
+        summary.person2TaxableOther = roundCurrency(summary.person2TaxableOther + taxableAmount * allocation.person2);
       }
-      summary.person1Taxable = roundCurrency(summary.person1Salary + summary.person1Other + summary.jointOther / 2);
-      summary.person2Taxable = roundCurrency(summary.person2Salary + summary.person2Other + summary.jointOther / 2);
+      summary.person1Taxable = roundCurrency(summary.person1Salary + summary.person1TaxableOther);
+      summary.person2Taxable = roundCurrency(summary.person2Salary + summary.person2TaxableOther);
       summary.otherIncome = roundCurrency(summary.person1Other + summary.person2Other + summary.jointOther);
       return summary;
     }, {
@@ -381,15 +470,19 @@
       person2Salary: 0,
       person1Other: 0,
       person2Other: 0,
+      person1TaxableOther: 0,
+      person2TaxableOther: 0,
       jointOther: 0,
+      jointOtherTaxable: 0,
       person1Taxable: 0,
       person2Taxable: 0,
       otherIncome: 0,
       total: 0,
+      taxableTotal: 0,
     });
   }
 
-  function calculateEmployerSuperForPerson(personId, incomes = [], superRate = EMPLOYER_SUPER_RATE) {
+  function calculateEmployerSuperForPerson(personId, incomes = [], superRate = EMPLOYER_SUPER_RATE, maximumContributionBase = EMPLOYER_SUPER_MAXIMUM_CONTRIBUTION_BASE) {
     const owner = personId === "person2" ? "person2" : "person1";
     const salary = (Array.isArray(incomes) ? incomes : []).reduce((total, item, index) => {
       const type = normaliseIncomeType(item.type || item.incomeType, index);
@@ -397,13 +490,14 @@
       if (type !== "salaryWages" || incomeOwner !== owner) return total;
       return total + annualize(item.amount, item.frequency || "annually");
     }, 0);
-    return roundCurrency(nonNegative(salary) * nonNegative(superRate));
+    const cappedSalary = maximumContributionBase > 0 ? Math.min(nonNegative(salary), nonNegative(maximumContributionBase)) : nonNegative(salary);
+    return roundCurrency(cappedSalary * nonNegative(superRate));
   }
 
   function employerSuperSummary(plan = {}) {
     const incomes = normalisedIncomeItems(plan);
-    const person1Calculated = calculateEmployerSuperForPerson("person1", incomes, EMPLOYER_SUPER_RATE);
-    const person2Calculated = calculateEmployerSuperForPerson("person2", incomes, EMPLOYER_SUPER_RATE);
+    const person1Calculated = calculateEmployerSuperForPerson("person1", incomes, EMPLOYER_SUPER_RATE, EMPLOYER_SUPER_MAXIMUM_CONTRIBUTION_BASE);
+    const person2Calculated = calculateEmployerSuperForPerson("person2", incomes, EMPLOYER_SUPER_RATE, EMPLOYER_SUPER_MAXIMUM_CONTRIBUTION_BASE);
     const person1OverrideEnabled = Boolean(plan.investing?.person1EmployerSuperOverrideEnabled);
     const person2OverrideEnabled = Boolean(plan.investing?.person2EmployerSuperOverrideEnabled);
     const person1Amount = person1OverrideEnabled ? nonNegative(plan.investing?.person1EmployerSuperOverride) : person1Calculated;
@@ -420,7 +514,8 @@
       person2OverrideEnabled,
       hasOverride: person1OverrideEnabled || person2OverrideEnabled,
       concessionalCap: CONCESSIONAL_SUPER_CAP,
-      note: "Estimated employer super contributions are calculated from salary and wages only.",
+      maximumContributionBase: EMPLOYER_SUPER_MAXIMUM_CONTRIBUTION_BASE,
+      note: "Estimated employer super contributions are calculated from salary and wages only and capped at the selected financial year's maximum contribution base where applicable.",
     };
   }
 
@@ -628,7 +723,7 @@
       const type = normaliseIncomeType(item.type || item.incomeType);
       if (type === "salaryWages" || type === "rentalNetCashIncome") return;
       const owner = normaliseIncomeOwner(item.owner || item.incomeOwner, type);
-      const annualAmount = roundCurrency(annualize(item.amount, item.frequency || "annually"));
+      const annualAmount = incomeCashAnnualAmount(item);
       if (type === "interest") addPassiveIncomeAmount(summary, "interest", annualAmount, owner);
       else if (type === "dividends") addPassiveIncomeAmount(summary, "dividends", annualAmount, owner);
       else if (type === "distributions") addPassiveIncomeAmount(summary, "distributions", annualAmount, owner);
@@ -1247,16 +1342,23 @@
       monthlyRepayment: roundCurrency(payrollEstimate.household.stslCompulsoryRepayment / MONTHS_PER_YEAR),
       person1: {
         hasDebt: person1HasStsl,
+        openingBalance: person1StslBalance,
         balance: person1StslBalance,
         repaymentIncome: payrollEstimate.person1.repaymentIncome,
         annualRepayment: payrollEstimate.person1.stslCompulsoryRepayment,
+        projectedClosingBalance: payrollEstimate.person1.stslProjectedClosingBalance,
+        effectOnNetIncome: payrollEstimate.person1.stslCompulsoryRepayment,
       },
       person2: {
         hasDebt: person2HasStsl,
+        openingBalance: person2StslBalance,
         balance: person2StslBalance,
         repaymentIncome: payrollEstimate.person2.repaymentIncome,
         annualRepayment: payrollEstimate.person2.stslCompulsoryRepayment,
+        projectedClosingBalance: payrollEstimate.person2.stslProjectedClosingBalance,
+        effectOnNetIncome: payrollEstimate.person2.stslCompulsoryRepayment,
       },
+      projectedClosingBalance: roundCurrency(Math.max(0, totalStudyLoanBalance - payrollEstimate.household.stslCompulsoryRepayment)),
       estimatedYearsToRepay: payrollEstimate.household.stslCompulsoryRepayment > 0 && totalStudyLoanBalance > 0
         ? roundRatio(totalStudyLoanBalance / payrollEstimate.household.stslCompulsoryRepayment)
         : null,
@@ -1407,9 +1509,58 @@
         progress: targetCapital > 0 ? Math.min(200, roundRatio(projectedAssets / targetCapital * 100)) : 0,
       };
     });
+    const people = {
+      person1: {
+        id: "person1",
+        name: plan.personal.person1Name || "Person 1",
+        taxableIncome: person1AnnualIncome,
+        salaryAndWages: person1SalaryWages,
+        stsl: {
+          hasDebt: person1HasStsl,
+          openingBalance: person1StslBalance,
+          estimatedCompulsoryRepayment: helpRepaymentEstimate.person1.annualRepayment,
+          projectedClosingBalance: helpRepaymentEstimate.person1.projectedClosingBalance,
+        },
+        privateHealth: {
+          hasAppropriateHospitalCover: hospitalCoverDays(plan.income.person1HospitalCoverStatus, plan.income.person1HospitalCoverDays) === DAYS_PER_YEAR,
+          coveredForFullYear: plan.income.person1HospitalCoverStatus === "full-year",
+          coveredDays: hospitalCoverDays(plan.income.person1HospitalCoverStatus, plan.income.person1HospitalCoverDays),
+        },
+        super: {
+          employerContributionAutoAmount: employerSuper.person1Calculated,
+          employerContributionOverride: nonNegative(plan.investing.person1EmployerSuperOverride),
+          useManualEmployerContribution: Boolean(plan.investing.person1EmployerSuperOverrideEnabled),
+          employerContributionAmount: employerSuper.person1Amount,
+        },
+      },
+      person2: {
+        id: "person2",
+        name: plan.personal.person2Name || "Person 2",
+        taxableIncome: person2AnnualIncome,
+        salaryAndWages: person2SalaryWages,
+        stsl: {
+          hasDebt: person2HasStsl,
+          openingBalance: person2StslBalance,
+          estimatedCompulsoryRepayment: helpRepaymentEstimate.person2.annualRepayment,
+          projectedClosingBalance: helpRepaymentEstimate.person2.projectedClosingBalance,
+        },
+        privateHealth: {
+          hasAppropriateHospitalCover: hospitalCoverDays(plan.income.person2HospitalCoverStatus, plan.income.person2HospitalCoverDays) === DAYS_PER_YEAR,
+          coveredForFullYear: plan.income.person2HospitalCoverStatus === "full-year",
+          coveredDays: hospitalCoverDays(plan.income.person2HospitalCoverStatus, plan.income.person2HospitalCoverDays),
+        },
+        super: {
+          employerContributionAutoAmount: employerSuper.person2Calculated,
+          employerContributionOverride: nonNegative(plan.investing.person2EmployerSuperOverride),
+          useManualEmployerContribution: Boolean(plan.investing.person2EmployerSuperOverrideEnabled),
+          employerContributionAmount: employerSuper.person2Amount,
+        },
+      },
+    };
 
     return {
       plan,
+      people,
       loan,
       totalAssets,
       totalLiabilities,
@@ -1468,8 +1619,11 @@
       helpRepaymentIncome,
       taxConfiguration: {
         taxYear: TAX_YEAR,
+        financialYearConfig: ACTIVE_CONFIG,
+        availableFinancialYears: Object.keys(FINANCIAL_YEAR_CONFIGS),
         stslThreshold: HELP_THRESHOLD,
         employerSuperRate: EMPLOYER_SUPER_RATE,
+        employerSuperMaximumContributionBase: EMPLOYER_SUPER_MAXIMUM_CONTRIBUTION_BASE,
         concessionalSuperCap: CONCESSIONAL_SUPER_CAP,
         medicareLevyRate: MEDICARE_LEVY_RATE,
         medicareLevySurchargeThresholds: MLS_THRESHOLDS_2026_27,
@@ -1500,6 +1654,7 @@
     clonePlan,
     annualize,
     annualRecurringExpenses,
+    financialYearConfigs: FINANCIAL_YEAR_CONFIGS,
     individualTaxEstimate,
     marginalTaxRate,
     estimateHelpRepayment,
