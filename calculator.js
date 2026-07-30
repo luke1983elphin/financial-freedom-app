@@ -7,6 +7,7 @@
   const SUPER_CONTRIBUTIONS_TAX_RATE = 0.15;
   const DAYS_PER_YEAR = 365;
   const DEFAULT_TAX_YEAR = FINANCIAL_YEAR;
+  const DEFAULT_INVESTMENT_PROPERTY_GROWTH_RATE = 0.03;
   const FINANCIAL_YEAR_CONFIGS = {
     "2026-27": {
       taxYear: "2026-27",
@@ -49,6 +50,14 @@
   const TAX_BRACKETS_2026_27 = ACTIVE_CONFIG.taxBrackets;
   const HELP_REPAYMENT_BRACKETS_2026_27 = ACTIVE_CONFIG.stsl.brackets;
   const STATUS = { GREEN: "green", AMBER: "amber", RED: "red" };
+  const INVESTMENT_PROPERTY_ASSET_CATEGORIES = [
+    "otherProperty",
+    "rentalProperty",
+    "investmentProperty",
+    "residentialInvestmentProperty",
+    "commercialInvestmentProperty",
+    "incomeProducingProperty",
+  ];
 
   function number(value) {
     const parsed = Number(value);
@@ -481,13 +490,11 @@
 
   function migratedDividendAnnualAmount(item = {}) {
     const frequency = item.frequency || "annually";
-    const grossedUp = nonNegative(item.totalTaxableGrossedUpDividend ?? item.grossedUpDividend);
-    if (grossedUp > 0) return roundCurrency(annualize(grossedUp, frequency));
     const cashDividend = nonNegative(item.cashDividend);
-    const frankingCredits = nonNegative(item.frankingCredits);
-    if (cashDividend > 0 || frankingCredits > 0) {
-      return roundCurrency(annualize(cashDividend + frankingCredits, frequency));
-    }
+    if (cashDividend > 0) return roundCurrency(annualize(cashDividend, frequency));
+    const grossedUp = nonNegative(item.totalTaxableGrossedUpDividend ?? item.grossedUpDividend);
+    const enteredAmount = nonNegative(item.amount);
+    if (grossedUp > 0 && enteredAmount <= 0) return roundCurrency(annualize(grossedUp * 0.7, frequency));
     return roundCurrency(annualize(item.amount, frequency));
   }
 
@@ -1487,6 +1494,78 @@
     };
   }
 
+  function rateFromPercentOrDecimal(value) {
+    const parsed = number(value);
+    if (!Number.isFinite(parsed) || parsed <= 0) return null;
+    return parsed > 1 ? parsed / 100 : parsed;
+  }
+
+  function propertyGrowthRateForAsset(plan = {}, asset = {}) {
+    const candidates = [
+      asset.propertyGrowthRatePct,
+      asset.propertyGrowthRate,
+      asset.capitalGrowthRatePct,
+      asset.capitalGrowthRate,
+      asset.expectedGrowthRatePct,
+      asset.expectedGrowthRate,
+      asset.growthRatePct,
+      asset.growthRate,
+      plan.investing?.investmentPropertyGrowthRatePct,
+      plan.investing?.investmentPropertyGrowthRate,
+      plan.investing?.propertyGrowthRatePct,
+      plan.investing?.propertyGrowthRate,
+      plan.assumptions?.investmentPropertyGrowthRatePct,
+      plan.assumptions?.investmentPropertyGrowthRate,
+      plan.assumptions?.propertyGrowthRatePct,
+      plan.assumptions?.propertyGrowthRate,
+    ];
+    const configuredRate = candidates.map(rateFromPercentOrDecimal).find((rate) => rate !== null);
+    return configuredRate ?? DEFAULT_INVESTMENT_PROPERTY_GROWTH_RATE;
+  }
+
+  function investmentPropertyRecords(plan = {}) {
+    const records = canonicalAssetRecords(plan, INVESTMENT_PROPERTY_ASSET_CATEGORIES);
+    if (records.some((item) => assetRecordValue(item) > 0)) return records;
+    const legacyValue = nonNegative(plan.assets?.otherPropertyValue);
+    return legacyValue > 0
+      ? [{ id: "legacy-other-property", category: "otherProperty", name: "Investment property", value: legacyValue, canonicalAssetId: "legacy-other-property" }]
+      : [];
+  }
+
+  function projectedInvestmentPropertyGrossValue(plan = {}, years = 0) {
+    const projectionYears = Math.max(0, number(years));
+    return roundCurrency(investmentPropertyRecords(plan).reduce((total, asset) => {
+      const value = assetRecordValue(asset);
+      const growthRate = propertyGrowthRateForAsset(plan, asset);
+      return total + value * Math.pow(1 + growthRate, projectionYears);
+    }, 0));
+  }
+
+  function projectedPropertyGrowthSummary(plan = {}) {
+    const properties = investmentPropertyRecords(plan)
+      .map((asset) => {
+        const grossValue = assetRecordValue(asset);
+        const growthRate = propertyGrowthRateForAsset(plan, asset);
+        return {
+          id: asset.canonicalAssetId || asset.assetId || asset.id || "",
+          name: asset.name || asset.description || "Investment property",
+          grossValue,
+          growthRate,
+          annualGrowth: roundCurrency(grossValue * growthRate),
+        };
+      })
+      .filter((asset) => asset.grossValue > 0);
+    const grossValue = roundCurrency(properties.reduce((total, asset) => total + asset.grossValue, 0));
+    const annualGrowth = roundCurrency(properties.reduce((total, asset) => total + asset.annualGrowth, 0));
+    return {
+      grossValue,
+      annualGrowth,
+      defaultRate: DEFAULT_INVESTMENT_PROPERTY_GROWTH_RATE,
+      blendedGrowthRate: grossValue > 0 ? roundRatio(annualGrowth / grossValue) : DEFAULT_INVESTMENT_PROPERTY_GROWTH_RATE,
+      properties,
+    };
+  }
+
   function liabilityItemTotal(plan = {}, categories = []) {
     const wanted = new Set(categories);
     return (Array.isArray(plan.liabilityItems) ? plan.liabilityItems : [])
@@ -1501,6 +1580,7 @@
     rentalPropertyDebt,
     downsizingBoost = 0,
     projectedInvestmentBalance,
+    projectedInvestmentPropertyGrossValue,
     projectedSuperBalance,
     includeSuperOverride,
   } = {}) {
@@ -1528,8 +1608,10 @@
     const grossLiquidInvestmentAssets = roundCurrency(investmentProjectionStartingBalance + offsetAsset.amount);
     const otherInvestmentDebt = liabilityItemTotal(plan, ["investmentLoan", "shareInvestmentLoan", "managedFundLoan"]);
     const liquidInvestmentAssets = roundCurrency(Math.max(0, grossLiquidInvestmentAssets - otherInvestmentDebt));
-    const investmentPropertyAsset = canonicalAssetAmount(plan, ["otherProperty", "rentalProperty", "investmentProperty"], assets.otherPropertyValue);
-    const investmentPropertyGrossValue = roundCurrency(investmentPropertyAsset.amount);
+    const investmentPropertyAsset = canonicalAssetAmount(plan, INVESTMENT_PROPERTY_ASSET_CATEGORIES, assets.otherPropertyValue);
+    const investmentPropertyGrossValue = roundCurrency(Number.isFinite(Number(projectedInvestmentPropertyGrossValue))
+      ? nonNegative(projectedInvestmentPropertyGrossValue)
+      : investmentPropertyAsset.amount);
     const investmentPropertyDebt = roundCurrency(nonNegative(rentalPropertyDebt) || liabilityItemTotal(plan, ["rentalPropertyLoan"]));
     const investmentPropertyEquity = roundCurrency(Math.max(0, investmentPropertyGrossValue - investmentPropertyDebt));
     const availableSuperBalance = roundCurrency(Number.isFinite(Number(projectedSuperBalance))
@@ -1837,12 +1919,15 @@
       + currentFiAssetSummary.investmentBondFiAssets
       + currentFiAssetSummary.otherInvestableFiAssets,
     );
-    const projectedInvestmentGrowthBase = roundCurrency(
-      Math.max(0, grossGrowthInvestmentAssets - currentFiAssetSummary.otherInvestmentDebt)
-      + currentFiAssetSummary.investmentPropertyEquity,
-    );
-    const projectedInvestmentGrowth = roundCurrency(projectedInvestmentGrowthBase * expectedInvestmentReturn);
-    const combinedWealthCreation = roundCurrency(annualPassiveIncome + projectedInvestmentGrowth);
+    const projectedFinancialInvestmentGrowthBase = roundCurrency(Math.max(0, grossGrowthInvestmentAssets - currentFiAssetSummary.otherInvestmentDebt));
+    const projectedFinancialInvestmentGrowth = roundCurrency(projectedFinancialInvestmentGrowthBase * expectedInvestmentReturn);
+    const propertyGrowthSummary = projectedPropertyGrowthSummary(plan);
+    const projectedPropertyGrowthBase = propertyGrowthSummary.grossValue;
+    const projectedPropertyGrowthRate = propertyGrowthSummary.blendedGrowthRate;
+    const projectedPropertyGrowth = propertyGrowthSummary.annualGrowth;
+    const projectedInvestmentGrowthBase = projectedFinancialInvestmentGrowthBase;
+    const projectedInvestmentGrowth = projectedFinancialInvestmentGrowth;
+    const combinedWealthCreation = roundCurrency(annualPassiveIncome + projectedFinancialInvestmentGrowth + projectedPropertyGrowth);
     const freedMonthlyRepayments = Array.from({ length: 360 }, (_, monthIndex) => {
       if (!loan.payoffMonth) return 0;
       return monthIndex + 1 > loan.payoffMonth ? nonNegative(plan.liabilities.monthlyRepayment || plan.expenses.mortgageRepayments) : 0;
@@ -1894,6 +1979,7 @@
     ].map((item) => {
       const investment = rowAtAge(investmentProjection, item.age);
       const superRow = rowAtAge(superProjection, item.age);
+      const projectionYears = Math.max(0, item.age - currentAge);
       const projectedFiSummary = calculateNetFiAssetSummary({
         plan,
         currentAge: item.age,
@@ -1901,6 +1987,7 @@
         projectedSuperBalance: superRow.closingBalance,
         rentalPropertyDebt: rentalPropertyLoanBalance,
         projectedInvestmentBalance: investment.closingBalance,
+        projectedInvestmentPropertyGrossValue: projectedInvestmentPropertyGrossValue(plan, projectionYears),
       });
       const projectedFiAssets = projectedFiSummary.netFiAssets;
       const requiredCapital = roundCurrency(targetCapital * item.coverage);
@@ -1948,10 +2035,11 @@
       const residenceValue = plan.downsizing?.enabled && nonNegative(plan.downsizing.futurePropertyValue) > 0
         ? nonNegative(plan.downsizing.futurePropertyValue)
         : nonNegative(plan.assets.homeValue);
-      const homeValue = (residenceValue + nonNegative(plan.assets.otherPropertyValue)) * Math.pow(1 + 0.03, year);
+      const homeValue = residenceValue * Math.pow(1 + 0.03, year);
+      const investmentPropertyValue = projectedInvestmentPropertyGrossValue(plan, year);
       const loanBalance = balanceAtMonth(loan.schedule, loan.finalBalance, year * MONTHS_PER_YEAR);
       const projectedStudyLoanBalance = Math.max(0, totalStudyLoanBalance - helpRepaymentEstimate.annualRepayment * year);
-      const closingBalance = roundCurrency(homeValue + nonNegative(plan.assets.vehiclesPersonalAssets) + nonNegative(plan.assets.offsetBalance) + row.closingBalance + superProjection[index].closingBalance - loanBalance - projectedStudyLoanBalance - nonNegative(plan.liabilities.otherDebts) - creditCardBalance);
+      const closingBalance = roundCurrency(homeValue + investmentPropertyValue + nonNegative(plan.assets.vehiclesPersonalAssets) + nonNegative(plan.assets.offsetBalance) + row.closingBalance + superProjection[index].closingBalance - loanBalance - projectedStudyLoanBalance - nonNegative(plan.liabilities.otherDebts) - creditCardBalance);
       return { year, age: currentAge + year, closingBalance };
     });
     const financialFreedomProgressProjection = investmentProjection.map((row, index) => {
@@ -1962,6 +2050,7 @@
         projectedSuperBalance: superProjection[index].closingBalance,
         rentalPropertyDebt: rentalPropertyLoanBalance,
         projectedInvestmentBalance: row.closingBalance,
+        projectedInvestmentPropertyGrossValue: projectedInvestmentPropertyGrossValue(plan, row.year),
       });
       return {
         year: row.year,
@@ -1982,6 +2071,7 @@
       projectedSuperBalance: targetSuperRow?.closingBalance || superannuationBalance,
       rentalPropertyDebt: rentalPropertyLoanBalance,
       projectedInvestmentBalance: targetInvestmentRow?.closingBalance || investmentBalance,
+      projectedInvestmentPropertyGrossValue: projectedInvestmentPropertyGrossValue(plan, targetProjectionYear),
     });
     const people = {
       person1: {
@@ -2082,8 +2172,15 @@
       otherAnnualIncome,
       passiveIncomeBreakdown: passiveIncomeSummary,
       annualPassiveIncome,
+      projectedFinancialInvestmentGrowthBase,
+      projectedFinancialInvestmentGrowth,
       projectedInvestmentGrowthBase,
       projectedInvestmentGrowth,
+      projectedPropertyGrowthBase,
+      projectedPropertyGrowthRate,
+      projectedPropertyGrowthDefaultRate: DEFAULT_INVESTMENT_PROPERTY_GROWTH_RATE,
+      projectedPropertyGrowth,
+      projectedPropertyGrowthProperties: propertyGrowthSummary.properties,
       combinedWealthCreation,
       passiveIncomeCoveragePercent,
       lifestyleFundingPercent,

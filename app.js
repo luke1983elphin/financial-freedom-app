@@ -214,23 +214,31 @@
     },
     passiveIncome: {
       title: "Passive Cash Income",
-      body: "Passive Cash Income includes income expected to be received as cash, such as interest, dividends, distributions, net rental cash income and other recurring passive income. It does not include unrealised investment growth.",
+      body: "Passive Cash Income is the estimated annual cash income received from investments, such as dividends, interest and net rental income. This income may be available to help fund your lifestyle.",
     },
     projectedInvestmentGrowth: {
-      title: "Projected Investment Growth",
-      body: "Projected Investment Growth estimates the annual growth expected from accessible investment assets based on the assumptions entered. It is not treated as spendable cash unless assets are sold or income is received.",
+      title: "Projected Financial Investment Growth",
+      body: "Projected Financial Investment Growth estimates how much your financial investments may increase in value each year based on the assumptions in your plan. It is not guaranteed and is not cash available to spend.",
+    },
+    projectedPropertyGrowth: {
+      title: "Projected Property Growth",
+      body: "Projected Property Growth estimates the annual increase in the value of your investment properties using the property growth assumption in your plan. It is calculated on gross property value, is not guaranteed and is not cash available to spend.",
     },
     combinedWealthCreation: {
       title: "Combined Wealth Creation",
-      body: "Combined Wealth Creation adds Passive Cash Income and Projected Investment Growth to show the broader wealth-building effect of income and asset growth together.",
+      body: "Combined Wealth Creation shows the estimated annual contribution from passive cash income, financial investment growth and investment property growth. Only the Passive Cash Income component represents income that may currently be available to spend.",
     },
     accessibleInvestments: {
       title: "Accessible Investments",
-      body: "Accessible Investments are assets that could generally be accessed before superannuation preservation age. This typically includes cash, shares, ETFs, managed funds, cryptocurrency and investment property equity where applicable. Your family home, personal assets and superannuation are excluded.",
+      body: "Accessible Investments include cash, offset balances, shares, ETFs, managed funds, cryptocurrency and other financial investments that can generally be accessed before superannuation preservation age. Investment property equity, your family home, personal-use assets and superannuation are assessed separately.",
     },
     annualLifestyleTarget: {
       title: "Annual Lifestyle Target",
-      body: "This is the annual lifestyle cost the plan is trying to fund. It is used to estimate the Financial Freedom target and compare whether passive cash income and assets could support the desired lifestyle.",
+      body: "Your Annual Lifestyle Target is the estimated yearly amount you want your investments to support once you reach Financial Freedom.",
+    },
+    dividendIncome: {
+      title: "Annual Dividend Received",
+      body: "Enter the annual cash dividend received before personal income tax. Do not add franking credits.",
     },
     stslAdvancedTaxSetting: {
       title: "STSL optional advanced tax setting",
@@ -1487,9 +1495,12 @@
         const cashDividend = Number(item.cashDividend) || 0;
         const frankingCredits = Number(item.frankingCredits) || 0;
         if (!item.dividendSimplified && (grossedUp > 0 || cashDividend > 0 || frankingCredits > 0)) {
-          item.amount = grossedUp > 0
-            ? annualValue(grossedUp, item.frequency || "annually")
-            : annualValue(cashDividend + frankingCredits, item.frequency || "annually");
+          const existingAmount = Number(item.amount) || 0;
+          item.amount = cashDividend > 0
+            ? annualValue(cashDividend, item.frequency || "annually")
+            : grossedUp > 0 && existingAmount <= 0
+              ? annualValue(grossedUp * 0.7, item.frequency || "annually")
+              : annualValue(existingAmount, item.frequency || "annually");
           item.cashDividend = 0;
           item.frankingCredits = 0;
           item.totalTaxableGrossedUpDividend = 0;
@@ -2367,7 +2378,8 @@
         gapToFinancialFreedom: numberValue(result.fiTargetRemaining),
         estimatedSustainableIncomeFromCurrentFiAssets: numberValue(result.estimatedSustainableIncomeFromCurrentFiAssets),
         estimatedAnnualPassiveIncome: numberValue(result.annualPassiveIncome),
-        projectedInvestmentGrowth: numberValue(result.projectedInvestmentGrowth),
+        projectedFinancialInvestmentGrowth: numberValue(result.projectedFinancialInvestmentGrowth ?? result.projectedInvestmentGrowth),
+        projectedPropertyGrowth: numberValue(result.projectedPropertyGrowth),
         combinedWealthCreation: numberValue(result.combinedWealthCreation),
         passiveIncomeCoveragePct: numberValue(result.passiveIncomeCoveragePercent),
         passiveIncomeBreakdown: result.passiveIncomeBreakdown || {},
@@ -4325,7 +4337,7 @@
           ${dynamicInput("incomeItems", item, "type", "Income type", { type: "select", options: incomeTypeOptions })}
           ${dynamicInput("incomeItems", item, "owner", "Owner", { type: "select", options: incomeOwnerOptions(type) })}
           ${incomeAllocationFields(item, owner)}
-          ${dynamicInput("incomeItems", item, "amount", "Gross Annual Dividend", { step: "100", placeholder: "Annual dividend amount" })}
+          ${dynamicInput("incomeItems", item, "amount", "Annual Dividend Received", { step: "100", placeholder: "Annual cash dividend", infoKey: "dividendIncome" })}
         ` : `
           ${dynamicInput("incomeItems", item, "name", "Income name", { kind: "text", placeholder: "e.g. Salary, rent, dividends" })}
           ${dynamicInput("incomeItems", item, "type", "Income type", { type: "select", options: incomeTypeOptions })}
@@ -4906,7 +4918,7 @@
       <div class="dashboard-card-grid mt-4">
         ${metricCard("Current stage", stage.name)}
         ${metricCard("Passive Cash Income", money(passive), "", "Recurring income from passive sources, separate from unrealised growth.", "passiveIncome")}
-        ${metricCard("Annual Lifestyle Target", money(target), "", "The annual lifestyle cost the plan is trying to fund.", "annualLifestyleTarget")}
+        ${metricCard("Annual Lifestyle Target", money(target), "", "The estimated yearly amount you want investments to support once you reach Financial Freedom.", "annualLifestyleTarget")}
         ${metricCard("Financial Freedom progress", plainPercent(percent), "", "Current net FI assets divided by target FI assets.", "financialFreedomProgress")}
       </div>
       <button class="btn btn-primary mt-4 w-full justify-center" type="button" data-view="dashboard">View Dashboard</button>
@@ -5011,12 +5023,13 @@
       metricCard("Accessible Investments", money(result.accessibleInvestmentAssets), "", "Accessible assets counted before super access age, net of linked investment debt.", "accessibleInvestments"),
       metricCard("Current Net FI Assets", money(result.financialIndependenceAssets), "", "Income-producing and investable assets counted toward Financial Freedom, net of linked investment debt.", "currentFiAssets"),
       metricCard("Target FI Assets", money(result.targetCapital), "", "Annual lifestyle spending divided by the selected withdrawal rate.", "targetFiAssets"),
-      metricCard("Annual Lifestyle Target", money(target), "", "The annual lifestyle cost the plan is trying to fund.", "annualLifestyleTarget"),
+      metricCard("Annual Lifestyle Target", money(target), "", "The estimated yearly amount you want investments to support once you reach Financial Freedom.", "annualLifestyleTarget"),
       metricCard("Remaining Required", money(result.fiTargetRemaining ?? Math.max(0, result.targetCapital - result.financialIndependenceAssets))),
       metricCard("Estimated Sustainable Income", money(result.estimatedSustainableIncomeFromCurrentFiAssets), "", "Current net FI assets multiplied by the selected withdrawal rate.", "sustainableIncome"),
-      metricCard("Passive Cash Income", money(passiveIncome), "", "Recurring cash income from passive sources such as interest, dividends, distributions and net rental cash income.", "passiveIncome"),
-      metricCard("Projected Investment Growth", money(result.projectedInvestmentGrowth || 0), "", "Estimated annual growth on accessible investment assets based on the return assumptions entered.", "projectedInvestmentGrowth"),
-      metricCard("Combined Wealth Creation", money(result.combinedWealthCreation || 0), "", "Passive cash income plus projected investment growth.", "combinedWealthCreation"),
+      metricCard("Passive Cash Income", money(passiveIncome), "", "Estimated annual cash income from investments, such as dividends, interest and net rental income.", "passiveIncome"),
+      metricCard("Projected Financial Investment Growth", money(result.projectedFinancialInvestmentGrowth ?? result.projectedInvestmentGrowth ?? 0), "", "Estimated annual growth on financial investments based on the assumptions entered.", "projectedInvestmentGrowth"),
+      metricCard("Projected Property Growth", money(result.projectedPropertyGrowth || 0), "", "Estimated annual growth on gross investment property values.", "projectedPropertyGrowth"),
+      metricCard("Combined Wealth Creation", money(result.combinedWealthCreation || 0), "", "Passive Cash Income plus projected financial investment growth and projected property growth.", "combinedWealthCreation"),
       metricCard("Annual Living Expenses", money(livingExpenses), "", "This is calculated from your recurring expense items and excludes investing and loan principal repayments."),
       metricCard("Highest Priority", highestRecommendation(result)),
       weeklyHealthCheckCard(result),
@@ -9260,6 +9273,9 @@
           ${summaryTile("Financial Freedom progress", plainPercent(percent))}
           ${summaryTile("Estimated sustainable income", money(result.estimatedSustainableIncomeFromCurrentFiAssets), "", "sustainableIncome")}
           ${summaryTile("Current Passive Cash Income", money(annualPassiveIncome(result)), "", "passiveIncome")}
+          ${summaryTile("Projected Financial Investment Growth", money(result.projectedFinancialInvestmentGrowth ?? result.projectedInvestmentGrowth ?? 0), "", "projectedInvestmentGrowth")}
+          ${summaryTile("Projected Property Growth", money(result.projectedPropertyGrowth || 0), "", "projectedPropertyGrowth")}
+          ${summaryTile("Combined Wealth Creation", money(result.combinedWealthCreation || 0), "", "combinedWealthCreation")}
           ${summaryTile("10-year investment balance", money(investmentAtYear(result, 10)))}
           ${summaryTile("10-year debt estimate", money(projectedDebtAtYear(result, 10)))}
         </div>

@@ -64,7 +64,7 @@ test("joint income allocation uses the entered ownership percentages", () => {
   assert.equal(result.annualGrossIncome, 10000);
 });
 
-test("legacy dividend franking fields migrate to one gross annual dividend amount", () => {
+test("legacy dividend franking fields migrate to the annual cash dividend received only", () => {
   const { CALC, plan } = basePlan();
   plan.incomeItems = [
     {
@@ -80,9 +80,10 @@ test("legacy dividend franking fields migrate to one gross annual dividend amoun
 
   const result = CALC.calculatePlan(plan);
 
-  assert.equal(result.annualGrossIncome, 10000);
-  assert.equal(result.person1AnnualIncome, 10000);
-  assert.equal(result.passiveIncomeBreakdown.dividends, 10000);
+  assert.equal(result.annualGrossIncome, 7000);
+  assert.equal(result.person1AnnualIncome, 7000);
+  assert.equal(result.passiveIncomeBreakdown.dividends, 7000);
+  assert.equal(result.passiveIncomeBreakdown.total, 7000);
 });
 
 test("employer super is calculated from salary and wages only and uses the configured cap", () => {

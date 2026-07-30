@@ -1,14 +1,17 @@
-﻿Financial Freedom App audit package test output
+Financial Freedom App audit package test output
 Generated: 2026-07-30
 
 Command run from inside the package:
 pnpm test
 
+Package test script:
+node --experimental-strip-types tests/calculations.test.ts && node --experimental-strip-types tests/engagement.test.ts && node tests/financial-freedom-tax-integration.test.mjs && node tests/financial-progress-history.test.mjs && node tests/calculation-audit-2026-27.test.mjs
+
 Runtime path used:
 C:\Users\Elphin Accounting\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin
 
 Result:
-38 passed
+42 passed
 0 failed
 
 Breakdown:
@@ -16,7 +19,15 @@ calculations.test.ts: 9 passed
 engagement.test.ts: 4 passed
 financial-freedom-tax-integration.test.mjs: 7 passed
 financial-progress-history.test.mjs: 5 passed
-calculation-audit-2026-27.test.mjs: 13 passed
+calculation-audit-2026-27.test.mjs: 17 passed
+
+New regression coverage in this correction:
+- legacy cash dividend plus franking credits flows only the cash dividend into Passive Cash Income, taxable income and household cashflow;
+- grossed-up-only legacy dividend records use a conservative 70% cash fallback;
+- Accessible Investments exclude investment property equity while shares and crypto remain counted once;
+- projected financial investment growth excludes investment property;
+- projected property growth is calculated from gross investment property value, defaults to 3% and supports multiple property records;
+- Combined Wealth Creation equals Passive Cash Income plus Projected Financial Investment Growth plus Projected Property Growth.
 
 Notes:
 The package test script runs TypeScript tests with node --experimental-strip-types, then runs the .mjs integration and audit tests.

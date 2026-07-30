@@ -111,7 +111,7 @@ test("STSL balances and repayments remain person-specific in the full plan", () 
   assert.equal(result.stslRepaymentEstimate.person2.projectedClosingBalance, 48429.2);
 });
 
-test("STSL repayment income includes allocated investment income, franking credits and rental taxable income", () => {
+test("STSL repayment income includes allocated investment income and rental taxable income without treating franking credits as cash", () => {
   const { CALC, plan } = basePlan();
   plan.incomeItems = [
     { id: "salary", type: "salaryWages", owner: "person1", amount: 65000, frequency: "annually" },
@@ -124,10 +124,10 @@ test("STSL repayment income includes allocated investment income, franking credi
     { id: "stsl-person1", type: "stsl", owner: "person1", balance: 20000 },
   ];
   const result = CALC.calculatePlan(plan);
-  assert.equal(result.stslRepaymentIncome.person1, 80000);
-  assert.equal(result.stslRepaymentEstimate.person1.repaymentIncome, 80000);
-  assert.equal(result.stslRepaymentEstimate.person1.annualRepayment, 1570.8);
-  assert.equal(result.stslRepaymentEstimate.annualRepayment, 1570.8);
+  assert.equal(result.stslRepaymentIncome.person1, 78200);
+  assert.equal(result.stslRepaymentEstimate.person1.repaymentIncome, 78200);
+  assert.equal(result.stslRepaymentEstimate.person1.annualRepayment, 1300.8);
+  assert.equal(result.stslRepaymentEstimate.annualRepayment, 1300.8);
 });
 
 test("Medicare levy surcharge separates threshold income, surcharge base and whole-family cover", () => {
@@ -348,7 +348,7 @@ test("employer super is calculated from salary only and supports package-inclusi
   assert.equal(result.employerSuperContributions.person2Calculated, 9600);
 });
 
-test("dividend income migrates old franking fields into one annual dividend amount", () => {
+test("dividend income migrates old franking fields into annual cash dividends only", () => {
   const { CALC, plan } = basePlan();
   plan.incomeItems = [
     { id: "salary", type: "salaryWages", owner: "person1", amount: 200000, frequency: "annually" },
@@ -359,11 +359,11 @@ test("dividend income migrates old franking fields into one annual dividend amou
   ];
   const result = CALC.calculatePlan(plan);
   assert.equal(result.passiveIncomeBreakdown.interest, 2000);
-  assert.equal(result.passiveIncomeBreakdown.dividends, 5714);
+  assert.equal(result.passiveIncomeBreakdown.dividends, 4000);
   assert.equal(result.passiveIncomeBreakdown.otherPassive, 1000);
-  assert.equal(result.passiveIncomeBreakdown.total, 8714);
-  assert.equal(result.person2AnnualIncome, 9214);
-  assert.equal(result.annualGrossIncome, 211714);
+  assert.equal(result.passiveIncomeBreakdown.total, 7000);
+  assert.equal(result.person2AnnualIncome, 7500);
+  assert.equal(result.annualGrossIncome, 210000);
 });
 
 test("rental cashflow uses linked loan treatment without deducting loan interest twice", () => {
@@ -438,6 +438,7 @@ test("Financial Freedom progress uses net FI assets while passive income stays s
   assert.equal(result.investmentPropertyGrossValue, 600000);
   assert.equal(result.investmentPropertyDebt, 350000);
   assert.equal(result.investmentPropertyEquity, 250000);
+  assert.equal(result.accessibleInvestmentAssets, 750000);
   assert.equal(result.superannuationBalance, 500000);
   assert.equal(result.financialIndependenceAssets, 1000000);
   assert.equal(result.currentNetFiAssets, 1000000);
@@ -447,20 +448,30 @@ test("Financial Freedom progress uses net FI assets while passive income stays s
   assert.equal(result.estimatedSustainableIncomeFromCurrentFiAssets, 40000);
   assert.equal(result.passiveIncomeCoveragePercent, 0);
   assert.equal(result.annualPassiveIncome, 0);
-  assert.equal(result.projectedInvestmentGrowthBase, 1000000);
-  assert.equal(result.projectedInvestmentGrowth, 70000);
-  assert.equal(result.combinedWealthCreation, 70000);
+  assert.equal(result.projectedFinancialInvestmentGrowthBase, 750000);
+  assert.equal(result.projectedFinancialInvestmentGrowth, 52500);
+  assert.equal(result.projectedInvestmentGrowthBase, 750000);
+  assert.equal(result.projectedInvestmentGrowth, 52500);
+  assert.equal(result.projectedPropertyGrowthBase, 600000);
+  assert.equal(result.projectedPropertyGrowth, 18000);
+  assert.equal(result.combinedWealthCreation, 70500);
   assert.equal(result.totalIncomeProducingAssets, 1500000);
   assert.equal(result.includeInvestmentPropertyEquityInFi, true);
+  assert.ok(result.financialFreedomProgressProjection[0].netFiAssets > result.financialIndependenceAssets);
 
   plan.liabilityItems.push({ id: "share-loan", type: "investmentLoan", balance: 100000 });
   result = CALC.calculatePlan(plan);
   assert.equal(result.otherInvestmentDebt, 100000);
   assert.equal(result.liquidInvestmentAssets, 650000);
+  assert.equal(result.accessibleInvestmentAssets, 650000);
   assert.equal(result.financialIndependenceAssets, 900000);
   assert.equal(result.financialFreedomProgressRaw, 36);
-  assert.equal(result.projectedInvestmentGrowthBase, 900000);
-  assert.equal(result.projectedInvestmentGrowth, 63000);
+  assert.equal(result.projectedFinancialInvestmentGrowthBase, 650000);
+  assert.equal(result.projectedFinancialInvestmentGrowth, 45500);
+  assert.equal(result.projectedInvestmentGrowthBase, 650000);
+  assert.equal(result.projectedInvestmentGrowth, 45500);
+  assert.equal(result.projectedPropertyGrowth, 18000);
+  assert.equal(result.combinedWealthCreation, 63500);
 
   plan.personal.person1Age = 61;
   result = CALC.calculatePlan(plan);
@@ -494,6 +505,83 @@ test("Financial Freedom progress uses net FI assets while passive income stays s
   assert.equal(futureResult.financialFreedomProgressRaw, 0);
   assert.ok(futureResult.financialFreedomProgressProjection.find((row) => row.age >= 60).netFiAssets >= 300000);
   assert.ok(futureResult.targetAgeNetFiAssets >= 300000);
+});
+
+test("property growth is calculated from gross investment property value and kept out of current cash income", () => {
+  const { CALC, plan } = basePlan();
+  plan.personal.person1Age = 45;
+  plan.personal.targetAnnualSpending = 80000;
+  plan.investing.safeWithdrawalRatePct = 4;
+  plan.investing.expectedInvestmentReturnPct = 7;
+  plan.assets.homeValue = 900000;
+  plan.assets.otherPropertyValue = 500000;
+  plan.liabilityItems = [
+    { id: "rental-loan", type: "rentalPropertyLoan", balance: 300000 },
+  ];
+  const result = CALC.calculatePlan(plan);
+
+  assert.equal(result.projectedPropertyGrowthBase, 500000);
+  assert.equal(result.projectedPropertyGrowth, 15000);
+  assert.equal(result.investmentPropertyEquity, 200000);
+  assert.equal(result.financialIndependenceAssets, 200000);
+  assert.equal(result.accessibleInvestmentAssets, 0);
+  assert.equal(result.annualPassiveIncome, 0);
+  assert.equal(result.cashSurplusBeforeInvesting, result.finalProjectedCashSurplus);
+  assert.equal(result.combinedWealthCreation, 15000);
+  assert.ok(result.financialFreedomProgressProjection[0].netFiAssets > result.financialIndependenceAssets);
+});
+
+test("investment property growth excludes the principal residence and totals multiple investment properties separately", () => {
+  const { CALC, plan } = basePlan();
+  plan.assets.homeValue = 1200000;
+  plan.assets.otherPropertyValue = 0;
+  plan.assetItems = [
+    { id: "home", category: "home", value: 1200000 },
+    { id: "rental-a", category: "otherProperty", value: 500000 },
+    { id: "rental-b", category: "investmentProperty", value: 300000, propertyGrowthRatePct: 4 },
+    { id: "holiday", category: "otherProperty", value: 200000, isPersonalUse: true },
+  ];
+  const result = CALC.calculatePlan(plan);
+
+  assert.equal(result.projectedPropertyGrowthBase, 800000);
+  assert.equal(result.projectedPropertyGrowth, 27000);
+  assert.equal(result.projectedPropertyGrowthProperties.length, 2);
+  assert.equal(result.projectedFinancialInvestmentGrowth, 0);
+  assert.equal(result.combinedWealthCreation, 27000);
+  assert.equal(result.accessibleInvestmentAssets, 0);
+});
+
+test("dividend franking credits do not increase passive cash income, gross income or surplus", () => {
+  const { CALC, plan } = basePlan();
+  plan.incomeItems = [
+    { id: "dividend", type: "dividends", owner: "person1", amount: 7000, cashDividend: 7000, frankingCredits: 3000, frequency: "annually" },
+  ];
+  const withFranking = CALC.calculatePlan(plan);
+  plan.incomeItems = [
+    { id: "dividend", type: "dividends", owner: "person1", amount: 7000, frequency: "annually" },
+  ];
+  const simplified = CALC.calculatePlan(plan);
+
+  assert.equal(withFranking.passiveIncomeBreakdown.dividends, 7000);
+  assert.equal(withFranking.annualPassiveIncome, 7000);
+  assert.equal(withFranking.annualGrossIncome, 7000);
+  assert.equal(withFranking.cashSurplusBeforeInvesting, simplified.cashSurplusBeforeInvesting);
+  assert.equal(withFranking.finalProjectedCashSurplus, simplified.finalProjectedCashSurplus);
+  assert.equal(simplified.passiveIncomeBreakdown.dividends, 7000);
+  assert.equal(simplified.annualGrossIncome, 7000);
+  assert.equal(simplified.person1AnnualIncome, 7000);
+});
+
+test("legacy grossed-up-only dividend records use a conservative cash fallback", () => {
+  const { CALC, plan } = basePlan();
+  plan.incomeItems = [
+    { id: "dividend", type: "dividends", owner: "person1", amount: 0, totalTaxableGrossedUpDividend: 10000, frequency: "annually" },
+  ];
+  const result = CALC.calculatePlan(plan);
+
+  assert.equal(result.passiveIncomeBreakdown.dividends, 7000);
+  assert.equal(result.annualGrossIncome, 7000);
+  assert.equal(result.person1AnnualIncome, 7000);
 });
 
 test("Net FI assets count shares and crypto once across legacy fields and canonical asset records", () => {
