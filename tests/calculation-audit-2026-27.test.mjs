@@ -348,7 +348,7 @@ test("employer super is calculated from salary only and supports package-inclusi
   assert.equal(result.employerSuperContributions.person2Calculated, 9600);
 });
 
-test("passive income and dividend tax treatment do not double count franking credits or employment income", () => {
+test("dividend income migrates old franking fields into one annual dividend amount", () => {
   const { CALC, plan } = basePlan();
   plan.incomeItems = [
     { id: "salary", type: "salaryWages", owner: "person1", amount: 200000, frequency: "annually" },
@@ -359,11 +359,11 @@ test("passive income and dividend tax treatment do not double count franking cre
   ];
   const result = CALC.calculatePlan(plan);
   assert.equal(result.passiveIncomeBreakdown.interest, 2000);
-  assert.equal(result.passiveIncomeBreakdown.dividends, 4000);
+  assert.equal(result.passiveIncomeBreakdown.dividends, 5714);
   assert.equal(result.passiveIncomeBreakdown.otherPassive, 1000);
-  assert.equal(result.passiveIncomeBreakdown.total, 7000);
+  assert.equal(result.passiveIncomeBreakdown.total, 8714);
   assert.equal(result.person2AnnualIncome, 9214);
-  assert.equal(result.annualGrossIncome, 210000);
+  assert.equal(result.annualGrossIncome, 211714);
 });
 
 test("rental cashflow uses linked loan treatment without deducting loan interest twice", () => {
@@ -447,6 +447,9 @@ test("Financial Freedom progress uses net FI assets while passive income stays s
   assert.equal(result.estimatedSustainableIncomeFromCurrentFiAssets, 40000);
   assert.equal(result.passiveIncomeCoveragePercent, 0);
   assert.equal(result.annualPassiveIncome, 0);
+  assert.equal(result.projectedInvestmentGrowthBase, 1000000);
+  assert.equal(result.projectedInvestmentGrowth, 70000);
+  assert.equal(result.combinedWealthCreation, 70000);
   assert.equal(result.totalIncomeProducingAssets, 1500000);
   assert.equal(result.includeInvestmentPropertyEquityInFi, true);
 
@@ -456,6 +459,8 @@ test("Financial Freedom progress uses net FI assets while passive income stays s
   assert.equal(result.liquidInvestmentAssets, 650000);
   assert.equal(result.financialIndependenceAssets, 900000);
   assert.equal(result.financialFreedomProgressRaw, 36);
+  assert.equal(result.projectedInvestmentGrowthBase, 900000);
+  assert.equal(result.projectedInvestmentGrowth, 63000);
 
   plan.personal.person1Age = 61;
   result = CALC.calculatePlan(plan);

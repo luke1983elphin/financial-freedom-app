@@ -479,6 +479,18 @@
     return "joint";
   }
 
+  function migratedDividendAnnualAmount(item = {}) {
+    const frequency = item.frequency || "annually";
+    const grossedUp = nonNegative(item.totalTaxableGrossedUpDividend ?? item.grossedUpDividend);
+    if (grossedUp > 0) return roundCurrency(annualize(grossedUp, frequency));
+    const cashDividend = nonNegative(item.cashDividend);
+    const frankingCredits = nonNegative(item.frankingCredits);
+    if (cashDividend > 0 || frankingCredits > 0) {
+      return roundCurrency(annualize(cashDividend + frankingCredits, frequency));
+    }
+    return roundCurrency(annualize(item.amount, frequency));
+  }
+
   function normalisedIncomeItems(plan = {}) {
     const items = Array.isArray(plan.incomeItems) ? plan.incomeItems : [];
     if (items.length) {
@@ -487,17 +499,18 @@
         const owner = normaliseIncomeOwner(item.owner || item.incomeOwner, type, index);
         const person1AllocationPercentage = number(item.person1AllocationPercentage ?? item.person1AllocationPct);
         const person2AllocationPercentage = number(item.person2AllocationPercentage ?? item.person2AllocationPct);
+        const migratedAmount = type === "dividends" ? migratedDividendAnnualAmount(item) : number(item.amount);
         return {
           ...item,
           type,
           owner,
-          amount: number(item.amount),
+          amount: migratedAmount,
           cashDividend: number(item.cashDividend),
           frankingCredits: number(item.frankingCredits),
           totalTaxableGrossedUpDividend: number(item.totalTaxableGrossedUpDividend ?? item.grossedUpDividend),
           person1AllocationPercentage,
           person2AllocationPercentage,
-          frequency: type === "rentalNetCashIncome" ? "annually" : item.frequency || "annually",
+          frequency: type === "rentalNetCashIncome" || type === "dividends" ? "annually" : item.frequency || "annually",
         };
       });
     }
@@ -511,9 +524,6 @@
   function incomeCashAnnualAmount(item = {}) {
     const type = normaliseIncomeType(item.type || item.incomeType);
     if (type === "salaryWages") return salaryCashEarningsAnnualAmount(item);
-    if (type === "dividends" && (nonNegative(item.cashDividend) > 0 || nonNegative(item.frankingCredits) > 0 || nonNegative(item.totalTaxableGrossedUpDividend) > 0)) {
-      return roundCurrency(annualize(nonNegative(item.cashDividend) || nonNegative(item.amount), item.frequency || "annually"));
-    }
     return roundCurrency(annualize(item.amount, item.frequency || "annually"));
   }
 
@@ -550,15 +560,6 @@
   function incomeTaxableAnnualAmount(item = {}) {
     const type = normaliseIncomeType(item.type || item.incomeType);
     if (type === "salaryWages") return salaryCashEarningsAnnualAmount(item);
-    if (type === "dividends") {
-      const grossedUp = nonNegative(item.totalTaxableGrossedUpDividend ?? item.grossedUpDividend);
-      if (grossedUp > 0) return roundCurrency(annualize(grossedUp, item.frequency || "annually"));
-      const cashDividend = nonNegative(item.cashDividend);
-      const frankingCredits = nonNegative(item.frankingCredits);
-      if (cashDividend > 0 || frankingCredits > 0) {
-        return roundCurrency(annualize(cashDividend + frankingCredits, item.frequency || "annually"));
-      }
-    }
     return incomeCashAnnualAmount(item);
   }
 
@@ -1829,6 +1830,19 @@
     const expectedInvestmentReturn = annualRate(plan.investing.expectedInvestmentReturnPct);
     const expectedSuperReturn = annualRate(plan.investing.expectedSuperReturnPct);
     const inflation = annualRate(plan.investing.inflationPct);
+    const grossGrowthInvestmentAssets = roundCurrency(
+      currentFiAssetSummary.sharesEtfsFiAssets
+      + currentFiAssetSummary.cryptoFiAssets
+      + currentFiAssetSummary.managedFundFiAssets
+      + currentFiAssetSummary.investmentBondFiAssets
+      + currentFiAssetSummary.otherInvestableFiAssets,
+    );
+    const projectedInvestmentGrowthBase = roundCurrency(
+      Math.max(0, grossGrowthInvestmentAssets - currentFiAssetSummary.otherInvestmentDebt)
+      + currentFiAssetSummary.investmentPropertyEquity,
+    );
+    const projectedInvestmentGrowth = roundCurrency(projectedInvestmentGrowthBase * expectedInvestmentReturn);
+    const combinedWealthCreation = roundCurrency(annualPassiveIncome + projectedInvestmentGrowth);
     const freedMonthlyRepayments = Array.from({ length: 360 }, (_, monthIndex) => {
       if (!loan.payoffMonth) return 0;
       return monthIndex + 1 > loan.payoffMonth ? nonNegative(plan.liabilities.monthlyRepayment || plan.expenses.mortgageRepayments) : 0;
@@ -2068,6 +2082,9 @@
       otherAnnualIncome,
       passiveIncomeBreakdown: passiveIncomeSummary,
       annualPassiveIncome,
+      projectedInvestmentGrowthBase,
+      projectedInvestmentGrowth,
+      combinedWealthCreation,
       passiveIncomeCoveragePercent,
       lifestyleFundingPercent,
       estimatedSustainableIncomeFromCurrentFiAssets,

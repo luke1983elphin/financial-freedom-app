@@ -186,7 +186,7 @@
     },
     financialStage: {
       title: "Financial stages",
-      body: "The stage shows where your plan appears to sit today. Stage progress is based primarily on current net FI assets compared with target FI assets, while cashflow, emergency savings and debt control help explain what may move you forward. Passive income is shown separately.",
+      body: "The stage shows where your plan appears to sit today. Stage progress is based primarily on current net FI assets compared with target FI assets, while cashflow, emergency savings and debt control help explain what may move you forward. Passive Cash Income is shown separately.",
     },
     financialFreedomProgress: {
       title: "Financial Freedom Progress",
@@ -194,7 +194,7 @@
     },
     sustainableIncome: {
       title: "Estimated sustainable income",
-      body: "This estimates the annual income your current net FI assets may support using the selected withdrawal rate. It is separate from actual passive income currently recorded in your plan.",
+      body: "This estimates the annual income your current net FI assets may support using the selected withdrawal rate. It is separate from actual Passive Cash Income currently recorded in your plan.",
     },
     stslDebt: {
       title: "Study and Training Support Loan",
@@ -213,8 +213,32 @@
       body: "Only the principal component is deducted separately from household cashflow because rental loan interest is already included in the linked rental property net cash income.",
     },
     passiveIncome: {
-      title: "Passive Income",
-      body: "Passive income includes interest, dividends, distributions, rental cash income before principal repayments and other income identified as passive. Salary and wages are excluded. For rental properties, linked loan principal repayments are shown separately because loan interest may already be included in net rental cash income.",
+      title: "Passive Cash Income",
+      body: "Passive Cash Income includes income expected to be received as cash, such as interest, dividends, distributions, net rental cash income and other recurring passive income. It does not include unrealised investment growth.",
+    },
+    projectedInvestmentGrowth: {
+      title: "Projected Investment Growth",
+      body: "Projected Investment Growth estimates the annual growth expected from accessible investment assets based on the assumptions entered. It is not treated as spendable cash unless assets are sold or income is received.",
+    },
+    combinedWealthCreation: {
+      title: "Combined Wealth Creation",
+      body: "Combined Wealth Creation adds Passive Cash Income and Projected Investment Growth to show the broader wealth-building effect of income and asset growth together.",
+    },
+    accessibleInvestments: {
+      title: "Accessible Investments",
+      body: "Accessible Investments are assets that could generally be accessed before superannuation preservation age. This typically includes cash, shares, ETFs, managed funds, cryptocurrency and investment property equity where applicable. Your family home, personal assets and superannuation are excluded.",
+    },
+    annualLifestyleTarget: {
+      title: "Annual Lifestyle Target",
+      body: "This is the annual lifestyle cost the plan is trying to fund. It is used to estimate the Financial Freedom target and compare whether passive cash income and assets could support the desired lifestyle.",
+    },
+    stslAdvancedTaxSetting: {
+      title: "STSL optional advanced tax setting",
+      body: "Complete this section if either person has a HELP, HECS, VET Student Loan or other Australian study loan. Estimated compulsory repayments will be included in your tax calculation.",
+    },
+    privateHealthAdvancedTaxSetting: {
+      title: "Private Health Cover optional advanced tax setting",
+      body: "Complete this section to help estimate whether the Medicare Levy Surcharge applies. Hospital cover generally needs to apply to the relevant individual or family members.",
     },
     employerSuperEstimate: {
       title: "Estimated employer super contributions",
@@ -1337,6 +1361,25 @@
     return name || `Person ${personNumber}`;
   }
 
+  function firstNameOnly(value) {
+    return String(value || "").trim().split(/\s+/).filter(Boolean)[0] || "";
+  }
+
+  function possessiveName(value) {
+    const name = firstNameOnly(value);
+    if (!name) return "";
+    return /s$/i.test(name) ? `${name}'` : `${name}'s`;
+  }
+
+  function weeklyPlanDisplayTitle() {
+    const names = [plan.personal?.person1Name, plan.personal?.person2Name]
+      .map(firstNameOnly)
+      .filter(Boolean);
+    if (names.length === 1) return `${possessiveName(names[0])} Ongoing Weekly Plan`;
+    if (names.length >= 2) return `${names[0]} & ${possessiveName(names[1])} Ongoing Weekly Plan`;
+    return "Your Ongoing Weekly Plan";
+  }
+
   function superDisplayName(personNumber) {
     return `${personDisplayName(personNumber)} Super`;
   }
@@ -1438,6 +1481,22 @@
         item.frequency = "annually";
         item.rentalCashflowTreatment = item.rentalCashflowTreatment === "beforeInterest" ? "beforeInterest" : "afterInterest";
         if (!Array.isArray(item.linkedLoanIds)) item.linkedLoanIds = item.linkedLoanId ? [item.linkedLoanId] : [];
+      }
+      if (item.type === "dividends") {
+        const grossedUp = Number(item.totalTaxableGrossedUpDividend ?? item.grossedUpDividend) || 0;
+        const cashDividend = Number(item.cashDividend) || 0;
+        const frankingCredits = Number(item.frankingCredits) || 0;
+        if (!item.dividendSimplified && (grossedUp > 0 || cashDividend > 0 || frankingCredits > 0)) {
+          item.amount = grossedUp > 0
+            ? annualValue(grossedUp, item.frequency || "annually")
+            : annualValue(cashDividend + frankingCredits, item.frequency || "annually");
+          item.cashDividend = 0;
+          item.frankingCredits = 0;
+          item.totalTaxableGrossedUpDividend = 0;
+          item.grossedUpDividend = 0;
+          item.dividendSimplified = true;
+        }
+        item.frequency = "annually";
       }
       if (item.type === "other" && item.isPassiveIncome === undefined && item.passiveIncome === true) {
         item.isPassiveIncome = true;
@@ -2308,6 +2367,8 @@
         gapToFinancialFreedom: numberValue(result.fiTargetRemaining),
         estimatedSustainableIncomeFromCurrentFiAssets: numberValue(result.estimatedSustainableIncomeFromCurrentFiAssets),
         estimatedAnnualPassiveIncome: numberValue(result.annualPassiveIncome),
+        projectedInvestmentGrowth: numberValue(result.projectedInvestmentGrowth),
+        combinedWealthCreation: numberValue(result.combinedWealthCreation),
         passiveIncomeCoveragePct: numberValue(result.passiveIncomeCoveragePercent),
         passiveIncomeBreakdown: result.passiveIncomeBreakdown || {},
         financialFreedomProgressPct: numberValue(result.financialFreedomScore),
@@ -2821,7 +2882,7 @@
       compareValue("Debt-to-asset ratio", historical.calculated.debtToAssetRatio, current.calculated.debtToAssetRatio, { category: "Liabilities", betterWhen: "decrease" }),
       compareValue("Gross household income", historical.calculated.annualGrossIncome, current.calculated.annualGrossIncome, { category: "Income", betterWhen: "context" }),
       compareValue("Net household income", historical.calculated.annualNetIncome, current.calculated.annualNetIncome, { category: "Income", betterWhen: "increase" }),
-      compareValue("Passive income", historical.calculated.passiveIncome, current.calculated.passiveIncome, { category: "Income", betterWhen: "increase" }),
+      compareValue("Passive Cash Income", historical.calculated.passiveIncome, current.calculated.passiveIncome, { category: "Income", betterWhen: "increase" }),
       compareValue("Lifestyle spending", historical.calculated.annualLifestyleSpending, current.calculated.annualLifestyleSpending, { category: "Expenses", betterWhen: "context" }),
       compareValue("Debt repayments", historical.calculated.annualDebtRepayments, current.calculated.annualDebtRepayments, { category: "Expenses", betterWhen: "context" }),
       compareValue("Investment contributions", historical.expenses.annualInvestmentContributions, current.expenses.annualInvestmentContributions, { category: "Investments", betterWhen: "context" }),
@@ -2882,7 +2943,7 @@
     if (rows["Consumer debt"]?.historical > 0 && rows["Consumer debt"]?.current <= 0) milestones.push("Consumer debt cleared");
     if (comparison.current.calculated.emergencyFundMonths >= 3 && comparison.historical.calculated.emergencyFundMonths < 3) milestones.push("Emergency fund reached three months");
     if (comparison.current.calculated.emergencyFundMonths >= 6 && comparison.historical.calculated.emergencyFundMonths < 6) milestones.push("Emergency fund reached six months");
-    if (rows["Passive income"]?.change > 0) milestones.push("Passive income increased");
+    if (rows["Passive Cash Income"]?.change > 0) milestones.push("Passive Cash Income increased");
     if (rows["Financial Freedom progress"]?.change >= 5) milestones.push("Financial Freedom progress increased by at least 5%");
     [25, 50, 75, 100].forEach((threshold) => {
       if (comparison.historical.calculated.financialIndependenceProgress < threshold && comparison.current.calculated.financialIndependenceProgress >= threshold) {
@@ -2943,7 +3004,7 @@
         fiTargetChange: row("FI target assets").change,
         superChange: row("Superannuation").change,
         cashChange: row("Cash and offset balances").change,
-        passiveIncomeChange: row("Passive income").change,
+        passiveIncomeChange: row("Passive Cash Income").change,
         spendingChange: row("Lifestyle spending").change,
         surplusChange: row("Annual cash surplus").change,
         emergencyFundChange: row("Emergency fund months").change,
@@ -4228,12 +4289,7 @@
   }
 
   function dividendTaxFields(item, type) {
-    if (type !== "dividends") return "";
-    return `
-      ${dynamicInput("incomeItems", item, "cashDividend", "Cash dividend received", { step: "100" })}
-      ${dynamicInput("incomeItems", item, "frankingCredits", "Franking credits", { step: "100" })}
-      ${dynamicInput("incomeItems", item, "totalTaxableGrossedUpDividend", "Total taxable grossed-up dividend", { step: "100" })}
-    `;
+    return "";
   }
 
   function investmentAssetLinkOptionPairs(category = "") {
@@ -4255,7 +4311,7 @@
     item.owner = owner;
     const typeLabel = incomeTypeLabels[type] || "Income";
     const ownerLabel = owner === "joint" ? "Joint" : personDisplayName(owner === "person2" ? 2 : 1);
-    const rentalFields = type === "rentalNetCashIncome" ? `
+    const incomeFields = type === "rentalNetCashIncome" ? `
           ${dynamicInput("incomeItems", item, "name", "Income description", { kind: "text", placeholder: "e.g. Rental property cashflow" })}
           ${dynamicInput("incomeItems", item, "type", "Income type", { type: "select", options: incomeTypeOptions, infoKey: "rentalNetCashIncome" })}
           ${dynamicInput("incomeItems", item, "propertyName", "Property name or description", { kind: "text", placeholder: "e.g. Smith Street rental" })}
@@ -4264,6 +4320,12 @@
           ${dynamicInput("incomeItems", item, "amount", "Annual net taxable profit after deductible interest", { step: "100", infoKey: "rentalNetCashIncome" })}
           ${dynamicInput("incomeItems", item, "rentalCashflowTreatment", "Rental cashflow treatment", { type: "select", options: rentalCashflowTreatmentOptions })}
           ${dynamicInput("incomeItems", item, "note", "Optional notes", { kind: "text", placeholder: "Optional context" })}
+        ` : type === "dividends" ? `
+          ${dynamicInput("incomeItems", item, "name", "Investment name", { kind: "text", placeholder: "e.g. ETF portfolio" })}
+          ${dynamicInput("incomeItems", item, "type", "Income type", { type: "select", options: incomeTypeOptions })}
+          ${dynamicInput("incomeItems", item, "owner", "Owner", { type: "select", options: incomeOwnerOptions(type) })}
+          ${incomeAllocationFields(item, owner)}
+          ${dynamicInput("incomeItems", item, "amount", "Gross Annual Dividend", { step: "100", placeholder: "Annual dividend amount" })}
         ` : `
           ${dynamicInput("incomeItems", item, "name", "Income name", { kind: "text", placeholder: "e.g. Salary, rent, dividends" })}
           ${dynamicInput("incomeItems", item, "type", "Income type", { type: "select", options: incomeTypeOptions })}
@@ -4285,7 +4347,7 @@
           ${removeButton("incomeItems", item.id)}
         </div>
         <div class="input-grid mt-4">
-          ${rentalFields}
+          ${incomeFields}
         </div>
         ${type === "rentalNetCashIncome" ? `${rentalLoanLinkControls(item)}<p class="field-help mt-3">${escapeHtml(goalInfoCopy.rentalNetCashIncome.body)}</p>` : ""}
       </article>
@@ -4455,22 +4517,47 @@
   function taxSettingsCardHtml() {
     const p1 = personDisplayName(1);
     const p2 = personDisplayName(2);
-    const fields = [
+    const stslFields = [
       { label: `${p1} has a Study and Training Support Loan debt`, path: "income.person1HasStslDebt", type: "checkbox", infoKey: "stslDebt", help: "Select this if STSL withholding or compulsory repayment should be estimated for this person. Enter the balance under Liabilities." },
       { label: `${p2} has a Study and Training Support Loan debt`, path: "income.person2HasStslDebt", type: "checkbox", infoKey: "stslDebt", help: "The debt balance is entered under Liabilities and can be assigned to this person." },
+    ];
+    const privateHealthFields = [
       { label: `${p1} eligible private patient hospital cover`, path: "income.person1HospitalCoverStatus", type: "select", options: hospitalCoverOptions, infoKey: "hospitalCover" },
       { label: `${p1} covered days if partial year`, path: "income.person1HospitalCoverDays", step: "1", help: "Only needed when cover applied for part of the financial year." },
       { label: `${p2} eligible private patient hospital cover`, path: "income.person2HospitalCoverStatus", type: "select", options: hospitalCoverOptions, infoKey: "hospitalCover" },
       { label: `${p2} covered days if partial year`, path: "income.person2HospitalCoverDays", step: "1", help: "Only needed when cover applied for part of the financial year." },
       { label: "Dependent children", path: "personal.dependants", step: "1", help: "Used only for family Medicare levy surcharge thresholds." },
     ];
+    const accordion = ({ title, infoKey, intro, fields }) => `
+      <details class="advanced-tax-accordion">
+        <summary>
+          <span class="field-label-with-info">${escapeHtml(title)}${infoButtonHtml(infoKey, title)}</span>
+          <span class="accordion-summary-hint">Optional</span>
+        </summary>
+        <p class="field-help mt-3">${escapeHtml(intro)}</p>
+        <div class="input-grid mt-4">${fields.map(field).join("")}</div>
+      </details>
+    `;
     return `
       <article class="form-item-card">
         <div class="card-subheading">
           <h3>Tax and study-loan details</h3>
-          <p>These settings help estimate STSL compulsory repayments and Medicare levy surcharge separately from income tax. Extras-only private health policies generally do not prevent Medicare levy surcharge exposure.</p>
+          <p>Optional settings for study-loan repayments and Medicare Levy Surcharge estimates.</p>
         </div>
-        <div class="input-grid mt-4">${fields.map(field).join("")}</div>
+        <div class="advanced-tax-accordion-list mt-4">
+          ${accordion({
+            title: "STSL (Optional Advanced Tax Setting)",
+            infoKey: "stslAdvancedTaxSetting",
+            intro: "Complete this section if either person has a HELP, HECS, VET Student Loan or other Australian study loan.",
+            fields: stslFields,
+          })}
+          ${accordion({
+            title: "Private Health Cover (Optional Advanced Tax Setting)",
+            infoKey: "privateHealthAdvancedTaxSetting",
+            intro: "Complete this section to help estimate whether the Medicare Levy Surcharge applies.",
+            fields: privateHealthFields,
+          })}
+        </div>
       </article>
     `;
   }
@@ -4818,8 +4905,8 @@
       </article>
       <div class="dashboard-card-grid mt-4">
         ${metricCard("Current stage", stage.name)}
-        ${metricCard("Annual passive income", money(passive))}
-        ${metricCard("Annual lifestyle target", money(target))}
+        ${metricCard("Passive Cash Income", money(passive), "", "Recurring income from passive sources, separate from unrealised growth.", "passiveIncome")}
+        ${metricCard("Annual Lifestyle Target", money(target), "", "The annual lifestyle cost the plan is trying to fund.", "annualLifestyleTarget")}
         ${metricCard("Financial Freedom progress", plainPercent(percent), "", "Current net FI assets divided by target FI assets.", "financialFreedomProgress")}
       </div>
       <button class="btn btn-primary mt-4 w-full justify-center" type="button" data-view="dashboard">View Dashboard</button>
@@ -4890,7 +4977,7 @@
           <span class="metric-label">Financial Freedom progress</span>
           <strong>${plainPercent(percent)} of target FI assets</strong>
         </div>
-        <p id="freedomPassiveText" class="progress-caption">Based on current net FI assets compared with your target FI assets. Passive income is shown separately.</p>
+        <p id="freedomPassiveText" class="progress-caption">Based on current net FI assets compared with your target FI assets. Passive Cash Income is shown separately.</p>
       </div>
       <div class="stage-actions">
         <span class="metric-label">What moves you forward</span>
@@ -4921,11 +5008,15 @@
       metricCard(stageInfo.nextStage ? `Progress Toward ${stageInfo.nextStage.name}` : "Financial Freedom Achieved", stageInfo.nextStage ? plainPercent(stageInfo.progressToNext) : "100%"),
       metricCard("Debt Balance", money(result.totalLiabilities), result.totalLiabilities <= result.totalAssets * 0.5 ? "status-green" : "status-amber"),
       metricCard("Monthly Surplus / Deficit", money(monthlySurplus), monthlySurplus >= 0 ? "status-green" : "status-amber"),
+      metricCard("Accessible Investments", money(result.accessibleInvestmentAssets), "", "Accessible assets counted before super access age, net of linked investment debt.", "accessibleInvestments"),
       metricCard("Current Net FI Assets", money(result.financialIndependenceAssets), "", "Income-producing and investable assets counted toward Financial Freedom, net of linked investment debt.", "currentFiAssets"),
       metricCard("Target FI Assets", money(result.targetCapital), "", "Annual lifestyle spending divided by the selected withdrawal rate.", "targetFiAssets"),
+      metricCard("Annual Lifestyle Target", money(target), "", "The annual lifestyle cost the plan is trying to fund.", "annualLifestyleTarget"),
       metricCard("Remaining Required", money(result.fiTargetRemaining ?? Math.max(0, result.targetCapital - result.financialIndependenceAssets))),
       metricCard("Estimated Sustainable Income", money(result.estimatedSustainableIncomeFromCurrentFiAssets), "", "Current net FI assets multiplied by the selected withdrawal rate.", "sustainableIncome"),
-      metricCard("Annual Passive Income", money(passiveIncome), "", "This is based on income items classified as passive, including net rental property cashflow.", "passiveIncome"),
+      metricCard("Passive Cash Income", money(passiveIncome), "", "Recurring cash income from passive sources such as interest, dividends, distributions and net rental cash income.", "passiveIncome"),
+      metricCard("Projected Investment Growth", money(result.projectedInvestmentGrowth || 0), "", "Estimated annual growth on accessible investment assets based on the return assumptions entered.", "projectedInvestmentGrowth"),
+      metricCard("Combined Wealth Creation", money(result.combinedWealthCreation || 0), "", "Passive cash income plus projected investment growth.", "combinedWealthCreation"),
       metricCard("Annual Living Expenses", money(livingExpenses), "", "This is calculated from your recurring expense items and excludes investing and loan principal repayments."),
       metricCard("Highest Priority", highestRecommendation(result)),
       weeklyHealthCheckCard(result),
@@ -5891,7 +5982,7 @@
     return `
       <section class="passive-income-card${options.compact ? " passive-income-card-compact" : ""}">
         <div class="card-subheading">
-          <h3 class="field-label-with-info">Passive income ${infoButtonHtml("passiveIncome", "Passive Income")}</h3>
+          <h3 class="field-label-with-info">Passive Cash Income ${infoButtonHtml("passiveIncome", "Passive Cash Income")}</h3>
           <p>Income that may help fund the target lifestyle without salary or wages.</p>
         </div>
         <div class="summary-grid mt-3">
@@ -5900,7 +5991,7 @@
           ${summaryTile("Distribution income", money(summary.distributions))}
           ${summaryTile("Passive rental income before principal", money(summary.rental))}
           ${summaryTile("Other passive income", money(summary.otherPassive))}
-          ${summaryTile("Total passive income", money(summary.total), summary.total > 0 ? "status-green" : "", "passiveIncome")}
+          ${summaryTile("Total Passive Cash Income", money(summary.total), summary.total > 0 ? "status-green" : "", "passiveIncome")}
         </div>
         ${rentalRows ? `<div class="table-list mt-3">${rentalRows}</div>` : ""}
         ${options.showOwners ? `
@@ -6011,7 +6102,7 @@
     container.innerHTML = [
       summaryTile("Target FI Capital", money(result.targetCapital), "", "targetFiCapital"),
       summaryTile("Current FI Assets", money(result.financialIndependenceAssets), "", "currentFiAssets"),
-      summaryTile("Current annual passive income", money(annualPassiveIncome(result)), "", "passiveIncome"),
+      summaryTile("Current Passive Cash Income", money(annualPassiveIncome(result)), "", "passiveIncome"),
       summaryTile("Financial Freedom progress", plainPercent(freedomPercent(result)), "", "financialFreedomProgress"),
       summaryTile("Annual Lifestyle Spending Needed for Financial Freedom", money(plan.personal.targetAnnualSpending), "", "annualLifestyleSpending"),
     ].join("");
@@ -6365,7 +6456,7 @@
 
   function plannerAssumptions(result) {
     return [
-      { label: "Planner start date", value: plannerShortDate(plan.reportSettings.weeklyPlanner.startDate), note: "Beginning of Week 1." },
+      { label: "Planner start date", value: plannerShortDate(plan.reportSettings.weeklyPlanner.startDate), note: "Beginning of the first planner date range." },
       { label: "Annual Lifestyle Spending Needed for Financial Freedom", value: money(plan.personal.targetAnnualSpending), note: "Used in the Financial Freedom target." },
       { label: "Investment return", value: `${Number(plan.investing.expectedInvestmentReturnPct || 0).toFixed(1)}%`, note: "Not applied to the weekly bank schedule." },
       { label: "Super return", value: `${Number(plan.investing.expectedSuperReturnPct || 0).toFixed(1)}%`, note: "Not applied to the weekly bank schedule." },
@@ -6384,6 +6475,7 @@
     const weeks = Array.from({ length: settings.periodWeeks }, (_, index) => ({
       week: index + 1,
       startDateIso: plannerDateIso(addDays(startDate, index * 7)),
+      endDateIso: plannerDateIso(addDays(startDate, index * 7 + 6)),
     }));
     const sections = weeklyPlan?.weeks?.length === weeks.length
       ? buildPlannerSectionsFromWeeklyPlan(weeks)
@@ -6507,7 +6599,7 @@
     preview.innerHTML = `
       <div class="summary-grid planner-summary-grid">
         ${summaryTile("Planner period", `${planner.weeks.length} weeks`)}
-        ${summaryTile("Week 1 starts", plannerShortDate(firstWeek.startDateIso))}
+        ${summaryTile("Planner starts", weeklyDateLabel(firstWeek.startDateIso, firstWeek.endDateIso))}
         ${summaryTile("Starting bank balance", money(planner.startingBalance))}
         ${summaryTile("Projected ending balance", money(finalWeek.closingBalance), finalWeek.closingBalance >= 0 ? "status-green" : "status-amber")}
         ${summaryTile("Estimated net money in", money(totalReceipts))}
@@ -6526,8 +6618,8 @@
             <article class="planner-week-card ${week.closingBalance < 0 ? "planner-week-warning" : ""}">
               <div class="planner-week-title">
                 <div>
-                  <span>Week ${week.week}</span>
-                  <h4>${plannerShortDate(week.startDateIso)}</h4>
+                  <span>${escapeHtml(week.statusLabel || "Forecast")}</span>
+                  <h4>${escapeHtml(weeklyDateLabel(week.startDateIso, week.endDateIso))}</h4>
                 </div>
                 <strong>${money(week.closingBalance)}</strong>
               </div>
@@ -6653,10 +6745,12 @@
     const start = new Date(`${startDate}T00:00:00`);
     const end = endDate ? new Date(`${endDate}T00:00:00`) : null;
     if (Number.isNaN(start.getTime())) return startDate || "";
+    if (!end || Number.isNaN(end.getTime())) {
+      return start.toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" });
+    }
     const startText = start.toLocaleDateString("en-AU", { day: "numeric", month: "long" });
-    if (!end || Number.isNaN(end.getTime())) return startText;
-    const endText = end.toLocaleDateString("en-AU", { day: "numeric", month: "long" });
-    return `${startText} to ${endText}`;
+    const endText = end.toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" });
+    return `${startText} - ${endText}`;
   }
 
   function weeklyStatusClass(status) {
@@ -7220,6 +7314,11 @@
     return weeklyViewedWeek();
   }
 
+  function weeklyDateLabelForNumber(weekNumber) {
+    const week = weeklyPlan?.weeks?.find((item) => item.weekNumber === Number(weekNumber));
+    return week ? weeklyDateLabel(week.startDate, week.endDate) : "Selected date range";
+  }
+
   function daysUntilWeeklyPlanStarts() {
     if (!weeklyPlan?.startDate) return 0;
     const start = new Date(`${weeklyPlan.startDate}T00:00:00`);
@@ -7246,7 +7345,7 @@
   }
 
   function weeklyCalendarStatusText(week) {
-    return weeklyCalendarStatusParts(week).join(" · ");
+    return weeklyCalendarStatusParts(week).join(" - ");
   }
 
   function weeklyWeekHasStarted(week) {
@@ -7262,8 +7361,8 @@
       <div class="weekly-week-navigation" aria-label="Weekly Plan week navigation">
         <button class="btn" type="button" data-weekly-action="view-week" data-weekly-week="${week.weekNumber - 1}"${week.weekNumber <= 1 ? " disabled" : ""}>Previous week</button>
         <div class="weekly-week-navigation-center">
-          <strong>Week ${week.weekNumber} of ${weeklyPlan.weeks.length}</strong>
-          <span>${escapeHtml(weeklyDateLabel(week.startDate, week.endDate))}</span>
+          <strong>${escapeHtml(weeklyDateLabel(week.startDate, week.endDate))}</strong>
+          <span>${week.weekNumber} of ${weeklyPlan.weeks.length}</span>
           <em>${escapeHtml(weeklyCalendarStatusText(week))}</em>
           ${startInDays ? `<small>Planner starts in ${startInDays} day${startInDays === 1 ? "" : "s"}.</small>` : ""}
         </div>
@@ -7580,7 +7679,7 @@
       <article class="card mt-4 weekly-complete-summary-card">
         <div class="card-heading">
           <div>
-            <h3>${week.isCompleted ? "Week Complete" : "Weekly Variance Summary"}</h3>
+            <h3>${week.isCompleted ? "Review Complete" : "Weekly Variance Summary"}</h3>
             <span>Quick feedback from the actual amounts entered for this week.</span>
           </div>
         </div>
@@ -7646,7 +7745,7 @@
         <details class="weekly-completed-details">
           <summary>
             <div>
-              <span class="metric-label">Week ${week.weekNumber} · Completed</span>
+              <span class="metric-label">Completed</span>
               <h3>${escapeHtml(weeklyDateLabel(week.startDate, week.endDate))}</h3>
             </div>
             <div class="weekly-completed-summary-grid">
@@ -7886,7 +7985,7 @@
       <article class="weekly-hero card ${statusClass}">
         <div>
           <span class="metric-label">${week.weekNumber === weeklyPlanCurrentCalendarWeekNumber() ? "This Week's Money Plan" : "Weekly Money Plan"}</span>
-          <h3>Week ${week.weekNumber}: ${escapeHtml(weeklyDateLabel(week.startDate, week.endDate))}</h3>
+          <h3>${escapeHtml(weeklyDateLabel(week.startDate, week.endDate))}</h3>
           <p><strong>${escapeHtml(weeklyCalendarStatusText(week))}</strong></p>
           <p>${escapeHtml(week.isCompleted ? "This completed week is saved. Open a step to review details or edit if needed." : planned.statusMessage)}</p>
         </div>
@@ -7927,7 +8026,7 @@
               <details class="weekly-upcoming-card ${weeklyStatusClass(planned.status)}" ${week.weekNumber === weeklyPlan.currentWeekNumber ? "open" : ""}>
                 <summary>
                   <div>
-                    <span>Week ${week.weekNumber}</span>
+                    <span>${escapeHtml(weeklyCalendarStatusText(week))}</span>
                     <strong>${escapeHtml(weeklyDateLabel(week.startDate, week.endDate))}</strong>
                   </div>
                   <div class="weekly-upcoming-metrics">
@@ -8168,12 +8267,12 @@
         <article class="weekly-plan-header card">
           <div>
             <span class="metric-label">Ongoing Weekly Money Plan</span>
-            <h3>${escapeHtml(weeklyPlan.planName || "Weekly Plan")}</h3>
+            <h3>${escapeHtml(weeklyPlanDisplayTitle())}</h3>
             <p>Use this each week to check money coming in, bills, spending, investments, super and extra debt repayments.</p>
           </div>
           <div class="weekly-plan-header-stat">
-            <span>Current week</span>
-            <strong>${currentCalendarWeek ? `Week ${currentCalendarWeek}` : "Not started"}</strong>
+            <span>Current dates</span>
+            <strong>${currentCalendarWeek ? escapeHtml(weeklyDateLabel(weeklyPlan.weeks[currentCalendarWeek - 1]?.startDate, weeklyPlan.weeks[currentCalendarWeek - 1]?.endDate)) : "Not started"}</strong>
           </div>
         </article>
         ${weeklyTimingSetupHtml()}
@@ -8289,9 +8388,10 @@
     if (complete && !editingCompletedWeek) {
       const completedWeek = weeklyPlan.weeks.find((item) => item.weekNumber === Number(weekNumber));
       const transfers = weeklyActualTransfers(completedWeek?.actual || {}, completedWeek?.planned || {});
+      const dateRange = weeklyDateLabelForNumber(weekNumber);
       logProgressEvent({
         eventType: "weekly-plan-completed",
-        title: `Week ${weekNumber} completed`,
+        title: `${dateRange} completed`,
         description: "Weekly review completed and future weeks updated from recorded actuals.",
         amount: transfers,
         source: "weekly-plan",
@@ -8300,13 +8400,13 @@
         },
       });
       showEngagementCelebration({
-        title: "Week Complete",
+        title: "Review Complete",
         message: transfers > 0 ? `You directed ${money(transfers)} toward your financial future this week.` : "Your weekly review has been recorded and the plan is up to date.",
         amountLabel: `Weekly progress: ${money(thisWeekProgressAmount())}`,
         secondaryLabel: `Current streak: ${weeklyCompletionStreak()} week${weeklyCompletionStreak() === 1 ? "" : "s"}`,
       });
     }
-    saveWeeklyPlan(complete ? `Week ${weekNumber} has been marked complete.` : editingCompletedWeek ? `Week ${weekNumber} has been updated.` : "Weekly progress saved.");
+    saveWeeklyPlan(complete ? `${weeklyDateLabelForNumber(weekNumber)} has been marked complete.` : editingCompletedWeek ? `${weeklyDateLabelForNumber(weekNumber)} has been updated.` : "Weekly progress saved.");
     renderAll();
     showWorkspace("weeklyplan");
   }
@@ -8346,7 +8446,7 @@
     weeklyEditingWeek = null;
     weeklyViewedWeekNumber = weekNumber;
     generatedWeeklyPlanner = null;
-    saveWeeklyPlan(`Week ${weekNumber} has been marked incomplete.`);
+    saveWeeklyPlan(`${weeklyDateLabelForNumber(weekNumber)} has been marked incomplete.`);
     renderAll();
     showWorkspace("weeklyplan");
   }
@@ -8589,7 +8689,7 @@
     }
     const payload = window.FFSWeeklyPlan.exportPayload(weeklyPlan);
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-    downloadBlob(blob, safeFilename(`Financial-Freedom-Weekly-Plan-${weeklyPlan.planName || householdNameForFile()}`, "json"));
+    downloadBlob(blob, safeFilename(`Financial-Freedom-Weekly-Plan-${householdNameForFile()}`, "json"));
     updateSaveStatus("Weekly Plan backup exported.");
   }
 
@@ -9152,14 +9252,14 @@
         <div class="${cashflowTone}"><strong>${cashflowHeading}</strong><p>${cashflowText}</p></div>
       `, "report-page-break report-compact-section")}
 
-      ${reportSection("Financial Freedom Progress", "This section compares current net FI assets with the target assets needed to support your chosen lifestyle. Passive income is shown separately as supporting context.", `
+      ${reportSection("Financial Freedom Progress", "This section compares current net FI assets with the target assets needed to support your chosen lifestyle. Passive Cash Income is shown separately as supporting context.", `
         <div class="summary-grid">
           ${summaryTile("Current FI assets", money(result.financialIndependenceAssets))}
           ${summaryTile("Target FI assets", money(result.targetCapital))}
           ${summaryTile("Gap to target", money(gap))}
           ${summaryTile("Financial Freedom progress", plainPercent(percent))}
           ${summaryTile("Estimated sustainable income", money(result.estimatedSustainableIncomeFromCurrentFiAssets), "", "sustainableIncome")}
-          ${summaryTile("Current annual passive income", money(annualPassiveIncome(result)), "", "passiveIncome")}
+          ${summaryTile("Current Passive Cash Income", money(annualPassiveIncome(result)), "", "passiveIncome")}
           ${summaryTile("10-year investment balance", money(investmentAtYear(result, 10)))}
           ${summaryTile("10-year debt estimate", money(projectedDebtAtYear(result, 10)))}
         </div>
@@ -9552,7 +9652,7 @@
             ${comparisonTableRow("Investment Balance", currentMetrics.investmentBalance, best.investmentBalance)}
             ${comparisonTableRow("Super Balance", currentMetrics.superBalance, best.superBalance)}
             ${comparisonTableRow("Net Worth", currentMetrics.projectedNetWorth, best.projectedNetWorth)}
-            ${comparisonTableRow("Annual Passive Income", currentMetrics.annualPassiveIncome, best.annualPassiveIncome)}
+            ${comparisonTableRow("Passive Cash Income", currentMetrics.annualPassiveIncome, best.annualPassiveIncome)}
             ${comparisonTableRow("Lifetime Wealth", currentMetrics.longTermNetWorth, best.longTermNetWorth)}
             ${comparisonTableRow("Debt Balance", currentMetrics.debtBalance, best.debtBalance, { lowerIsBetter: true })}
           </tbody>

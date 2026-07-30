@@ -83,8 +83,26 @@
     return date.toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" });
   }
 
+  function dateFromIso(value) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ""));
+    const date = match
+      ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+      : new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  function dateRange(week) {
+    const start = dateFromIso(week.startDateIso);
+    const end = dateFromIso(week.endDateIso);
+    if (!start) return String(week.startDateIso || "");
+    if (!end) return start.toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" });
+    const startText = start.toLocaleDateString("en-AU", { day: "numeric", month: "long" });
+    const endText = end.toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" });
+    return `${startText} - ${endText}`;
+  }
+
   function weekHeading(week) {
-    return `Week ${week.week}\n${shortDate(week.startDateIso)}`;
+    return dateRange(week);
   }
 
   function makeRows(width, rows) {
@@ -243,7 +261,7 @@
     ]);
     rows.push([blank(), blank(), ...weeks.map(() => blank())]);
     rows.push([text("Actuals and reconciliation", STYLE.section), blank(STYLE.section), ...weeks.map(() => blank(STYLE.section))]);
-    rows.push([text("Week status"), text("Recorded"), ...weeks.map((week) => text(week.statusLabel || (week.isCompleted ? "Completed" : "Forecast")))]); 
+    rows.push([text("Date-range status"), text("Recorded"), ...weeks.map((week) => text(week.statusLabel || (week.isCompleted ? "Completed" : "Forecast")))]); 
     rows.push([text("Actual opening balance"), text("Recorded"), ...weeks.map((week) => numberOrText(week.actualOpeningBalance))]);
     rows.push([text("Actual money in"), text("Recorded"), ...weeks.map((week) => numberOrText(week.actualReceiptsTotal))]);
     rows.push([text("Actual bills"), text("Recorded"), ...weeks.map((week) => numberOrText(week.actualEssentialTotal))]);
@@ -279,8 +297,8 @@
     const rows = [
       [text("Weekly Money Plan", STYLE.title), blank(), blank(), blank(), blank(), blank(), blank(), blank(), blank(), blank(), blank(), blank(), blank(), blank()],
       [
-        text("Week", STYLE.header),
-        text("Week commencing", STYLE.header),
+        text("Date range", STYLE.header),
+        text("Starts", STYLE.header),
         text("Estimated net money in", STYLE.header),
         text("Bills and spending", STYLE.header),
         text("Provisions", STYLE.header),
@@ -295,7 +313,7 @@
         text("Super done", STYLE.header),
       ],
       ...planner.weeks.map((week) => [
-        number(week.week),
+        text(dateRange(week)),
         text(shortDate(week.startDateIso), STYLE.date),
         number(week.receiptsTotal, STYLE.currency),
         number(week.essentialTotal + week.discretionaryTotal, STYLE.currency),
@@ -314,7 +332,7 @@
     return {
       name: "Weekly Money Plan",
       xml: sheetXml(makeRows(14, rows), {
-        cols: [10, 18, 16, 16, 18, 16, 14, 17, 19, 58, 15, 12, 14, 12],
+        cols: [28, 18, 16, 16, 18, 16, 14, 17, 19, 58, 15, 12, 14, 12],
         freeze: { rows: 2, cols: 2, topLeftCell: "C3" },
       }),
     };
