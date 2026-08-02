@@ -466,12 +466,12 @@ test("Financial Freedom progress uses net FI assets while passive income stays s
   assert.equal(result.accessibleInvestmentAssets, 650000);
   assert.equal(result.financialIndependenceAssets, 900000);
   assert.equal(result.financialFreedomProgressRaw, 36);
-  assert.equal(result.projectedFinancialInvestmentGrowthBase, 650000);
-  assert.equal(result.projectedFinancialInvestmentGrowth, 45500);
-  assert.equal(result.projectedInvestmentGrowthBase, 650000);
-  assert.equal(result.projectedInvestmentGrowth, 45500);
+  assert.equal(result.projectedFinancialInvestmentGrowthBase, 750000);
+  assert.equal(result.projectedFinancialInvestmentGrowth, 52500);
+  assert.equal(result.projectedInvestmentGrowthBase, 750000);
+  assert.equal(result.projectedInvestmentGrowth, 52500);
   assert.equal(result.projectedPropertyGrowth, 18000);
-  assert.equal(result.combinedWealthCreation, 63500);
+  assert.equal(result.combinedWealthCreation, 70500);
 
   plan.personal.person1Age = 61;
   result = CALC.calculatePlan(plan);
@@ -505,6 +505,67 @@ test("Financial Freedom progress uses net FI assets while passive income stays s
   assert.equal(futureResult.financialFreedomProgressRaw, 0);
   assert.ok(futureResult.financialFreedomProgressProjection.find((row) => row.age >= 60).netFiAssets >= 300000);
   assert.ok(futureResult.targetAgeNetFiAssets >= 300000);
+});
+
+test("projected financial investment growth uses gross financial assets before investment debt", () => {
+  const { CALC, plan } = basePlan();
+  plan.personal.person1Age = 45;
+  plan.personal.targetAnnualSpending = 80000;
+  plan.investing.safeWithdrawalRatePct = 4;
+  plan.investing.expectedInvestmentReturnPct = 8;
+  plan.investing.annualInvestingTarget = 12000;
+  plan.assets.sharesEtfs = 150000;
+  plan.assets.crypto = 50000;
+  plan.liabilityItems = [
+    {
+      id: "share-loan",
+      type: "investmentLoan",
+      balance: 100000,
+      interestRatePct: 7,
+      repayment: 1000,
+      repaymentFrequency: "monthly",
+      termYears: 10,
+      investmentAssetCategory: "shares",
+    },
+  ];
+
+  const result = CALC.calculatePlan(plan);
+  const loanBreakdown = CALC.getAnnualLoanBreakdown(plan.liabilityItems[0]);
+
+  assert.equal(result.projectedFinancialInvestmentGrowthBase, 200000);
+  assert.equal(result.projectedFinancialInvestmentGrowth, 16000);
+  assert.equal(result.projectedInvestmentGrowthBase, 200000);
+  assert.equal(result.projectedInvestmentGrowth, 16000);
+  assert.equal(result.otherInvestmentDebt, 100000);
+  assert.equal(result.grossLiquidInvestmentAssets, 200000);
+  assert.equal(result.liquidInvestmentAssets, 100000);
+  assert.equal(result.financialIndependenceAssets, 100000);
+  assert.equal(result.projectedPropertyGrowth, 0);
+  assert.equal(result.combinedWealthCreation, 16000);
+  assert.equal(result.investmentProjection[0].openingBalance, 200000);
+  assert.ok(result.investmentProjection[0].closingBalance > 212000);
+  assert.ok(loanBreakdown.annualInterest > 0);
+  assert.ok(loanBreakdown.annualPrincipal > 0);
+  assert.ok(loanBreakdown.closingBalance < 100000);
+});
+
+test("investment asset double-counting protections still use gross growth once", () => {
+  const { CALC, plan } = basePlan();
+  plan.investing.expectedInvestmentReturnPct = 8;
+  plan.assets.sharesEtfs = 200000;
+  plan.assetItems = [
+    { id: "shares-a", category: "shares", value: 200000 },
+    { id: "shares-a", category: "shares", value: 200000 },
+  ];
+  plan.liabilityItems = [
+    { id: "share-loan", type: "investmentLoan", balance: 100000 },
+  ];
+  const result = CALC.calculatePlan(plan);
+
+  assert.equal(result.canonicalAssetSource.sharesEtfs, "assetItems");
+  assert.equal(result.projectedFinancialInvestmentGrowthBase, 200000);
+  assert.equal(result.projectedFinancialInvestmentGrowth, 16000);
+  assert.equal(result.financialIndependenceAssets, 100000);
 });
 
 test("property growth is calculated from gross investment property value and kept out of current cash income", () => {

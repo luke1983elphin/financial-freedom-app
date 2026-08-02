@@ -1919,7 +1919,7 @@
       + currentFiAssetSummary.investmentBondFiAssets
       + currentFiAssetSummary.otherInvestableFiAssets,
     );
-    const projectedFinancialInvestmentGrowthBase = roundCurrency(Math.max(0, grossGrowthInvestmentAssets - currentFiAssetSummary.otherInvestmentDebt));
+    const projectedFinancialInvestmentGrowthBase = grossGrowthInvestmentAssets;
     const projectedFinancialInvestmentGrowth = roundCurrency(projectedFinancialInvestmentGrowthBase * expectedInvestmentReturn);
     const propertyGrowthSummary = projectedPropertyGrowthSummary(plan);
     const projectedPropertyGrowthBase = propertyGrowthSummary.grossValue;

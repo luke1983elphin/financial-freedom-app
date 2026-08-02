@@ -218,7 +218,7 @@
     },
     projectedInvestmentGrowth: {
       title: "Projected Financial Investment Growth",
-      body: "Projected Financial Investment Growth estimates how much your financial investments may increase in value each year based on the assumptions in your plan. It is not guaranteed and is not cash available to spend.",
+      body: "Projected Financial Investment Growth estimates how much your financial investments may increase in value each year based on the assumptions in your plan. It is calculated on the gross value of applicable investments before deducting related investment debt. Investment debt, interest and repayments are assessed separately.",
     },
     projectedPropertyGrowth: {
       title: "Projected Property Growth",
@@ -5027,7 +5027,7 @@
       metricCard("Remaining Required", money(result.fiTargetRemaining ?? Math.max(0, result.targetCapital - result.financialIndependenceAssets))),
       metricCard("Estimated Sustainable Income", money(result.estimatedSustainableIncomeFromCurrentFiAssets), "", "Current net FI assets multiplied by the selected withdrawal rate.", "sustainableIncome"),
       metricCard("Passive Cash Income", money(passiveIncome), "", "Estimated annual cash income from investments, such as dividends, interest and net rental income.", "passiveIncome"),
-      metricCard("Projected Financial Investment Growth", money(result.projectedFinancialInvestmentGrowth ?? result.projectedInvestmentGrowth ?? 0), "", "Estimated annual growth on financial investments based on the assumptions entered.", "projectedInvestmentGrowth"),
+      metricCard("Projected Financial Investment Growth", money(result.projectedFinancialInvestmentGrowth ?? result.projectedInvestmentGrowth ?? 0), "", "Estimated annual growth on gross financial investments before deducting related investment debt.", "projectedInvestmentGrowth"),
       metricCard("Projected Property Growth", money(result.projectedPropertyGrowth || 0), "", "Estimated annual growth on gross investment property values.", "projectedPropertyGrowth"),
       metricCard("Combined Wealth Creation", money(result.combinedWealthCreation || 0), "", "Passive Cash Income plus projected financial investment growth and projected property growth.", "combinedWealthCreation"),
       metricCard("Annual Living Expenses", money(livingExpenses), "", "This is calculated from your recurring expense items and excludes investing and loan principal repayments."),
