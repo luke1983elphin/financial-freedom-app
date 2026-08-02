@@ -11,17 +11,21 @@ Runtime path used:
 C:\Users\Elphin Accounting\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin
 
 Result:
-44 passed
+48 passed
 0 failed
 
 Breakdown:
 calculations.test.ts: 9 passed
-engagement.test.ts: 4 passed
+engagement.test.ts: 8 passed
 financial-freedom-tax-integration.test.mjs: 7 passed
 financial-progress-history.test.mjs: 5 passed
 calculation-audit-2026-27.test.mjs: 19 passed
 
 New regression coverage in this correction:
+- workspace Dashboard renders the simplified layer while preserving detailed financial sections in an expandable drawer;
+- Future You remains prominent on the Dashboard with a live age control and projected FI assets/passive income/progress;
+- Forecast retains milestone cards while the Dashboard defaults to the compact view;
+- workspace navigation includes Dashboard, Weekly Plan, Investments, Goals and AI Coach as prominent destinations;
 - legacy cash dividend plus franking credits flows only the cash dividend into Passive Cash Income, taxable income and household cashflow;
 - grossed-up-only legacy dividend records use a conservative 70% cash fallback;
 - Accessible Investments exclude investment property equity while shares and crypto remain counted once;
