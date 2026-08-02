@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -7,6 +8,9 @@ import {
   calculateWeeklyStreak,
   deriveJourneyStage,
 } from "../lib/engagement.ts";
+
+const appSource = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+const indexSource = readFileSync(new URL("../index.html", import.meta.url), "utf8");
 
 test("Financial Freedom progress is capped for display but preserves raw progress", () => {
   const result = calculateLifestyleFundingPercentage({
@@ -86,4 +90,49 @@ test("journey stage is derived from financial progress and practical readiness",
     financialIndependenceProgressPct: 120,
     financialFreedomProgressPct: 105,
   }), "Financial Freedom");
+});
+
+test("workspace dashboard renders a simplified layer with details preserved", () => {
+  assert.match(indexSource, /id="dashboardSimplified"/);
+  assert.match(indexSource, /id="dashboardDetails"/);
+  assert.match(appSource, /function renderDashboardSimplified/);
+  assert.match(appSource, /This Week's Mission/);
+  assert.match(appSource, /Continue Weekly Plan/);
+  assert.match(appSource, /data-dashboard-detail-open/);
+});
+
+test("dashboard mission shows one current action before expanded task details", () => {
+  assert.match(appSource, /const nextTask = mission\.tasks\.find\(\(task\) => !task\.completed\)/);
+  assert.match(appSource, /const expandedTasks = \[\.\.\.remainingUnfinishedTasks, \.\.\.completedTasks\]/);
+  assert.match(appSource, /engagementMissionExpanded && expandedTasks\.length/);
+  assert.match(appSource, /dashboard-task-recommendation/);
+  assert.doesNotMatch(appSource, /<button class="dashboard-task-button" type="button" data-engagement-action="weeklyplan">/);
+  assert.match(appSource, /Weekly Mission complete/);
+});
+
+test("workspace dashboard keeps Future You prominent with a live age control", () => {
+  assert.match(appSource, /function dashboardFutureYouHtml/);
+  assert.match(appSource, /id="dashboardFutureAgeInput"/);
+  assert.match(appSource, /data-dashboard-future-age/);
+  assert.match(appSource, /Projected FI assets/);
+  assert.match(appSource, /Financial Freedom %/);
+});
+
+test("forecast retains milestone cards while dashboard defaults to the compact view", () => {
+  assert.match(appSource, /dashboard\.innerHTML = ""/);
+  assert.match(appSource, /forecast\.innerHTML = html/);
+});
+
+test("weekly plan keeps live balance check inside completion step only", () => {
+  assert.doesNotMatch(appSource, /weeklyLiveBalanceSummaryHtml\(week, "top"\)/);
+  assert.match(appSource, /weeklyLiveBalanceSummaryHtml\(week, "complete"\)/);
+  assert.match(appSource, /function weeklyBalanceSummaryBodyHtml/);
+});
+
+test("workspace navigation includes the prominent dashboard destinations", () => {
+  assert.match(indexSource, /data-view="dashboard">Dashboard/);
+  assert.match(indexSource, /data-view="weeklyplan">Weekly Plan/);
+  assert.match(indexSource, /data-view="investments">Investments/);
+  assert.match(indexSource, /data-view="goals">Goals/);
+  assert.match(indexSource, /data-engagement-action="ai">AI Coach/);
 });

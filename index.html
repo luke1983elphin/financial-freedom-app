@@ -189,9 +189,11 @@
               <div class="grid gap-1" id="sideNav">
                 <button class="nav-button" type="button" data-view="setup" id="setupNavButton">Setup Wizard</button>
                 <button class="nav-button active" type="button" data-view="dashboard">Dashboard</button>
+                <button class="nav-button" type="button" data-view="weeklyplan">Weekly Plan</button>
                 <button class="nav-button" type="button" data-view="investments">Investments</button>
-                <button class="nav-button" type="button" data-view="super">Super</button>
                 <button class="nav-button" type="button" data-view="goals">Goals</button>
+                <button class="nav-button" type="button" data-engagement-action="ai">AI Coach</button>
+                <button class="nav-button" type="button" data-view="super">Super</button>
                 <button class="nav-button" type="button" data-view="decision">Decision Engine</button>
                 <button class="nav-button" type="button" data-view="reports">Reports</button>
                 <button class="nav-button" type="button" data-view="scenarios">Saved Scenarios</button>
@@ -303,6 +305,12 @@
 
                 <div id="dashboardMilestones" class="milestone-grid mt-6"></div>
 
+                <div id="dashboardSimplified" class="dashboard-simplified mt-6"></div>
+
+                <details id="dashboardDetails" class="dashboard-details card mt-6">
+                  <summary>View Financial Details</summary>
+                  <div class="dashboard-detail-content mt-4">
+
                 <div class="dashboard-hero-metrics mt-6" id="dashboardHeroMetrics"></div>
 
                 <div class="celebration-grid mt-4" id="celebrationGrid"></div>
@@ -359,6 +367,8 @@
                   <summary>Assumptions</summary>
                   <p class="mt-2 text-sm text-slate-500">These are starting assumptions only. You can change them at any time.</p>
                   <div id="assumptionsList" class="summary-grid mt-4"></div>
+                </details>
+                  </div>
                 </details>
               </section>
 

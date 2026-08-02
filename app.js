@@ -935,6 +935,7 @@
     const mortgageBalance = mortgageBalanceAtAge(result, projectedAge);
     const superAccessible = projectedAge >= Number(result.superAccessAge || 60) ? Number(superRow?.closingBalance) || 0 : 0;
     const projectedFiAssets = (Number(investment?.closingBalance) || result.investmentBalance || 0) + (Number(plan.assets.offsetBalance) || 0) + superAccessible;
+    const effectiveProjectedFiAssets = Number(progressRow?.netFiAssets) || projectedFiAssets;
     return {
       age: projectedAge,
       requestedAge,
@@ -944,7 +945,8 @@
       superBalance: Number(superRow?.closingBalance) || result.superannuationBalance || 0,
       mortgageBalance,
       netWorth: year <= 0 ? result.currentNetWorth : Number(netWorthRow?.closingBalance) || result.currentNetWorth || 0,
-      passiveIncome: projectedFiAssets * safeWithdrawalRate(),
+      projectedFiAssets: effectiveProjectedFiAssets,
+      passiveIncome: effectiveProjectedFiAssets * safeWithdrawalRate(),
       progress: Number(progressRow?.progress) || engagementProgress(result).financialFreedomRaw || 0,
     };
   }
@@ -4949,6 +4951,226 @@
     }
   }
 
+  function dashboardFinancialFreedomLabel(result) {
+    const progress = engagementProgress(result);
+    const currentAge = Number(plan.personal.person1Age || plan.personal.person2Age) || 0;
+    if (progress.financialFreedomRaw >= 100) {
+      return currentAge ? `Financial Freedom is reached in this model at age ${currentAge}.` : "Financial Freedom is reached in this model.";
+    }
+    const row = (result.financialFreedomProgressProjection || []).find((item) => Number(item.progress) >= 100);
+    if (!row) return "Financial Freedom is not yet projected within the current model period.";
+    const years = currentAge ? Math.max(0, Number(row.age) - currentAge) : Number(row.year) || 0;
+    return currentAge
+      ? `Projected Financial Freedom age ${row.age}, about ${years} year${years === 1 ? "" : "s"} away.`
+      : `Projected Financial Freedom in about ${row.year} year${row.year === 1 ? "" : "s"}.`;
+  }
+
+  function dashboardReadyState(result) {
+    const readiness = financialJourneyReadiness(plan, result);
+    const hasPlanData = !isBlankPlan(plan) && isEngagementPlanReady(result);
+    return {
+      hasPlanData,
+      readiness,
+      ready: hasPlanData && readiness.complete,
+    };
+  }
+
+  function dashboardMissionHtml(result, readyState) {
+    if (!readyState.ready) {
+      return `
+        <article class="dashboard-compact-card dashboard-mission-card">
+          <span class="metric-label">Weekly Mission</span>
+          <h3>Personalised actions appear after setup</h3>
+          <p>Complete your Financial Plan to receive a small weekly checklist based on your cashflow, savings and long-term wealth goals.</p>
+          <button class="btn btn-primary" type="button" data-engagement-action="setup">Continue Setup</button>
+        </article>
+      `;
+    }
+    const mission = currentWeeklyMission(result);
+    const nextTask = mission.tasks.find((task) => !task.completed);
+    const remainingUnfinishedTasks = mission.tasks.filter((task) => !task.completed && task.id !== nextTask?.id);
+    const completedTasks = mission.tasks.filter((task) => task.completed && task.id !== nextTask?.id);
+    const expandedTasks = [...remainingUnfinishedTasks, ...completedTasks];
+    const moreCount = remainingUnfinishedTasks.length;
+    return `
+      <article class="dashboard-compact-card dashboard-mission-card">
+        <span class="metric-label">This Week's Mission</span>
+        <div class="dashboard-card-heading-row">
+          <h3>${plainPercent(mission.percent)} complete</h3>
+          <strong>${mission.completedCount} of ${mission.totalTasks} actions</strong>
+        </div>
+        <div class="engagement-progress-track" aria-label="Weekly mission ${mission.percent}% complete"><span style="width:${mission.percent}%"></span></div>
+        ${nextTask ? `
+          <div class="dashboard-current-action">
+            <span class="metric-label">Current recommended action</span>
+            <div class="dashboard-task-button dashboard-task-recommendation" aria-label="Current recommended action">
+              <strong>${escapeHtml(nextTask.title)}</strong>
+            </div>
+          </div>
+        ` : `
+          <div class="dashboard-current-action">
+            <span class="metric-label">Current recommended action</span>
+            <strong>Weekly Mission complete</strong>
+            <p class="field-help">All weekly actions are recorded. Open the Weekly Plan if you want to review or correct anything.</p>
+          </div>
+        `}
+        ${engagementMissionExpanded && expandedTasks.length ? `
+          <ul class="dashboard-task-list">
+            ${expandedTasks.map((task) => `
+              <li class="${task.completed ? "complete" : ""}">
+                <button type="button" data-engagement-action="weeklyplan">
+                  <span aria-hidden="true">${task.completed ? "OK" : ""}</span>
+                  <strong>${escapeHtml(task.title)}</strong>
+                </button>
+              </li>
+            `).join("")}
+          </ul>
+        ` : ""}
+        <div class="dashboard-action-row">
+          <button class="btn btn-primary" type="button" data-engagement-action="weeklyplan">Continue Weekly Plan</button>
+          ${moreCount ? `<button class="btn" type="button" data-engagement-action="toggle-mission" aria-expanded="${engagementMissionExpanded ? "true" : "false"}">${engagementMissionExpanded ? "Show fewer" : `+${moreCount} action${moreCount === 1 ? "" : "s"} remaining`}</button>` : ""}
+        </div>
+      </article>
+    `;
+  }
+
+  function dashboardFutureAgeBounds(result, future) {
+    const currentAge = Number(future.currentAge || plan.personal.person1Age || plan.personal.person2Age) || 18;
+    const projectedAges = [
+      ...(result.netWorthProjection || []).map((row) => Number(row.age)),
+      ...(result.investmentProjection || []).map((row) => Number(row.age)),
+      ...(result.financialFreedomProgressProjection || []).map((row) => Number(row.age)),
+    ].filter((age) => Number.isFinite(age) && age > 0);
+    const maxProjectedAge = projectedAges.length ? Math.max(...projectedAges) : currentAge + 30;
+    const min = Math.max(18, Math.floor(currentAge));
+    const max = Math.max(min + 1, Math.ceil(maxProjectedAge));
+    return { min, max };
+  }
+
+  function dashboardFutureMetricsHtml(future) {
+    return `
+      <div class="dashboard-future-results" id="dashboardFutureYouResults">
+        ${summaryTile("Projected FI assets", money(future.projectedFiAssets), "", "currentFiAssets")}
+        ${summaryTile("Projected net worth", money(future.netWorth))}
+        ${summaryTile("Projected passive income", `${money(future.passiveIncome)} pa`, "", "passiveIncome")}
+        ${summaryTile("Financial Freedom %", plainPercent(future.progress), "", "financialFreedomProgress")}
+      </div>
+    `;
+  }
+
+  function dashboardFutureYouHtml(result, readyState) {
+    if (!readyState.ready) {
+      return `
+        <article class="dashboard-compact-card dashboard-future-card">
+          <span class="metric-label">Future You</span>
+          <h3>Complete your financial plan to see Future You</h3>
+          <p>This preview will show projected wealth, passive income and Financial Freedom progress at the age you select.</p>
+          <button class="btn" type="button" data-engagement-action="setup">Continue Setup</button>
+        </article>
+      `;
+    }
+    const future = futureYouPreview(result);
+    const bounds = dashboardFutureAgeBounds(result, future);
+    const value = Math.min(bounds.max, Math.max(bounds.min, future.age));
+    return `
+      <article class="dashboard-compact-card dashboard-future-card">
+        <div class="dashboard-card-heading-row">
+          <div>
+            <span class="metric-label">Future You</span>
+            <h3 id="dashboardFutureAgeLabel">Age ${escapeHtml(value)}</h3>
+          </div>
+          <button class="btn" type="button" data-engagement-action="decision">View Projection</button>
+        </div>
+        <label class="dashboard-age-control">
+          <span>Select future age</span>
+          <input id="dashboardFutureAgeInput" type="range" min="${bounds.min}" max="${bounds.max}" step="1" value="${value}" data-dashboard-future-age aria-label="Select Future You age">
+        </label>
+        ${dashboardFutureMetricsHtml(future)}
+        <p class="field-help">Figures come from the app's existing projection row for the selected age.</p>
+      </article>
+    `;
+  }
+
+  function dashboardSnapshotHtml(result, readyState, percent, annualSurplus, passiveIncome) {
+    if (!readyState.ready) {
+      return `
+        <article class="dashboard-compact-card dashboard-snapshot-card">
+          <span class="metric-label">Snapshot</span>
+          <h3>Your key figures will appear here after setup</h3>
+          <p>Net worth, Financial Freedom progress, weekly surplus and passive income will update once the plan has enough information.</p>
+        </article>
+      `;
+    }
+    return `
+      <article class="dashboard-compact-card dashboard-snapshot-card">
+        <div class="dashboard-card-heading-row">
+          <div>
+            <span class="metric-label">Snapshot</span>
+            <h3>Four numbers to watch</h3>
+          </div>
+          <button class="dashboard-text-button" type="button" data-dashboard-detail-open>View Financial Details</button>
+        </div>
+        <div class="dashboard-snapshot-grid">
+          ${summaryTile("Net Worth", money(result.currentNetWorth))}
+          ${summaryTile("Financial Freedom %", plainPercent(percent), "", "financialFreedomProgress")}
+          ${summaryTile("Weekly Surplus", money(annualSurplus / 52))}
+          ${summaryTile("Passive Income", `${money(passiveIncome)} pa`, "", "passiveIncome")}
+        </div>
+      </article>
+    `;
+  }
+
+  function dashboardAiCoachHtml(readyState) {
+    if (!readyState.ready) {
+      return `
+        <article class="dashboard-compact-card dashboard-ai-card">
+          <span class="metric-label">AI Coach</span>
+          <h3>AI coaching unlocks after setup</h3>
+          <p>Once your plan is complete, AI can explain opportunities and scenarios using your existing app calculations.</p>
+          <button class="btn" type="button" data-engagement-action="setup">Continue Setup</button>
+        </article>
+      `;
+    }
+    return aiOpeningInsightHtml().replace("engagement-card engagement-ai-card", "dashboard-compact-card dashboard-ai-card");
+  }
+
+  function dashboardSimplifiedHtml(result, context) {
+    return `
+      <div class="dashboard-simplified-grid">
+        ${dashboardMissionHtml(result, context.readyState)}
+        ${dashboardFutureYouHtml(result, context.readyState)}
+      </div>
+      <div class="dashboard-simplified-grid dashboard-simplified-grid-secondary">
+        ${dashboardSnapshotHtml(result, context.readyState, context.percent, context.annualSurplus, context.passiveIncome)}
+        ${dashboardAiCoachHtml(context.readyState)}
+      </div>
+    `;
+  }
+
+  function renderDashboardSimplified(result, context) {
+    const container = document.getElementById("dashboardSimplified");
+    if (!container) return;
+    container.innerHTML = dashboardSimplifiedHtml(result, context);
+  }
+
+  function updateDashboardFutureAge(value, options = {}) {
+    const age = Math.max(0, Math.round(Number(value)));
+    if (!Number.isFinite(age) || age <= 0) return;
+    engagementData().futureYouAge = age;
+    const result = CALC.calculatePlan(plan);
+    const future = futureYouPreview(result);
+    const label = document.getElementById("dashboardFutureAgeLabel");
+    if (label) label.textContent = `Age ${future.age}`;
+    const input = document.getElementById("dashboardFutureAgeInput");
+    if (input && String(input.value) !== String(future.age)) input.value = String(future.age);
+    const results = document.getElementById("dashboardFutureYouResults");
+    if (results) results.outerHTML = dashboardFutureMetricsHtml(future);
+    if (options.commit) {
+      saveDraft(`Future You preview set to age ${future.age}.`);
+      updateSaveStatus(`Future You preview set to age ${future.age}.`);
+    }
+  }
+
   function renderDashboard(result) {
     const names = [plan.personal.person1Name, plan.personal.person2Name].filter(Boolean).join(" and ");
     const percent = freedomPercent(result);
@@ -4961,43 +5183,68 @@
     const monthlySurplus = estimatedCashflow(result) / 12;
     const milestone = nextMilestone(result, percent);
     const progressWidth = Math.min(100, Math.max(0, percent));
+    const readyState = dashboardReadyState(result);
+    const dashboardReady = readyState.ready;
+    const greetingName = engagementGreetingName();
+    const dashboardTitle = document.getElementById("dashboardTitle");
+    const dashboardSubtitle = document.getElementById("dashboardSubtitle");
+    const heroScore = document.getElementById("heroScore");
+    const scoreRing = document.querySelector(".score-ring");
+    const scoreRingLabel = document.querySelector(".score-ring span");
+    const progressSection = document.querySelector(".freedom-progress-section");
+    const nextMilestoneCard = document.querySelector(".next-milestone-card");
 
-    document.getElementById("dashboardTitle").textContent = names ? `${names}'s Financial Freedom` : "Start a plan or load a sample plan.";
-    document.getElementById("dashboardSubtitle").textContent = isBlankPlan(plan)
-      ? "Enter your own details or load a fictional sample plan to see the dashboard come alive."
-      : "See how today's decisions shape tomorrow's financial freedom.";
-    document.getElementById("heroScore").textContent = plainPercent(percent);
-    document.querySelector(".score-ring span").textContent = "FI progress";
-    document.querySelector(".score-ring").style.borderColor = percent >= 100 ? "#bdebd7" : percent >= 75 ? "#f3d08c" : "#dbe4ee";
-    document.querySelector(".freedom-stage-card").innerHTML = `
-      <div class="stage-heading-row">
-        <span class="metric-label">Your current financial stage</span>
-        ${infoButtonHtml("financialStage", "financial stages")}
-      </div>
-      <strong id="freedomStageLabel">${escapeHtml(stage.name)}</strong>
-      <p id="freedomStageText">${escapeHtml(stageInfo.insufficient ? "Complete the remaining plan information to calculate your financial stage." : stage.explanation)}</p>
-      ${stageJourneyHtml(stageInfo)}
-      <div class="stage-progress-block">
-        <div>
-          <span class="metric-label">${stageInfo.nextStage ? `Progress toward ${escapeHtml(stageInfo.nextStage.name)}` : "Financial Freedom achieved"}</span>
-          <strong>${stageInfo.nextStage ? plainPercent(stageInfo.progressToNext) : "100%"}</strong>
+    progressSection?.classList.toggle("dashboard-journey-simple", true);
+    nextMilestoneCard?.classList.add("hidden");
+    if (dashboardReady) {
+      dashboardTitle.textContent = `${engagementGreeting()}, ${greetingName}. You are ${plainPercent(percent)} of the way toward Financial Freedom.`;
+      dashboardSubtitle.textContent = dashboardFinancialFreedomLabel(result);
+      heroScore.textContent = plainPercent(percent);
+      if (scoreRingLabel) scoreRingLabel.textContent = "Financial Freedom";
+      if (scoreRing) scoreRing.style.borderColor = percent >= 100 ? "#bdebd7" : percent >= 75 ? "#f3d08c" : "#dbe4ee";
+      document.querySelector(".freedom-stage-card").innerHTML = `
+        <div class="stage-heading-row">
+          <span class="metric-label">Financial Freedom Journey</span>
+          ${infoButtonHtml("financialStage", "financial stages")}
         </div>
-        <div class="progress-track progress-track-large" aria-label="${stageInfo.nextStage ? `${plainPercent(stageInfo.progressToNext)} progress toward ${stageInfo.nextStage.name}` : "Financial Freedom achieved"}"><span id="freedomProgressBar" style="width:${stageInfo.nextStage ? stageInfo.progressToNext : 100}%"></span></div>
-      </div>
-      <div class="stage-progress-block">
-        <div>
-          <span class="metric-label">Financial Freedom progress</span>
-          <strong>${plainPercent(percent)} of target FI assets</strong>
+        <div class="dashboard-stage-summary">
+          <div>
+            <span class="metric-label">Current stage</span>
+            <strong id="freedomStageLabel">${escapeHtml(stage.name)}</strong>
+          </div>
+          <div>
+            <span class="metric-label">Progress</span>
+            <strong>${plainPercent(percent)}</strong>
+          </div>
         </div>
-        <p id="freedomPassiveText" class="progress-caption">Based on current net FI assets compared with your target FI assets. Passive Cash Income is shown separately.</p>
-      </div>
-      <div class="stage-actions">
-        <span class="metric-label">What moves you forward</span>
-        <ul>${stageInfo.actions.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
-      </div>
-    `;
-    document.getElementById("nextMilestoneAmount").textContent = milestone.amount;
-    document.getElementById("nextMilestoneText").textContent = milestone.text;
+        <div class="progress-track progress-track-large" aria-label="Financial Freedom progress ${plainPercent(progressWidth)}"><span id="freedomProgressBar" style="width:${progressWidth}%"></span></div>
+        <p id="freedomStageText">${escapeHtml(stage.explanation)}</p>
+        <p id="freedomPassiveText" class="progress-caption">Based on current net FI assets compared with your target FI assets. Passive Cash Income is tracked separately.</p>
+        <div class="dashboard-stage-next">
+          <span class="metric-label">What helps next</span>
+          <strong>${escapeHtml(stageInfo.actions[0] || milestone.text)}</strong>
+        </div>
+      `;
+    } else {
+      const missing = readyState.readiness.missingSections.slice(0, 4).join(", ");
+      dashboardTitle.textContent = names ? `${engagementGreeting()}, ${greetingName}. Complete your financial plan to calculate your Dashboard.` : "Complete your financial setup to see your Dashboard.";
+      dashboardSubtitle.textContent = missing ? `Still needed: ${missing}${readyState.readiness.missingSections.length > 4 ? " and more" : ""}.` : "Enter your own details or load the sample to see the dashboard come alive.";
+      heroScore.textContent = "--";
+      if (scoreRingLabel) scoreRingLabel.textContent = "Setup needed";
+      if (scoreRing) scoreRing.style.borderColor = "#dbe4ee";
+      document.querySelector(".freedom-stage-card").innerHTML = `
+        <div class="stage-heading-row">
+          <span class="metric-label">Financial Freedom Journey</span>
+          ${infoButtonHtml("financialStage", "financial stages")}
+        </div>
+        <strong id="freedomStageLabel">Complete setup</strong>
+        <p id="freedomStageText">Complete your Financial Plan to calculate your stage, Financial Freedom progress and next weekly actions.</p>
+        <div class="progress-track progress-track-large" aria-label="Financial Freedom progress unavailable"><span id="freedomProgressBar" style="width:0%"></span></div>
+        <p id="freedomPassiveText" class="progress-caption">${escapeHtml(readyState.readiness.message)}</p>
+        <button class="btn btn-primary" type="button" data-engagement-action="setup">Continue Setup</button>
+      `;
+    }
+    renderDashboardSimplified(result, { readyState, percent, annualSurplus, passiveIncome });
 
     const boostCard = document.getElementById("downsizingBoostCard");
     if (result.downsizingInvestmentBoost > 0) {
@@ -6089,10 +6336,10 @@
 
   function renderMilestones(result) {
     const html = milestoneCards(result);
-    ["dashboardMilestones", "forecastMilestones"].forEach((id) => {
-      const container = document.getElementById(id);
-      if (container) container.innerHTML = html;
-    });
+    const dashboard = document.getElementById("dashboardMilestones");
+    if (dashboard) dashboard.innerHTML = "";
+    const forecast = document.getElementById("forecastMilestones");
+    if (forecast) forecast.innerHTML = html;
   }
 
   function renderForecast(result) {
@@ -8007,8 +8254,6 @@
           <strong>${escapeHtml(planned.statusLabel || weeklyStatusLabel(planned.status))}</strong>
         </div>
       </article>
-
-      ${weeklyLiveBalanceSummaryHtml(week, "top")}
 
       ${weeklyWarningPanelHtml(week)}
 
@@ -10273,6 +10518,10 @@
   function bindEvents() {
     document.addEventListener("input", (event) => {
       const target = event.target;
+      if (target.dataset.dashboardFutureAge !== undefined) {
+        updateDashboardFutureAge(target.value);
+        return;
+      }
       if (target.closest("[data-timing-editor]")) {
         updateWeeklyTimingDraftFromInput(target);
         return;
@@ -10462,6 +10711,10 @@
 
     document.addEventListener("change", (event) => {
       const target = event.target;
+      if (target.dataset.dashboardFutureAge !== undefined) {
+        updateDashboardFutureAge(target.value, { commit: true });
+        return;
+      }
       const rentalLoanLink = target.closest("[data-rental-loan-link]");
       if (rentalLoanLink) {
         updateRentalIncomeLoanLink(rentalLoanLink);
@@ -10529,6 +10782,17 @@
       if (event.target.closest("[data-demo-return]")) {
         event.preventDefault();
         returnToPersonalPlan();
+        return;
+      }
+
+      const dashboardDetailsButton = event.target.closest("[data-dashboard-detail-open]");
+      if (dashboardDetailsButton) {
+        event.preventDefault();
+        const details = document.getElementById("dashboardDetails");
+        if (details) {
+          details.open = true;
+          details.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
         return;
       }
 
