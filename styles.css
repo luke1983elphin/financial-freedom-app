@@ -146,6 +146,10 @@
     padding: 12px 0;
   }
 
+  .lifestyle-spending-helper {
+    grid-template-columns: 1fr;
+  }
+
   .comparison-row strong {
     text-align: left;
   }
@@ -1191,6 +1195,36 @@ main {
   line-height: 1.4;
 }
 
+.lifestyle-spending-helper {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+  border: 1px solid #dbe4ee;
+  border-radius: 14px;
+  background: #f8fafc;
+  padding: 10px;
+}
+
+.lifestyle-spending-helper div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.lifestyle-spending-helper span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.lifestyle-spending-helper strong {
+  color: #0f2742;
+  font-size: 14px;
+  font-weight: 950;
+  line-height: 1.25;
+}
+
 .toggle-field {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1588,6 +1622,14 @@ main {
 .dashboard-details {
   padding: 0;
   overflow: hidden;
+}
+
+.engagement-dashboard-feature {
+  min-width: 0;
+}
+
+.engagement-dashboard-feature .dashboard-compact-card {
+  width: 100%;
 }
 
 .dashboard-details > summary {

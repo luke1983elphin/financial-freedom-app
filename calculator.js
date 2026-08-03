@@ -1272,6 +1272,11 @@
     return roundCurrency((startingBalance - targetPresentValue) / annuityFactor);
   }
 
+  function inflatedLifestyleSpending(baseAnnualSpending, inflation, years) {
+    const yearCount = Math.max(0, Math.round(number(years)));
+    return roundCurrency(nonNegative(baseAnnualSpending) * Math.pow(1 + number(inflation), yearCount));
+  }
+
   function personAdjustmentValue(plan = {}, personKey = "person1", suffixes = []) {
     const prefixes = personKey === "person2" ? ["person2", "p2"] : ["person1", "p1"];
     const sources = [plan.income || {}, plan.tax || {}, plan.assumptions || {}, plan.investing || {}];
@@ -1950,7 +1955,11 @@
       safeWithdrawalRate,
     });
     const targetAnnualLifestyleSpending = nonNegative(plan.personal.targetAnnualSpending);
-    const targetCapital = safeWithdrawalRate > 0 ? targetAnnualLifestyleSpending / safeWithdrawalRate : 0;
+    const targetProjectionAge = nonNegative(plan.personal.fullRetirementAge) || currentAge;
+    const targetProjectionYear = Math.max(0, Math.min(30, Math.round(targetProjectionAge - currentAge)));
+    const targetAnnualLifestyleSpendingAtFinancialFreedomAge = inflatedLifestyleSpending(targetAnnualLifestyleSpending, inflation, targetProjectionYear);
+    const currentYearTargetCapital = safeWithdrawalRate > 0 ? roundCurrency(targetAnnualLifestyleSpending / safeWithdrawalRate) : 0;
+    const targetCapital = safeWithdrawalRate > 0 ? roundCurrency(targetAnnualLifestyleSpendingAtFinancialFreedomAge / safeWithdrawalRate) : 0;
     const estimatedSustainableIncomeFromCurrentFiAssets = roundCurrency(financialIndependenceAssets * safeWithdrawalRate);
     const passiveIncomeCoveragePercent = targetAnnualLifestyleSpending > 0 ? Math.max(0, roundRatio(annualPassiveIncome / targetAnnualLifestyleSpending * 100)) : 0;
     const lifestyleFundingPercent = targetAnnualLifestyleSpending > 0 ? Math.max(0, roundRatio(estimatedSustainableIncomeFromCurrentFiAssets / targetAnnualLifestyleSpending * 100)) : 0;
@@ -1980,6 +1989,8 @@
       const investment = rowAtAge(investmentProjection, item.age);
       const superRow = rowAtAge(superProjection, item.age);
       const projectionYears = Math.max(0, item.age - currentAge);
+      const milestoneAnnualLifestyleSpending = inflatedLifestyleSpending(targetAnnualLifestyleSpending, inflation, projectionYears);
+      const milestoneTargetCapital = safeWithdrawalRate > 0 ? milestoneAnnualLifestyleSpending / safeWithdrawalRate : 0;
       const projectedFiSummary = calculateNetFiAssetSummary({
         plan,
         currentAge: item.age,
@@ -1990,11 +2001,13 @@
         projectedInvestmentPropertyGrossValue: projectedInvestmentPropertyGrossValue(plan, projectionYears),
       });
       const projectedFiAssets = projectedFiSummary.netFiAssets;
-      const requiredCapital = roundCurrency(targetCapital * item.coverage);
+      const requiredCapital = roundCurrency(milestoneTargetCapital * item.coverage);
       return {
         ...item,
         projectedFiAssets,
         requiredCapital,
+        inflatedAnnualLifestyleSpending: milestoneAnnualLifestyleSpending,
+        targetCapital: roundCurrency(milestoneTargetCapital),
         passiveIncomeEstimate: roundCurrency(projectedFiAssets * safeWithdrawalRate),
         status: milestoneStatus(projectedFiAssets, requiredCapital),
       };
@@ -2019,7 +2032,7 @@
         startingBalance: totalRetirementAssets,
         expectedReturn: expectedInvestmentReturn,
         inflation,
-        firstYearDraw: plan.personal.targetAnnualSpending,
+        firstYearDraw: inflatedLifestyleSpending(targetAnnualLifestyleSpending, inflation, Math.max(0, fullRetirementAge - currentAge)),
       }),
       simulateRetirement({
         label: "Maximum lifestyle",
@@ -2043,6 +2056,8 @@
       return { year, age: currentAge + year, closingBalance };
     });
     const financialFreedomProgressProjection = investmentProjection.map((row, index) => {
+      const inflatedAnnualLifestyleSpending = inflatedLifestyleSpending(targetAnnualLifestyleSpending, inflation, row.year);
+      const requiredCapital = safeWithdrawalRate > 0 ? inflatedAnnualLifestyleSpending / safeWithdrawalRate : 0;
       const projectedFiSummary = calculateNetFiAssetSummary({
         plan,
         currentAge: row.age,
@@ -2057,11 +2072,11 @@
         age: row.age,
         netFiAssets: projectedFiSummary.netFiAssets,
         estimatedSustainableIncome: roundCurrency(projectedFiSummary.netFiAssets * safeWithdrawalRate),
-        progress: targetCapital > 0 ? Math.min(200, roundRatio(projectedFiSummary.netFiAssets / targetCapital * 100)) : 0,
+        inflatedAnnualLifestyleSpending,
+        requiredCapital: roundCurrency(requiredCapital),
+        progress: requiredCapital > 0 ? Math.min(200, roundRatio(projectedFiSummary.netFiAssets / requiredCapital * 100)) : 0,
       };
     });
-    const targetProjectionAge = nonNegative(plan.personal.fullRetirementAge) || currentAge;
-    const targetProjectionYear = Math.max(0, Math.min(30, Math.round(targetProjectionAge - currentAge)));
     const targetInvestmentRow = targetProjectionYear > 0 ? investmentProjection[targetProjectionYear - 1] : { closingBalance: investmentBalance, age: currentAge, year: 0 };
     const targetSuperRow = targetProjectionYear > 0 ? superProjection[targetProjectionYear - 1] : { closingBalance: superannuationBalance };
     const targetAgeFiAssetSummary = calculateNetFiAssetSummary({
@@ -2182,6 +2197,11 @@
       projectedPropertyGrowth,
       projectedPropertyGrowthProperties: propertyGrowthSummary.properties,
       combinedWealthCreation,
+      targetAnnualLifestyleSpendingToday: targetAnnualLifestyleSpending,
+      targetAnnualLifestyleSpendingAtFinancialFreedomAge,
+      targetProjectionAge,
+      targetProjectionYear,
+      currentYearTargetCapital,
       passiveIncomeCoveragePercent,
       lifestyleFundingPercent,
       estimatedSustainableIncomeFromCurrentFiAssets,
