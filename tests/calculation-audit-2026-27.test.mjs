@@ -433,7 +433,12 @@ test("Financial Freedom progress uses net FI assets while passive income stays s
     { id: "rental-loan", type: "rentalPropertyLoan", balance: 350000 },
   ];
   let result = CALC.calculatePlan(plan);
-  assert.equal(result.targetCapital, 2500000);
+  assert.equal(result.targetAnnualLifestyleSpendingToday, 100000);
+  assert.equal(result.targetAnnualLifestyleSpendingAtFinancialFreedomAge, 128008.45);
+  assert.equal(result.currentYearTargetCapital, 2500000);
+  assert.equal(result.targetCapital, 3200211.25);
+  assert.equal(result.targetProjectionAge, 55);
+  assert.equal(result.targetProjectionYear, 10);
   assert.equal(result.liquidInvestmentAssets, 750000);
   assert.equal(result.investmentPropertyGrossValue, 600000);
   assert.equal(result.investmentPropertyDebt, 350000);
@@ -442,8 +447,8 @@ test("Financial Freedom progress uses net FI assets while passive income stays s
   assert.equal(result.superannuationBalance, 500000);
   assert.equal(result.financialIndependenceAssets, 1000000);
   assert.equal(result.currentNetFiAssets, 1000000);
-  assert.equal(result.financialFreedomProgressRaw, 40);
-  assert.equal(result.financialFreedomScore, 40);
+  assert.equal(result.financialFreedomProgressRaw, 31.2479);
+  assert.equal(result.financialFreedomScore, 31.2479);
   assert.equal(result.lifestyleFundingPercent, 40);
   assert.equal(result.estimatedSustainableIncomeFromCurrentFiAssets, 40000);
   assert.equal(result.passiveIncomeCoveragePercent, 0);
@@ -465,7 +470,7 @@ test("Financial Freedom progress uses net FI assets while passive income stays s
   assert.equal(result.liquidInvestmentAssets, 650000);
   assert.equal(result.accessibleInvestmentAssets, 650000);
   assert.equal(result.financialIndependenceAssets, 900000);
-  assert.equal(result.financialFreedomProgressRaw, 36);
+  assert.equal(result.financialFreedomProgressRaw, 28.1231);
   assert.equal(result.projectedFinancialInvestmentGrowthBase, 750000);
   assert.equal(result.projectedFinancialInvestmentGrowth, 52500);
   assert.equal(result.projectedInvestmentGrowthBase, 750000);
@@ -686,7 +691,7 @@ test("Net FI assets count shares and crypto once across legacy fields and canoni
   }).result;
   assert.equal(bothLegacyAndRecords.grossLiquidInvestmentAssets, 150000);
   assert.equal(bothLegacyAndRecords.financialIndependenceAssets, 150000);
-  assert.equal(bothLegacyAndRecords.financialFreedomProgressRaw, 6);
+  assert.equal(bothLegacyAndRecords.financialFreedomProgressRaw, 4.1428);
 
   const duplicateAssetRecord = resultFor({
     legacyShares: 100000,

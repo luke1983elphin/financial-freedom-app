@@ -112,10 +112,25 @@ test("dashboard mission shows one current action before expanded task details", 
 
 test("workspace dashboard keeps Future You prominent with a live age control", () => {
   assert.match(appSource, /function dashboardFutureYouHtml/);
-  assert.match(appSource, /id="dashboardFutureAgeInput"/);
+  assert.match(appSource, /const inputId = `\$\{idPrefix\}FutureAgeInput`/);
   assert.match(appSource, /data-dashboard-future-age/);
+  assert.match(appSource, /data-dashboard-future-age-label/);
+  assert.match(appSource, /data-dashboard-future-results/);
   assert.match(appSource, /Projected FI assets/);
   assert.match(appSource, /Financial Freedom %/);
+});
+
+test("home page reuses dashboard mission and Future You components", () => {
+  assert.match(appSource, /dashboardMissionHtml\(result, homeReadyState\)/);
+  assert.match(appSource, /dashboardFutureYouHtml\(result, homeReadyState, \{ idPrefix: "home" \}\)/);
+  assert.doesNotMatch(appSource, /engagement-future-compact/);
+});
+
+test("lifestyle spending field explains today's dollars and shows live inflation helper", () => {
+  assert.match(appSource, /Annual Lifestyle Spending Needed for Financial Freedom \(Today's Dollars\)/);
+  assert.match(appSource, /expressed in today's dollars/);
+  assert.match(appSource, /data-lifestyle-spending-helper/);
+  assert.match(appSource, /Estimated spending required at age/);
 });
 
 test("forecast retains milestone cards while dashboard defaults to the compact view", () => {

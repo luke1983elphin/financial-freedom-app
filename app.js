@@ -137,8 +137,8 @@
   ];
   const goalInfoCopy = {
     annualLifestyleSpending: {
-      title: "Annual Lifestyle Spending Needed for Financial Freedom",
-      body: "This is how much you want your investments to fund each year. It is one of the most important numbers in your plan because it helps calculate your Financial Freedom Target.",
+      title: "Annual Lifestyle Spending Needed for Financial Freedom (Today's Dollars)",
+      body: "Enter how much you would like to spend each year during Financial Freedom, expressed in today's dollars. The app automatically adjusts this amount for inflation when calculating your Financial Freedom Target and Future You projections, so you don't need to estimate future living costs yourself.",
     },
     financialFreedomTarget: {
       title: "Financial Freedom Target",
@@ -4023,6 +4023,46 @@
     return frequencies.map(([value, label]) => `<option value="${value}"${selected === value ? " selected" : ""}>${label}</option>`).join("");
   }
 
+  function lifestyleSpendingProjectionValues() {
+    const todayAmount = Math.max(0, Number(plan.personal.targetAnnualSpending) || 0);
+    const currentAge = Number(plan.personal.person1Age || plan.personal.person2Age) || 0;
+    const targetAge = Number(plan.personal.fullRetirementAge || plan.personal.semiRetirementAge || plan.personal.workOptionalAge) || currentAge;
+    const years = Math.max(0, Math.round(targetAge - currentAge));
+    const inflation = Math.max(-0.99, (Number(plan.investing.inflationPct) || 0) / 100);
+    const futureAmount = todayAmount * Math.pow(1 + inflation, years);
+    return {
+      todayAmount,
+      futureAmount,
+      targetAge,
+      years,
+    };
+  }
+
+  function lifestyleSpendingHelperHtml() {
+    const projection = lifestyleSpendingProjectionValues();
+    const futureAgeLabel = projection.targetAge
+      ? `Estimated spending required at age ${projection.targetAge}`
+      : "Estimated future spending required";
+    return `
+      <div class="lifestyle-spending-helper" data-lifestyle-spending-helper>
+        <div>
+          <span>Today's lifestyle target</span>
+          <strong>${money(projection.todayAmount)} per year</strong>
+        </div>
+        <div>
+          <span>${escapeHtml(futureAgeLabel)}</span>
+          <strong>Approximately ${money(projection.futureAmount)} per year</strong>
+        </div>
+      </div>
+    `;
+  }
+
+  function updateLifestyleSpendingHelper() {
+    document.querySelectorAll("[data-lifestyle-spending-helper]").forEach((helper) => {
+      helper.outerHTML = lifestyleSpendingHelperHtml();
+    });
+  }
+
   function field(config) {
     const value = getPath(plan, config.path);
     const id = config.path.replaceAll(".", "-");
@@ -4041,6 +4081,7 @@
         <span class="field-label field-label-with-info">${escapeHtml(config.label)}${infoButton}</span>
         ${input}
         ${config.help ? `<small class="field-help">${escapeHtml(config.help)}</small>` : ""}
+        ${typeof config.afterHtml === "function" ? config.afterHtml() : config.afterHtml || ""}
       </label>
     `;
   }
@@ -4674,7 +4715,14 @@
       { label: "Building Wealth target age", path: "personal.workOptionalAge", infoKey: "buildingWealthTargetAge" },
       { label: "Financial Independence target age", path: "personal.semiRetirementAge", infoKey: "financialIndependenceTargetAge" },
       { label: "Financial Freedom target age", path: "personal.fullRetirementAge", infoKey: "financialFreedomTargetAge" },
-      { label: "Annual Lifestyle Spending Needed for Financial Freedom", path: "personal.targetAnnualSpending", step: "1000", infoKey: "annualLifestyleSpending" },
+      {
+        label: "Annual Lifestyle Spending Needed for Financial Freedom (Today's Dollars)",
+        path: "personal.targetAnnualSpending",
+        step: "1000",
+        infoKey: "annualLifestyleSpending",
+        help: goalInfoCopy.annualLifestyleSpending.body,
+        afterHtml: lifestyleSpendingHelperHtml,
+      },
       { label: "Annual investing target", path: "investing.annualInvestingTarget", step: "1000", infoKey: "annualInvestingTarget" },
       { label: "Extra super contributions", path: "investing.extraSuperContributions", step: "1000", infoKey: "extraSuperContributions" },
     ];
@@ -5047,9 +5095,10 @@
     return { min, max };
   }
 
-  function dashboardFutureMetricsHtml(future) {
+  function dashboardFutureMetricsHtml(future, options = {}) {
+    const id = options.resultsId === null ? "" : (options.resultsId || "dashboardFutureYouResults");
     return `
-      <div class="dashboard-future-results" id="dashboardFutureYouResults">
+      <div class="dashboard-future-results"${id ? ` id="${escapeHtml(id)}"` : ""} data-dashboard-future-results>
         ${summaryTile("Projected FI assets", money(future.projectedFiAssets), "", "currentFiAssets")}
         ${summaryTile("Projected net worth", money(future.netWorth))}
         ${summaryTile("Projected passive income", `${money(future.passiveIncome)} pa`, "", "passiveIncome")}
@@ -5058,7 +5107,11 @@
     `;
   }
 
-  function dashboardFutureYouHtml(result, readyState) {
+  function dashboardFutureYouHtml(result, readyState, options = {}) {
+    const idPrefix = options.idPrefix || "dashboard";
+    const labelId = `${idPrefix}FutureAgeLabel`;
+    const inputId = `${idPrefix}FutureAgeInput`;
+    const resultsId = `${idPrefix}FutureYouResults`;
     if (!readyState.ready) {
       return `
         <article class="dashboard-compact-card dashboard-future-card">
@@ -5077,15 +5130,15 @@
         <div class="dashboard-card-heading-row">
           <div>
             <span class="metric-label">Future You</span>
-            <h3 id="dashboardFutureAgeLabel">Age ${escapeHtml(value)}</h3>
+            <h3 id="${escapeHtml(labelId)}" data-dashboard-future-age-label>Age ${escapeHtml(value)}</h3>
           </div>
           <button class="btn" type="button" data-engagement-action="decision">View Projection</button>
         </div>
         <label class="dashboard-age-control">
           <span>Select future age</span>
-          <input id="dashboardFutureAgeInput" type="range" min="${bounds.min}" max="${bounds.max}" step="1" value="${value}" data-dashboard-future-age aria-label="Select Future You age">
+          <input id="${escapeHtml(inputId)}" type="range" min="${bounds.min}" max="${bounds.max}" step="1" value="${value}" data-dashboard-future-age aria-label="Select Future You age">
         </label>
-        ${dashboardFutureMetricsHtml(future)}
+        ${dashboardFutureMetricsHtml(future, { resultsId })}
         <p class="field-help">Figures come from the app's existing projection row for the selected age.</p>
       </article>
     `;
@@ -5159,12 +5212,15 @@
     engagementData().futureYouAge = age;
     const result = CALC.calculatePlan(plan);
     const future = futureYouPreview(result);
-    const label = document.getElementById("dashboardFutureAgeLabel");
-    if (label) label.textContent = `Age ${future.age}`;
-    const input = document.getElementById("dashboardFutureAgeInput");
-    if (input && String(input.value) !== String(future.age)) input.value = String(future.age);
-    const results = document.getElementById("dashboardFutureYouResults");
-    if (results) results.outerHTML = dashboardFutureMetricsHtml(future);
+    document.querySelectorAll("[data-dashboard-future-age-label]").forEach((label) => {
+      label.textContent = `Age ${future.age}`;
+    });
+    document.querySelectorAll("[data-dashboard-future-age]").forEach((input) => {
+      if (String(input.value) !== String(future.age)) input.value = String(future.age);
+    });
+    document.querySelectorAll("[data-dashboard-future-results]").forEach((results) => {
+      results.outerHTML = dashboardFutureMetricsHtml(future, { resultsId: results.id || null });
+    });
     if (options.commit) {
       saveDraft(`Future You preview set to age ${future.age}.`);
       updateSaveStatus(`Future You preview set to age ${future.age}.`);
@@ -5904,7 +5960,6 @@
     const todayWin = engagementTodayWin(result, goal, mission);
     const weeklyAmount = thisWeekProgressAmount();
     const achievement = latestAchievement(result);
-    const future = futureYouPreview(result);
     const recentEvents = latestProgressEvents(3);
     const goalPercent = goalProgressPercent(goal);
     const goalRequiredWeekly = goal && goal.targetDate
@@ -5912,11 +5967,6 @@
       : Number(goal?.recurringAmount) || 0;
     const displayName = engagementGreetingName();
     const hasPlanData = isEngagementPlanReady(result);
-    const completedTask = mission.tasks.find((task) => task.completed);
-    const unfinishedTasks = mission.tasks.filter((task) => !task.completed);
-    const missionPreviewTasks = [completedTask, ...unfinishedTasks].filter(Boolean).slice(0, 3);
-    const visibleMissionTasks = engagementMissionExpanded ? mission.tasks : missionPreviewTasks;
-    const moreMissionCount = Math.max(0, mission.tasks.length - missionPreviewTasks.length);
     const previousStage = stageInfo.index > 0 ? engagementJourneyStages[stageInfo.index - 1] : null;
     const nextStage = engagementJourneyStages[stageInfo.index + 1] || null;
     const nextStageProgress = nextStage ? Math.max(0, Math.min(100, progress.financialIndependence)) : 100;
@@ -5926,6 +5976,7 @@
         ? `Projected completion: about ${Math.ceil(goalRemaining(goal) / Math.max(1, goalRequiredWeekly))} week${Math.ceil(goalRemaining(goal) / Math.max(1, goalRequiredWeekly)) === 1 ? "" : "s"}`
         : "Projected completion: add a contribution plan";
     const homeMode = !hasPlanData || !journeyReadiness.complete ? "placeholder" : "personalised";
+    const homeReadyState = { hasPlanData, readiness: journeyReadiness, ready: journeyReadiness.complete };
     const shouldAnimateModeChange = container.dataset.engagementMode && container.dataset.engagementMode !== homeMode;
     container.dataset.engagementMode = homeMode;
     if (shouldAnimateModeChange) {
@@ -6007,19 +6058,7 @@
       </section>
 
       <section class="engagement-two-column">
-        <article class="engagement-card engagement-mission-card">
-          <span class="metric-label">This Week's Mission</span>
-          <div class="engagement-section-heading-row">
-            <h3>${plainPercent(mission.percent)} complete</h3>
-            <strong>${mission.completedCount} of ${mission.totalTasks} actions</strong>
-          </div>
-          <div class="engagement-progress-track" aria-label="Weekly mission ${mission.percent}% complete"><span style="width:${mission.percent}%"></span></div>
-          <ul class="engagement-task-list compact">
-            ${visibleMissionTasks.map((task) => missionTaskHtml(task)).join("")}
-          </ul>
-          ${moreMissionCount ? `<button class="engagement-more-button" type="button" data-engagement-action="toggle-mission" aria-expanded="${engagementMissionExpanded ? "true" : "false"}">${engagementMissionExpanded ? "Show fewer" : `+${moreMissionCount} more action${moreMissionCount === 1 ? "" : "s"}`}</button>` : ""}
-          <button class="btn mt-3" type="button" data-engagement-action="weeklyplan">Continue Weekly Plan</button>
-        </article>
+        ${dashboardMissionHtml(result, homeReadyState)}
 
         <article class="engagement-card engagement-goal-card">
           <span class="metric-label">Primary Goal</span>
@@ -6060,26 +6099,8 @@
         ${aiOpeningInsightHtml()}
       </section>
 
-      <section class="engagement-card engagement-future-compact">
-        <div class="engagement-section-heading-row">
-          <div>
-            <span class="metric-label">Future You</span>
-            <h3>Projected at age ${escapeHtml(future.age)}</h3>
-          </div>
-          <div class="engagement-button-row">
-            <button class="btn" type="button" data-engagement-action="change-future-age">Change age</button>
-            <button class="btn" type="button" data-engagement-action="decision">Explore Future You</button>
-          </div>
-        </div>
-        <div class="engagement-future-metrics">
-          <div><span>Mortgage</span><strong>${future.mortgageBalance > 0 ? money(future.mortgageBalance) : "Paid off"}</strong></div>
-          <div><span>Investments</span><strong>${money(future.investmentBalance)}</strong></div>
-          <div><span>Super</span><strong>${money(future.superBalance)}</strong></div>
-          <div><span>Passive Income</span><strong>${money(future.passiveIncome)} per year</strong></div>
-          <div><span>Lifestyle Funded</span><strong>${plainPercent(Math.min(100, future.progress))}</strong></div>
-          <div><span>Net Worth</span><strong>${money(future.netWorth)}</strong></div>
-        </div>
-        <small>All figures in this preview use the same projection period: age ${escapeHtml(future.age)} (${future.year} year${future.year === 1 ? "" : "s"} from the current age used by the model).</small>
+      <section class="engagement-dashboard-feature">
+        ${dashboardFutureYouHtml(result, homeReadyState, { idPrefix: "home" })}
       </section>
 
       <section class="engagement-card engagement-progress-achievement">
@@ -10684,6 +10705,9 @@
         saveWeeklyPlan();
       }
       syncInputs(target.dataset.path, value);
+      if (["personal.targetAnnualSpending", "personal.fullRetirementAge", "personal.semiRetirementAge", "personal.workOptionalAge", "personal.person1Age", "personal.person2Age", "investing.inflationPct"].includes(target.dataset.path)) {
+        updateLifestyleSpendingHelper();
+      }
       if (target.dataset.path === "liabilities.monthlyRepayment") {
         setPath(plan, "expenses.mortgageRepayments", value);
         syncInputs("expenses.mortgageRepayments", value);
