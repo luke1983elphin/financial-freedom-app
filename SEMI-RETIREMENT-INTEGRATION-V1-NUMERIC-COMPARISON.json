@@ -1,0 +1,113 @@
+{
+  "comparisons": [
+    {
+      "field": "netWorth",
+      "matches": true
+    },
+    {
+      "field": "financialFreedomProgressRaw",
+      "current": 5.5496,
+      "integrated": 5.5496,
+      "matches": true
+    },
+    {
+      "field": "annualGrossIncome",
+      "current": 208000,
+      "integrated": 208000,
+      "matches": true
+    },
+    {
+      "field": "annualLivingExpenses",
+      "current": 0,
+      "integrated": 0,
+      "matches": true
+    },
+    {
+      "field": "annualLoanRepayments",
+      "matches": true
+    },
+    {
+      "field": "annualCashSurplus",
+      "matches": true
+    },
+    {
+      "field": "estimatedTaxAndHelp",
+      "current": 47600,
+      "integrated": 47600,
+      "matches": true
+    },
+    {
+      "field": "netIncomeAfterTaxHelp",
+      "current": 160400,
+      "integrated": 160400,
+      "matches": true
+    },
+    {
+      "field": "accessibleInvestmentAssets",
+      "current": 190000,
+      "integrated": 190000,
+      "matches": true
+    },
+    {
+      "field": "currentFiAssets",
+      "matches": true
+    },
+    {
+      "field": "targetFiCapital",
+      "matches": true
+    },
+    {
+      "field": "estimatedPassiveIncome",
+      "matches": true
+    },
+    {
+      "field": "totalAssets",
+      "current": 545000,
+      "integrated": 545000,
+      "matches": true
+    },
+    {
+      "field": "totalLiabilities",
+      "current": 0,
+      "integrated": 0,
+      "matches": true
+    },
+    {
+      "field": "totalSuper",
+      "matches": true
+    },
+    {
+      "field": "weekly.week1.openingBalance",
+      "current": 2500,
+      "integrated": 2500,
+      "matches": true
+    },
+    {
+      "field": "weekly.week1.income",
+      "current": 9090.77,
+      "integrated": 9090.77,
+      "matches": true
+    },
+    {
+      "field": "weekly.week1.bills",
+      "matches": true
+    },
+    {
+      "field": "weekly.week1.provisions",
+      "current": 0,
+      "integrated": 0,
+      "matches": true
+    },
+    {
+      "field": "weekly.week1.financialFreedomTransfers",
+      "matches": true
+    },
+    {
+      "field": "weekly.week1.closingBalance",
+      "current": 11590.77,
+      "integrated": 11590.77,
+      "matches": true
+    }
+  ],
+  "mismatches": []
+}

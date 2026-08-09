@@ -1,0 +1,1 @@
+﻿npm command unavailable in this Codex runtime. Equivalent package scripts were run with the bundled Node executable at C:\Users\Elphin Accounting\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe.
