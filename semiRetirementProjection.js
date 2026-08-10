@@ -17,6 +17,47 @@
   const DEFAULT_FINANCIAL_YEAR = CALC.FINANCIAL_YEAR || "2026-27";
   const DEFAULT_FINANCIAL_YEAR_CONFIG = CALC.financialYearConfigs?.[DEFAULT_FINANCIAL_YEAR] || {};
   const DEFAULT_MAXIMUM_CONTRIBUTION_BASE = DEFAULT_FINANCIAL_YEAR_CONFIG.employerSuperMaximumContributionBase || 0;
+  const VALID_REPAYMENT_FREQUENCIES = new Set(["weekly", "fortnightly", "monthly", "quarterly", "annually", "annual"]);
+  const GENERIC_DEBT_TYPES = new Set([
+    "homeLoan",
+    "mortgage",
+    "rentalPropertyLoan",
+    "investmentLoan",
+    "shareInvestmentLoan",
+    "managedFundLoan",
+    "personalLoan",
+    "vehicleLoan",
+    "creditCard",
+    "lineOfCredit",
+    "overdraft",
+    "revolvingCredit",
+    "revolvingFacility",
+    "otherDebt",
+  ]);
+  const HOME_LOAN_TYPES = new Set(["homeLoan", "mortgage"]);
+  const REVOLVING_DEBT_TYPES = new Set(["creditCard", "lineOfCredit", "overdraft", "revolvingCredit", "revolvingFacility"]);
+  const STSL_DEBT_TYPES = new Set(["stsl", "hecsHelp", "helpDebt", "studyLoan"]);
+  const PROPERTY_ASSET_TYPES = new Set([
+    "home",
+    "principalResidence",
+    "principal_residence",
+    "otherProperty",
+    "rentalInvestmentProperty",
+    "rentalProperty",
+    "investmentProperty",
+    "residentialInvestmentProperty",
+    "commercialInvestmentProperty",
+    "incomeProducingProperty",
+  ]);
+  const RENTAL_INVESTMENT_PROPERTY_TYPES = new Set([
+    "rentalInvestmentProperty",
+    "rentalProperty",
+    "investmentProperty",
+    "residentialInvestmentProperty",
+    "commercialInvestmentProperty",
+    "incomeProducingProperty",
+  ]);
+  const PERSONAL_USE_ASSET_TYPES = new Set(["home", "principalResidence", "principal_residence", "vehicle", "personalUse"]);
 
   function hasFiniteNumber(value) {
     return value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value));
@@ -118,6 +159,12 @@
       meetsMinimumEstateBalanceAtEndAge: true,
       totalPlannedSemiRetirementWithdrawals: 0,
       totalRetirementWithdrawals: 0,
+      debtPayoffMilestones: [],
+      totalDebtAtEndAge: 0,
+      totalPropertyValueAtEndAge: 0,
+      totalPropertyDebtAtEndAge: 0,
+      totalPropertyEquityAtEndAge: 0,
+      totalNetWorthAtEndAge: 0,
     };
   }
 
@@ -180,6 +227,411 @@
     return value;
   }
 
+  function normaliseRecordId(item = {}, prefix = "record", index = 0) {
+    return String(item.id || item.assetId || item.liabilityId || item.uid || item.key || `${prefix}-${index + 1}`);
+  }
+
+  function normaliseFrequency(value) {
+    const text = String(value || "annually").trim();
+    if (text === "annual") return "annually";
+    return VALID_REPAYMENT_FREQUENCIES.has(text) ? text : "annually";
+  }
+
+  function annualiseAmount(amount, frequency = "annually") {
+    const value = number(amount);
+    const normalisedFrequency = normaliseFrequency(frequency);
+    if (normalisedFrequency === "weekly") return roundCurrency(value * 52);
+    if (normalisedFrequency === "fortnightly") return roundCurrency(value * 26);
+    if (normalisedFrequency === "monthly") return roundCurrency(value * 12);
+    if (normalisedFrequency === "quarterly") return roundCurrency(value * 4);
+    return roundCurrency(value);
+  }
+
+  function rateFromPercentOrDecimal(value, fallback = 0) {
+    if (!hasFiniteNumber(value)) return fallback;
+    const parsed = number(value);
+    return Math.abs(parsed) > 1 ? parsed / 100 : parsed;
+  }
+
+  function normaliseAssetType(value) {
+    const text = String(value || "").trim();
+    if (text === "rental_property" || text === "rental_property_asset") return "rentalInvestmentProperty";
+    if (text === "investment_property") return "investmentProperty";
+    if (text === "principal_home") return "home";
+    return text || "other";
+  }
+
+  function normaliseLiabilityType(value) {
+    const text = String(value || "").trim();
+    if (text === "home_loan" || text === "mortgageLoan") return "homeLoan";
+    if (text === "rental_property_loan") return "rentalPropertyLoan";
+    if (text === "investment_loan") return "investmentLoan";
+    if (text === "personal_loan") return "personalLoan";
+    if (text === "vehicle_loan" || text === "carLoan") return "vehicleLoan";
+    if (text === "credit_card") return "creditCard";
+    if (text === "line_of_credit") return "lineOfCredit";
+    if (text === "revolving_credit") return "revolvingCredit";
+    if (text === "revolving_facility") return "revolvingFacility";
+    if (text === "other_debt") return "otherDebt";
+    return text || "otherDebt";
+  }
+
+  function warningCodeMessage(warning) {
+    if (typeof warning === "string") return warning;
+    if (!warning || typeof warning !== "object") return String(warning || "");
+    if (warning.code === "DEBT_NEGATIVE_AMORTISATION") {
+      return `Repayments did not cover interest, so ${roundCurrency(warning.capitalisedInterest)} of interest was capitalised.`;
+    }
+    if (warning.code === "DEBT_TERM_BALLOON_REPAYMENT") {
+      return `The entered term expired, so a final repayment of ${roundCurrency(warning.balloonRepayment)} was modelled.`;
+    }
+    if (warning.code === "DEBT_TERM_EXPIRED_REVOLVING") {
+      return "The entered term expired, but this revolving debt was not forced into a balloon repayment.";
+    }
+    return warning.message || warning.code || "Debt schedule warning.";
+  }
+
+  function linkedLoanIds(value) {
+    if (Array.isArray(value)) return value.map((item) => String(item || "").trim()).filter(Boolean);
+    if (typeof value === "string") return value.split(",").map((item) => item.trim()).filter(Boolean);
+    return value ? [String(value)] : [];
+  }
+
+  function normaliseProjectionAsset(asset = {}, index = 0) {
+    const type = normaliseAssetType(asset.type || asset.category || asset.assetCategory);
+    const id = normaliseRecordId(asset, "asset", index);
+    const annualGrowthRate = rateFromPercentOrDecimal(
+      asset.annualGrowthRate ?? asset.growthRate ?? asset.growthRatePct ?? asset.propertyGrowthRate ?? asset.propertyGrowthRatePct,
+      0,
+    );
+    return {
+      id,
+      name: String(asset.name || asset.description || `Asset ${index + 1}`),
+      type,
+      openingValue: roundCurrency(Math.max(0, number(asset.openingValue ?? asset.currentValue ?? asset.value ?? asset.balance))),
+      annualGrowthRate,
+      includeInNetWorth: asset.includeInNetWorth !== false,
+      isProperty: PROPERTY_ASSET_TYPES.has(type),
+      isRentalInvestmentProperty: RENTAL_INVESTMENT_PROPERTY_TYPES.has(type),
+      isPersonalUse: asset.isPersonalUse === true || PERSONAL_USE_ASSET_TYPES.has(type),
+      isAccessibleAsset: asset.isAccessibleAsset === true,
+    };
+  }
+
+  function normaliseProjectionLiability(liability = {}, index = 0) {
+    const type = normaliseLiabilityType(liability.type || liability.category || liability.liabilityType);
+    const id = normaliseRecordId(liability, "liability", index);
+    const remainingTermSource = liability.remainingTermYears ?? liability.termYears;
+    const hasExplicitRemainingTerm = hasFiniteNumber(remainingTermSource);
+    const remainingTermYears = hasExplicitRemainingTerm
+      ? Math.max(0, number(remainingTermSource))
+      : 30;
+    const explicitRepaymentSource = liability.repaymentAmount ?? liability.repayment;
+    const debtScheduleType = liability.debtScheduleType === "revolving" || REVOLVING_DEBT_TYPES.has(type)
+      ? "revolving"
+      : "amortising";
+    return {
+      id,
+      name: String(liability.name || liability.description || `Liability ${index + 1}`),
+      type,
+      debtScheduleType,
+      linkedAssetId: String(liability.linkedAssetId || liability.investmentLink?.linkedAssetId || ""),
+      linkedRentalIncomeId: String(liability.linkedRentalIncomeId || ""),
+      openingBalance: roundCurrency(Math.max(0, number(liability.openingBalance ?? liability.currentBalance ?? liability.balance ?? liability.value))),
+      openingOffsetBalance: roundCurrency(Math.max(0, number(liability.openingOffsetBalance ?? liability.offsetBalance ?? liability.linkedOffsetBalance))),
+      annualInterestRate: rateFromPercentOrDecimal(liability.annualInterestRate ?? liability.interestRate ?? liability.interestRatePct, 0),
+      repaymentAmount: Math.max(0, number(explicitRepaymentSource)),
+      hasExplicitRepaymentAmount: hasFiniteNumber(explicitRepaymentSource),
+      repaymentFrequency: normaliseFrequency(liability.repaymentFrequency || "monthly"),
+      annualAdditionalPrincipalRepayment: annualiseAmount(liability.additionalPrincipalRepayment, liability.additionalPrincipalFrequency || "annually"),
+      remainingTermYears,
+      hasExplicitRemainingTerm,
+      repaymentType: liability.repaymentType === "interestOnly" ? "interestOnly" : "principalAndInterest",
+      isStsl: STSL_DEBT_TYPES.has(type),
+      isSupportedDebt: GENERIC_DEBT_TYPES.has(type),
+      isHomeLoan: HOME_LOAN_TYPES.has(type),
+    };
+  }
+
+  function normalisePropertyIncome(item = {}, index = 0) {
+    const annualIncome = hasFiniteNumber(item.annualIncome)
+      ? number(item.annualIncome)
+      : annualiseAmount(item.amount, item.frequency || "annually");
+    const treatment = item.rentalCashflowTreatment === "beforeInterest" || item.cashflowTreatment === "beforeInterest"
+      ? "beforeInterest"
+      : "afterInterest";
+    return {
+      id: normaliseRecordId(item, "property-income", index),
+      name: String(item.propertyName || item.name || item.description || `Property income ${index + 1}`),
+      linkedAssetId: String(item.linkedAssetId || item.linkedPropertyAssetId || item.assetId || ""),
+      linkedLoanIds: linkedLoanIds(item.linkedLoanIds || item.linkedLoanId),
+      annualIncome: roundCurrency(annualIncome),
+      annualGrowthRate: rateFromPercentOrDecimal(item.annualGrowthRate ?? item.growthRate ?? item.growthRatePct, 0),
+      rentalCashflowTreatment: treatment,
+    };
+  }
+
+  function projectDebtYear(liability, openingBalance, yearIndex = 0, calendarYear = null) {
+    const opening = roundCurrency(Math.max(0, number(openingBalance)));
+    const offsetBalanceUsed = liability.isHomeLoan
+      ? roundCurrency(Math.min(opening, Math.max(0, number(liability.openingOffsetBalance))))
+      : 0;
+    const interestBearingBalance = roundCurrency(Math.max(0, opening - offsetBalanceUsed));
+    const base = {
+      id: liability.id,
+      name: liability.name,
+      type: liability.type,
+      debtScheduleType: liability.debtScheduleType || "amortising",
+      linkedAssetId: liability.linkedAssetId,
+      linkedRentalIncomeId: liability.linkedRentalIncomeId,
+      openingBalance: opening,
+      offsetBalanceUsed,
+      interestBearingBalance,
+      interestRate: liability.annualInterestRate,
+      interestCharged: 0,
+      scheduledRepayment: 0,
+      regularRepayment: 0,
+      balloonRepayment: 0,
+      totalRepayment: 0,
+      principalRepaid: 0,
+      capitalisedInterest: 0,
+      closingBalance: opening,
+      paidOffThisYear: false,
+      warnings: [],
+    };
+    if (opening <= 0) return { ...base, closingBalance: 0 };
+
+    const annualRegularRepayment = annualiseAmount(liability.repaymentAmount, liability.repaymentFrequency);
+    const annualAdditionalPrincipal = roundCurrency(Math.max(0, liability.annualAdditionalPrincipalRepayment));
+    const totalTermMonths = liability.hasExplicitRemainingTerm
+      ? Math.max(0, Math.round(liability.remainingTermYears * 12))
+      : null;
+    const termMonthsRemainingAtStart = liability.hasExplicitRemainingTerm
+      ? Math.max(0, totalTermMonths - (yearIndex * 12))
+      : null;
+    const isRevolving = liability.debtScheduleType === "revolving";
+    const shouldApplyTermExpiry = !isRevolving && liability.hasExplicitRemainingTerm;
+    const regularMonthsThisYear = isRevolving || !liability.hasExplicitRemainingTerm
+      ? 12
+      : Math.min(12, Math.max(0, termMonthsRemainingAtStart));
+    const termExpiresThisYear = shouldApplyTermExpiry
+      && opening > 0
+      && termMonthsRemainingAtStart !== null
+      && termMonthsRemainingAtStart <= 12;
+
+    const negativeAmortisationWarning = (interestCharged, repayment, capitalisedInterest) => ({
+      code: "DEBT_NEGATIVE_AMORTISATION",
+      liabilityId: liability.id,
+      calendarYear,
+      interestCharged: roundCurrency(interestCharged),
+      repayment: roundCurrency(repayment),
+      capitalisedInterest: roundCurrency(capitalisedInterest),
+    });
+
+    const balloonWarning = (balloonRepayment) => ({
+      code: "DEBT_TERM_BALLOON_REPAYMENT",
+      liabilityId: liability.id,
+      calendarYear,
+      balloonRepayment: roundCurrency(balloonRepayment),
+    });
+
+    if (liability.repaymentType === "interestOnly") {
+      const interestCharged = roundCurrency(interestBearingBalance * Math.max(0, liability.annualInterestRate));
+      const defaultInterestOnlyRepayment = liability.hasExplicitRepaymentAmount
+        ? annualRegularRepayment
+        : interestCharged;
+      let regularRepayment = roundCurrency(Math.min(Math.max(0, defaultInterestOnlyRepayment), opening + interestCharged));
+      let balance = roundCurrency(Math.max(0, opening + interestCharged - regularRepayment));
+      const warnings = [];
+      const extraPrincipal = roundCurrency(Math.min(balance, annualAdditionalPrincipal));
+      balance = roundCurrency(Math.max(0, balance - extraPrincipal));
+      let balloonRepayment = 0;
+      if (termExpiresThisYear && balance > 0) {
+        balloonRepayment = balance;
+        balance = 0;
+        warnings.push(balloonWarning(balloonRepayment));
+      } else if (liability.hasExplicitRemainingTerm && isRevolving && termMonthsRemainingAtStart <= 0 && balance > 0) {
+        warnings.push({
+          code: "DEBT_TERM_EXPIRED_REVOLVING",
+          liabilityId: liability.id,
+          calendarYear,
+        });
+      }
+      const totalRepayment = roundCurrency(regularRepayment + extraPrincipal + balloonRepayment);
+      const capitalisedInterest = roundCurrency(Math.max(0, balance - opening));
+      const principalRepaid = roundCurrency(Math.max(0, opening - balance));
+      if (capitalisedInterest > 0) warnings.push(negativeAmortisationWarning(interestCharged, totalRepayment, capitalisedInterest));
+      return {
+        ...base,
+        interestCharged,
+        scheduledRepayment: totalRepayment,
+        regularRepayment,
+        balloonRepayment,
+        totalRepayment,
+        principalRepaid,
+        capitalisedInterest,
+        closingBalance: balance,
+        paidOffThisYear: opening > 0 && balance === 0,
+        warnings,
+      };
+    }
+
+    const monthlyRate = Math.max(0, liability.annualInterestRate) / 12;
+    const monthlyRepayment = annualRegularRepayment / 12;
+    let balance = opening;
+    let interestCharged = 0;
+    let regularRepayment = 0;
+    const warnings = [];
+
+    for (let month = 0; month < regularMonthsThisYear && balance > 0; month += 1) {
+      const monthInterestBearingBalance = Math.max(0, balance - offsetBalanceUsed);
+      const interest = roundCurrency(monthInterestBearingBalance * monthlyRate);
+      const repayment = Math.min(monthlyRepayment, balance + interest);
+      interestCharged = roundCurrency(interestCharged + interest);
+      regularRepayment += repayment;
+      balance = Math.max(0, balance + interest - repayment);
+    }
+
+    if (balance > 0 && annualAdditionalPrincipal > 0) {
+      const extraPrincipal = roundCurrency(Math.min(balance, annualAdditionalPrincipal));
+      regularRepayment = roundCurrency(regularRepayment + extraPrincipal);
+      balance = Math.max(0, balance - extraPrincipal);
+    }
+
+    balance = roundCurrency(balance);
+    let balloonRepayment = 0;
+    if (termExpiresThisYear && balance > 0) {
+      balloonRepayment = balance;
+      balance = 0;
+      warnings.push(balloonWarning(balloonRepayment));
+    } else if (liability.hasExplicitRemainingTerm && isRevolving && termMonthsRemainingAtStart <= 0 && balance > 0) {
+      warnings.push({
+        code: "DEBT_TERM_EXPIRED_REVOLVING",
+        liabilityId: liability.id,
+        calendarYear,
+      });
+    }
+
+    const totalRepayment = roundCurrency(regularRepayment + balloonRepayment);
+    const capitalisedInterest = roundCurrency(Math.max(0, balance - opening));
+    const principalRepaid = roundCurrency(Math.max(0, opening - balance));
+    if (capitalisedInterest > 0) warnings.push(negativeAmortisationWarning(interestCharged, totalRepayment, capitalisedInterest));
+
+    return {
+      ...base,
+      interestCharged: roundCurrency(interestCharged),
+      scheduledRepayment: totalRepayment,
+      regularRepayment: roundCurrency(regularRepayment),
+      balloonRepayment: roundCurrency(balloonRepayment),
+      totalRepayment,
+      principalRepaid: roundCurrency(principalRepaid),
+      capitalisedInterest: roundCurrency(capitalisedInterest),
+      closingBalance: balance,
+      paidOffThisYear: opening > 0 && balance === 0,
+      warnings,
+    };
+  }
+
+  function projectAssetYear(asset, openingValue) {
+    const opening = roundCurrency(Math.max(0, number(openingValue)));
+    const growth = roundCurrency(opening * asset.annualGrowthRate);
+    const closingValue = roundCurrency(Math.max(0, opening + growth));
+    return {
+      id: asset.id,
+      name: asset.name,
+      type: asset.type,
+      openingValue: opening,
+      propertyGrowth: PROPERTY_ASSET_TYPES.has(asset.type) ? growth : 0,
+      annualGrowth: growth,
+      closingValue,
+      includeInNetWorth: asset.includeInNetWorth,
+      isProperty: asset.isProperty,
+      isRentalInvestmentProperty: asset.isRentalInvestmentProperty,
+      isAccessibleAsset: asset.isAccessibleAsset,
+    };
+  }
+
+  function loanIdsForPropertyIncome(income, debtRows, liabilities) {
+    const ids = new Set(income.linkedLoanIds);
+    debtRows.forEach((row) => {
+      const source = liabilities.find((liability) => liability.id === row.id);
+      if (!source) return;
+      if (source.linkedRentalIncomeId && source.linkedRentalIncomeId === income.id) ids.add(row.id);
+      if (income.linkedAssetId && source.linkedAssetId && source.linkedAssetId === income.linkedAssetId && source.type === "rentalPropertyLoan") ids.add(row.id);
+    });
+    return ids;
+  }
+
+  function projectPropertyIncomeRows(normalised, debtRows, yearIndex) {
+    return normalised.propertyIncome.map((income) => {
+      const loanIds = loanIdsForPropertyIncome(income, debtRows, normalised.liabilities);
+      const linkedLoanRows = debtRows.filter((row) => loanIds.has(row.id));
+      const loanInterest = roundCurrency(linkedLoanRows.reduce((total, row) => total + row.interestCharged, 0));
+      const loanPrincipal = roundCurrency(linkedLoanRows.reduce((total, row) => total + row.principalRepaid, 0));
+      const fullLoanRepayments = roundCurrency(linkedLoanRows.reduce((total, row) => total + row.totalRepayment, 0));
+      const rentalCashIncome = grownAmount(income.annualIncome, income.annualGrowthRate, yearIndex);
+      const incomeAfterInterest = income.rentalCashflowTreatment === "beforeInterest"
+        ? roundCurrency(rentalCashIncome - loanInterest)
+        : rentalCashIncome;
+      const netPropertyCashflow = income.rentalCashflowTreatment === "beforeInterest"
+        ? roundCurrency(rentalCashIncome - fullLoanRepayments)
+        : roundCurrency(rentalCashIncome - loanPrincipal);
+      return {
+        id: income.id,
+        name: income.name,
+        linkedAssetId: income.linkedAssetId,
+        linkedLoanIds: Array.from(loanIds),
+        rentalCashflowTreatment: income.rentalCashflowTreatment,
+        rentalIncomeTreatment: income.rentalCashflowTreatment,
+        rentalCashIncome,
+        grossRentalIncome: rentalCashIncome,
+        propertyExpenses: 0,
+        loanInterest,
+        loanPrincipal,
+        fullLoanRepayments,
+        incomeAfterInterest,
+        netPropertyCashflow,
+        interestAlreadyIncluded: income.rentalCashflowTreatment === "afterInterest",
+      };
+    });
+  }
+
+  function projectPropertyRows(normalised, assetRows, debtRows, propertyIncomeRows) {
+    const rows = assetRows
+      .filter((asset) => asset.isProperty)
+      .map((asset) => {
+        const linkedDebtRows = debtRows.filter((debt) => debt.linkedAssetId && debt.linkedAssetId === asset.id);
+        const linkedIncomeRows = propertyIncomeRows.filter((income) => {
+          if (income.linkedAssetId && income.linkedAssetId === asset.id) return true;
+          return income.linkedLoanIds.some((loanId) => linkedDebtRows.some((debt) => debt.id === loanId));
+        });
+        const linkedLoanOpeningBalance = roundCurrency(linkedDebtRows.reduce((total, debt) => total + debt.openingBalance, 0));
+        const linkedLoanClosingBalance = roundCurrency(linkedDebtRows.reduce((total, debt) => total + debt.closingBalance, 0));
+        const loanInterest = roundCurrency(linkedDebtRows.reduce((total, debt) => total + debt.interestCharged, 0));
+        const loanPrincipal = roundCurrency(linkedDebtRows.reduce((total, debt) => total + debt.principalRepaid, 0));
+        const netPropertyCashflow = roundCurrency(linkedIncomeRows.reduce((total, income) => total + income.netPropertyCashflow, 0));
+        return {
+          id: asset.id,
+          name: asset.name,
+          type: asset.type,
+          openingValue: asset.openingValue,
+          propertyGrowth: asset.propertyGrowth,
+          closingValue: asset.closingValue,
+          rentalCashIncome: roundCurrency(linkedIncomeRows.reduce((total, income) => total + income.rentalCashIncome, 0)),
+          grossRentalIncome: roundCurrency(linkedIncomeRows.reduce((total, income) => total + income.rentalCashIncome, 0)),
+          propertyExpenses: 0,
+          loanInterest,
+          loanPrincipal,
+          netPropertyCashflow,
+          linkedLoanOpeningBalance,
+          linkedLoanClosingBalance,
+          propertyEquity: roundCurrency(asset.closingValue - linkedLoanClosingBalance),
+          isRentalInvestmentProperty: asset.isRentalInvestmentProperty,
+        };
+      });
+    return rows;
+  }
+
   function normaliseInputs(input) {
     const people = Array.isArray(input?.people) ? input.people.map(normalisePerson) : [];
     const externalAccessibleContribution = hasFiniteNumber(input?.accessibleInvestments?.externalAnnualAccessibleContribution)
@@ -194,6 +646,7 @@
         semiRetirementLifestyleSpending: number(input?.household?.semiRetirementLifestyleSpending),
         fullRetirementLifestyleSpending: number(input?.household?.fullRetirementLifestyleSpending),
         spendingAmountsAreInTodaysDollars: true,
+        dependants: Math.max(0, Math.round(number(input?.household?.dependants))),
         otherAnnualIncome: number(input?.household?.otherAnnualIncome),
         annualLoanPrincipalRepayments: number(input?.household?.annualLoanPrincipalRepayments),
       },
@@ -204,6 +657,11 @@
         externalAnnualAccessibleContribution: externalAccessibleContribution,
         currentAnnualContributions: externalAccessibleContribution,
       },
+      assets: Array.isArray(input?.assets) ? input.assets.map(normaliseProjectionAsset) : [],
+      liabilities: Array.isArray(input?.liabilities)
+        ? input.liabilities.map(normaliseProjectionLiability).filter((liability) => !liability.isStsl)
+        : [],
+      propertyIncome: Array.isArray(input?.propertyIncome) ? input.propertyIncome.map(normalisePropertyIncome) : [],
       people,
       scenario: {
         semiRetirementAccessibleWithdrawal: number(input?.scenario?.semiRetirementAccessibleWithdrawal),
@@ -253,6 +711,42 @@
       ["scenario.minimumAccessibleBalance", input.scenario?.minimumAccessibleBalance],
     ].forEach(([path, value]) => {
       if (hasFiniteNumber(value) && number(value) < 0) addValidation(errors, path, "Negative amounts are not valid for this projection input.");
+    });
+
+    const assetInputs = Array.isArray(input.assets) ? input.assets.map(normaliseProjectionAsset) : [];
+    const assetIds = new Set();
+    assetInputs.forEach((asset, index) => {
+      const prefix = `assets.${index}`;
+      if (assetIds.has(asset.id)) addValidation(errors, `${prefix}.id`, "Duplicate asset IDs are not valid.");
+      assetIds.add(asset.id);
+      if (asset.openingValue < 0) addValidation(errors, `${prefix}.openingValue`, "Asset values cannot be negative.");
+      if (asset.annualGrowthRate < -1) addValidation(errors, `${prefix}.annualGrowthRate`, "Asset growth assumptions cannot be below -100%.");
+    });
+    const liabilityInputs = Array.isArray(input.liabilities) ? input.liabilities.map(normaliseProjectionLiability) : [];
+    const liabilityIds = new Set();
+    liabilityInputs.forEach((liability, index) => {
+      const prefix = `liabilities.${index}`;
+      if (STSL_DEBT_TYPES.has(liability.type)) return;
+      if (liabilityIds.has(liability.id)) addValidation(errors, `${prefix}.id`, "Duplicate liability IDs are not valid.");
+      liabilityIds.add(liability.id);
+      if (liability.openingBalance < 0) addValidation(errors, `${prefix}.openingBalance`, "Debt balances cannot be negative.");
+      if (liability.repaymentAmount < 0) addValidation(errors, `${prefix}.repaymentAmount`, "Debt repayments cannot be negative.");
+      if (liability.annualInterestRate < 0) addValidation(errors, `${prefix}.annualInterestRate`, "Interest rates cannot be negative.");
+      if (!VALID_REPAYMENT_FREQUENCIES.has(liability.repaymentFrequency)) addValidation(errors, `${prefix}.repaymentFrequency`, "Repayment frequency is not supported.");
+      if (liability.linkedAssetId && !assetIds.has(liability.linkedAssetId)) addValidation(errors, `${prefix}.linkedAssetId`, "Linked asset was not found.");
+    });
+    const propertyIncomeInputs = Array.isArray(input.propertyIncome) ? input.propertyIncome.map(normalisePropertyIncome) : [];
+    propertyIncomeInputs.forEach((income, index) => {
+      const prefix = `propertyIncome.${index}`;
+      if (income.annualGrowthRate < -1) addValidation(errors, `${prefix}.annualGrowthRate`, "Property income growth cannot be below -100%.");
+      if (income.linkedAssetId && !assetIds.has(income.linkedAssetId)) addValidation(errors, `${prefix}.linkedAssetId`, "Linked property asset was not found.");
+      if (income.linkedAssetId && assetIds.has(income.linkedAssetId)) {
+        const linkedAsset = assetInputs.find((asset) => asset.id === income.linkedAssetId);
+        if (linkedAsset && !linkedAsset.isProperty) addValidation(errors, `${prefix}.linkedAssetId`, "Rental income must link to a property asset.");
+      }
+      income.linkedLoanIds.forEach((loanId) => {
+        if (!liabilityIds.has(loanId)) addValidation(errors, `${prefix}.linkedLoanIds`, "Linked rental loan was not found.");
+      });
     });
 
     if (!Array.isArray(input.people) || input.people.length === 0) {
@@ -427,6 +921,8 @@
         "Determine person employment phases and gross employment income.",
         "Calculate person-level tax, Medicare levy, MLS and capped STSL repayment using existing helpers.",
         "Calculate gross and net employer/additional concessional super contributions.",
+        "Project annual debt schedules and property values from explicit asset/liability inputs.",
+        "Calculate rental/property cashflow using the selected after-interest or before-interest treatment.",
         "Calculate household lifestyle requirement in nominal dollars using today's-dollar inflation.",
         "Apply cash surplus or shortfall to accessible investments first, then available super where permitted.",
         "Apply midpoint total-return earnings to accessible investments and super balances.",
@@ -447,12 +943,19 @@
       superAccessTreatment: "scenario-assumed-access-age",
       superAccessNote: "Super availability is modelled using the entered scenario access age. The engine does not independently determine whether all legal conditions of release are satisfied.",
       accessibleContributionTreatment: "accessibleInvestments.externalAnnualAccessibleContribution/currentAnnualContributions is treated as an explicit additional accessible-investment contribution on top of any household cash surplus. It is not auto-populated from household surplus.",
+      debtAndPropertyTreatment: "Stage A1 projects supplied non-STSL liabilities annually, separating interest charged, total repayment, principal repaid, capitalised interest, final balloon repayments and repayment cashflow. STSL remains person-level and outside the generic debt schedule.",
+      rentalIncomeTreatment: "Rental/property income uses rentalCashflowTreatment. afterInterest means loan interest is already included in the entered rental cash income, so only linked principal is deducted from property cashflow. beforeInterest deducts linked loan interest and principal exactly once.",
+      rentalTaxModel: "Rental property projection models cashflow, not full future taxable rental profit/loss. Negative gearing, depreciation, CGT and future rental tax schedules are not modelled in Stage A1.",
+      propertyEquityTreatment: "Property equity is reported in projected net worth but is not treated as accessible retirement cash or used to fund lifestyle spending.",
+      propertySaleTreatment: "No automatic property sale, refinance, downsizing or redraw event is assumed in Stage A.",
+      offsetTreatment: "Existing app offset assumptions are preserved. Stage A1 applies the current offset balance to reduce projected home-loan interest, while loan principal remains the actual liability. The projection does not dynamically deplete offset accounts during retirement; if offset funds are later withdrawn, future loan interest may differ.",
       withdrawalOrder: normalised.scenario.withdrawalOrder,
       superWithdrawalOrder: normalised.scenario.superWithdrawalOrder || "oldest available person first",
       limitations: [
         "No Age Pension, Monte Carlo modelling, contribution optimisation, account-based pension minimums or transfer balance cap treatment.",
         "Additional concessional contributions are paid from household cash and receive contributions-tax treatment only in Stage 1.",
         "Investment assumptions use a total-return model to avoid double counting cash yield.",
+        "Property sale, downsizing, refinance, redraw, dynamic offset depletion, CGT, depreciation and negative-gearing optimisation are intentionally deferred.",
       ],
     };
 
@@ -491,6 +994,15 @@
     if (normalised.accessibleInvestments.externalAnnualAccessibleContribution > 0) {
       warnings.push("External annual accessible contribution is modelled as additional to ordinary household cash surplus.");
     }
+    const assetStates = {};
+    normalised.assets.forEach((asset) => {
+      assetStates[asset.id] = roundCurrency(asset.openingValue);
+    });
+    const liabilityStates = {};
+    normalised.liabilities.forEach((liability) => {
+      liabilityStates[liability.id] = roundCurrency(liability.openingBalance);
+    });
+    const debtPayoffRecorded = new Set();
     let accessibleOpening = roundCurrency(normalised.accessibleInvestments.openingBalance);
     // Age is measured at the start of each projection year; projectionEndAge belongs to the youngest person.
     const maxYears = projectionHorizonYears;
@@ -552,6 +1064,53 @@
         person.superWithdrawal = 0;
       });
 
+      const assetRows = normalised.assets.map((asset) => {
+        const row = projectAssetYear(asset, assetStates[asset.id]);
+        assetStates[asset.id] = row.closingValue;
+        return row;
+      });
+      const liabilityRows = normalised.liabilities.map((liability) => {
+        const row = projectDebtYear(liability, liabilityStates[liability.id], yearIndex, calendarYear);
+        liabilityStates[liability.id] = row.closingBalance;
+        if (row.paidOffThisYear && !debtPayoffRecorded.has(row.id)) {
+          summary.debtPayoffMilestones.push({
+            liabilityId: row.id,
+            name: row.name,
+            calendarYear,
+            person1Age: peopleYear[0]?.age ?? null,
+            person2Age: peopleYear[1]?.age ?? null,
+            type: row.type,
+          });
+          debtPayoffRecorded.add(row.id);
+        }
+        row.warnings.forEach((warning) => warnings.push(`${calendarYear} ${row.name}: ${warningCodeMessage(warning)}`));
+        return row;
+      });
+      const propertyIncomeRows = projectPropertyIncomeRows(normalised, liabilityRows, yearIndex);
+      const propertyRows = projectPropertyRows(normalised, assetRows, liabilityRows, propertyIncomeRows);
+      const debtIdsLinkedToPropertyIncome = new Set(propertyIncomeRows.flatMap((income) => income.linkedLoanIds));
+      const totalDebtRepayments = roundCurrency(liabilityRows.reduce((total, debt) => total + debt.totalRepayment, 0));
+      const totalLoanInterest = roundCurrency(liabilityRows.reduce((total, debt) => total + debt.interestCharged, 0));
+      const totalLoanPrincipal = roundCurrency(liabilityRows.reduce((total, debt) => total + debt.principalRepaid, 0));
+      const propertyDebtRepayments = roundCurrency(liabilityRows
+        .filter((debt) => debtIdsLinkedToPropertyIncome.has(debt.id))
+        .reduce((total, debt) => total + debt.totalRepayment, 0));
+      const scheduledDebtCashRequirement = roundCurrency(liabilityRows
+        .filter((debt) => !debtIdsLinkedToPropertyIncome.has(debt.id))
+        .reduce((total, debt) => total + debt.totalRepayment, 0));
+      const legacyFlatLoanRepayments = normalised.liabilities.length
+        ? 0
+        : roundCurrency(normalised.household.annualLoanPrincipalRepayments);
+      const annualDebtCashRequirement = roundCurrency(scheduledDebtCashRequirement + legacyFlatLoanRepayments);
+      const netRentalCashflow = roundCurrency(propertyIncomeRows.reduce((total, income) => total + income.netPropertyCashflow, 0));
+      const totalPropertyValue = roundCurrency(propertyRows.reduce((total, property) => total + property.closingValue, 0));
+      const totalPropertyDebt = roundCurrency(propertyRows.reduce((total, property) => total + property.linkedLoanClosingBalance, 0));
+      const totalPropertyEquity = roundCurrency(propertyRows.reduce((total, property) => total + property.propertyEquity, 0));
+      const totalDebt = roundCurrency(liabilityRows.reduce((total, debt) => total + debt.closingBalance, 0));
+      const totalNonAccessibleAssetValue = roundCurrency(assetRows
+        .filter((asset) => asset.includeInNetWorth && !asset.isAccessibleAsset)
+        .reduce((total, asset) => total + asset.closingValue, 0));
+
       const phase = householdPhase(peopleYear);
       const lifestyleBase = phase === "full-retirement"
         ? (normalised.scenario.fullRetirementAnnualSpending || normalised.household.fullRetirementLifestyleSpending)
@@ -562,8 +1121,8 @@
       const totalNetEmploymentIncome = roundCurrency(peopleYear.reduce((total, person) => total + person.netEmploymentIncome, 0));
       const otherIncome = roundCurrency(normalised.household.otherAnnualIncome);
       const totalAdditionalSuperContribution = roundCurrency(peopleYear.reduce((total, person) => total + person.additionalSuperContribution, 0));
-      const householdCashRequirement = roundCurrency(applicableLifestyleSpending + normalised.household.annualLoanPrincipalRepayments + totalAdditionalSuperContribution);
-      const netHouseholdCashIncome = roundCurrency(totalNetEmploymentIncome + otherIncome);
+      const householdCashRequirement = roundCurrency(applicableLifestyleSpending + annualDebtCashRequirement + totalAdditionalSuperContribution);
+      const netHouseholdCashIncome = roundCurrency(totalNetEmploymentIncome + otherIncome + netRentalCashflow);
       const cashSurplusOrShortfall = roundCurrency(netHouseholdCashIncome - householdCashRequirement);
       const householdSurplusAccessibleContribution = roundCurrency(Math.max(0, cashSurplusOrShortfall));
       const externalAnnualAccessibleContribution = roundCurrency(normalised.accessibleInvestments.externalAnnualAccessibleContribution);
@@ -640,6 +1199,7 @@
 
       const totalSuperBalance = roundCurrency(peopleYear.reduce((total, person) => total + person.closingSuperBalance, 0));
       const totalInvestableAssets = roundCurrency(closingAccessibleInvestmentBalance + totalSuperBalance);
+      const totalNetWorth = roundCurrency(closingAccessibleInvestmentBalance + totalSuperBalance + totalNonAccessibleAssetValue - totalDebt);
       const yearWarnings = [];
       if (unfundedPlannedSemiRetirementWithdrawal > 0) yearWarnings.push("Planned semi-retirement withdrawal could not be fully funded from accessible investments.");
       if (superFunding.unmet > 0) yearWarnings.push("Household spending shortfall could not be fully funded.");
@@ -710,8 +1270,21 @@
           applicableLifestyleSpending,
           totalNetEmploymentIncome,
           otherIncome,
+          netRentalCashflow,
           netHouseholdCashIncome,
-          annualLoanPrincipalRepayments: roundCurrency(normalised.household.annualLoanPrincipalRepayments),
+          annualLoanPrincipalRepayments: roundCurrency(legacyFlatLoanRepayments || totalLoanPrincipal),
+          legacyFlatLoanRepayments,
+          scheduledDebtCashRequirement,
+          annualDebtCashRequirement,
+          totalDebtRepayments,
+          propertyDebtRepayments,
+          totalLoanInterest,
+          totalLoanPrincipal,
+          totalPropertyValue,
+          totalPropertyDebt,
+          totalPropertyEquity,
+          totalDebt,
+          totalNetWorth,
           additionalConcessionalContributionsPaidFromCash: totalAdditionalSuperContribution,
           householdCashRequirement,
           cashSurplusOrShortfall,
@@ -744,6 +1317,10 @@
           totalInvestableAssets,
           unmetSpending,
         },
+        assets: assetRows,
+        liabilities: liabilityRows,
+        propertyIncome: propertyIncomeRows,
+        properties: propertyRows,
         warnings: yearWarnings,
       };
       years.push(annualResult);
@@ -773,6 +1350,11 @@
       summary.accessibleBalanceAtEndAge = finalYear.household.closingAccessibleInvestmentBalance;
       summary.superBalanceAtEndAge = finalYear.household.totalSuperBalance;
       summary.totalInvestableAssetsAtEndAge = finalYear.household.totalInvestableAssets;
+      summary.totalDebtAtEndAge = finalYear.household.totalDebt;
+      summary.totalPropertyValueAtEndAge = finalYear.household.totalPropertyValue;
+      summary.totalPropertyDebtAtEndAge = finalYear.household.totalPropertyDebt;
+      summary.totalPropertyEquityAtEndAge = finalYear.household.totalPropertyEquity;
+      summary.totalNetWorthAtEndAge = finalYear.household.totalNetWorth;
     }
     summary.minimumEstateBalanceTarget = roundCurrency(normalised.scenario.minimumEstateBalanceAtEndAge);
     summary.minimumEstateBalanceShortfallAtEndAge = roundCurrency(Math.max(
@@ -805,5 +1387,6 @@
     projectRetirementScenario,
     validateRetirementProjectionInputs: validateInputs,
     normaliseRetirementProjectionInputs: normaliseInputs,
+    projectDebtYearForAudit: projectDebtYear,
   };
 })(globalThis);

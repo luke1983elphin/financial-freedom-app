@@ -360,6 +360,18 @@
   border-color: #fde68a;
 }
 
+.semi-retirement-debt-warning-list {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  margin-top: 14px;
+}
+
+.semi-retirement-debt-card,
+.semi-retirement-property-card {
+  align-content: start;
+}
+
 .semi-retirement-person-values {
   display: grid;
   gap: 8px;
@@ -437,7 +449,7 @@
   border-collapse: separate;
   border-spacing: 0;
   font-size: 12px;
-  min-width: 1180px;
+  min-width: 1420px;
   width: 100%;
 }
 
@@ -483,6 +495,10 @@
   color: #0f2742;
   font-size: 14px;
   font-weight: 950;
+}
+
+.semi-retirement-annual-subgroup {
+  background: #eff6ff;
 }
 
 .semi-retirement-row-warning {

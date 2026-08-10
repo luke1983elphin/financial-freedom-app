@@ -52,6 +52,7 @@
   const STATUS = { GREEN: "green", AMBER: "amber", RED: "red" };
   const INVESTMENT_PROPERTY_ASSET_CATEGORIES = [
     "otherProperty",
+    "rentalInvestmentProperty",
     "rentalProperty",
     "investmentProperty",
     "residentialInvestmentProperty",

@@ -30,6 +30,175 @@
     return path.split(".").reduce((cursor, key) => cursor?.[key], plan) ?? fallback;
   }
 
+  function roundCurrency(value) {
+    return Math.round((number(value) + Number.EPSILON) * 100) / 100;
+  }
+
+  function annualiseAmount(amount, frequency = "annually") {
+    const value = number(amount);
+    if (frequency === "weekly") return roundCurrency(value * 52);
+    if (frequency === "fortnightly") return roundCurrency(value * 26);
+    if (frequency === "monthly") return roundCurrency(value * 12);
+    if (frequency === "quarterly") return roundCurrency(value * 4);
+    return roundCurrency(value);
+  }
+
+  function ratePercentForProperty(plan = {}, item = {}) {
+    const candidates = [
+      item.propertyGrowthRatePct,
+      item.propertyGrowthRate,
+      item.capitalGrowthRatePct,
+      item.capitalGrowthRate,
+      item.expectedGrowthRatePct,
+      item.expectedGrowthRate,
+      item.growthRatePct,
+      item.growthRate,
+      plan.investing?.investmentPropertyGrowthRatePct,
+      plan.investing?.investmentPropertyGrowthRate,
+      plan.investing?.propertyGrowthRatePct,
+      plan.investing?.propertyGrowthRate,
+      plan.assumptions?.investmentPropertyGrowthRatePct,
+      plan.assumptions?.investmentPropertyGrowthRate,
+      plan.assumptions?.propertyGrowthRatePct,
+      plan.assumptions?.propertyGrowthRate,
+    ];
+    const found = candidates.find((value) => finiteNumberOrNull(value) !== null);
+    return found === undefined ? 0 : number(found);
+  }
+
+  function linkedLoanIds(item = {}) {
+    if (Array.isArray(item.linkedLoanIds)) return item.linkedLoanIds.map((id) => String(id || "")).filter(Boolean);
+    if (typeof item.linkedLoanIds === "string") return item.linkedLoanIds.split(",").map((id) => id.trim()).filter(Boolean);
+    return item.linkedLoanId ? [String(item.linkedLoanId)] : [];
+  }
+
+  function projectionAssetsFromPlan(plan = {}) {
+    const items = Array.isArray(plan.assetItems) ? plan.assetItems : [];
+    const propertyLike = new Set(["home", "otherProperty", "rentalInvestmentProperty", "rentalProperty", "investmentProperty", "vehicle"]);
+    const detailed = items
+      .filter((item) => propertyLike.has(item.category || item.type))
+      .map((item, index) => ({
+        id: String(item.id || `asset-${index + 1}`),
+        name: String(item.name || item.description || `Asset ${index + 1}`),
+        type: item.category || item.type || "other",
+        openingValue: nonNegative(item.value ?? item.currentValue ?? item.balance),
+        annualGrowthRatePct: ["home", "otherProperty", "rentalInvestmentProperty", "rentalProperty", "investmentProperty"].includes(item.category || item.type)
+          ? ratePercentForProperty(plan, item)
+          : 0,
+        includeInNetWorth: item.includeInNetWorth !== false,
+        isAccessibleAsset: false,
+        isPersonalUse: item.isPersonalUse === true,
+      }))
+      .filter((item) => item.openingValue > 0 || item.type === "rentalInvestmentProperty");
+    if (detailed.length) return detailed;
+    const fallback = [];
+    if (nonNegative(plan.assets?.homeValue) > 0) {
+      fallback.push({ id: "legacy-home", name: "Home", type: "home", openingValue: nonNegative(plan.assets.homeValue), annualGrowthRatePct: ratePercentForProperty(plan), includeInNetWorth: true, isAccessibleAsset: false });
+    }
+    if (nonNegative(plan.assets?.otherPropertyValue) > 0) {
+      fallback.push({ id: "legacy-other-property", name: "Other property", type: "otherProperty", openingValue: nonNegative(plan.assets.otherPropertyValue), annualGrowthRatePct: ratePercentForProperty(plan), includeInNetWorth: true, isAccessibleAsset: false });
+    }
+    if (nonNegative(plan.assets?.vehiclesPersonalAssets) > 0) {
+      fallback.push({ id: "legacy-vehicle", name: "Vehicles / personal assets", type: "vehicle", openingValue: nonNegative(plan.assets.vehiclesPersonalAssets), annualGrowthRatePct: 0, includeInNetWorth: true, isAccessibleAsset: false });
+    }
+    return fallback;
+  }
+
+  function projectionLiabilitiesFromPlan(plan = {}) {
+    const items = Array.isArray(plan.liabilityItems) ? plan.liabilityItems : [];
+    const homeLoanTypes = new Set(["homeLoan", "mortgage", "home_loan", "mortgageLoan"]);
+    let unappliedHomeOffsetBalance = nonNegative(plan.assets?.offsetBalance);
+    const offsetForLiability = (item, type, openingBalance) => {
+      const explicitOffset = item.openingOffsetBalance ?? item.offsetBalance ?? item.linkedOffsetBalance;
+      if (explicitOffset !== null && explicitOffset !== undefined && explicitOffset !== "") return nonNegative(explicitOffset);
+      if (!homeLoanTypes.has(type)) return 0;
+      const assigned = Math.min(openingBalance, unappliedHomeOffsetBalance);
+      unappliedHomeOffsetBalance = Math.max(0, unappliedHomeOffsetBalance - assigned);
+      return assigned;
+    };
+    const filtered = items
+      .filter((item) => !["stsl", "hecsHelp", "helpDebt", "studyLoan"].includes(item.type || item.category))
+      .map((item, index) => {
+        const type = item.type || item.category || "otherDebt";
+        const openingBalance = nonNegative(item.balance ?? item.currentBalance ?? item.value);
+        return {
+          id: String(item.id || `liability-${index + 1}`),
+          name: String(item.name || item.description || `Liability ${index + 1}`),
+          type,
+          linkedAssetId: String(item.linkedAssetId || item.investmentLink?.linkedAssetId || ""),
+          linkedRentalIncomeId: String(item.linkedRentalIncomeId || ""),
+          openingBalance,
+          openingOffsetBalance: offsetForLiability(item, type, openingBalance),
+          interestRatePct: number(item.interestRatePct ?? item.interestRate ?? item.annualInterestRate),
+          repaymentAmount: nonNegative(item.repayment ?? item.repaymentAmount),
+          repaymentFrequency: item.repaymentFrequency || "monthly",
+          remainingTermYears: nonNegative(item.termYears ?? item.remainingTermYears),
+          repaymentType: item.repaymentType === "interestOnly" ? "interestOnly" : "principalAndInterest",
+          additionalPrincipalRepayment: nonNegative(item.additionalPrincipalRepayment),
+          additionalPrincipalFrequency: item.additionalPrincipalFrequency || "annually",
+        };
+      })
+      .filter((item) => item.openingBalance > 0 || item.repaymentAmount > 0);
+    if (filtered.length) return filtered;
+    const fallback = [];
+    if (nonNegative(plan.liabilities?.homeLoanBalance) > 0) {
+      fallback.push({
+        id: "legacy-home-loan",
+        name: "Home loan",
+        type: "homeLoan",
+        linkedAssetId: "legacy-home",
+        openingBalance: nonNegative(plan.liabilities.homeLoanBalance),
+        openingOffsetBalance: Math.min(nonNegative(plan.liabilities.homeLoanBalance), nonNegative(plan.assets?.offsetBalance)),
+        interestRatePct: number(plan.liabilities.homeLoanInterestRatePct),
+        repaymentAmount: nonNegative(plan.liabilities.monthlyRepayment),
+        repaymentFrequency: "monthly",
+        remainingTermYears: nonNegative(plan.liabilities.remainingLoanTermYears),
+        repaymentType: "principalAndInterest",
+      });
+    }
+    if (nonNegative(plan.liabilities?.creditCardBalance) > 0) {
+      fallback.push({
+        id: "legacy-credit-card",
+        name: "Credit card",
+        type: "creditCard",
+        openingBalance: nonNegative(plan.liabilities.creditCardBalance),
+        interestRatePct: number(plan.liabilities.creditCardInterestRatePct),
+        repaymentAmount: nonNegative(plan.liabilities.creditCardMonthlyRepayment),
+        repaymentFrequency: "monthly",
+        remainingTermYears: 30,
+        repaymentType: "principalAndInterest",
+      });
+    }
+    if (nonNegative(plan.liabilities?.otherDebts) > 0) {
+      fallback.push({
+        id: "legacy-other-debt",
+        name: "Other debts",
+        type: "otherDebt",
+        openingBalance: nonNegative(plan.liabilities.otherDebts),
+        interestRatePct: 0,
+        repaymentAmount: 0,
+        repaymentFrequency: "monthly",
+        remainingTermYears: 30,
+        repaymentType: "principalAndInterest",
+      });
+    }
+    return fallback;
+  }
+
+  function projectionPropertyIncomeFromPlan(plan = {}) {
+    return (Array.isArray(plan.incomeItems) ? plan.incomeItems : [])
+      .filter((item) => item.type === "rentalNetCashIncome" || item.incomeType === "rentalNetCashIncome")
+      .map((item, index) => ({
+        id: String(item.id || `property-income-${index + 1}`),
+        name: String(item.propertyName || item.name || `Rental property ${index + 1}`),
+        linkedAssetId: String(item.linkedAssetId || item.linkedPropertyAssetId || ""),
+        linkedLoanIds: linkedLoanIds(item),
+        annualIncome: annualiseAmount(item.amount, item.frequency || "annually"),
+        annualGrowthRatePct: number(item.annualGrowthRatePct ?? item.growthRatePct ?? 0),
+        rentalCashflowTreatment: item.rentalCashflowTreatment === "beforeInterest" ? "beforeInterest" : "afterInterest",
+      }));
+  }
+
   function personName(plan, index) {
     return String(plan?.personal?.[`person${index}Name`] || `Person ${index}`);
   }
@@ -87,6 +256,13 @@
         accessibleInvestmentAssets: nonNegative(result.accessibleInvestmentAssets),
         superPerson1: superForPerson(plan, 1),
         superPerson2: superForPerson(plan, 2),
+        projectedAssets: projectionAssetsFromPlan(plan),
+      },
+      liabilities: {
+        projectedLiabilities: projectionLiabilitiesFromPlan(plan),
+      },
+      propertyIncome: {
+        projectedPropertyIncome: projectionPropertyIncomeFromPlan(plan),
       },
       assumptions: {
         investmentReturnPct: number(plan.investing?.expectedInvestmentReturnPct),
@@ -134,6 +310,11 @@
     const lifestyleSpending = nonNegative(plan.personal?.targetAnnualSpending) || nonNegative(result.annualLivingExpenses);
     const people = [personDefaults(plan, result, 1)];
     if (hasSecondPerson(plan, result)) people.push(personDefaults(plan, result, 2));
+    const assets = projectionAssetsFromPlan(plan);
+    const liabilities = projectionLiabilitiesFromPlan(plan);
+    const propertyIncome = projectionPropertyIncomeFromPlan(plan);
+    const mappedPropertyIncomeTotal = roundCurrency(propertyIncome.reduce((total, item) => total + number(item.annualIncome), 0));
+    const otherAnnualIncome = roundCurrency(number(result.otherAnnualIncome) - mappedPropertyIncomeTotal);
     const draft = {
       version: 1,
       projectionStartYear: currentYear(),
@@ -143,7 +324,7 @@
         semiRetirementLifestyleSpending: lifestyleSpending,
         fullRetirementLifestyleSpending: lifestyleSpending,
         annualLoanPrincipalRepayments: 0,
-        otherAnnualIncome: nonNegative(result.otherAnnualIncome),
+        otherAnnualIncome,
       },
       accessibleInvestments: {
         openingBalance: nonNegative(result.accessibleInvestmentAssets),
@@ -160,6 +341,9 @@
         minimumEstateBalanceAtEndAge: 0,
         withdrawalOrder: "accessible-first",
       },
+      assets,
+      liabilities,
+      propertyIncome,
       people,
     };
     return {
@@ -271,6 +455,27 @@
         externalAnnualAccessibleContribution: nonNegative(draft.accessibleInvestments?.externalAnnualAccessibleContribution),
         currentAnnualContributions: nonNegative(draft.accessibleInvestments?.externalAnnualAccessibleContribution),
       },
+      assets: Array.isArray(draft.assets) ? clone(draft.assets).map((asset) => ({
+        ...asset,
+        annualGrowthRate: finiteNumberOrNull(asset.annualGrowthRate) !== null
+          ? number(asset.annualGrowthRate)
+          : percentToRate(asset.annualGrowthRatePct),
+      })) : [],
+      liabilities: Array.isArray(draft.liabilities) ? clone(draft.liabilities).map((liability) => ({
+        ...liability,
+        annualInterestRate: finiteNumberOrNull(liability.annualInterestRate) !== null
+          ? number(liability.annualInterestRate)
+          : percentToRate(liability.interestRatePct),
+        repaymentAmount: nonNegative(liability.repaymentAmount),
+        openingBalance: nonNegative(liability.openingBalance),
+      })) : [],
+      propertyIncome: Array.isArray(draft.propertyIncome) ? clone(draft.propertyIncome).map((income) => ({
+        ...income,
+        annualIncome: number(income.annualIncome),
+        annualGrowthRate: finiteNumberOrNull(income.annualGrowthRate) !== null
+          ? number(income.annualGrowthRate)
+          : percentToRate(income.annualGrowthRatePct),
+      })) : [],
       people: (draft.people || []).map((person, index) => {
         const fullRetirementAge = number(person.fullRetirementAge);
         const hasSemiRetirement = Boolean(person.hasSemiRetirement);
@@ -407,6 +612,242 @@
       .replace(/Input mutation was detected\. This should not occur\./g, "The projection input changed unexpectedly while calculating. Review the scenario and calculate again.");
   }
 
+  function debtTypeLabel(type = "") {
+    const labels = {
+      homeLoan: "Home loan",
+      mortgage: "Home loan",
+      rentalPropertyLoan: "Investment property loan",
+      investmentLoan: "Investment loan",
+      shareInvestmentLoan: "Share investment loan",
+      managedFundLoan: "Managed fund loan",
+      personalLoan: "Personal loan",
+      vehicleLoan: "Vehicle loan",
+      creditCard: "Credit card",
+      lineOfCredit: "Line of credit",
+      overdraft: "Overdraft",
+      revolvingCredit: "Revolving credit",
+      revolvingFacility: "Revolving facility",
+      otherDebt: "Other debt",
+    };
+    return labels[type] || String(type || "Debt");
+  }
+
+  function rentalTreatmentLabel(treatment = "") {
+    return treatment === "beforeInterest"
+      ? "Loan interest is deducted separately in this projection."
+      : "Rental cash income entered after loan interest.";
+  }
+
+  function resolveLinkedPropertyName(linkedAssetId, propertyRows = [], assetRows = []) {
+    if (!linkedAssetId) return "";
+    const property = propertyRows.find((item) => item.id === linkedAssetId)
+      || assetRows.find((item) => item.id === linkedAssetId);
+    return property?.name || "Linked property unavailable";
+  }
+
+  function liabilityInRow(row = {}, liabilityId = "") {
+    return asArray(row.liabilities).find((liability) => liability.id === liabilityId) || null;
+  }
+
+  function propertyInRow(row = {}, propertyId = "") {
+    return asArray(row.properties).find((property) => property.id === propertyId) || null;
+  }
+
+  function hasMeaningfulDebt(row = {}) {
+    return asArray(row.liabilities).some((liability) => (
+      number(liability.openingBalance) > 0
+      || number(liability.closingBalance) > 0
+      || number(liability.totalRepayment ?? liability.scheduledRepayment) > 0
+    ));
+  }
+
+  function buildDebtWarnings(years = []) {
+    const negativeByDebt = new Map();
+    const balloonWarnings = [];
+    years.forEach((row) => {
+      asArray(row.liabilities).forEach((liability) => {
+        asArray(liability.warnings).forEach((warning) => {
+          if (!warning || typeof warning !== "object") return;
+          if (warning.code === "DEBT_NEGATIVE_AMORTISATION") {
+            const existing = negativeByDebt.get(liability.id) || {
+              liabilityId: liability.id,
+              name: liability.name || debtTypeLabel(liability.type),
+              years: [],
+              firstYear: row.calendarYear,
+            };
+            existing.years.push(row.calendarYear);
+            existing.firstYear = Math.min(existing.firstYear, row.calendarYear);
+            existing.capitalisedInterest = roundDisplayAmount(number(existing.capitalisedInterest) + number(warning.capitalisedInterest));
+            negativeByDebt.set(liability.id, existing);
+          }
+          if (warning.code === "DEBT_TERM_BALLOON_REPAYMENT") {
+            balloonWarnings.push({
+              liabilityId: liability.id,
+              name: liability.name || debtTypeLabel(liability.type),
+              calendarYear: row.calendarYear,
+              amount: roundDisplayAmount(warning.balloonRepayment ?? liability.balloonRepayment),
+            });
+          }
+        });
+      });
+    });
+    return {
+      negativeAmortisation: Array.from(negativeByDebt.values()).map((item) => ({
+        ...item,
+        yearCount: item.years.length,
+      })),
+      balloonRepayments: balloonWarnings,
+    };
+  }
+
+  function buildDebtCard({ liabilityId, years, people, payoffMilestones, propertyRows, assetRows, householdFullRetirementRow }) {
+    const firstRowWithDebt = years.find((row) => liabilityInRow(row, liabilityId));
+    const startDebt = liabilityInRow(firstRowWithDebt, liabilityId);
+    if (!startDebt) return null;
+    const retirementDebt = liabilityInRow(householdFullRetirementRow, liabilityId)
+      || liabilityInRow(years.at(-1), liabilityId)
+      || startDebt;
+    const payoff = payoffMilestones.find((milestone) => milestone.liabilityId === liabilityId) || null;
+    const payoffRow = payoff ? rowForCalendarYear(years, payoff.calendarYear) : null;
+    const payoffDebt = payoffRow ? liabilityInRow(payoffRow, liabilityId) : null;
+    const nextRow = payoffRow ? years[years.findIndex((row) => row.calendarYear === payoffRow.calendarYear) + 1] : null;
+    const repaymentBefore = payoffRow?.household?.totalDebtRepayments ?? payoffDebt?.totalRepayment ?? null;
+    const repaymentAfter = nextRow?.household?.totalDebtRepayments ?? null;
+    const repaymentReduction = repaymentBefore !== null && repaymentAfter !== null
+      ? roundDisplayAmount(number(repaymentBefore) - number(repaymentAfter))
+      : null;
+    const linkedPropertyName = resolveLinkedPropertyName(startDebt.linkedAssetId, propertyRows, assetRows);
+    return {
+      id: liabilityId,
+      name: startDebt.name || debtTypeLabel(startDebt.type),
+      type: startDebt.type,
+      typeLabel: debtTypeLabel(startDebt.type),
+      linkedPropertyName,
+      currentBalance: startDebt.openingBalance,
+      projectedBalanceAtRetirement: retirementDebt.closingBalance,
+      projectedBalanceAtRetirementYear: householdFullRetirementRow?.calendarYear ?? years.at(-1)?.calendarYear ?? null,
+      annualRepayment: startDebt.totalRepayment ?? startDebt.scheduledRepayment,
+      payoff,
+      payoffAges: payoff ? milestoneAges(payoff, people) : [],
+      payoffIsBalloon: number(payoffDebt?.balloonRepayment) > 0,
+      balloonRepayment: payoffDebt?.balloonRepayment ?? 0,
+      repaymentBefore,
+      repaymentAfter,
+      repaymentReduction,
+      hasNegativeAmortisation: years.some((row) => {
+        const debt = liabilityInRow(row, liabilityId);
+        return number(debt?.capitalisedInterest) > 0;
+      }),
+      isRevolving: startDebt.debtScheduleType === "revolving",
+    };
+  }
+
+  function buildPropertyCard(propertyId, selectedRow = {}, years = []) {
+    const property = propertyInRow(selectedRow, propertyId)
+      || years.map((row) => propertyInRow(row, propertyId)).find(Boolean);
+    if (!property) return null;
+    return {
+      id: propertyId,
+      name: property.name || "Rental / Investment Property",
+      selectedYear: selectedRow?.calendarYear ?? null,
+      selectedLabel: selectedRow?.householdPhase === "full-retirement"
+        ? "At household full retirement"
+        : selectedRow?.calendarYear ? `At ${selectedRow.calendarYear}` : "Selected projection year",
+      openingValue: property.openingValue,
+      propertyGrowth: property.propertyGrowth,
+      projectedPropertyValue: property.closingValue,
+      linkedPropertyDebt: property.linkedLoanClosingBalance,
+      projectedPropertyEquity: property.propertyEquity,
+      rentalCashIncome: property.rentalCashIncome ?? property.grossRentalIncome,
+      loanInterest: property.loanInterest,
+      loanPrincipal: property.loanPrincipal,
+      netPropertyCashflow: property.netPropertyCashflow,
+      cashflowTone: number(property.netPropertyCashflow) < 0 ? "warning" : "positive",
+      isRentalInvestmentProperty: property.isRentalInvestmentProperty === true,
+    };
+  }
+
+  function buildDebtPropertyResultsViewModel(projection = {}, people = []) {
+    const years = asArray(projection.years);
+    const summary = projection.summary || {};
+    const startRow = years[0] || null;
+    const finalRow = years.at(-1) || null;
+    const firstPersonFullRetirementRow = rowForCalendarYear(years, summary.firstPersonFullRetirement?.calendarYear) || null;
+    const householdFullRetirementRow = rowForCalendarYear(years, summary.householdFullRetirement?.calendarYear)
+      || years.find((row) => row.householdPhase === "full-retirement")
+      || finalRow
+      || null;
+    const propertyDisplayRow = householdFullRetirementRow || finalRow || startRow;
+    const hasDebt = years.some(hasMeaningfulDebt);
+    const assetRows = asArray(startRow?.assets);
+    const propertyRows = asArray(propertyDisplayRow?.properties).length
+      ? asArray(propertyDisplayRow.properties)
+      : asArray(startRow?.properties);
+    const liabilityIds = Array.from(new Set(years.flatMap((row) => asArray(row.liabilities).map((liability) => liability.id)).filter(Boolean)));
+    const payoffMilestones = asArray(summary.debtPayoffMilestones);
+    const debtCards = liabilityIds
+      .map((liabilityId) => buildDebtCard({
+        liabilityId,
+        years,
+        people,
+        payoffMilestones,
+        propertyRows,
+        assetRows,
+        householdFullRetirementRow,
+      }))
+      .filter(Boolean);
+    const propertyIds = Array.from(new Set(years
+      .flatMap((row) => asArray(row.properties))
+      .filter((property) => property.isRentalInvestmentProperty)
+      .map((property) => property.id)
+      .filter(Boolean)));
+    const propertyCards = propertyIds.map((propertyId) => buildPropertyCard(propertyId, propertyDisplayRow, years)).filter(Boolean);
+    const debtWarnings = buildDebtWarnings(years);
+    const accessibleExhaustion = milestoneHasYear(summary.accessibleFundsExhausted)
+      ? rowForCalendarYear(years, summary.accessibleFundsExhausted.calendarYear)
+      : null;
+    const propertyEquityAtAccessibleExhaustion = accessibleExhaustion
+      ? roundDisplayAmount(asArray(accessibleExhaustion.properties).reduce((total, property) => total + number(property.propertyEquity), 0))
+      : 0;
+    const netWorthRow = householdFullRetirementRow || finalRow || startRow || {};
+    return {
+      isAvailable: Boolean(years.length),
+      hasDebt,
+      hasProperty: propertyCards.length > 0,
+      milestoneDebt: [
+        { label: "Total debt now", row: startRow, value: startRow?.household?.totalDebt },
+        { label: "Debt when first person fully retires", row: firstPersonFullRetirementRow, value: firstPersonFullRetirementRow?.household?.totalDebt },
+        { label: "Debt when both are fully retired", row: householdFullRetirementRow, value: householdFullRetirementRow?.household?.totalDebt },
+        { label: "Debt at projection end", row: finalRow, value: finalRow?.household?.totalDebt },
+      ].filter((item) => item.row),
+      debtCards,
+      propertyCards,
+      netWorthDistinction: {
+        label: netWorthRow?.householdPhase === "full-retirement" ? "When both are fully retired" : `At ${netWorthRow?.calendarYear || "projection end"}`,
+        calendarYear: netWorthRow?.calendarYear ?? null,
+        ages: rowAges(netWorthRow, people),
+        investableRetirementAssets: netWorthRow?.household?.totalInvestableAssets,
+        projectedNetWorth: netWorthRow?.household?.totalNetWorth,
+        totalPropertyEquity: netWorthRow?.household?.totalPropertyEquity,
+        totalDebt: netWorthRow?.household?.totalDebt,
+      },
+      accessibleExhaustionPropertyEquity: accessibleExhaustion ? {
+        calendarYear: accessibleExhaustion.calendarYear,
+        ages: rowAges(accessibleExhaustion, people),
+        propertyEquity: propertyEquityAtAccessibleExhaustion,
+      } : null,
+      warnings: debtWarnings,
+      offsetDisclosure: years.flatMap((row) => asArray(row.liabilities))
+        .filter((debt) => number(debt.offsetBalanceUsed) > 0)
+        .map((debt) => ({
+          liabilityId: debt.id,
+          name: debt.name || debtTypeLabel(debt.type),
+          offsetBalanceUsed: debt.offsetBalanceUsed,
+        }))
+        .filter((item, index, array) => array.findIndex((candidate) => candidate.liabilityId === item.liabilityId) === index),
+    };
+  }
+
   function addTimelineEvent(groups, event) {
     if (!event?.calendarYear) return;
     const key = `${event.calendarYear}:${event.title}`;
@@ -513,6 +954,22 @@
         tone: "warning",
       });
     }
+    asArray(summary.debtPayoffMilestones).forEach((milestone) => {
+      const row = rowForCalendarYear(years, milestone.calendarYear);
+      const debt = liabilityInRow(row, milestone.liabilityId);
+      const isBalloon = number(debt?.balloonRepayment) > 0;
+      addTimelineEvent(groups, {
+        calendarYear: milestone.calendarYear,
+        ages: milestoneAges(milestone, people),
+        title: isBalloon
+          ? `${milestone.name || debt?.name || "Debt"} final repayment`
+          : `${milestone.name || debt?.name || "Debt"} repaid`,
+        detail: isBalloon
+          ? `Final repayment projected at ${roundDisplayAmount(debt.balloonRepayment).toLocaleString(undefined, { style: "currency", currency: "AUD", maximumFractionDigits: 0 })}.`
+          : "Debt payoff based on the annual debt schedule.",
+        tone: isBalloon ? "warning" : "positive",
+      });
+    });
 
     return Array.from(groups.byYear.values()).sort((a, b) => a.calendarYear - b.calendarYear);
   }
@@ -529,6 +986,10 @@
         employmentPhaseLabel: phaseLabel(person.employmentPhase),
       })),
       household: row.household || {},
+      assets: asArray(row.assets),
+      liabilities: asArray(row.liabilities),
+      propertyIncome: asArray(row.propertyIncome),
+      properties: asArray(row.properties),
       warnings: asArray(row.warnings).map(warningText).filter(Boolean),
     }));
   }
@@ -536,6 +997,36 @@
   function buildAssumptionRows(projection = {}, inputs = {}) {
     const assumptions = projection.assumptions || {};
     const people = asArray(inputs.people);
+    const debtRows = asArray(inputs.liabilities).flatMap((liability) => {
+      const name = liability.name || debtTypeLabel(liability.type);
+      return [
+        { label: `${name} interest rate`, value: liability.annualInterestRate, type: "percentRate" },
+        { label: `${name} repayment`, value: `${number(liability.repaymentAmount).toLocaleString(undefined, { style: "currency", currency: "AUD", maximumFractionDigits: 0 })} ${liability.repaymentFrequency || "annually"}`, type: "plain" },
+        { label: `${name} remaining term`, value: liability.remainingTermYears ? `${liability.remainingTermYears} years` : "Open-ended or not entered", type: "plain" },
+        ...(number(liability.openingOffsetBalance) > 0 ? [{ label: `${name} opening offset`, value: liability.openingOffsetBalance, type: "currency" }] : []),
+      ];
+    });
+    const propertyRows = asArray(inputs.assets)
+      .filter((asset) => asset.isRentalInvestmentProperty || asset.type === "rentalInvestmentProperty" || asset.type === "rentalProperty" || asset.type === "investmentProperty")
+      .flatMap((asset) => [
+        { label: `${asset.name || "Rental / Investment Property"} property growth`, value: asset.annualGrowthRate, type: "percentRate" },
+      ]);
+    const rentalRows = asArray(inputs.propertyIncome).map((income) => ({
+      label: `${income.name || "Rental income"} treatment`,
+      value: income.rentalCashflowTreatment === "beforeInterest"
+        ? "Rental cash income before loan interest"
+        : "Rental cash income after loan interest",
+      type: "plain",
+    }));
+    const offsetRows = asArray(projection.years).some((row) => asArray(row.liabilities).some((debt) => number(debt.offsetBalanceUsed) > 0))
+      ? [{ label: "Mortgage offset limitation", value: assumptions.offsetTreatment || "Current offset balance reduces projected interest. Dynamic offset depletion is not modelled.", type: "plain" }]
+      : [];
+    const noSaleRows = asArray(projection.years).some((row) => asArray(row.properties).length)
+      ? [
+        { label: "Property sale treatment", value: assumptions.propertySaleTreatment || "No automatic property sale is assumed.", type: "plain" },
+        { label: "Rental tax model", value: assumptions.rentalTaxModel || "Rental property projection models cashflow, not full future taxable rental profit/loss.", type: "plain" },
+      ]
+      : [];
     return [
       { label: "Projection start year", value: inputs.projectionStartYear ?? assumptions.projectionStartYear ?? null, type: "plain" },
       { label: "Projection end age", value: inputs.projectionEndAge ?? null, type: "age" },
@@ -559,6 +1050,11 @@
         { label: `${person.name || person.id} super return before retirement`, value: person.superReturnBeforeRetirement, type: "percentRate" },
         { label: `${person.name || person.id} super return after retirement`, value: person.superReturnAfterRetirement, type: "percentRate" },
       ]),
+      ...debtRows,
+      ...propertyRows,
+      ...rentalRows,
+      ...offsetRows,
+      ...noSaleRows,
     ].filter((row) => row.value !== undefined);
   }
 
@@ -604,6 +1100,7 @@
     const missingSuperAccessAgeWarnings = people
       .filter((person) => finiteNumberOrNull(person.superAccessAge) === null)
       .map((person) => `${person.name || person.id}: assumed super access age is missing, so no super-access timeline event is shown.`);
+    const debtProperty = buildDebtPropertyResultsViewModel(projection, people);
 
     return {
       isAvailable: true,
@@ -649,6 +1146,7 @@
           accessibleInvestments: summary.accessibleBalanceAtEndAge ?? finalYear.household?.closingAccessibleInvestmentBalance ?? null,
           super: summary.superBalanceAtEndAge ?? finalYear.household?.totalSuperBalance ?? null,
           totalInvestableAssets: summary.totalInvestableAssetsAtEndAge ?? finalYear.household?.totalInvestableAssets ?? null,
+          projectedNetWorth: summary.totalNetWorthAtEndAge ?? finalYear.household?.totalNetWorth ?? null,
         },
       },
       timeline: buildRetirementTimeline(projection, people),
@@ -665,6 +1163,7 @@
         superWithdrawalsDuringSemiRetirement,
         totalAssetWithdrawalsDuringSemiRetirement,
       },
+      debtProperty,
       annualRows,
       assumptions: {
         rows: buildAssumptionRows(projection, inputs),
@@ -853,6 +1352,7 @@
     scenarioDraftToProjectionInputs,
     runSemiRetirementProjection,
     buildSemiRetirementResultsViewModel,
+    buildDebtPropertyResultsViewModel,
     hasSemiRetirementPhase,
     applyScenarioAdjustment,
     buildScenarioAdjustmentSnapshot,

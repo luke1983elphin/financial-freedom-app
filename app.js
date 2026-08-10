@@ -69,6 +69,7 @@
   const assetCategoryOptions = [
     ["home", "Home"],
     ["otherProperty", "Other property"],
+    ["rentalInvestmentProperty", "Rental / Investment Property"],
     ["offset", "Offset account"],
     ["cash", "Cash"],
     ["shares", "Shares / ETFs"],
@@ -77,6 +78,7 @@
     ["vehicle", "Vehicles / personal assets"],
     ["other", "Other"],
   ];
+  const propertyAssetCategories = ["otherProperty", "rentalInvestmentProperty", "rentalProperty", "investmentProperty"];
   const liabilityTypeOptions = [
     ["homeLoan", "Home loan"],
     ["rentalPropertyLoan", "Rental property loan"],
@@ -1818,7 +1820,7 @@
       .filter((item) => item !== superPerson1Item && item !== superPerson2Item)
       .reduce((total, item) => total + (Number(item.value) || 0), 0);
     plan.assets.homeValue = sumBy(assets, "home");
-    plan.assets.otherPropertyValue = sumBy(assets, "otherProperty");
+    plan.assets.otherPropertyValue = propertyAssetCategories.reduce((total, category) => total + sumBy(assets, category), 0);
     plan.assets.offsetBalance = sumBy(assets, "offset");
     plan.assets.cash = sumBy(assets, "cash");
     plan.assets.sharesEtfs = sumBy(assets, "shares");
@@ -2366,7 +2368,7 @@
       assets: {
         source: "user-entered",
         home: numberValue(assets.homeValue || categoryTotal(assetItems, ["home"])),
-        otherProperty: numberValue(result.investmentPropertyGrossValue || assets.otherPropertyValue || categoryTotal(assetItems, ["otherProperty"])),
+        otherProperty: numberValue(result.investmentPropertyGrossValue || assets.otherPropertyValue || categoryTotal(assetItems, propertyAssetCategories)),
         cashAndOffsets,
         investmentsOutsideSuper,
         superannuation,
@@ -4363,7 +4365,7 @@
     const assets = Array.isArray(plan.assetItems) ? plan.assetItems : [];
     const filtered = assets.filter((asset) => {
       if (!category) return true;
-      if (category === "rental_property") return asset.category === "otherProperty";
+      if (category === "rental_property") return propertyAssetCategories.includes(asset.category);
       if (category === "shares") return ["shares", "crypto"].includes(asset.category);
       if (category === "business") return asset.category === "other";
       return true;
@@ -4382,6 +4384,7 @@
           ${dynamicInput("incomeItems", item, "name", "Income description", { kind: "text", placeholder: "e.g. Rental property cashflow" })}
           ${dynamicInput("incomeItems", item, "type", "Income type", { type: "select", options: incomeTypeOptions, infoKey: "rentalNetCashIncome" })}
           ${dynamicInput("incomeItems", item, "propertyName", "Property name or description", { kind: "text", placeholder: "e.g. Smith Street rental" })}
+          ${dynamicInput("incomeItems", item, "linkedAssetId", "Linked property", { type: "select", options: investmentAssetLinkOptionPairs("rental_property") })}
           ${dynamicInput("incomeItems", item, "owner", "Income owner", { type: "select", options: incomeOwnerOptions(type) })}
           ${incomeAllocationFields(item, owner)}
           ${dynamicInput("incomeItems", item, "amount", "Annual net taxable profit after deductible interest", { step: "100", infoKey: "rentalNetCashIncome" })}
@@ -4422,6 +4425,9 @@
   }
 
   function assetCard(item, index) {
+    const rentalInvestmentNote = item.category === "rentalInvestmentProperty"
+      ? `<p class="field-help mt-3">Use this for a property held to earn rent and/or for investment purposes.</p>`
+      : "";
     return `
       <article class="form-item-card dynamic-item-card">
         <div class="item-card-title">
@@ -4436,6 +4442,7 @@
           ${dynamicInput("assetItems", item, "category", "Asset type", { type: "select", options: assetCategoryOptions })}
           ${dynamicInput("assetItems", item, "value", "Asset value", { step: "1000" })}
         </div>
+        ${rentalInvestmentNote}
       </article>
     `;
   }
@@ -4506,6 +4513,7 @@
     const rentalFields = isRentalLoan ? `
           ${dynamicInput("liabilityItems", item, "owner", "Loan owner", { type: "select", options: incomeOwnerOptions("other") })}
           ${dynamicInput("liabilityItems", item, "repaymentType", "Repayment type", { type: "select", options: rentalLoanRepaymentTypeOptions })}
+          ${dynamicInput("liabilityItems", item, "linkedAssetId", "Linked property", { type: "select", options: investmentAssetLinkOptionPairs("rental_property") })}
           ${dynamicInput("liabilityItems", item, "linkedRentalIncomeId", "Linked rental property income", { type: "select", options: rentalIncomeLinkOptionPairs() })}
           ${!linkedIncomeId && !rentalLinkedFromIncome ? dynamicInput("liabilityItems", item, "unlinkedRentalCashflowTreatment", "Unlinked rental cashflow treatment", { type: "select", options: unlinkedRentalCashflowTreatmentOptions }) : ""}
           ${item.repaymentType === "interestOnly" ? dynamicInput("liabilityItems", item, "additionalPrincipalRepayment", "Additional principal repayment", { step: "100" }) : ""}
@@ -6569,6 +6577,12 @@
     return value === null || value === undefined || !Number.isFinite(Number(value)) ? fallback : money(value);
   }
 
+  function semiRetirementSignedMoney(value, suffix = "") {
+    const amount = Number(value) || 0;
+    const sign = amount > 0 ? "+" : "";
+    return `${sign}${money(amount)}${suffix}`;
+  }
+
   function semiRetirementPercentRate(value) {
     return value === null || value === undefined || !Number.isFinite(Number(value)) ? "Not available" : `${(Number(value) * 100).toFixed(1)}%`;
   }
@@ -6789,6 +6803,7 @@
           ${semiRetirementPersonValuesCard("Super at assumed access age", key.superAtAccessAge || [], "Access is modelled using the scenario age entered and does not independently determine whether legal conditions of release are satisfied.")}
           ${semiRetirementMetricCard("Total investable assets when both are fully retired", semiRetirementMoney(key.totalInvestableAssetsWhenBothFullyRetired?.value), semiRetirementMilestoneNote(key.totalInvestableAssetsWhenBothFullyRetired?.milestone, householdRetirementAges))}
           ${semiRetirementMetricCard("Assets remaining at projection end", semiRetirementMoney(end.totalInvestableAssets), `${end.calendarYear || "End"} - ${semiRetirementAgeList(end.ages || [])}`)}
+          ${semiRetirementMetricCard("Projected net worth at projection end", semiRetirementMoney(end.projectedNetWorth), "Net worth can include property equity that is not available to fund spending.")}
           ${semiRetirementMetricCard("Accessible investments at projection end", semiRetirementMoney(end.accessibleInvestments))}
           ${semiRetirementMetricCard("Super at projection end", semiRetirementMoney(end.super))}
         </div>
@@ -6860,6 +6875,128 @@
     `;
   }
 
+  function renderSemiRetirementDebtWarningsHtml(debtProperty = {}) {
+    const negative = debtProperty.warnings?.negativeAmortisation || [];
+    const balloons = debtProperty.warnings?.balloonRepayments || [];
+    if (!negative.length && !balloons.length) return "";
+    return `
+      <div class="semi-retirement-debt-warning-list">
+        ${negative.map((item) => `
+          <article class="semi-retirement-metric-card is-warning">
+            <span>Debt balance warning</span>
+            <strong>${escapeHtml(item.name)} increases in ${escapeHtml(String(item.yearCount))} year${item.yearCount === 1 ? "" : "s"}</strong>
+            <small>The scheduled repayment is lower than projected interest, so some interest is capitalised. First year: ${escapeHtml(String(item.firstYear))}.</small>
+          </article>
+        `).join("")}
+        ${balloons.map((item) => `
+          <article class="semi-retirement-metric-card is-warning">
+            <span>Final repayment</span>
+            <strong>${escapeHtml(item.name)}: ${semiRetirementMoney(item.amount)}</strong>
+            <small>A final repayment is projected in ${escapeHtml(String(item.calendarYear))}. This may create a sharp cash requirement in that year.</small>
+          </article>
+        `).join("")}
+      </div>
+    `;
+  }
+
+  function renderSemiRetirementDebtCard(card) {
+    const payoffText = card.payoff
+      ? `${card.payoffIsBalloon ? "Final repayment projected" : "Projected payoff"} in ${card.payoff.calendarYear}${card.payoffAges?.length ? ` - ${semiRetirementAgeList(card.payoffAges)}` : ""}`
+      : card.isRevolving ? "Open-ended revolving debt" : "Not repaid within projection";
+    const linked = card.linkedPropertyName ? `<div><span>Linked property</span><strong>${escapeHtml(card.linkedPropertyName)}</strong></div>` : "";
+    const cashflow = card.repaymentReduction > 0 && !card.isRevolving
+      ? `<p class="field-help">Based on current repayment assumptions, annual debt repayments fall from ${semiRetirementMoney(card.repaymentBefore)} to ${semiRetirementMoney(card.repaymentAfter)} after payoff.</p>`
+      : "";
+    return `
+      <article class="semi-retirement-metric-card semi-retirement-debt-card ${card.hasNegativeAmortisation ? "is-warning" : ""}">
+        <span>${escapeHtml(card.typeLabel)}</span>
+        <strong>${escapeHtml(card.name)}</strong>
+        <div class="semi-retirement-person-values">
+          <div><span>Current balance</span><strong>${semiRetirementMoney(card.currentBalance)}</strong></div>
+          <div><span>Balance at retirement</span><strong>${semiRetirementMoney(card.projectedBalanceAtRetirement)}</strong></div>
+          <div><span>Expected payoff</span><strong>${escapeHtml(payoffText)}</strong></div>
+          <div><span>Annual repayment</span><strong>${semiRetirementMoney(card.annualRepayment)}</strong></div>
+          ${card.payoffIsBalloon ? `<div><span>Balloon repayment</span><strong>${semiRetirementMoney(card.balloonRepayment)}</strong></div>` : ""}
+          ${linked}
+        </div>
+        ${cashflow}
+      </article>
+    `;
+  }
+
+  function renderSemiRetirementPropertyCard(card) {
+    return `
+      <article class="semi-retirement-metric-card semi-retirement-property-card ${card.cashflowTone === "warning" ? "is-warning" : "is-positive"}">
+        <span>Rental / Investment Property</span>
+        <strong>${escapeHtml(card.name)}</strong>
+        <small>${escapeHtml(card.selectedLabel || "Selected projection year")}</small>
+        <div class="semi-retirement-person-values">
+          <div><span>Projected property value</span><strong>${semiRetirementMoney(card.projectedPropertyValue)}</strong></div>
+          <div><span>Linked property debt</span><strong>${semiRetirementMoney(card.linkedPropertyDebt)}</strong></div>
+          <div><span>Projected property equity</span><strong>${semiRetirementMoney(card.projectedPropertyEquity)}</strong></div>
+          <div><span>Rental cash income</span><strong>${semiRetirementMoney(card.rentalCashIncome)} p.a.</strong></div>
+          <div><span>Net property cashflow</span><strong>${semiRetirementSignedMoney(card.netPropertyCashflow, " p.a.")}</strong></div>
+        </div>
+        <p class="field-help">Property equity contributes to projected net worth but is not treated as available retirement spending unless a future property sale is modelled.</p>
+      </article>
+    `;
+  }
+
+  function renderSemiRetirementDebtPropertyHtml(viewModel) {
+    const debtProperty = viewModel.debtProperty || {};
+    if (!debtProperty.isAvailable) return "";
+    const netWorth = debtProperty.netWorthDistinction || {};
+    const noDebtMessage = !debtProperty.hasDebt
+      ? `<article class="semi-retirement-metric-card is-positive"><span>Debt</span><strong>No projected debt</strong><small>No meaningful debt balances were returned by the projection engine.</small></article>`
+      : "";
+    const exhaustion = debtProperty.accessibleExhaustionPropertyEquity;
+    return `
+      <section class="semi-retirement-results-section semi-retirement-debt-property">
+        <div class="card-subheading">
+          <h4>Debt & Property</h4>
+          <p>What debts remain while you semi-retire, when they may disappear, and how property affects net worth and cashflow.</p>
+        </div>
+        <div class="semi-retirement-results-grid compact">
+          ${noDebtMessage}
+          ${debtProperty.hasDebt ? (debtProperty.milestoneDebt || []).map((item) => semiRetirementMetricCard(item.label, semiRetirementMoney(item.value), item.row?.calendarYear ? `${item.row.calendarYear} - ${semiRetirementAgeList(item.row.ages || semiRetirementMilestoneAgesFromRow(item.row, viewModel.people))}` : "")).join("") : ""}
+        </div>
+        <div class="semi-retirement-results-grid compact">
+          ${semiRetirementMetricCard("Investable retirement assets", semiRetirementMoney(netWorth.investableRetirementAssets), `${escapeHtml(netWorth.label || "Selected milestone")} - accessible investments plus super`)}
+          ${semiRetirementMetricCard("Projected net worth", semiRetirementMoney(netWorth.projectedNetWorth), "Net worth can include property equity that is not available to fund spending.")}
+          ${semiRetirementMetricCard("Property equity included in net worth", semiRetirementMoney(netWorth.totalPropertyEquity), "Not treated as accessible retirement cash in this scenario.")}
+          ${semiRetirementMetricCard("Total debt", semiRetirementMoney(netWorth.totalDebt), netWorth.ages?.length ? semiRetirementAgeList(netWorth.ages) : "")}
+        </div>
+        ${renderSemiRetirementDebtWarningsHtml(debtProperty)}
+        ${debtProperty.debtCards?.length ? `
+          <div class="card-subheading mt-4">
+            <h4>Individual Debts</h4>
+            <p>Balances and repayments are read from the annual debt schedule.</p>
+          </div>
+          <div class="semi-retirement-results-grid">${debtProperty.debtCards.map(renderSemiRetirementDebtCard).join("")}</div>
+        ` : ""}
+        ${debtProperty.propertyCards?.length ? `
+          <div class="card-subheading mt-4">
+            <h4>Rental / Investment Property</h4>
+            <p>Property equity is shown separately from investable retirement assets.</p>
+          </div>
+          <div class="semi-retirement-results-grid">${debtProperty.propertyCards.map(renderSemiRetirementPropertyCard).join("")}</div>
+        ` : ""}
+        ${exhaustion && Number(exhaustion.propertyEquity || 0) > 0 ? `
+          <article class="semi-retirement-metric-card is-warning mt-4">
+            <span>No-sale behaviour</span>
+            <strong>Accessible investments are exhausted in ${escapeHtml(String(exhaustion.calendarYear))}</strong>
+            <small>Projected property equity at that time is ${semiRetirementMoney(exhaustion.propertyEquity)}. Property equity is not automatically used to fund spending in this scenario.</small>
+          </article>
+        ` : ""}
+        ${debtProperty.offsetDisclosure?.length ? `
+          <div class="semi-retirement-disclaimer mt-4">
+            ${debtProperty.offsetDisclosure.map((item) => `<p><strong>Mortgage offset used for ${escapeHtml(item.name)}:</strong> ${semiRetirementMoney(item.offsetBalanceUsed)}. The current offset balance reduces projected loan interest. This version does not yet model future retirement withdrawals reducing the offset balance.</p>`).join("")}
+          </div>
+        ` : ""}
+      </section>
+    `;
+  }
+
   function semiRetirementDetailRows(rows = []) {
     return rows.map((row) => `
       <div>
@@ -6871,11 +7008,56 @@
 
   function renderSemiRetirementAnnualDetailHtml(row) {
     const household = row.household || {};
+    const annualDebtSections = (row.liabilities || [])
+      .filter((debt) => Number(debt.openingBalance || 0) > 0 || Number(debt.closingBalance || 0) > 0 || Number(debt.totalRepayment ?? debt.scheduledRepayment ?? 0) > 0 || Number(debt.interestCharged || 0) > 0)
+      .map((debt) => {
+      const detailRows = [
+        { label: "Opening balance", value: semiRetirementMoney(debt.openingBalance) },
+        Number(debt.offsetBalanceUsed || 0) > 0 ? { label: "Offset balance used", value: semiRetirementMoney(debt.offsetBalanceUsed) } : null,
+        Number(debt.interestBearingBalance || 0) !== Number(debt.openingBalance || 0) ? { label: "Interest-bearing balance", value: semiRetirementMoney(debt.interestBearingBalance) } : null,
+        { label: "Interest", value: semiRetirementMoney(debt.interestCharged) },
+        { label: "Scheduled repayment", value: semiRetirementMoney(debt.regularRepayment ?? debt.scheduledRepayment) },
+        Number(debt.balloonRepayment || 0) > 0 ? { label: "Balloon repayment", value: semiRetirementMoney(debt.balloonRepayment) } : null,
+        { label: "Principal repaid", value: semiRetirementMoney(debt.principalRepaid) },
+        Number(debt.capitalisedInterest || 0) > 0 ? { label: "Capitalised interest", value: semiRetirementMoney(debt.capitalisedInterest) } : null,
+        { label: "Closing balance", value: semiRetirementMoney(debt.closingBalance) },
+      ].filter(Boolean);
+      return `
+        <section>
+          <h5>${escapeHtml(debt.name || debt.type || "Debt")}</h5>
+          ${semiRetirementDetailRows(detailRows)}
+        </section>
+      `;
+    }).join("");
+    const annualPropertySections = (row.properties || []).filter((property) => property.isRentalInvestmentProperty).map((property) => `
+      <section>
+        <h5>${escapeHtml(property.name || "Rental / Investment Property")}</h5>
+        ${semiRetirementDetailRows([
+          { label: "Opening property value", value: semiRetirementMoney(property.openingValue) },
+          { label: "Growth", value: semiRetirementMoney(property.propertyGrowth) },
+          { label: "Closing property value", value: semiRetirementMoney(property.closingValue) },
+          { label: "Rental cash income", value: semiRetirementMoney(property.rentalCashIncome ?? property.grossRentalIncome) },
+          { label: "Loan interest", value: semiRetirementMoney(property.loanInterest) },
+          { label: "Loan principal", value: semiRetirementMoney(property.loanPrincipal) },
+          { label: "Net property cashflow", value: semiRetirementSignedMoney(property.netPropertyCashflow) },
+          { label: "Linked loan balance", value: semiRetirementMoney(property.linkedLoanClosingBalance) },
+          { label: "Property equity", value: semiRetirementMoney(property.propertyEquity) },
+        ])}
+      </section>
+    `).join("");
     const householdRows = [
       ["Projected spending", semiRetirementMoney(household.applicableLifestyleSpending)],
       ["Other income", semiRetirementMoney(household.otherIncome)],
       ["Net household cash income", semiRetirementMoney(household.netHouseholdCashIncome)],
       ["Cash surplus or shortfall", semiRetirementMoney(household.cashSurplusOrShortfall)],
+      ["Total debt", semiRetirementMoney(household.totalDebt)],
+      ["Debt repayments", semiRetirementMoney(household.totalDebtRepayments)],
+      ["Loan interest", semiRetirementMoney(household.totalLoanInterest)],
+      ["Property value", semiRetirementMoney(household.totalPropertyValue)],
+      ["Property debt", semiRetirementMoney(household.totalPropertyDebt)],
+      ["Property equity", semiRetirementMoney(household.totalPropertyEquity)],
+      ["Net rental cashflow", semiRetirementSignedMoney(household.netRentalCashflow)],
+      ["Projected net worth", semiRetirementMoney(household.totalNetWorth)],
       ["Planned semi-retirement withdrawal", semiRetirementMoney(household.plannedSemiRetirementWithdrawal)],
       ["Required accessible withdrawal", semiRetirementMoney(household.requiredAccessibleWithdrawal)],
       ["Total accessible withdrawal", semiRetirementMoney(household.totalAccessibleWithdrawal)],
@@ -6914,6 +7096,8 @@
           ${semiRetirementDetailRows(householdRows)}
           ${row.warnings?.length ? `<div class="semi-retirement-row-warning"><strong>Notes</strong><ul>${row.warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}</ul></div>` : ""}
         </section>
+        ${annualDebtSections ? `<section class="semi-retirement-annual-subgroup"><h5>Debts</h5></section>${annualDebtSections}` : ""}
+        ${annualPropertySections ? `<section class="semi-retirement-annual-subgroup"><h5>Rental / Investment Property</h5></section>${annualPropertySections}` : ""}
       </div>
     `;
   }
@@ -6931,7 +7115,7 @@
           <table class="semi-retirement-annual-table">
             <thead>
               <tr>
-                <th>Year</th><th>Person 1 age</th><th>Person 2 age</th><th>Household phase</th><th>Net employment income</th><th>Projected spending</th><th>Accessible withdrawal</th><th>Accessible investments</th><th>Super</th><th>Total investable assets</th><th>Unfunded spending</th><th>Details</th>
+                <th>Year</th><th>Person 1 age</th><th>Person 2 age</th><th>Household phase</th><th>Net employment income</th><th>Projected spending</th><th>Accessible withdrawal</th><th>Accessible investments</th><th>Super</th><th>Total investable assets</th><th>Total debt</th><th>Net rental cashflow</th><th>Projected net worth</th><th>Unfunded spending</th><th>Details</th>
               </tr>
             </thead>
             <tbody>
@@ -6949,6 +7133,9 @@
                     <td>${escapeHtml(semiRetirementMoney(household.closingAccessibleInvestmentBalance))}</td>
                     <td>${escapeHtml(semiRetirementMoney(household.totalSuperBalance))}</td>
                     <td>${escapeHtml(semiRetirementMoney(household.totalInvestableAssets))}</td>
+                    <td>${escapeHtml(semiRetirementMoney(household.totalDebt))}</td>
+                    <td>${escapeHtml(semiRetirementSignedMoney(household.netRentalCashflow))}</td>
+                    <td>${escapeHtml(semiRetirementMoney(household.totalNetWorth))}</td>
                     <td>${escapeHtml(semiRetirementMoney(household.unmetSpending))}</td>
                     <td><details><summary>View details</summary>${renderSemiRetirementAnnualDetailHtml(row)}</details></td>
                   </tr>
@@ -6969,6 +7156,9 @@
                   { label: "Accessible investments", value: semiRetirementMoney(household.closingAccessibleInvestmentBalance) },
                   { label: "Super", value: semiRetirementMoney(household.totalSuperBalance) },
                   { label: "Total assets", value: semiRetirementMoney(household.totalInvestableAssets) },
+                  { label: "Total debt", value: semiRetirementMoney(household.totalDebt) },
+                  { label: "Net rental cashflow", value: semiRetirementSignedMoney(household.netRentalCashflow) },
+                  { label: "Projected net worth", value: semiRetirementMoney(household.totalNetWorth) },
                   { label: "Unfunded spending", value: semiRetirementMoney(household.unmetSpending) },
                 ])}
                 <details><summary>View details</summary>${renderSemiRetirementAnnualDetailHtml(row)}</details>
@@ -7044,6 +7234,7 @@
         ${renderSemiRetirementTimelineHtml(viewModel)}
         ${renderSemiRetirementLongevityHtml(viewModel)}
         ${renderSemiRetirementFundingHtml(viewModel)}
+        ${renderSemiRetirementDebtPropertyHtml(viewModel)}
         ${renderSemiRetirementAnnualProjectionHtml(viewModel)}
         ${renderSemiRetirementAssumptionsHtml(viewModel)}
         ${renderSemiRetirementWarningsHtml(viewModel)}
