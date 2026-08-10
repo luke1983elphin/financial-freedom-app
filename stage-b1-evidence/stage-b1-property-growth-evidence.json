@@ -1,0 +1,50 @@
+{
+  "generatedAt": "2026-08-10T01:20:52.313Z",
+  "cases": [
+    {
+      "name": "Case 1 - investment property uses 3% default",
+      "year": 2031,
+      "growthRate": 0.03,
+      "growthRateSource": "investment-property-default",
+      "initialOpeningValue": 600000,
+      "milestoneOpeningValue": 695564.45,
+      "projectedValue": 716431.38,
+      "linkedDebt": 0,
+      "projectedEquity": 716431.38,
+      "projectedNetWorth": 716431.38,
+      "accessibleInvestableAssets": 0,
+      "cardProjectedValue": 716431.38,
+      "cardProjectedEquity": 716431.38
+    },
+    {
+      "name": "Case 2 - Smith St property-specific override uses 4%",
+      "year": 2031,
+      "growthRate": 0.04,
+      "growthRateSource": "asset-specific",
+      "initialOpeningValue": 600000,
+      "milestoneOpeningValue": 729991.75,
+      "projectedValue": 759191.42,
+      "linkedDebt": 0,
+      "projectedEquity": 759191.42,
+      "projectedNetWorth": 759191.42,
+      "accessibleInvestableAssets": 0,
+      "cardProjectedValue": 759191.42,
+      "cardProjectedEquity": 759191.42
+    },
+    {
+      "name": "Case 3 - property value, linked debt, equity and net worth reconcile",
+      "year": 2031,
+      "growthRate": 0.03,
+      "growthRateSource": "investment-property-default",
+      "initialOpeningValue": 600000,
+      "milestoneOpeningValue": 695564.45,
+      "projectedValue": 716431.38,
+      "linkedDebt": 240000,
+      "projectedEquity": 476431.38,
+      "projectedNetWorth": 476431.38,
+      "accessibleInvestableAssets": 0,
+      "cardProjectedValue": 716431.38,
+      "cardProjectedEquity": 476431.38
+    }
+  ]
+}

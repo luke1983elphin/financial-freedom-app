@@ -34,6 +34,10 @@
     return Math.round((number(value) + Number.EPSILON) * 100) / 100;
   }
 
+  function roundRatio(value) {
+    return Math.round((number(value) + Number.EPSILON) * 10000) / 10000;
+  }
+
   function annualiseAmount(amount, frequency = "annually") {
     const value = number(amount);
     if (frequency === "weekly") return roundCurrency(value * 52);
@@ -43,8 +47,47 @@
     return roundCurrency(value);
   }
 
-  function ratePercentForProperty(plan = {}, item = {}) {
-    const candidates = [
+  const DEFAULT_INVESTMENT_PROPERTY_GROWTH_RATE = number(global.FFSCalculator?.DEFAULT_INVESTMENT_PROPERTY_GROWTH_RATE, 0.03);
+  const DEFAULT_PRINCIPAL_RESIDENCE_GROWTH_RATE = number(global.FFSCalculator?.DEFAULT_PRINCIPAL_RESIDENCE_GROWTH_RATE, 0.03);
+  const PRINCIPAL_RESIDENCE_TYPES = new Set(["home", "principalResidence", "principal_residence"]);
+  const RENTAL_INVESTMENT_PROPERTY_TYPES = new Set(["rentalInvestmentProperty", "rentalProperty", "investmentProperty", "residentialInvestmentProperty", "commercialInvestmentProperty", "incomeProducingProperty"]);
+  const OTHER_PROPERTY_TYPES = new Set(["otherProperty"]);
+  const PROPERTY_TYPES = new Set([...PRINCIPAL_RESIDENCE_TYPES, ...RENTAL_INVESTMENT_PROPERTY_TYPES, ...OTHER_PROPERTY_TYPES]);
+  const PROPERTY_GROWTH_SOURCE_LABELS = {
+    "asset-specific": "property-specific assumption",
+    "investment-property-default": "investment property capital-growth assumption",
+    "principal-residence-default": "principal residence capital-growth assumption",
+    "zero-fallback": "0% fallback because no applicable growth assumption was entered",
+  };
+
+  function ratePctFromPercentOrDecimal(value) {
+    const parsed = finiteNumberOrNull(value);
+    if (parsed === null) return null;
+    const rate = Math.abs(parsed) > 1 ? parsed / 100 : parsed;
+    if (rate < -1) return null;
+    return roundRatio(rate * 100);
+  }
+
+  function firstRatePct(candidates = []) {
+    for (const value of candidates) {
+      const rate = ratePctFromPercentOrDecimal(value);
+      if (rate !== null) return rate;
+    }
+    return null;
+  }
+
+  function propertyTypeGroup(type = "") {
+    if (PRINCIPAL_RESIDENCE_TYPES.has(type)) return "principal-residence";
+    if (RENTAL_INVESTMENT_PROPERTY_TYPES.has(type)) return "investment-property";
+    if (OTHER_PROPERTY_TYPES.has(type)) return "other-property";
+    return PROPERTY_TYPES.has(type) ? "property" : "non-property";
+  }
+
+  function propertySpecificGrowthRatePct(item = {}) {
+    return firstRatePct([
+      item.assetSpecificGrowthRatePct,
+      item.annualGrowthRatePct,
+      item.annualGrowthRate,
       item.propertyGrowthRatePct,
       item.propertyGrowthRate,
       item.capitalGrowthRatePct,
@@ -53,6 +96,22 @@
       item.expectedGrowthRate,
       item.growthRatePct,
       item.growthRate,
+    ]);
+  }
+
+  function propertyGrowthAssumptionsFromPlan(plan = {}) {
+    const principalResidenceCapitalGrowthRatePct = firstRatePct([
+      plan.investing?.principalResidenceGrowthRatePct,
+      plan.investing?.principalResidenceGrowthRate,
+      plan.investing?.homeGrowthRatePct,
+      plan.investing?.homeGrowthRate,
+      plan.assumptions?.principalResidenceGrowthRatePct,
+      plan.assumptions?.principalResidenceGrowthRate,
+      plan.assumptions?.homeGrowthRatePct,
+      plan.assumptions?.homeGrowthRate,
+      DEFAULT_PRINCIPAL_RESIDENCE_GROWTH_RATE,
+    ]);
+    const investmentPropertyCapitalGrowthRatePct = firstRatePct([
       plan.investing?.investmentPropertyGrowthRatePct,
       plan.investing?.investmentPropertyGrowthRate,
       plan.investing?.propertyGrowthRatePct,
@@ -61,9 +120,62 @@
       plan.assumptions?.investmentPropertyGrowthRate,
       plan.assumptions?.propertyGrowthRatePct,
       plan.assumptions?.propertyGrowthRate,
-    ];
-    const found = candidates.find((value) => finiteNumberOrNull(value) !== null);
-    return found === undefined ? 0 : number(found);
+      DEFAULT_INVESTMENT_PROPERTY_GROWTH_RATE,
+    ]);
+    return {
+      principalResidenceCapitalGrowthRatePct: principalResidenceCapitalGrowthRatePct ?? 0,
+      investmentPropertyCapitalGrowthRatePct: investmentPropertyCapitalGrowthRatePct ?? 0,
+    };
+  }
+
+  function resolvePlanPropertyGrowthRatePct(plan = {}, item = {}, assumptions = propertyGrowthAssumptionsFromPlan(plan)) {
+    const type = item.category || item.type || "";
+    const group = propertyTypeGroup(type);
+    const specificRate = propertySpecificGrowthRatePct(item);
+    if (specificRate !== null) return { ratePct: specificRate, source: "asset-specific", group };
+    if (group === "investment-property") {
+      return { ratePct: assumptions.investmentPropertyCapitalGrowthRatePct, source: "investment-property-default", group };
+    }
+    if (group === "principal-residence") {
+      return { ratePct: assumptions.principalResidenceCapitalGrowthRatePct, source: "principal-residence-default", group };
+    }
+    return { ratePct: 0, source: "zero-fallback", group };
+  }
+
+  function resolveScenarioPropertyGrowthRatePct(draft = {}, asset = {}) {
+    const type = asset.type || asset.category || "";
+    const group = propertyTypeGroup(type);
+    const scenarioAssumptions = {
+      principalResidenceCapitalGrowthRatePct: firstRatePct([draft.assumptions?.principalResidenceCapitalGrowthRatePct]) ?? 0,
+      investmentPropertyCapitalGrowthRatePct: firstRatePct([draft.assumptions?.investmentPropertyCapitalGrowthRatePct]) ?? 0,
+    };
+    const source = String(asset.growthRateSource || "");
+    if (source === "asset-specific") {
+      const specificRate = firstRatePct([
+        asset.assetSpecificGrowthRatePct,
+        asset.annualGrowthRatePct,
+        asset.annualGrowthRate,
+        asset.propertyGrowthRatePct,
+        asset.propertyGrowthRate,
+        asset.capitalGrowthRatePct,
+        asset.capitalGrowthRate,
+        asset.expectedGrowthRatePct,
+        asset.expectedGrowthRate,
+        asset.growthRatePct,
+        asset.growthRate,
+      ]);
+      if (specificRate !== null) return { ratePct: specificRate, source: "asset-specific", group };
+    }
+    if (source && source !== "asset-specific") {
+      if (group === "investment-property") return { ratePct: scenarioAssumptions.investmentPropertyCapitalGrowthRatePct, source: "investment-property-default", group };
+      if (group === "principal-residence") return { ratePct: scenarioAssumptions.principalResidenceCapitalGrowthRatePct, source: "principal-residence-default", group };
+      return { ratePct: 0, source: "zero-fallback", group };
+    }
+    const specificRate = propertySpecificGrowthRatePct(asset);
+    if (specificRate !== null) return { ratePct: specificRate, source: "asset-specific", group };
+    if (group === "investment-property") return { ratePct: scenarioAssumptions.investmentPropertyCapitalGrowthRatePct, source: "investment-property-default", group };
+    if (group === "principal-residence") return { ratePct: scenarioAssumptions.principalResidenceCapitalGrowthRatePct, source: "principal-residence-default", group };
+    return { ratePct: 0, source: "zero-fallback", group };
   }
 
   function linkedLoanIds(item = {}) {
@@ -74,29 +186,51 @@
 
   function projectionAssetsFromPlan(plan = {}) {
     const items = Array.isArray(plan.assetItems) ? plan.assetItems : [];
-    const propertyLike = new Set(["home", "otherProperty", "rentalInvestmentProperty", "rentalProperty", "investmentProperty", "vehicle"]);
+    const propertyLike = new Set(["home", "principalResidence", "principal_residence", "otherProperty", "rentalInvestmentProperty", "rentalProperty", "investmentProperty", "vehicle"]);
+    const growthAssumptions = propertyGrowthAssumptionsFromPlan(plan);
     const detailed = items
       .filter((item) => propertyLike.has(item.category || item.type))
-      .map((item, index) => ({
-        id: String(item.id || `asset-${index + 1}`),
-        name: String(item.name || item.description || `Asset ${index + 1}`),
-        type: item.category || item.type || "other",
-        openingValue: nonNegative(item.value ?? item.currentValue ?? item.balance),
-        annualGrowthRatePct: ["home", "otherProperty", "rentalInvestmentProperty", "rentalProperty", "investmentProperty"].includes(item.category || item.type)
-          ? ratePercentForProperty(plan, item)
-          : 0,
-        includeInNetWorth: item.includeInNetWorth !== false,
-        isAccessibleAsset: false,
-        isPersonalUse: item.isPersonalUse === true,
-      }))
+      .map((item, index) => {
+        const type = item.category || item.type || "other";
+        const resolvedGrowth = PROPERTY_TYPES.has(type)
+          ? resolvePlanPropertyGrowthRatePct(plan, item, growthAssumptions)
+          : { ratePct: 0, source: "zero-fallback", group: "non-property" };
+        return {
+          id: String(item.id || `asset-${index + 1}`),
+          name: String(item.name || item.description || `Asset ${index + 1}`),
+          type,
+          openingValue: nonNegative(item.value ?? item.currentValue ?? item.balance),
+          annualGrowthRatePct: resolvedGrowth.ratePct,
+          assetSpecificGrowthRatePct: resolvedGrowth.source === "asset-specific" ? resolvedGrowth.ratePct : null,
+          growthRateSource: resolvedGrowth.source,
+          propertyTypeGroup: resolvedGrowth.group,
+          includeInNetWorth: item.includeInNetWorth !== false,
+          isAccessibleAsset: false,
+          isPersonalUse: item.isPersonalUse === true,
+        };
+      })
       .filter((item) => item.openingValue > 0 || item.type === "rentalInvestmentProperty");
-    if (detailed.length) return detailed;
+    if (detailed.length) {
+      const hasPrincipalResidence = detailed.some((item) => propertyTypeGroup(item.type) === "principal-residence");
+      const hasLegacyOtherProperty = detailed.some((item) => item.id === "legacy-other-property" || propertyTypeGroup(item.type) === "other-property");
+      if (!hasPrincipalResidence && nonNegative(plan.assets?.homeValue) > 0) {
+        const resolvedGrowth = resolvePlanPropertyGrowthRatePct(plan, { type: "home" }, growthAssumptions);
+        detailed.unshift({ id: "legacy-home", name: "Home", type: "home", openingValue: nonNegative(plan.assets.homeValue), annualGrowthRatePct: resolvedGrowth.ratePct, growthRateSource: resolvedGrowth.source, propertyTypeGroup: resolvedGrowth.group, includeInNetWorth: true, isAccessibleAsset: false });
+      }
+      if (!hasLegacyOtherProperty && nonNegative(plan.assets?.otherPropertyValue) > 0) {
+        const resolvedGrowth = resolvePlanPropertyGrowthRatePct(plan, { type: "otherProperty" }, growthAssumptions);
+        detailed.push({ id: "legacy-other-property", name: "Other property", type: "otherProperty", openingValue: nonNegative(plan.assets.otherPropertyValue), annualGrowthRatePct: resolvedGrowth.ratePct, growthRateSource: resolvedGrowth.source, propertyTypeGroup: resolvedGrowth.group, includeInNetWorth: true, isAccessibleAsset: false });
+      }
+      return detailed;
+    }
     const fallback = [];
     if (nonNegative(plan.assets?.homeValue) > 0) {
-      fallback.push({ id: "legacy-home", name: "Home", type: "home", openingValue: nonNegative(plan.assets.homeValue), annualGrowthRatePct: ratePercentForProperty(plan), includeInNetWorth: true, isAccessibleAsset: false });
+      const resolvedGrowth = resolvePlanPropertyGrowthRatePct(plan, { type: "home" }, growthAssumptions);
+      fallback.push({ id: "legacy-home", name: "Home", type: "home", openingValue: nonNegative(plan.assets.homeValue), annualGrowthRatePct: resolvedGrowth.ratePct, growthRateSource: resolvedGrowth.source, propertyTypeGroup: resolvedGrowth.group, includeInNetWorth: true, isAccessibleAsset: false });
     }
     if (nonNegative(plan.assets?.otherPropertyValue) > 0) {
-      fallback.push({ id: "legacy-other-property", name: "Other property", type: "otherProperty", openingValue: nonNegative(plan.assets.otherPropertyValue), annualGrowthRatePct: ratePercentForProperty(plan), includeInNetWorth: true, isAccessibleAsset: false });
+      const resolvedGrowth = resolvePlanPropertyGrowthRatePct(plan, { type: "otherProperty" }, growthAssumptions);
+      fallback.push({ id: "legacy-other-property", name: "Other property", type: "otherProperty", openingValue: nonNegative(plan.assets.otherPropertyValue), annualGrowthRatePct: resolvedGrowth.ratePct, growthRateSource: resolvedGrowth.source, propertyTypeGroup: resolvedGrowth.group, includeInNetWorth: true, isAccessibleAsset: false });
     }
     if (nonNegative(plan.assets?.vehiclesPersonalAssets) > 0) {
       fallback.push({ id: "legacy-vehicle", name: "Vehicles / personal assets", type: "vehicle", openingValue: nonNegative(plan.assets.vehiclesPersonalAssets), annualGrowthRatePct: 0, includeInNetWorth: true, isAccessibleAsset: false });
@@ -269,6 +403,7 @@
         superReturnPct: number(plan.investing?.expectedSuperReturnPct),
         inflationPct: number(plan.investing?.inflationPct),
         wageGrowthPct: number(plan.investing?.wageGrowthPct),
+        propertyGrowth: propertyGrowthAssumptionsFromPlan(plan),
         employerSuperRate: number(result.employerSuperRate || result.taxConfiguration?.employerSuperRate),
       },
       stsl: {
@@ -313,6 +448,7 @@
     const assets = projectionAssetsFromPlan(plan);
     const liabilities = projectionLiabilitiesFromPlan(plan);
     const propertyIncome = projectionPropertyIncomeFromPlan(plan);
+    const propertyGrowthAssumptions = propertyGrowthAssumptionsFromPlan(plan);
     const mappedPropertyIncomeTotal = roundCurrency(propertyIncome.reduce((total, item) => total + number(item.annualIncome), 0));
     const otherAnnualIncome = roundCurrency(number(result.otherAnnualIncome) - mappedPropertyIncomeTotal);
     const draft = {
@@ -334,6 +470,8 @@
       },
       assumptions: {
         inflationRatePct: number(plan.investing?.inflationPct, 2.5),
+        principalResidenceCapitalGrowthRatePct: propertyGrowthAssumptions.principalResidenceCapitalGrowthRatePct,
+        investmentPropertyCapitalGrowthRatePct: propertyGrowthAssumptions.investmentPropertyCapitalGrowthRatePct,
       },
       scenario: {
         semiRetirementAccessibleWithdrawal: 0,
@@ -413,6 +551,8 @@
       ["accessibleInvestments.annualReturnRatePct", draft.accessibleInvestments?.annualReturnRatePct],
       ["accessibleInvestments.annualFeesRatePct", draft.accessibleInvestments?.annualFeesRatePct],
       ["assumptions.inflationRatePct", draft.assumptions?.inflationRatePct],
+      ["assumptions.principalResidenceCapitalGrowthRatePct", draft.assumptions?.principalResidenceCapitalGrowthRatePct],
+      ["assumptions.investmentPropertyCapitalGrowthRatePct", draft.assumptions?.investmentPropertyCapitalGrowthRatePct],
       ...(draft.people || []).flatMap((person, index) => [
         [`people.${index}.annualIncomeGrowthRatePct`, person.annualIncomeGrowthRatePct],
         [`people.${index}.superReturnBeforeRetirementPct`, person.superReturnBeforeRetirementPct],
@@ -455,12 +595,24 @@
         externalAnnualAccessibleContribution: nonNegative(draft.accessibleInvestments?.externalAnnualAccessibleContribution),
         currentAnnualContributions: nonNegative(draft.accessibleInvestments?.externalAnnualAccessibleContribution),
       },
-      assets: Array.isArray(draft.assets) ? clone(draft.assets).map((asset) => ({
-        ...asset,
-        annualGrowthRate: finiteNumberOrNull(asset.annualGrowthRate) !== null
-          ? number(asset.annualGrowthRate)
-          : percentToRate(asset.annualGrowthRatePct),
-      })) : [],
+      assumptions: {
+        principalResidenceCapitalGrowthRate: percentToRate(draft.assumptions?.principalResidenceCapitalGrowthRatePct),
+        principalResidenceCapitalGrowthRatePct: number(draft.assumptions?.principalResidenceCapitalGrowthRatePct),
+        investmentPropertyCapitalGrowthRate: percentToRate(draft.assumptions?.investmentPropertyCapitalGrowthRatePct),
+        investmentPropertyCapitalGrowthRatePct: number(draft.assumptions?.investmentPropertyCapitalGrowthRatePct),
+      },
+      assets: Array.isArray(draft.assets) ? clone(draft.assets).map((asset) => {
+        const resolvedGrowth = PROPERTY_TYPES.has(asset.type || asset.category)
+          ? resolveScenarioPropertyGrowthRatePct(draft, asset)
+          : { ratePct: 0, source: "zero-fallback", group: "non-property" };
+        return {
+          ...asset,
+          annualGrowthRatePct: resolvedGrowth.ratePct,
+          annualGrowthRate: percentToRate(resolvedGrowth.ratePct),
+          growthRateSource: resolvedGrowth.source,
+          propertyTypeGroup: resolvedGrowth.group,
+        };
+      }) : [],
       liabilities: Array.isArray(draft.liabilities) ? clone(draft.liabilities).map((liability) => ({
         ...liability,
         annualInterestRate: finiteNumberOrNull(liability.annualInterestRate) !== null
@@ -755,6 +907,10 @@
         : selectedRow?.calendarYear ? `At ${selectedRow.calendarYear}` : "Selected projection year",
       openingValue: property.openingValue,
       propertyGrowth: property.propertyGrowth,
+      annualGrowthRate: property.annualGrowthRate,
+      annualGrowthRatePct: property.annualGrowthRatePct,
+      growthRateSource: property.growthRateSource,
+      growthRateSourceLabel: PROPERTY_GROWTH_SOURCE_LABELS[property.growthRateSource] || "capital-growth assumption",
       projectedPropertyValue: property.closingValue,
       linkedPropertyDebt: property.linkedLoanClosingBalance,
       projectedPropertyEquity: property.propertyEquity,
@@ -1006,11 +1162,38 @@
         ...(number(liability.openingOffsetBalance) > 0 ? [{ label: `${name} opening offset`, value: liability.openingOffsetBalance, type: "currency" }] : []),
       ];
     });
-    const propertyRows = asArray(inputs.assets)
-      .filter((asset) => asset.isRentalInvestmentProperty || asset.type === "rentalInvestmentProperty" || asset.type === "rentalProperty" || asset.type === "investmentProperty")
-      .flatMap((asset) => [
-        { label: `${asset.name || "Rental / Investment Property"} property growth`, value: asset.annualGrowthRate, type: "percentRate" },
-      ]);
+    const propertyInputs = asArray(inputs.assets).filter((asset) => PROPERTY_TYPES.has(asset.type || asset.category));
+    const hasPrincipalResidence = propertyInputs.some((asset) => propertyTypeGroup(asset.type || asset.category) === "principal-residence");
+    const hasInvestmentProperty = propertyInputs.some((asset) => propertyTypeGroup(asset.type || asset.category) === "investment-property");
+    const hasOtherPropertyFallback = propertyInputs.some((asset) => propertyTypeGroup(asset.type || asset.category) === "other-property" && asset.growthRateSource === "zero-fallback");
+    const propertyRows = [
+      ...(hasPrincipalResidence ? [{
+        label: "Principal residence capital growth",
+        value: inputs.assumptions?.principalResidenceCapitalGrowthRate,
+        type: "percentRate",
+        note: PROPERTY_GROWTH_SOURCE_LABELS["principal-residence-default"],
+      }] : []),
+      ...(hasInvestmentProperty ? [{
+        label: "Investment property capital growth",
+        value: inputs.assumptions?.investmentPropertyCapitalGrowthRate,
+        type: "percentRate",
+        note: PROPERTY_GROWTH_SOURCE_LABELS["investment-property-default"],
+      }] : []),
+      ...propertyInputs
+        .filter((asset) => asset.growthRateSource === "asset-specific")
+        .map((asset) => ({
+          label: `${asset.name || "Property"} property growth`,
+          value: asset.annualGrowthRate,
+          type: "percentRate",
+          note: PROPERTY_GROWTH_SOURCE_LABELS["asset-specific"],
+        })),
+      ...(hasOtherPropertyFallback ? [{
+        label: "Other property capital growth",
+        value: 0,
+        type: "percentRate",
+        note: PROPERTY_GROWTH_SOURCE_LABELS["zero-fallback"],
+      }] : []),
+    ];
     const rentalRows = asArray(inputs.propertyIncome).map((income) => ({
       label: `${income.name || "Rental income"} treatment`,
       value: income.rentalCashflowTreatment === "beforeInterest"

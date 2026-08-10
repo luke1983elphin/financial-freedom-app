@@ -6931,13 +6931,14 @@
         <strong>${escapeHtml(card.name)}</strong>
         <small>${escapeHtml(card.selectedLabel || "Selected projection year")}</small>
         <div class="semi-retirement-person-values">
+          <div><span>Capital growth assumption</span><strong>${escapeHtml(semiRetirementAssumptionValue({ value: card.annualGrowthRate, type: "percentRate" }))}</strong></div>
           <div><span>Projected property value</span><strong>${semiRetirementMoney(card.projectedPropertyValue)}</strong></div>
           <div><span>Linked property debt</span><strong>${semiRetirementMoney(card.linkedPropertyDebt)}</strong></div>
           <div><span>Projected property equity</span><strong>${semiRetirementMoney(card.projectedPropertyEquity)}</strong></div>
           <div><span>Rental cash income</span><strong>${semiRetirementMoney(card.rentalCashIncome)} p.a.</strong></div>
           <div><span>Net property cashflow</span><strong>${semiRetirementSignedMoney(card.netPropertyCashflow, " p.a.")}</strong></div>
         </div>
-        <p class="field-help">Property equity contributes to projected net worth but is not treated as available retirement spending unless a future property sale is modelled.</p>
+        <p class="field-help">${escapeHtml(card.growthRateSourceLabel || "Based on the selected assumptions.")}. Property equity contributes to projected net worth but is not treated as available retirement spending unless a future property sale is modelled.</p>
       </article>
     `;
   }
@@ -7034,6 +7035,7 @@
         <h5>${escapeHtml(property.name || "Rental / Investment Property")}</h5>
         ${semiRetirementDetailRows([
           { label: "Opening property value", value: semiRetirementMoney(property.openingValue) },
+          { label: "Capital growth assumption", value: semiRetirementAssumptionValue({ value: property.annualGrowthRate, type: "percentRate" }) },
           { label: "Growth", value: semiRetirementMoney(property.propertyGrowth) },
           { label: "Closing property value", value: semiRetirementMoney(property.closingValue) },
           { label: "Rental cash income", value: semiRetirementMoney(property.rentalCashIncome ?? property.grossRentalIncome) },
@@ -7179,7 +7181,7 @@
           <span>Expand</span>
         </summary>
         <div class="semi-retirement-assumption-grid mt-4">
-          ${rows.map((row) => `<div><span>${escapeHtml(row.label)}</span><strong>${escapeHtml(semiRetirementAssumptionValue(row))}</strong></div>`).join("")}
+          ${rows.map((row) => `<div><span>${escapeHtml(row.label)}</span><strong>${escapeHtml(semiRetirementAssumptionValue(row))}</strong>${row.note ? `<small>${escapeHtml(row.note)}</small>` : ""}</div>`).join("")}
         </div>
       </details>
     `;
@@ -7288,6 +7290,8 @@
             ${semiRetirementInput({ label: "Current accessible investment balance", path: "accessibleInvestments.openingBalance", step: "1000" })}
             ${semiRetirementInput({ label: "Accessible investment annual return (%)", path: "accessibleInvestments.annualReturnRatePct", step: "0.1" })}
             ${semiRetirementInput({ label: "Inflation (%)", path: "assumptions.inflationRatePct", step: "0.1" })}
+            ${semiRetirementInput({ label: "Principal residence capital growth (%)", path: "assumptions.principalResidenceCapitalGrowthRatePct", step: "0.1", help: "Scenario-only assumption used for the family home or principal residence. It does not make home equity available for spending." })}
+            ${semiRetirementInput({ label: "Investment property capital growth (%)", path: "assumptions.investmentPropertyCapitalGrowthRatePct", step: "0.1", help: "Scenario-only assumption used for rental and investment properties unless a property-specific rate has been entered." })}
             ${semiRetirementInput({ label: "Additional planned investment contribution", path: "accessibleInvestments.externalAnnualAccessibleContribution", step: "1000", help: "Additional to any normal cash surplus automatically invested by the projection. Defaults to $0 to avoid double counting ordinary savings surplus." })}
           </div>
           <p class="field-help mt-3">For global assumptions used elsewhere in the app, update the main Financial Plan assumptions. These Stage 2 values are scenario-only.</p>

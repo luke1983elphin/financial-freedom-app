@@ -297,19 +297,53 @@
     return value ? [String(value)] : [];
   }
 
-  function normaliseProjectionAsset(asset = {}, index = 0) {
+  function resolveProjectionAssetGrowthRate(asset = {}, type = "", growthAssumptions = {}) {
+    const hasExplicitGrowthRate = [
+      asset.annualGrowthRate,
+      asset.growthRate,
+      asset.growthRatePct,
+      asset.propertyGrowthRate,
+      asset.propertyGrowthRatePct,
+    ].some(hasFiniteNumber);
+    if (hasExplicitGrowthRate) {
+      return {
+        annualGrowthRate: rateFromPercentOrDecimal(asset.annualGrowthRate ?? asset.growthRate ?? asset.growthRatePct ?? asset.propertyGrowthRate ?? asset.propertyGrowthRatePct, 0),
+        growthRateSource: String(asset.growthRateSource || "asset-specific"),
+      };
+    }
+    if (RENTAL_INVESTMENT_PROPERTY_TYPES.has(type)) {
+      return {
+        annualGrowthRate: number(growthAssumptions.investmentPropertyCapitalGrowthRate),
+        growthRateSource: "investment-property-default",
+      };
+    }
+    if (PERSONAL_USE_ASSET_TYPES.has(type) && (type === "home" || type === "principalResidence" || type === "principal_residence")) {
+      return {
+        annualGrowthRate: number(growthAssumptions.principalResidenceCapitalGrowthRate),
+        growthRateSource: "principal-residence-default",
+      };
+    }
+    return {
+      annualGrowthRate: 0,
+      growthRateSource: "zero-fallback",
+    };
+  }
+
+  function normaliseProjectionAsset(asset = {}, index = 0, growthAssumptions = {}) {
     const type = normaliseAssetType(asset.type || asset.category || asset.assetCategory);
     const id = normaliseRecordId(asset, "asset", index);
-    const annualGrowthRate = rateFromPercentOrDecimal(
-      asset.annualGrowthRate ?? asset.growthRate ?? asset.growthRatePct ?? asset.propertyGrowthRate ?? asset.propertyGrowthRatePct,
-      0,
-    );
+    const resolvedGrowth = resolveProjectionAssetGrowthRate(asset, type, growthAssumptions);
+    const annualGrowthRate = resolvedGrowth.annualGrowthRate;
     return {
       id,
       name: String(asset.name || asset.description || `Asset ${index + 1}`),
       type,
       openingValue: roundCurrency(Math.max(0, number(asset.openingValue ?? asset.currentValue ?? asset.value ?? asset.balance))),
       annualGrowthRate,
+      annualGrowthRatePct: hasFiniteNumber(asset.annualGrowthRatePct)
+        ? number(asset.annualGrowthRatePct)
+        : roundRatio(annualGrowthRate * 100),
+      growthRateSource: resolvedGrowth.growthRateSource,
       includeInNetWorth: asset.includeInNetWorth !== false,
       isProperty: PROPERTY_ASSET_TYPES.has(type),
       isRentalInvestmentProperty: RENTAL_INVESTMENT_PROPERTY_TYPES.has(type),
@@ -544,6 +578,9 @@
       propertyGrowth: PROPERTY_ASSET_TYPES.has(asset.type) ? growth : 0,
       annualGrowth: growth,
       closingValue,
+      annualGrowthRate: asset.annualGrowthRate,
+      annualGrowthRatePct: asset.annualGrowthRatePct,
+      growthRateSource: asset.growthRateSource,
       includeInNetWorth: asset.includeInNetWorth,
       isProperty: asset.isProperty,
       isRentalInvestmentProperty: asset.isRentalInvestmentProperty,
@@ -617,6 +654,9 @@
           openingValue: asset.openingValue,
           propertyGrowth: asset.propertyGrowth,
           closingValue: asset.closingValue,
+          annualGrowthRate: asset.annualGrowthRate,
+          annualGrowthRatePct: asset.annualGrowthRatePct,
+          growthRateSource: asset.growthRateSource,
           rentalCashIncome: roundCurrency(linkedIncomeRows.reduce((total, income) => total + income.rentalCashIncome, 0)),
           grossRentalIncome: roundCurrency(linkedIncomeRows.reduce((total, income) => total + income.rentalCashIncome, 0)),
           propertyExpenses: 0,
@@ -657,11 +697,20 @@
         externalAnnualAccessibleContribution: externalAccessibleContribution,
         currentAnnualContributions: externalAccessibleContribution,
       },
-      assets: Array.isArray(input?.assets) ? input.assets.map(normaliseProjectionAsset) : [],
+      assets: Array.isArray(input?.assets)
+        ? input.assets.map((asset, index) => normaliseProjectionAsset(asset, index, {
+          principalResidenceCapitalGrowthRate: rateFromPercentOrDecimal(input?.assumptions?.principalResidenceCapitalGrowthRate ?? input?.assumptions?.principalResidenceCapitalGrowthRatePct, 0),
+          investmentPropertyCapitalGrowthRate: rateFromPercentOrDecimal(input?.assumptions?.investmentPropertyCapitalGrowthRate ?? input?.assumptions?.investmentPropertyCapitalGrowthRatePct, 0),
+        }))
+        : [],
       liabilities: Array.isArray(input?.liabilities)
         ? input.liabilities.map(normaliseProjectionLiability).filter((liability) => !liability.isStsl)
         : [],
       propertyIncome: Array.isArray(input?.propertyIncome) ? input.propertyIncome.map(normalisePropertyIncome) : [],
+      assumptions: {
+        principalResidenceCapitalGrowthRate: rateFromPercentOrDecimal(input?.assumptions?.principalResidenceCapitalGrowthRate ?? input?.assumptions?.principalResidenceCapitalGrowthRatePct, 0),
+        investmentPropertyCapitalGrowthRate: rateFromPercentOrDecimal(input?.assumptions?.investmentPropertyCapitalGrowthRate ?? input?.assumptions?.investmentPropertyCapitalGrowthRatePct, 0),
+      },
       people,
       scenario: {
         semiRetirementAccessibleWithdrawal: number(input?.scenario?.semiRetirementAccessibleWithdrawal),
@@ -947,6 +996,11 @@
       rentalIncomeTreatment: "Rental/property income uses rentalCashflowTreatment. afterInterest means loan interest is already included in the entered rental cash income, so only linked principal is deducted from property cashflow. beforeInterest deducts linked loan interest and principal exactly once.",
       rentalTaxModel: "Rental property projection models cashflow, not full future taxable rental profit/loss. Negative gearing, depreciation, CGT and future rental tax schedules are not modelled in Stage A1.",
       propertyEquityTreatment: "Property equity is reported in projected net worth but is not treated as accessible retirement cash or used to fund lifestyle spending.",
+      propertyGrowthAssumptions: {
+        principalResidenceCapitalGrowthRate: normalised.assumptions.principalResidenceCapitalGrowthRate,
+        investmentPropertyCapitalGrowthRate: normalised.assumptions.investmentPropertyCapitalGrowthRate,
+        hierarchy: "Property-specific rate, then scenario-level rate for the matching property type, then a documented 0% fallback only where no applicable rate exists.",
+      },
       propertySaleTreatment: "No automatic property sale, refinance, downsizing or redraw event is assumed in Stage A.",
       offsetTreatment: "Existing app offset assumptions are preserved. Stage A1 applies the current offset balance to reduce projected home-loan interest, while loan principal remains the actual liability. The projection does not dynamically deplete offset accounts during retirement; if offset funds are later withdrawn, future loan interest may differ.",
       withdrawalOrder: normalised.scenario.withdrawalOrder,

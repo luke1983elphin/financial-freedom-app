@@ -8,6 +8,7 @@
   const DAYS_PER_YEAR = 365;
   const DEFAULT_TAX_YEAR = FINANCIAL_YEAR;
   const DEFAULT_INVESTMENT_PROPERTY_GROWTH_RATE = 0.03;
+  const DEFAULT_PRINCIPAL_RESIDENCE_GROWTH_RATE = 0.03;
   const FINANCIAL_YEAR_CONFIGS = {
     "2026-27": {
       taxYear: "2026-27",
@@ -1501,9 +1502,11 @@
   }
 
   function rateFromPercentOrDecimal(value) {
+    if (value === null || value === undefined || value === "") return null;
     const parsed = number(value);
-    if (!Number.isFinite(parsed) || parsed <= 0) return null;
-    return parsed > 1 ? parsed / 100 : parsed;
+    if (!Number.isFinite(parsed)) return null;
+    const rate = Math.abs(parsed) > 1 ? parsed / 100 : parsed;
+    return rate < -1 ? null : rate;
   }
 
   function propertyGrowthRateForAsset(plan = {}, asset = {}) {
@@ -1527,6 +1530,33 @@
     ];
     const configuredRate = candidates.map(rateFromPercentOrDecimal).find((rate) => rate !== null);
     return configuredRate ?? DEFAULT_INVESTMENT_PROPERTY_GROWTH_RATE;
+  }
+
+  function principalResidenceGrowthRateForAsset(plan = {}, asset = {}) {
+    const candidates = [
+      asset.principalResidenceGrowthRatePct,
+      asset.principalResidenceGrowthRate,
+      asset.homeGrowthRatePct,
+      asset.homeGrowthRate,
+      asset.propertyGrowthRatePct,
+      asset.propertyGrowthRate,
+      asset.capitalGrowthRatePct,
+      asset.capitalGrowthRate,
+      asset.expectedGrowthRatePct,
+      asset.expectedGrowthRate,
+      asset.growthRatePct,
+      asset.growthRate,
+      plan.investing?.principalResidenceGrowthRatePct,
+      plan.investing?.principalResidenceGrowthRate,
+      plan.investing?.homeGrowthRatePct,
+      plan.investing?.homeGrowthRate,
+      plan.assumptions?.principalResidenceGrowthRatePct,
+      plan.assumptions?.principalResidenceGrowthRate,
+      plan.assumptions?.homeGrowthRatePct,
+      plan.assumptions?.homeGrowthRate,
+    ];
+    const configuredRate = candidates.map(rateFromPercentOrDecimal).find((rate) => rate !== null);
+    return configuredRate ?? DEFAULT_PRINCIPAL_RESIDENCE_GROWTH_RATE;
   }
 
   function investmentPropertyRecords(plan = {}) {
@@ -2049,7 +2079,7 @@
       const residenceValue = plan.downsizing?.enabled && nonNegative(plan.downsizing.futurePropertyValue) > 0
         ? nonNegative(plan.downsizing.futurePropertyValue)
         : nonNegative(plan.assets.homeValue);
-      const homeValue = residenceValue * Math.pow(1 + 0.03, year);
+      const homeValue = residenceValue * Math.pow(1 + principalResidenceGrowthRateForAsset(plan, { category: "home" }), year);
       const investmentPropertyValue = projectedInvestmentPropertyGrossValue(plan, year);
       const loanBalance = balanceAtMonth(loan.schedule, loan.finalBalance, year * MONTHS_PER_YEAR);
       const projectedStudyLoanBalance = Math.max(0, totalStudyLoanBalance - helpRepaymentEstimate.annualRepayment * year);
@@ -2288,6 +2318,8 @@
   global.FFSCalculator = {
     CALCULATION_VERSION,
     FINANCIAL_YEAR,
+    DEFAULT_INVESTMENT_PROPERTY_GROWTH_RATE,
+    DEFAULT_PRINCIPAL_RESIDENCE_GROWTH_RATE,
     emptyPlan,
     clonePlan,
     annualize,
@@ -2313,6 +2345,8 @@
     calculateRentalPropertyCashflow,
     calculateRentalCashflowSummary,
     passiveIncomeBreakdown,
+    propertyGrowthRateForAsset,
+    principalResidenceGrowthRateForAsset,
     calculateNetFiAssetSummary,
     calculateNetFIAssets,
     amortiseLoan,
