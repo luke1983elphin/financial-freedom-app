@@ -38,6 +38,10 @@
     return Math.round((number(value) + Number.EPSILON) * 10000) / 10000;
   }
 
+  function formatPercentRate(rate) {
+    return `${roundRatio(number(rate) * 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}%`;
+  }
+
   function annualiseAmount(amount, frequency = "annually") {
     const value = number(amount);
     if (frequency === "weekly") return roundCurrency(value * 52);
@@ -60,17 +64,34 @@
     "zero-fallback": "0% fallback because no applicable growth assumption was entered",
   };
 
-  function ratePctFromPercentOrDecimal(value) {
+  function ratePctFromPercentageField(value) {
     const parsed = finiteNumberOrNull(value);
     if (parsed === null) return null;
-    const rate = Math.abs(parsed) > 1 ? parsed / 100 : parsed;
-    if (rate < -1) return null;
-    return roundRatio(rate * 100);
+    if (parsed < -100) return null;
+    return roundRatio(parsed);
   }
 
-  function firstRatePct(candidates = []) {
+  function ratePctFromDecimalField(value) {
+    const parsed = finiteNumberOrNull(value);
+    if (parsed === null) return null;
+    if (parsed < -1) return null;
+    return roundRatio(parsed * 100);
+  }
+
+  function firstFieldContractRatePct(candidates = []) {
+    for (const candidate of candidates) {
+      if (!candidate) continue;
+      const rate = candidate.unit === "percent"
+        ? ratePctFromPercentageField(candidate.value)
+        : ratePctFromDecimalField(candidate.value);
+      if (rate !== null) return rate;
+    }
+    return null;
+  }
+
+  function firstPercentageRatePct(candidates = []) {
     for (const value of candidates) {
-      const rate = ratePctFromPercentOrDecimal(value);
+      const rate = ratePctFromPercentageField(value);
       if (rate !== null) return rate;
     }
     return null;
@@ -84,43 +105,44 @@
   }
 
   function propertySpecificGrowthRatePct(item = {}) {
-    return firstRatePct([
-      item.assetSpecificGrowthRatePct,
-      item.annualGrowthRatePct,
-      item.annualGrowthRate,
-      item.propertyGrowthRatePct,
-      item.propertyGrowthRate,
-      item.capitalGrowthRatePct,
-      item.capitalGrowthRate,
-      item.expectedGrowthRatePct,
-      item.expectedGrowthRate,
-      item.growthRatePct,
-      item.growthRate,
+    return firstFieldContractRatePct([
+      { value: item.assetSpecificGrowthRatePct, unit: "percent" },
+      { value: item.annualGrowthRatePct, unit: "percent" },
+      { value: item.propertyGrowthRatePct, unit: "percent" },
+      { value: item.capitalGrowthRatePct, unit: "percent" },
+      { value: item.expectedGrowthRatePct, unit: "percent" },
+      { value: item.growthRatePct, unit: "percent" },
+      { value: item.assetSpecificGrowthRate, unit: "decimal" },
+      { value: item.annualGrowthRate, unit: "decimal" },
+      { value: item.propertyGrowthRate, unit: "decimal" },
+      { value: item.capitalGrowthRate, unit: "decimal" },
+      { value: item.expectedGrowthRate, unit: "decimal" },
+      { value: item.growthRate, unit: "decimal" },
     ]);
   }
 
   function propertyGrowthAssumptionsFromPlan(plan = {}) {
-    const principalResidenceCapitalGrowthRatePct = firstRatePct([
-      plan.investing?.principalResidenceGrowthRatePct,
-      plan.investing?.principalResidenceGrowthRate,
-      plan.investing?.homeGrowthRatePct,
-      plan.investing?.homeGrowthRate,
-      plan.assumptions?.principalResidenceGrowthRatePct,
-      plan.assumptions?.principalResidenceGrowthRate,
-      plan.assumptions?.homeGrowthRatePct,
-      plan.assumptions?.homeGrowthRate,
-      DEFAULT_PRINCIPAL_RESIDENCE_GROWTH_RATE,
+    const principalResidenceCapitalGrowthRatePct = firstFieldContractRatePct([
+      { value: plan.investing?.principalResidenceGrowthRatePct, unit: "percent" },
+      { value: plan.investing?.homeGrowthRatePct, unit: "percent" },
+      { value: plan.assumptions?.principalResidenceGrowthRatePct, unit: "percent" },
+      { value: plan.assumptions?.homeGrowthRatePct, unit: "percent" },
+      { value: plan.investing?.principalResidenceGrowthRate, unit: "decimal" },
+      { value: plan.investing?.homeGrowthRate, unit: "decimal" },
+      { value: plan.assumptions?.principalResidenceGrowthRate, unit: "decimal" },
+      { value: plan.assumptions?.homeGrowthRate, unit: "decimal" },
+      { value: DEFAULT_PRINCIPAL_RESIDENCE_GROWTH_RATE, unit: "decimal" },
     ]);
-    const investmentPropertyCapitalGrowthRatePct = firstRatePct([
-      plan.investing?.investmentPropertyGrowthRatePct,
-      plan.investing?.investmentPropertyGrowthRate,
-      plan.investing?.propertyGrowthRatePct,
-      plan.investing?.propertyGrowthRate,
-      plan.assumptions?.investmentPropertyGrowthRatePct,
-      plan.assumptions?.investmentPropertyGrowthRate,
-      plan.assumptions?.propertyGrowthRatePct,
-      plan.assumptions?.propertyGrowthRate,
-      DEFAULT_INVESTMENT_PROPERTY_GROWTH_RATE,
+    const investmentPropertyCapitalGrowthRatePct = firstFieldContractRatePct([
+      { value: plan.investing?.investmentPropertyGrowthRatePct, unit: "percent" },
+      { value: plan.investing?.propertyGrowthRatePct, unit: "percent" },
+      { value: plan.assumptions?.investmentPropertyGrowthRatePct, unit: "percent" },
+      { value: plan.assumptions?.propertyGrowthRatePct, unit: "percent" },
+      { value: plan.investing?.investmentPropertyGrowthRate, unit: "decimal" },
+      { value: plan.investing?.propertyGrowthRate, unit: "decimal" },
+      { value: plan.assumptions?.investmentPropertyGrowthRate, unit: "decimal" },
+      { value: plan.assumptions?.propertyGrowthRate, unit: "decimal" },
+      { value: DEFAULT_INVESTMENT_PROPERTY_GROWTH_RATE, unit: "decimal" },
     ]);
     return {
       principalResidenceCapitalGrowthRatePct: principalResidenceCapitalGrowthRatePct ?? 0,
@@ -146,23 +168,24 @@
     const type = asset.type || asset.category || "";
     const group = propertyTypeGroup(type);
     const scenarioAssumptions = {
-      principalResidenceCapitalGrowthRatePct: firstRatePct([draft.assumptions?.principalResidenceCapitalGrowthRatePct]) ?? 0,
-      investmentPropertyCapitalGrowthRatePct: firstRatePct([draft.assumptions?.investmentPropertyCapitalGrowthRatePct]) ?? 0,
+      principalResidenceCapitalGrowthRatePct: firstPercentageRatePct([draft.assumptions?.principalResidenceCapitalGrowthRatePct]) ?? 0,
+      investmentPropertyCapitalGrowthRatePct: firstPercentageRatePct([draft.assumptions?.investmentPropertyCapitalGrowthRatePct]) ?? 0,
     };
     const source = String(asset.growthRateSource || "");
     if (source === "asset-specific") {
-      const specificRate = firstRatePct([
-        asset.assetSpecificGrowthRatePct,
-        asset.annualGrowthRatePct,
-        asset.annualGrowthRate,
-        asset.propertyGrowthRatePct,
-        asset.propertyGrowthRate,
-        asset.capitalGrowthRatePct,
-        asset.capitalGrowthRate,
-        asset.expectedGrowthRatePct,
-        asset.expectedGrowthRate,
-        asset.growthRatePct,
-        asset.growthRate,
+      const specificRate = firstFieldContractRatePct([
+        { value: asset.assetSpecificGrowthRatePct, unit: "percent" },
+        { value: asset.annualGrowthRatePct, unit: "percent" },
+        { value: asset.propertyGrowthRatePct, unit: "percent" },
+        { value: asset.capitalGrowthRatePct, unit: "percent" },
+        { value: asset.expectedGrowthRatePct, unit: "percent" },
+        { value: asset.growthRatePct, unit: "percent" },
+        { value: asset.assetSpecificGrowthRate, unit: "decimal" },
+        { value: asset.annualGrowthRate, unit: "decimal" },
+        { value: asset.propertyGrowthRate, unit: "decimal" },
+        { value: asset.capitalGrowthRate, unit: "decimal" },
+        { value: asset.expectedGrowthRate, unit: "decimal" },
+        { value: asset.growthRate, unit: "decimal" },
       ]);
       if (specificRate !== null) return { ratePct: specificRate, source: "asset-specific", group };
     }
@@ -914,7 +937,10 @@
       projectedPropertyValue: property.closingValue,
       linkedPropertyDebt: property.linkedLoanClosingBalance,
       projectedPropertyEquity: property.propertyEquity,
+      baseRentalCashIncome: property.baseRentalCashIncome,
       rentalCashIncome: property.rentalCashIncome ?? property.grossRentalIncome,
+      rentalCashIncomeGrowthRate: property.rentalCashIncomeGrowthRate,
+      rentalCashIncomeGrowthSource: property.rentalCashIncomeGrowthSource,
       loanInterest: property.loanInterest,
       loanPrincipal: property.loanPrincipal,
       netPropertyCashflow: property.netPropertyCashflow,
@@ -1194,13 +1220,22 @@
         note: PROPERTY_GROWTH_SOURCE_LABELS["zero-fallback"],
       }] : []),
     ];
-    const rentalRows = asArray(inputs.propertyIncome).map((income) => ({
-      label: `${income.name || "Rental income"} treatment`,
-      value: income.rentalCashflowTreatment === "beforeInterest"
-        ? "Rental cash income before loan interest"
-        : "Rental cash income after loan interest",
-      type: "plain",
-    }));
+    const propertyIncomeInputs = asArray(inputs.propertyIncome);
+    const rentalRows = [
+      ...(propertyIncomeInputs.length ? [{
+        label: "Rental cash income growth",
+        value: "CPI",
+        type: "plain",
+        note: `Uses the inflation assumption (${formatPercentRate(inputs.inflationRate)}).`,
+      }] : []),
+      ...propertyIncomeInputs.map((income) => ({
+        label: `${income.name || "Rental income"} treatment`,
+        value: income.rentalCashflowTreatment === "beforeInterest"
+          ? "Rental cash income before loan interest"
+          : "Rental cash income after loan interest",
+        type: "plain",
+      })),
+    ];
     const offsetRows = asArray(projection.years).some((row) => asArray(row.liabilities).some((debt) => number(debt.offsetBalanceUsed) > 0))
       ? [{ label: "Mortgage offset limitation", value: assumptions.offsetTreatment || "Current offset balance reduces projected interest. Dynamic offset depletion is not modelled.", type: "plain" }]
       : [];

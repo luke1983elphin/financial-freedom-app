@@ -7038,13 +7038,19 @@
           { label: "Capital growth assumption", value: semiRetirementAssumptionValue({ value: property.annualGrowthRate, type: "percentRate" }) },
           { label: "Growth", value: semiRetirementMoney(property.propertyGrowth) },
           { label: "Closing property value", value: semiRetirementMoney(property.closingValue) },
+          Number(property.baseRentalCashIncome || 0) && Number(property.baseRentalCashIncome || 0) !== Number(property.rentalCashIncome ?? property.grossRentalIncome ?? 0)
+            ? { label: "Base rental cash income", value: semiRetirementMoney(property.baseRentalCashIncome) }
+            : null,
+          property.rentalCashIncomeGrowthSource === "cpi"
+            ? { label: "Rental cash income growth", value: "CPI" }
+            : null,
           { label: "Rental cash income", value: semiRetirementMoney(property.rentalCashIncome ?? property.grossRentalIncome) },
           { label: "Loan interest", value: semiRetirementMoney(property.loanInterest) },
           { label: "Loan principal", value: semiRetirementMoney(property.loanPrincipal) },
           { label: "Net property cashflow", value: semiRetirementSignedMoney(property.netPropertyCashflow) },
           { label: "Linked loan balance", value: semiRetirementMoney(property.linkedLoanClosingBalance) },
           { label: "Property equity", value: semiRetirementMoney(property.propertyEquity) },
-        ])}
+        ].filter(Boolean))}
       </section>
     `).join("");
     const householdRows = [

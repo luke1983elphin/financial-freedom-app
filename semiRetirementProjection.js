@@ -253,6 +253,36 @@
     return Math.abs(parsed) > 1 ? parsed / 100 : parsed;
   }
 
+  function rateFromPercentageField(value) {
+    if (!hasFiniteNumber(value)) return null;
+    const rate = number(value) / 100;
+    return rate < -1 ? null : rate;
+  }
+
+  function rateFromDecimalField(value) {
+    if (!hasFiniteNumber(value)) return null;
+    const rate = number(value);
+    return rate < -1 ? null : rate;
+  }
+
+  function firstFieldContractRate(candidates = []) {
+    for (const candidate of candidates) {
+      if (!candidate) continue;
+      const rate = candidate.unit === "percent"
+        ? rateFromPercentageField(candidate.value)
+        : rateFromDecimalField(candidate.value);
+      if (rate !== null) return rate;
+    }
+    return null;
+  }
+
+  function assumptionGrowthRate(decimalValue, percentageValue) {
+    const percentageRate = rateFromPercentageField(percentageValue);
+    if (percentageRate !== null) return percentageRate;
+    const decimalRate = rateFromDecimalField(decimalValue);
+    return decimalRate ?? 0;
+  }
+
   function normaliseAssetType(value) {
     const text = String(value || "").trim();
     if (text === "rental_property" || text === "rental_property_asset") return "rentalInvestmentProperty";
@@ -298,16 +328,31 @@
   }
 
   function resolveProjectionAssetGrowthRate(asset = {}, type = "", growthAssumptions = {}) {
-    const hasExplicitGrowthRate = [
-      asset.annualGrowthRate,
-      asset.growthRate,
-      asset.growthRatePct,
-      asset.propertyGrowthRate,
-      asset.propertyGrowthRatePct,
-    ].some(hasFiniteNumber);
-    if (hasExplicitGrowthRate) {
+    const explicitPercentageRate = firstFieldContractRate([
+      { value: asset.assetSpecificGrowthRatePct, unit: "percent" },
+      { value: asset.annualGrowthRatePct, unit: "percent" },
+      { value: asset.propertyGrowthRatePct, unit: "percent" },
+      { value: asset.capitalGrowthRatePct, unit: "percent" },
+      { value: asset.expectedGrowthRatePct, unit: "percent" },
+      { value: asset.growthRatePct, unit: "percent" },
+    ]);
+    if (explicitPercentageRate !== null) {
       return {
-        annualGrowthRate: rateFromPercentOrDecimal(asset.annualGrowthRate ?? asset.growthRate ?? asset.growthRatePct ?? asset.propertyGrowthRate ?? asset.propertyGrowthRatePct, 0),
+        annualGrowthRate: explicitPercentageRate,
+        growthRateSource: String(asset.growthRateSource || "asset-specific"),
+      };
+    }
+    const explicitDecimalRate = firstFieldContractRate([
+      { value: asset.assetSpecificGrowthRate, unit: "decimal" },
+      { value: asset.annualGrowthRate, unit: "decimal" },
+      { value: asset.propertyGrowthRate, unit: "decimal" },
+      { value: asset.capitalGrowthRate, unit: "decimal" },
+      { value: asset.expectedGrowthRate, unit: "decimal" },
+      { value: asset.growthRate, unit: "decimal" },
+    ]);
+    if (explicitDecimalRate !== null) {
+      return {
+        annualGrowthRate: explicitDecimalRate,
         growthRateSource: String(asset.growthRateSource || "asset-specific"),
       };
     }
@@ -340,9 +385,7 @@
       type,
       openingValue: roundCurrency(Math.max(0, number(asset.openingValue ?? asset.currentValue ?? asset.value ?? asset.balance))),
       annualGrowthRate,
-      annualGrowthRatePct: hasFiniteNumber(asset.annualGrowthRatePct)
-        ? number(asset.annualGrowthRatePct)
-        : roundRatio(annualGrowthRate * 100),
+      annualGrowthRatePct: roundRatio(annualGrowthRate * 100),
       growthRateSource: resolvedGrowth.growthRateSource,
       includeInNetWorth: asset.includeInNetWorth !== false,
       isProperty: PROPERTY_ASSET_TYPES.has(type),
@@ -387,7 +430,7 @@
     };
   }
 
-  function normalisePropertyIncome(item = {}, index = 0) {
+  function normalisePropertyIncome(item = {}, index = 0, inflationRate = 0) {
     const annualIncome = hasFiniteNumber(item.annualIncome)
       ? number(item.annualIncome)
       : annualiseAmount(item.amount, item.frequency || "annually");
@@ -400,7 +443,10 @@
       linkedAssetId: String(item.linkedAssetId || item.linkedPropertyAssetId || item.assetId || ""),
       linkedLoanIds: linkedLoanIds(item.linkedLoanIds || item.linkedLoanId),
       annualIncome: roundCurrency(annualIncome),
-      annualGrowthRate: rateFromPercentOrDecimal(item.annualGrowthRate ?? item.growthRate ?? item.growthRatePct, 0),
+      baseRentalCashIncome: roundCurrency(annualIncome),
+      annualGrowthRate: number(inflationRate),
+      rentalCashIncomeGrowthRate: number(inflationRate),
+      rentalCashIncomeGrowthSource: "cpi",
       rentalCashflowTreatment: treatment,
     };
   }
@@ -606,7 +652,9 @@
       const loanInterest = roundCurrency(linkedLoanRows.reduce((total, row) => total + row.interestCharged, 0));
       const loanPrincipal = roundCurrency(linkedLoanRows.reduce((total, row) => total + row.principalRepaid, 0));
       const fullLoanRepayments = roundCurrency(linkedLoanRows.reduce((total, row) => total + row.totalRepayment, 0));
-      const rentalCashIncome = grownAmount(income.annualIncome, income.annualGrowthRate, yearIndex);
+      const baseRentalCashIncome = roundCurrency(income.baseRentalCashIncome ?? income.annualIncome);
+      const rentalCashIncomeGrowthRate = number(income.rentalCashIncomeGrowthRate ?? income.annualGrowthRate);
+      const rentalCashIncome = grownAmount(baseRentalCashIncome, rentalCashIncomeGrowthRate, yearIndex);
       const incomeAfterInterest = income.rentalCashflowTreatment === "beforeInterest"
         ? roundCurrency(rentalCashIncome - loanInterest)
         : rentalCashIncome;
@@ -620,7 +668,10 @@
         linkedLoanIds: Array.from(loanIds),
         rentalCashflowTreatment: income.rentalCashflowTreatment,
         rentalIncomeTreatment: income.rentalCashflowTreatment,
+        baseRentalCashIncome,
         rentalCashIncome,
+        rentalCashIncomeGrowthRate,
+        rentalCashIncomeGrowthSource: income.rentalCashIncomeGrowthSource || "cpi",
         grossRentalIncome: rentalCashIncome,
         propertyExpenses: 0,
         loanInterest,
@@ -658,6 +709,9 @@
           annualGrowthRatePct: asset.annualGrowthRatePct,
           growthRateSource: asset.growthRateSource,
           rentalCashIncome: roundCurrency(linkedIncomeRows.reduce((total, income) => total + income.rentalCashIncome, 0)),
+          baseRentalCashIncome: roundCurrency(linkedIncomeRows.reduce((total, income) => total + (income.baseRentalCashIncome ?? income.rentalCashIncome), 0)),
+          rentalCashIncomeGrowthRate: linkedIncomeRows[0]?.rentalCashIncomeGrowthRate ?? normalised.inflationRate,
+          rentalCashIncomeGrowthSource: linkedIncomeRows[0]?.rentalCashIncomeGrowthSource || "cpi",
           grossRentalIncome: roundCurrency(linkedIncomeRows.reduce((total, income) => total + income.rentalCashIncome, 0)),
           propertyExpenses: 0,
           loanInterest,
@@ -677,10 +731,21 @@
     const externalAccessibleContribution = hasFiniteNumber(input?.accessibleInvestments?.externalAnnualAccessibleContribution)
       ? number(input.accessibleInvestments.externalAnnualAccessibleContribution)
       : number(input?.accessibleInvestments?.currentAnnualContributions);
+    const inflationRate = number(input?.inflationRate);
+    const propertyGrowthAssumptions = {
+      principalResidenceCapitalGrowthRate: assumptionGrowthRate(
+        input?.assumptions?.principalResidenceCapitalGrowthRate,
+        input?.assumptions?.principalResidenceCapitalGrowthRatePct,
+      ),
+      investmentPropertyCapitalGrowthRate: assumptionGrowthRate(
+        input?.assumptions?.investmentPropertyCapitalGrowthRate,
+        input?.assumptions?.investmentPropertyCapitalGrowthRatePct,
+      ),
+    };
     return {
       projectionStartYear: Math.round(number(input?.projectionStartYear)),
       projectionEndAge: number(input?.projectionEndAge),
-      inflationRate: number(input?.inflationRate),
+      inflationRate,
       household: {
         currentLifestyleSpending: number(input?.household?.currentLifestyleSpending),
         semiRetirementLifestyleSpending: number(input?.household?.semiRetirementLifestyleSpending),
@@ -699,17 +764,17 @@
       },
       assets: Array.isArray(input?.assets)
         ? input.assets.map((asset, index) => normaliseProjectionAsset(asset, index, {
-          principalResidenceCapitalGrowthRate: rateFromPercentOrDecimal(input?.assumptions?.principalResidenceCapitalGrowthRate ?? input?.assumptions?.principalResidenceCapitalGrowthRatePct, 0),
-          investmentPropertyCapitalGrowthRate: rateFromPercentOrDecimal(input?.assumptions?.investmentPropertyCapitalGrowthRate ?? input?.assumptions?.investmentPropertyCapitalGrowthRatePct, 0),
+          principalResidenceCapitalGrowthRate: propertyGrowthAssumptions.principalResidenceCapitalGrowthRate,
+          investmentPropertyCapitalGrowthRate: propertyGrowthAssumptions.investmentPropertyCapitalGrowthRate,
         }))
         : [],
       liabilities: Array.isArray(input?.liabilities)
         ? input.liabilities.map(normaliseProjectionLiability).filter((liability) => !liability.isStsl)
         : [],
-      propertyIncome: Array.isArray(input?.propertyIncome) ? input.propertyIncome.map(normalisePropertyIncome) : [],
+      propertyIncome: Array.isArray(input?.propertyIncome) ? input.propertyIncome.map((item, index) => normalisePropertyIncome(item, index, inflationRate)) : [],
       assumptions: {
-        principalResidenceCapitalGrowthRate: rateFromPercentOrDecimal(input?.assumptions?.principalResidenceCapitalGrowthRate ?? input?.assumptions?.principalResidenceCapitalGrowthRatePct, 0),
-        investmentPropertyCapitalGrowthRate: rateFromPercentOrDecimal(input?.assumptions?.investmentPropertyCapitalGrowthRate ?? input?.assumptions?.investmentPropertyCapitalGrowthRatePct, 0),
+        principalResidenceCapitalGrowthRate: propertyGrowthAssumptions.principalResidenceCapitalGrowthRate,
+        investmentPropertyCapitalGrowthRate: propertyGrowthAssumptions.investmentPropertyCapitalGrowthRate,
       },
       people,
       scenario: {
@@ -971,7 +1036,7 @@
         "Calculate person-level tax, Medicare levy, MLS and capped STSL repayment using existing helpers.",
         "Calculate gross and net employer/additional concessional super contributions.",
         "Project annual debt schedules and property values from explicit asset/liability inputs.",
-        "Calculate rental/property cashflow using the selected after-interest or before-interest treatment.",
+        "Escalate rental/property cash income by CPI, then calculate cashflow using the selected after-interest or before-interest treatment.",
         "Calculate household lifestyle requirement in nominal dollars using today's-dollar inflation.",
         "Apply cash surplus or shortfall to accessible investments first, then available super where permitted.",
         "Apply midpoint total-return earnings to accessible investments and super balances.",
@@ -986,19 +1051,21 @@
       projectionHorizonYears,
       projectedEndAgesByPerson,
       superAtAge60Treatment: "superByPersonAtAge60 records each person's own projected super balance only in the projection year where that person's age is exactly 60. If a person is older than 60 at projection start, the value remains null because the engine does not reconstruct historical age-60 balances.",
-      inflation: "Household lifestyle spending is treated as today's dollars and inflated from projection year zero.",
+      inflation: "Household lifestyle spending and rental cash income are treated as projection-start dollars and inflated from projection year zero using the same CPI assumption.",
       investmentReturnTiming: "Total-return method. Earnings equal opening balance return plus 50% of net annual cash movement return. Fees use the same midpoint balance. Dividends, interest and rent are not added separately.",
       superContributionTiming: "Employer and additional concessional contributions are reduced by 15% contributions tax before being added to super. Stage 1 does not optimise concessional caps or carry-forward amounts.",
       superAccessTreatment: "scenario-assumed-access-age",
       superAccessNote: "Super availability is modelled using the entered scenario access age. The engine does not independently determine whether all legal conditions of release are satisfied.",
       accessibleContributionTreatment: "accessibleInvestments.externalAnnualAccessibleContribution/currentAnnualContributions is treated as an explicit additional accessible-investment contribution on top of any household cash surplus. It is not auto-populated from household surplus.",
       debtAndPropertyTreatment: "Stage A1 projects supplied non-STSL liabilities annually, separating interest charged, total repayment, principal repaid, capitalised interest, final balloon repayments and repayment cashflow. STSL remains person-level and outside the generic debt schedule.",
-      rentalIncomeTreatment: "Rental/property income uses rentalCashflowTreatment. afterInterest means loan interest is already included in the entered rental cash income, so only linked principal is deducted from property cashflow. beforeInterest deducts linked loan interest and principal exactly once.",
+      rentalIncomeTreatment: "Rental/property income uses rentalCashflowTreatment. Entered rental cash income is the projection-start annual amount, CPI-escalated each projection year before loan cashflows are applied. afterInterest means loan interest is already included in the entered rental cash income, so only linked principal is deducted from property cashflow. beforeInterest deducts linked loan interest and principal exactly once.",
       rentalTaxModel: "Rental property projection models cashflow, not full future taxable rental profit/loss. Negative gearing, depreciation, CGT and future rental tax schedules are not modelled in Stage A1.",
       propertyEquityTreatment: "Property equity is reported in projected net worth but is not treated as accessible retirement cash or used to fund lifestyle spending.",
       propertyGrowthAssumptions: {
         principalResidenceCapitalGrowthRate: normalised.assumptions.principalResidenceCapitalGrowthRate,
         investmentPropertyCapitalGrowthRate: normalised.assumptions.investmentPropertyCapitalGrowthRate,
+        rentalCashIncomeGrowthRate: normalised.inflationRate,
+        rentalCashIncomeGrowthSource: "cpi",
         hierarchy: "Property-specific rate, then scenario-level rate for the matching property type, then a documented 0% fallback only where no applicable rate exists.",
       },
       propertySaleTreatment: "No automatic property sale, refinance, downsizing or redraw event is assumed in Stage A.",
