@@ -431,9 +431,18 @@
   }
 
   function normalisePropertyIncome(item = {}, index = 0, inflationRate = 0) {
-    const annualIncome = hasFiniteNumber(item.annualIncome)
-      ? number(item.annualIncome)
-      : annualiseAmount(item.amount, item.frequency || "annually");
+    const rentalCashSource = firstRentalCashIncomeSource(item);
+    const hasRentalCashIncome = item.missingRentalCashIncome === true || item.hasRentalCashIncome === false
+      ? false
+      : rentalCashSource !== undefined;
+    const annualIncome = hasRentalCashIncome ? number(rentalCashSource) : null;
+    const annualTaxableIncome = hasFiniteNumber(item.taxableRentalIncomeAnnual)
+      ? number(item.taxableRentalIncomeAnnual)
+      : hasFiniteNumber(item.annualTaxableIncome)
+        ? number(item.annualTaxableIncome)
+        : hasFiniteNumber(item.taxableIncome)
+          ? number(item.taxableIncome)
+          : 0;
     const treatment = item.rentalCashflowTreatment === "beforeInterest" || item.cashflowTreatment === "beforeInterest"
       ? "beforeInterest"
       : "afterInterest";
@@ -442,12 +451,98 @@
       name: String(item.propertyName || item.name || item.description || `Property income ${index + 1}`),
       linkedAssetId: String(item.linkedAssetId || item.linkedPropertyAssetId || item.assetId || ""),
       linkedLoanIds: linkedLoanIds(item.linkedLoanIds || item.linkedLoanId),
-      annualIncome: roundCurrency(annualIncome),
-      baseRentalCashIncome: roundCurrency(annualIncome),
+      annualIncome: annualIncome === null ? null : roundCurrency(annualIncome),
+      baseRentalCashIncome: annualIncome === null ? null : roundCurrency(annualIncome),
+      hasRentalCashIncome,
+      missingRentalCashIncome: !hasRentalCashIncome,
       annualGrowthRate: number(inflationRate),
       rentalCashIncomeGrowthRate: number(inflationRate),
       rentalCashIncomeGrowthSource: "cpi",
+      taxableRentalIncomeAnnual: roundCurrency(annualTaxableIncome),
+      baseTaxableRentalIncome: roundCurrency(annualTaxableIncome),
+      taxableRentalIncomeGrowthRate: number(item.taxableRentalIncomeGrowthRate ?? item.annualTaxableIncomeGrowthRate),
       rentalCashflowTreatment: treatment,
+    };
+  }
+
+  function firstRentalCashIncomeSource(item = {}) {
+    const candidates = [
+      item.annualIncome,
+      item.rentalCashIncomeAnnual,
+      item.annualRentalCashIncome,
+      item.annualCashIncome,
+      item.cashIncome,
+      item.annualNetRentalCashIncome,
+    ];
+    return candidates.find(hasFiniteNumber);
+  }
+
+  function rentalCashIncomeRequiredWarning(income = {}) {
+    const propertyName = income.name || "Rental property";
+    return {
+      code: "RENTAL_CASH_INCOME_REQUIRED",
+      incomeId: income.id,
+      linkedAssetId: income.linkedAssetId,
+      propertyName,
+      message: `Rental cash income required for ${propertyName}. The entered taxable rental profit cannot be used as the property's cash income. Enter the annual rental cash income used for cashflow projections.`,
+    };
+  }
+
+  function normaliseIncomeType(value) {
+    const text = String(value || "").trim();
+    if (["interest", "bankInterest"].includes(text)) return "interest";
+    if (["dividends", "dividend", "frankedDividends"].includes(text)) return "dividends";
+    if (["distributions", "distributionIncome", "distribution_income", "trustDistribution"].includes(text)) return "distributions";
+    if (["rentalTaxableIncome", "rentalNetCashIncome", "rental_net_profit", "rentalNetProfit", "rental"].includes(text)) return "rentalTaxableIncome";
+    if (["otherPassive", "otherPassiveIncome"].includes(text)) return "otherPassive";
+    if (["otherTaxableIncome", "other_taxable_income", "other"].includes(text)) return "otherTaxableIncome";
+    return "otherTaxableIncome";
+  }
+
+  function normaliseIncomeOwner(value) {
+    const text = String(value || "").trim();
+    if (text === "person1" || text === "person2") return text;
+    return "joint";
+  }
+
+  function ownershipShares(item = {}) {
+    const owner = normaliseIncomeOwner(item.owner || item.incomeOwner);
+    if (owner === "person1") return { person1: 1, person2: 0 };
+    if (owner === "person2") return { person1: 0, person2: 1 };
+    let person1Percent = number(item.person1AllocationPercentage ?? item.person1AllocationPct ?? item.person1SharePct);
+    let person2Percent = number(item.person2AllocationPercentage ?? item.person2AllocationPct ?? item.person2SharePct);
+    if (person1Percent <= 0 && person2Percent <= 0) {
+      person1Percent = 50;
+      person2Percent = 50;
+    } else if (person1Percent > 0 && person2Percent <= 0) {
+      person2Percent = Math.max(0, 100 - person1Percent);
+    } else if (person2Percent > 0 && person1Percent <= 0) {
+      person1Percent = Math.max(0, 100 - person2Percent);
+    }
+    const total = person1Percent + person2Percent;
+    if (total <= 0) return { person1: 0.5, person2: 0.5 };
+    return {
+      person1: roundRatio(person1Percent / total),
+      person2: roundRatio(person2Percent / total),
+    };
+  }
+
+  function normalisePassiveIncome(item = {}, index = 0) {
+    const type = normaliseIncomeType(item.type || item.category || item.incomeType);
+    const cashSource = item.annualCashIncome ?? item.cashIncome ?? item.cashAmount ?? item.annualAmount ?? item.amount;
+    const taxableSource = item.annualTaxableIncome ?? item.taxableIncome ?? item.taxableAmount ?? item.annualAmount ?? item.amount;
+    return {
+      id: normaliseRecordId(item, "passive-income", index),
+      name: String(item.name || item.description || `Passive income ${index + 1}`),
+      type,
+      owner: normaliseIncomeOwner(item.owner || item.incomeOwner),
+      shares: ownershipShares(item),
+      annualCashIncome: roundCurrency(Math.max(0, number(cashSource))),
+      annualTaxableIncome: roundCurrency(Math.max(0, number(taxableSource))),
+      annualCashGrowthRate: number(item.annualCashGrowthRate ?? item.cashGrowthRate),
+      annualTaxableGrowthRate: number(item.annualTaxableGrowthRate ?? item.taxableGrowthRate),
+      linkedAssetId: String(item.linkedAssetId || item.linkedPropertyAssetId || item.assetId || ""),
+      sourceIncomeId: String(item.sourceIncomeId || item.id || ""),
     };
   }
 
@@ -652,9 +747,40 @@
       const loanInterest = roundCurrency(linkedLoanRows.reduce((total, row) => total + row.interestCharged, 0));
       const loanPrincipal = roundCurrency(linkedLoanRows.reduce((total, row) => total + row.principalRepaid, 0));
       const fullLoanRepayments = roundCurrency(linkedLoanRows.reduce((total, row) => total + row.totalRepayment, 0));
+      if (income.hasRentalCashIncome === false || !hasFiniteNumber(income.baseRentalCashIncome ?? income.annualIncome)) {
+        const warning = rentalCashIncomeRequiredWarning(income);
+        return {
+          id: income.id,
+          name: income.name,
+          linkedAssetId: income.linkedAssetId,
+          linkedLoanIds: Array.from(loanIds),
+          rentalCashflowTreatment: income.rentalCashflowTreatment,
+          rentalIncomeTreatment: income.rentalCashflowTreatment,
+          hasRentalCashIncome: false,
+          missingRentalCashIncome: true,
+          baseRentalCashIncome: null,
+          rentalCashIncome: null,
+          rentalCashIncomeGrowthRate: number(income.rentalCashIncomeGrowthRate ?? income.annualGrowthRate),
+          rentalCashIncomeGrowthSource: income.rentalCashIncomeGrowthSource || "cpi",
+          baseTaxableRentalIncome: roundCurrency(income.baseTaxableRentalIncome ?? income.taxableRentalIncomeAnnual),
+          taxableRentalIncome: grownAmount(income.baseTaxableRentalIncome ?? income.taxableRentalIncomeAnnual, number(income.taxableRentalIncomeGrowthRate), yearIndex),
+          taxableRentalIncomeGrowthRate: number(income.taxableRentalIncomeGrowthRate),
+          grossRentalIncome: null,
+          propertyExpenses: 0,
+          loanInterest,
+          loanPrincipal,
+          fullLoanRepayments,
+          incomeAfterInterest: null,
+          netPropertyCashflow: 0,
+          interestAlreadyIncluded: income.rentalCashflowTreatment === "afterInterest",
+          warnings: [warning],
+        };
+      }
       const baseRentalCashIncome = roundCurrency(income.baseRentalCashIncome ?? income.annualIncome);
       const rentalCashIncomeGrowthRate = number(income.rentalCashIncomeGrowthRate ?? income.annualGrowthRate);
       const rentalCashIncome = grownAmount(baseRentalCashIncome, rentalCashIncomeGrowthRate, yearIndex);
+      const baseTaxableRentalIncome = roundCurrency(income.baseTaxableRentalIncome ?? income.taxableRentalIncomeAnnual);
+      const taxableRentalIncome = grownAmount(baseTaxableRentalIncome, number(income.taxableRentalIncomeGrowthRate), yearIndex);
       const incomeAfterInterest = income.rentalCashflowTreatment === "beforeInterest"
         ? roundCurrency(rentalCashIncome - loanInterest)
         : rentalCashIncome;
@@ -672,6 +798,9 @@
         rentalCashIncome,
         rentalCashIncomeGrowthRate,
         rentalCashIncomeGrowthSource: income.rentalCashIncomeGrowthSource || "cpi",
+        baseTaxableRentalIncome,
+        taxableRentalIncome,
+        taxableRentalIncomeGrowthRate: number(income.taxableRentalIncomeGrowthRate),
         grossRentalIncome: rentalCashIncome,
         propertyExpenses: 0,
         loanInterest,
@@ -680,6 +809,9 @@
         incomeAfterInterest,
         netPropertyCashflow,
         interestAlreadyIncluded: income.rentalCashflowTreatment === "afterInterest",
+        hasRentalCashIncome: true,
+        missingRentalCashIncome: false,
+        warnings: [],
       };
     });
   }
@@ -698,6 +830,8 @@
         const loanInterest = roundCurrency(linkedDebtRows.reduce((total, debt) => total + debt.interestCharged, 0));
         const loanPrincipal = roundCurrency(linkedDebtRows.reduce((total, debt) => total + debt.principalRepaid, 0));
         const netPropertyCashflow = roundCurrency(linkedIncomeRows.reduce((total, income) => total + income.netPropertyCashflow, 0));
+        const hasLinkedIncome = linkedIncomeRows.length > 0;
+        const hasValidRentalCashIncome = linkedIncomeRows.some((income) => income.hasRentalCashIncome === true);
         return {
           id: asset.id,
           name: asset.name,
@@ -708,11 +842,19 @@
           annualGrowthRate: asset.annualGrowthRate,
           annualGrowthRatePct: asset.annualGrowthRatePct,
           growthRateSource: asset.growthRateSource,
-          rentalCashIncome: roundCurrency(linkedIncomeRows.reduce((total, income) => total + income.rentalCashIncome, 0)),
-          baseRentalCashIncome: roundCurrency(linkedIncomeRows.reduce((total, income) => total + (income.baseRentalCashIncome ?? income.rentalCashIncome), 0)),
+          rentalCashIncome: hasValidRentalCashIncome
+            ? roundCurrency(linkedIncomeRows.reduce((total, income) => total + number(income.rentalCashIncome), 0))
+            : hasLinkedIncome ? null : 0,
+          baseRentalCashIncome: hasValidRentalCashIncome
+            ? roundCurrency(linkedIncomeRows.reduce((total, income) => total + number(income.baseRentalCashIncome ?? income.rentalCashIncome), 0))
+            : hasLinkedIncome ? null : 0,
           rentalCashIncomeGrowthRate: linkedIncomeRows[0]?.rentalCashIncomeGrowthRate ?? normalised.inflationRate,
           rentalCashIncomeGrowthSource: linkedIncomeRows[0]?.rentalCashIncomeGrowthSource || "cpi",
-          grossRentalIncome: roundCurrency(linkedIncomeRows.reduce((total, income) => total + income.rentalCashIncome, 0)),
+          taxableRentalIncome: roundCurrency(linkedIncomeRows.reduce((total, income) => total + number(income.taxableRentalIncome), 0)),
+          baseTaxableRentalIncome: roundCurrency(linkedIncomeRows.reduce((total, income) => total + number(income.baseTaxableRentalIncome), 0)),
+          grossRentalIncome: hasValidRentalCashIncome
+            ? roundCurrency(linkedIncomeRows.reduce((total, income) => total + number(income.rentalCashIncome), 0))
+            : hasLinkedIncome ? null : 0,
           propertyExpenses: 0,
           loanInterest,
           loanPrincipal,
@@ -721,9 +863,57 @@
           linkedLoanClosingBalance,
           propertyEquity: roundCurrency(asset.closingValue - linkedLoanClosingBalance),
           isRentalInvestmentProperty: asset.isRentalInvestmentProperty,
+          hasMissingRentalCashIncome: linkedIncomeRows.some((income) => income.missingRentalCashIncome === true),
+          warnings: linkedIncomeRows.flatMap((income) => income.warnings || []),
         };
       });
     return rows;
+  }
+
+  function projectPassiveIncomeRows(normalised, yearIndex) {
+    return normalised.passiveIncome.map((income) => {
+      const cashIncome = grownAmount(income.annualCashIncome, income.annualCashGrowthRate, yearIndex);
+      const taxableIncome = grownAmount(income.annualTaxableIncome, income.annualTaxableGrowthRate, yearIndex);
+      return {
+        id: income.id,
+        name: income.name,
+        type: income.type,
+        owner: income.owner,
+        shares: { ...income.shares },
+        linkedAssetId: income.linkedAssetId,
+        sourceIncomeId: income.sourceIncomeId,
+        cashIncome,
+        taxableIncome,
+        person1CashIncome: roundCurrency(cashIncome * income.shares.person1),
+        person2CashIncome: roundCurrency(cashIncome * income.shares.person2),
+        person1TaxableIncome: roundCurrency(taxableIncome * income.shares.person1),
+        person2TaxableIncome: roundCurrency(taxableIncome * income.shares.person2),
+      };
+    });
+  }
+
+  function passiveIncomeForPerson(passiveIncomeRows, personId) {
+    const personKey = personId === "person2" ? "person2" : "person1";
+    return passiveIncomeRows.reduce((summary, income) => {
+      const cash = number(income[`${personKey}CashIncome`]);
+      const taxable = number(income[`${personKey}TaxableIncome`]);
+      summary.cashIncome = roundCurrency(summary.cashIncome + cash);
+      summary.taxableIncome = roundCurrency(summary.taxableIncome + taxable);
+      if (income.type === "interest") summary.interestIncome = roundCurrency(summary.interestIncome + taxable);
+      else if (income.type === "dividends") summary.dividendIncome = roundCurrency(summary.dividendIncome + taxable);
+      else if (income.type === "distributions") summary.distributionIncome = roundCurrency(summary.distributionIncome + taxable);
+      else if (income.type === "rentalTaxableIncome") summary.rentalTaxableIncome = roundCurrency(summary.rentalTaxableIncome + taxable);
+      else summary.otherTaxableIncome = roundCurrency(summary.otherTaxableIncome + taxable);
+      return summary;
+    }, {
+      cashIncome: 0,
+      taxableIncome: 0,
+      interestIncome: 0,
+      dividendIncome: 0,
+      distributionIncome: 0,
+      rentalTaxableIncome: 0,
+      otherTaxableIncome: 0,
+    });
   }
 
   function normaliseInputs(input) {
@@ -772,6 +962,7 @@
         ? input.liabilities.map(normaliseProjectionLiability).filter((liability) => !liability.isStsl)
         : [],
       propertyIncome: Array.isArray(input?.propertyIncome) ? input.propertyIncome.map((item, index) => normalisePropertyIncome(item, index, inflationRate)) : [],
+      passiveIncome: Array.isArray(input?.passiveIncome) ? input.passiveIncome.map(normalisePassiveIncome) : [],
       assumptions: {
         principalResidenceCapitalGrowthRate: propertyGrowthAssumptions.principalResidenceCapitalGrowthRate,
         investmentPropertyCapitalGrowthRate: propertyGrowthAssumptions.investmentPropertyCapitalGrowthRate,
@@ -862,6 +1053,17 @@
         if (!liabilityIds.has(loanId)) addValidation(errors, `${prefix}.linkedLoanIds`, "Linked rental loan was not found.");
       });
     });
+    const passiveIncomeInputs = Array.isArray(input.passiveIncome) ? input.passiveIncome.map(normalisePassiveIncome) : [];
+    const passiveIncomeIds = new Set();
+    passiveIncomeInputs.forEach((income, index) => {
+      const prefix = `passiveIncome.${index}`;
+      if (passiveIncomeIds.has(income.id)) addValidation(errors, `${prefix}.id`, "Duplicate passive-income IDs are not valid.");
+      passiveIncomeIds.add(income.id);
+      if (income.annualCashIncome < 0 || income.annualTaxableIncome < 0) addValidation(errors, prefix, "Passive-income amounts cannot be negative.");
+      if (income.annualCashGrowthRate < -1 || income.annualTaxableGrowthRate < -1) addValidation(errors, prefix, "Passive-income growth assumptions cannot be below -100%.");
+      const shareTotal = roundRatio(number(income.shares.person1) + number(income.shares.person2));
+      if (Math.abs(shareTotal - 1) > 0.01) addValidation(errors, `${prefix}.owner`, "Passive-income ownership must allocate 100%.");
+    });
 
     if (!Array.isArray(input.people) || input.people.length === 0) {
       addValidation(errors, "people", "At least one person is required.");
@@ -950,13 +1152,15 @@
     const p1 = peopleYear[0] || {};
     const p2 = peopleYear[1] || {};
     const hasPartner = Boolean(peopleYear[1]);
+    const p1Income = p1.totalTaxableIncome ?? p1.grossEmploymentIncome ?? 0;
+    const p2Income = p2.totalTaxableIncome ?? p2.grossEmploymentIncome ?? 0;
     const result = CALC.calculateMedicareLevySurcharge({
-      person1TaxableIncome: p1.grossEmploymentIncome || 0,
-      person2TaxableIncome: p2.grossEmploymentIncome || 0,
-      person1MLSIncomeForThreshold: p1.grossEmploymentIncome || 0,
-      person2MLSIncomeForThreshold: p2.grossEmploymentIncome || 0,
-      person1MLSSurchargeBase: p1.grossEmploymentIncome || 0,
-      person2MLSSurchargeBase: p2.grossEmploymentIncome || 0,
+      person1TaxableIncome: p1Income,
+      person2TaxableIncome: p2Income,
+      person1MLSIncomeForThreshold: p1Income,
+      person2MLSIncomeForThreshold: p2Income,
+      person1MLSSurchargeBase: p1Income,
+      person2MLSSurchargeBase: p2Income,
       person1CoverStatus: p1.hasPrivateHealthCover ? "full-year" : "no-cover",
       person2CoverStatus: hasPartner ? (p2.hasPrivateHealthCover ? "full-year" : "no-cover") : "full-year",
       dependantsHospitalCoverStatus: "full-year",
@@ -1033,7 +1237,7 @@
       financialYear: DEFAULT_FINANCIAL_YEAR,
       annualCalculationOrder: [
         "Determine person employment phases and gross employment income.",
-        "Calculate person-level tax, Medicare levy, MLS and capped STSL repayment using existing helpers.",
+        "Allocate passive taxable income by owner, then calculate person-level tax, Medicare levy, MLS and capped STSL repayment using existing helpers.",
         "Calculate gross and net employer/additional concessional super contributions.",
         "Project annual debt schedules and property values from explicit asset/liability inputs.",
         "Escalate rental/property cash income by CPI, then calculate cashflow using the selected after-interest or before-interest treatment.",
@@ -1059,7 +1263,8 @@
       accessibleContributionTreatment: "accessibleInvestments.externalAnnualAccessibleContribution/currentAnnualContributions is treated as an explicit additional accessible-investment contribution on top of any household cash surplus. It is not auto-populated from household surplus.",
       debtAndPropertyTreatment: "Stage A1 projects supplied non-STSL liabilities annually, separating interest charged, total repayment, principal repaid, capitalised interest, final balloon repayments and repayment cashflow. STSL remains person-level and outside the generic debt schedule.",
       rentalIncomeTreatment: "Rental/property income uses rentalCashflowTreatment. Entered rental cash income is the projection-start annual amount, CPI-escalated each projection year before loan cashflows are applied. afterInterest means loan interest is already included in the entered rental cash income, so only linked principal is deducted from property cashflow. beforeInterest deducts linked loan interest and principal exactly once.",
-      rentalTaxModel: "Rental property projection models cashflow, not full future taxable rental profit/loss. Negative gearing, depreciation, CGT and future rental tax schedules are not modelled in Stage A1.",
+      passiveIncomeTreatment: "Interest, dividends, distributions and taxable rental income are allocated to each person using stored ownership percentages and included in person-level taxable income. Cash income is modelled separately from taxable income where supplied.",
+      rentalTaxModel: "Rental property projection models cashflow, not full future taxable rental profit/loss. Stage C also carries the entered taxable rental-income amount separately for owner-level tax estimates. Negative gearing, depreciation, CGT and future rental tax schedules are not modelled in Stage C.",
       propertyEquityTreatment: "Property equity is reported in projected net worth but is not treated as accessible retirement cash or used to fund lifestyle spending.",
       propertyGrowthAssumptions: {
         principalResidenceCapitalGrowthRate: normalised.assumptions.principalResidenceCapitalGrowthRate,
@@ -1147,6 +1352,20 @@
           warnings: [],
         };
       });
+      const passiveIncomeRows = projectPassiveIncomeRows(normalised, yearIndex);
+      peopleYear.forEach((person) => {
+        const passive = passiveIncomeForPerson(passiveIncomeRows, person.id);
+        person.employmentIncome = roundCurrency(person.grossEmploymentIncome);
+        person.interestIncome = passive.interestIncome;
+        person.dividendIncome = passive.dividendIncome;
+        person.rentalTaxableIncome = passive.rentalTaxableIncome;
+        person.distributionIncome = passive.distributionIncome;
+        person.otherTaxableIncome = passive.otherTaxableIncome;
+        person.totalPassiveTaxableIncome = passive.taxableIncome;
+        person.totalPassiveCashIncome = passive.cashIncome;
+        person.totalTaxableIncome = roundCurrency(person.grossEmploymentIncome + passive.taxableIncome);
+        person.totalCashIncomeBeforeTax = roundCurrency(person.grossEmploymentIncome + passive.cashIncome);
+      });
 
       const mls = calculateMls(peopleYear, normalised);
       if (mls.warning) warnings.push(`${calendarYear}: ${mls.warning}`);
@@ -1154,10 +1373,10 @@
       peopleYear.forEach((person, index) => {
         const source = normalised.people.find((item) => item.id === person.id);
         const taxBreakdown = typeof CALC.individualTaxBreakdown === "function"
-          ? CALC.individualTaxBreakdown(person.grossEmploymentIncome)
-          : fallbackTaxBreakdown(person.grossEmploymentIncome);
+          ? CALC.individualTaxBreakdown(person.totalTaxableIncome)
+          : fallbackTaxBreakdown(person.totalTaxableIncome);
         const stslOpeningBalance = peopleStates[person.id].stslBalance;
-        const stslRepayment = roundCurrency(Math.min(stslOpeningBalance, estimateStslRepayment(person.grossEmploymentIncome, stslOpeningBalance)));
+        const stslRepayment = roundCurrency(Math.min(stslOpeningBalance, estimateStslRepayment(person.totalTaxableIncome, stslOpeningBalance)));
         peopleStates[person.id].stslBalance = roundCurrency(Math.max(0, stslOpeningBalance - stslRepayment));
         const medicareLevySurcharge = index === 0 ? mls.person1Surcharge : mls.person2Surcharge;
         const additionalSuperContribution = person.grossEmploymentIncome > 0 && person.age < source.additionalContributionsStopAge
@@ -1170,7 +1389,8 @@
         person.stslOpeningBalance = stslOpeningBalance;
         person.stslRepayment = stslRepayment;
         person.stslClosingBalance = peopleStates[person.id].stslBalance;
-        person.netEmploymentIncome = roundCurrency(Math.max(0, person.grossEmploymentIncome - person.incomeTax - person.medicareLevy - person.medicareLevySurcharge - stslRepayment));
+        person.netEmploymentIncome = roundCurrency(Math.max(0, person.totalCashIncomeBeforeTax - person.incomeTax - person.medicareLevy - person.medicareLevySurcharge - stslRepayment));
+        person.netIncome = person.netEmploymentIncome;
         person.employerSuperContribution = employerSuper;
         person.netEmployerSuperContribution = roundCurrency(employerSuper * (1 - DEFAULT_CONTRIBUTIONS_TAX_RATE));
         person.additionalSuperContribution = additionalSuperContribution;
@@ -1240,6 +1460,12 @@
           : normalised.household.currentLifestyleSpending;
       const applicableLifestyleSpending = todayDollarAmount(lifestyleBase, normalised.inflationRate, yearIndex);
       const totalNetEmploymentIncome = roundCurrency(peopleYear.reduce((total, person) => total + person.netEmploymentIncome, 0));
+      const totalPassiveCashIncome = roundCurrency(passiveIncomeRows.reduce((total, income) => total + income.cashIncome, 0));
+      const totalPassiveTaxableIncome = roundCurrency(passiveIncomeRows.reduce((total, income) => total + income.taxableIncome, 0));
+      const totalInterestCashIncome = roundCurrency(passiveIncomeRows.filter((income) => income.type === "interest").reduce((total, income) => total + income.cashIncome, 0));
+      const totalDividendCashIncome = roundCurrency(passiveIncomeRows.filter((income) => income.type === "dividends").reduce((total, income) => total + income.cashIncome, 0));
+      const totalDistributionCashIncome = roundCurrency(passiveIncomeRows.filter((income) => income.type === "distributions").reduce((total, income) => total + income.cashIncome, 0));
+      const totalRentalTaxableIncome = roundCurrency(passiveIncomeRows.filter((income) => income.type === "rentalTaxableIncome").reduce((total, income) => total + income.taxableIncome, 0));
       const otherIncome = roundCurrency(normalised.household.otherAnnualIncome);
       const totalAdditionalSuperContribution = roundCurrency(peopleYear.reduce((total, person) => total + person.additionalSuperContribution, 0));
       const householdCashRequirement = roundCurrency(applicableLifestyleSpending + annualDebtCashRequirement + totalAdditionalSuperContribution);
@@ -1321,7 +1547,11 @@
       const totalSuperBalance = roundCurrency(peopleYear.reduce((total, person) => total + person.closingSuperBalance, 0));
       const totalInvestableAssets = roundCurrency(closingAccessibleInvestmentBalance + totalSuperBalance);
       const totalNetWorth = roundCurrency(closingAccessibleInvestmentBalance + totalSuperBalance + totalNonAccessibleAssetValue - totalDebt);
-      const yearWarnings = [];
+      const propertyIncomeWarningMessages = propertyIncomeRows
+        .flatMap((income) => income.warnings || [])
+        .map(warningCodeMessage)
+        .filter(Boolean);
+      const yearWarnings = yearIndex === 0 ? propertyIncomeWarningMessages : [];
       if (unfundedPlannedSemiRetirementWithdrawal > 0) yearWarnings.push("Planned semi-retirement withdrawal could not be fully funded from accessible investments.");
       if (superFunding.unmet > 0) yearWarnings.push("Household spending shortfall could not be fully funded.");
       if (closingAccessibleInvestmentBalance === 0 && totalAccessibleWithdrawal > 0 && milestoneIsUnset(summary.accessibleFundsExhausted)) {
@@ -1367,6 +1597,16 @@
           age: person.age,
           employmentPhase: person.employmentPhase,
           grossEmploymentIncome: roundCurrency(person.grossEmploymentIncome),
+          employmentIncome: roundCurrency(person.employmentIncome),
+          interestIncome: person.interestIncome,
+          dividendIncome: person.dividendIncome,
+          rentalTaxableIncome: person.rentalTaxableIncome,
+          distributionIncome: person.distributionIncome,
+          otherTaxableIncome: person.otherTaxableIncome,
+          totalPassiveTaxableIncome: person.totalPassiveTaxableIncome,
+          totalPassiveCashIncome: person.totalPassiveCashIncome,
+          totalTaxableIncome: person.totalTaxableIncome,
+          totalCashIncomeBeforeTax: person.totalCashIncomeBeforeTax,
           incomeTax: person.incomeTax,
           medicareLevy: person.medicareLevy,
           medicareLevySurcharge: person.medicareLevySurcharge,
@@ -1390,6 +1630,13 @@
           householdPhase: phase,
           applicableLifestyleSpending,
           totalNetEmploymentIncome,
+          totalNetPersonCashIncome: totalNetEmploymentIncome,
+          totalPassiveCashIncome,
+          totalPassiveTaxableIncome,
+          totalInterestCashIncome,
+          totalDividendCashIncome,
+          totalDistributionCashIncome,
+          totalRentalTaxableIncome,
           otherIncome,
           netRentalCashflow,
           netHouseholdCashIncome,
@@ -1441,6 +1688,7 @@
         assets: assetRows,
         liabilities: liabilityRows,
         propertyIncome: propertyIncomeRows,
+        passiveIncome: passiveIncomeRows,
         properties: propertyRows,
         warnings: yearWarnings,
       };
@@ -1509,5 +1757,6 @@
     validateRetirementProjectionInputs: validateInputs,
     normaliseRetirementProjectionInputs: normaliseInputs,
     projectDebtYearForAudit: projectDebtYear,
+    projectPassiveIncomeRowsForAudit: projectPassiveIncomeRows,
   };
 })(globalThis);

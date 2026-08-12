@@ -57,6 +57,7 @@
   const RENTAL_INVESTMENT_PROPERTY_TYPES = new Set(["rentalInvestmentProperty", "rentalProperty", "investmentProperty", "residentialInvestmentProperty", "commercialInvestmentProperty", "incomeProducingProperty"]);
   const OTHER_PROPERTY_TYPES = new Set(["otherProperty"]);
   const PROPERTY_TYPES = new Set([...PRINCIPAL_RESIDENCE_TYPES, ...RENTAL_INVESTMENT_PROPERTY_TYPES, ...OTHER_PROPERTY_TYPES]);
+  const PASSIVE_TAXABLE_INCOME_TYPES = new Set(["interest", "dividends", "distributions", "rentalNetCashIncome"]);
   const PROPERTY_GROWTH_SOURCE_LABELS = {
     "asset-specific": "property-specific assumption",
     "investment-property-default": "investment property capital-growth assumption",
@@ -207,6 +208,65 @@
     return item.linkedLoanId ? [String(item.linkedLoanId)] : [];
   }
 
+  function normalisedIncomeItems(plan = {}) {
+    if (typeof global.FFSCalculator?.normalisedIncomeItems === "function") return global.FFSCalculator.normalisedIncomeItems(plan);
+    return Array.isArray(plan.incomeItems) ? plan.incomeItems : [];
+  }
+
+  function incomeAllocation(item = {}) {
+    if (typeof global.FFSCalculator?.incomeAllocation === "function") return global.FFSCalculator.incomeAllocation(item);
+    const owner = item.owner || item.incomeOwner;
+    if (owner === "person1") return { person1: 1, person2: 0 };
+    if (owner === "person2") return { person1: 0, person2: 1 };
+    const p1 = number(item.person1AllocationPercentage ?? item.person1AllocationPct, 50);
+    const p2 = number(item.person2AllocationPercentage ?? item.person2AllocationPct, 50);
+    const total = p1 + p2 || 100;
+    return { person1: roundRatio(p1 / total), person2: roundRatio(p2 / total) };
+  }
+
+  function incomeCashAnnualAmount(item = {}) {
+    if (typeof global.FFSCalculator?.incomeCashAnnualAmount === "function") return global.FFSCalculator.incomeCashAnnualAmount(item);
+    return annualiseAmount(item.amount, item.frequency || "annually");
+  }
+
+  function incomeTaxableAnnualAmount(item = {}) {
+    if (typeof global.FFSCalculator?.incomeTaxableAnnualAmount === "function") return global.FFSCalculator.incomeTaxableAnnualAmount(item);
+    return incomeCashAnnualAmount(item);
+  }
+
+  function rentalCashIncomeAnnualAmount(item = {}) {
+    if (typeof global.FFSCalculator?.rentalCashIncomeAnnualAmount === "function") return global.FFSCalculator.rentalCashIncomeAnnualAmount(item);
+    const source = item.rentalCashIncomeAnnual ?? item.annualRentalCashIncome ?? item.annualCashIncome ?? item.cashIncome ?? item.annualNetRentalCashIncome;
+    if (source === undefined || source === null || source === "") return null;
+    return annualiseAmount(source, item.rentalCashIncomeFrequency || item.cashIncomeFrequency || item.frequency || "annually");
+  }
+
+  function hasRentalCashIncomeAnnualAmount(item = {}) {
+    if (typeof global.FFSCalculator?.hasRentalCashIncomeAnnualAmount === "function") return global.FFSCalculator.hasRentalCashIncomeAnnualAmount(item);
+    return [item.rentalCashIncomeAnnual, item.annualRentalCashIncome, item.annualCashIncome, item.cashIncome, item.annualNetRentalCashIncome]
+      .some((value) => value !== undefined && value !== null && value !== "");
+  }
+
+  function rentalLoansLinkedToIncome(plan = {}, income = {}) {
+    const existing = new Set(linkedLoanIds(income));
+    const incomeLinkedAssetId = String(income.linkedAssetId || income.linkedPropertyAssetId || "");
+    const rentalLoans = (Array.isArray(plan.liabilityItems) ? plan.liabilityItems : [])
+      .filter((loan) => loan.type === "rentalPropertyLoan");
+    rentalLoans.forEach((loan) => {
+      const loanId = String(loan.id || "");
+      if (!loanId) return;
+      const loanLinkedAssetId = String(loan.linkedAssetId || loan.investmentLink?.linkedAssetId || "");
+      if (loan.linkedRentalIncomeId && String(loan.linkedRentalIncomeId) === String(income.id || "")) existing.add(loanId);
+      if (incomeLinkedAssetId && loanLinkedAssetId && loanLinkedAssetId === incomeLinkedAssetId) existing.add(loanId);
+    });
+    return Array.from(existing).filter((loanId) => {
+      const loan = rentalLoans.find((item) => String(item.id || "") === loanId);
+      if (!loan) return false;
+      const loanLinkedAssetId = String(loan.linkedAssetId || loan.investmentLink?.linkedAssetId || "");
+      return !incomeLinkedAssetId || !loanLinkedAssetId || loanLinkedAssetId === incomeLinkedAssetId || String(loan.linkedRentalIncomeId || "") === String(income.id || "");
+    });
+  }
+
   function projectionAssetsFromPlan(plan = {}) {
     const items = Array.isArray(plan.assetItems) ? plan.assetItems : [];
     const propertyLike = new Set(["home", "principalResidence", "principal_residence", "otherProperty", "rentalInvestmentProperty", "rentalProperty", "investmentProperty", "vehicle"]);
@@ -343,17 +403,50 @@
   }
 
   function projectionPropertyIncomeFromPlan(plan = {}) {
-    return (Array.isArray(plan.incomeItems) ? plan.incomeItems : [])
+    return normalisedIncomeItems(plan)
       .filter((item) => item.type === "rentalNetCashIncome" || item.incomeType === "rentalNetCashIncome")
-      .map((item, index) => ({
-        id: String(item.id || `property-income-${index + 1}`),
-        name: String(item.propertyName || item.name || `Rental property ${index + 1}`),
-        linkedAssetId: String(item.linkedAssetId || item.linkedPropertyAssetId || ""),
-        linkedLoanIds: linkedLoanIds(item),
-        annualIncome: annualiseAmount(item.amount, item.frequency || "annually"),
-        annualGrowthRatePct: number(item.annualGrowthRatePct ?? item.growthRatePct ?? 0),
-        rentalCashflowTreatment: item.rentalCashflowTreatment === "beforeInterest" ? "beforeInterest" : "afterInterest",
-      }));
+      .map((item, index) => {
+        const hasRentalCashIncome = hasRentalCashIncomeAnnualAmount(item);
+        return {
+          id: String(item.id || `property-income-${index + 1}`),
+          name: String(item.propertyName || item.name || `Rental property ${index + 1}`),
+          linkedAssetId: String(item.linkedAssetId || item.linkedPropertyAssetId || ""),
+          linkedLoanIds: rentalLoansLinkedToIncome(plan, item),
+          annualIncome: hasRentalCashIncome ? rentalCashIncomeAnnualAmount(item) : null,
+          hasRentalCashIncome,
+          missingRentalCashIncome: !hasRentalCashIncome,
+          taxableRentalIncomeAnnual: incomeTaxableAnnualAmount(item),
+          annualGrowthRatePct: number(item.annualGrowthRatePct ?? item.growthRatePct ?? 0),
+          rentalCashflowTreatment: item.rentalCashflowTreatment === "beforeInterest" ? "beforeInterest" : "afterInterest",
+        };
+      });
+  }
+
+  function projectionPassiveIncomeFromPlan(plan = {}) {
+    return normalisedIncomeItems(plan)
+      .filter((item) => {
+        if (PASSIVE_TAXABLE_INCOME_TYPES.has(item.type)) return true;
+        return item.type === "other" && (item.isPassiveIncome === true || item.passiveIncome === true || item.isPassive === true);
+      })
+      .map((item, index) => {
+        const allocation = incomeAllocation(item);
+        const isRental = item.type === "rentalNetCashIncome";
+        const annualCashIncome = isRental ? 0 : incomeCashAnnualAmount(item);
+        const annualTaxableIncome = incomeTaxableAnnualAmount(item);
+        const type = isRental ? "rentalTaxableIncome" : item.type === "other" ? "otherPassive" : item.type;
+        return {
+          id: `passive-${String(item.id || index + 1)}`,
+          sourceIncomeId: String(item.id || ""),
+          name: String(item.name || item.propertyName || `Passive income ${index + 1}`),
+          type,
+          owner: item.owner || item.incomeOwner || "joint",
+          person1AllocationPercentage: roundRatio(allocation.person1 * 100),
+          person2AllocationPercentage: roundRatio(allocation.person2 * 100),
+          annualCashIncome,
+          annualTaxableIncome,
+          linkedAssetId: String(item.linkedAssetId || item.linkedPropertyAssetId || ""),
+        };
+      });
   }
 
   function personName(plan, index) {
@@ -421,6 +514,9 @@
       propertyIncome: {
         projectedPropertyIncome: projectionPropertyIncomeFromPlan(plan),
       },
+      passiveIncome: {
+        projectedPassiveIncome: projectionPassiveIncomeFromPlan(plan),
+      },
       assumptions: {
         investmentReturnPct: number(plan.investing?.expectedInvestmentReturnPct),
         superReturnPct: number(plan.investing?.expectedSuperReturnPct),
@@ -471,9 +567,11 @@
     const assets = projectionAssetsFromPlan(plan);
     const liabilities = projectionLiabilitiesFromPlan(plan);
     const propertyIncome = projectionPropertyIncomeFromPlan(plan);
+    const passiveIncome = projectionPassiveIncomeFromPlan(plan);
     const propertyGrowthAssumptions = propertyGrowthAssumptionsFromPlan(plan);
     const mappedPropertyIncomeTotal = roundCurrency(propertyIncome.reduce((total, item) => total + number(item.annualIncome), 0));
-    const otherAnnualIncome = roundCurrency(number(result.otherAnnualIncome) - mappedPropertyIncomeTotal);
+    const mappedPassiveCashIncomeTotal = roundCurrency(passiveIncome.reduce((total, item) => total + number(item.annualCashIncome), 0));
+    const otherAnnualIncome = roundCurrency(Math.max(0, number(result.otherAnnualIncome) - mappedPropertyIncomeTotal - mappedPassiveCashIncomeTotal));
     const draft = {
       version: 1,
       projectionStartYear: currentYear(),
@@ -505,6 +603,7 @@
       assets,
       liabilities,
       propertyIncome,
+      passiveIncome,
       people,
     };
     return {
@@ -646,10 +745,20 @@
       })) : [],
       propertyIncome: Array.isArray(draft.propertyIncome) ? clone(draft.propertyIncome).map((income) => ({
         ...income,
-        annualIncome: number(income.annualIncome),
+        annualIncome: finiteNumberOrNull(income.annualIncome) === null ? null : number(income.annualIncome),
+        hasRentalCashIncome: income.hasRentalCashIncome === true && finiteNumberOrNull(income.annualIncome) !== null,
+        missingRentalCashIncome: income.missingRentalCashIncome === true || finiteNumberOrNull(income.annualIncome) === null,
+        taxableRentalIncomeAnnual: number(income.taxableRentalIncomeAnnual),
         annualGrowthRate: finiteNumberOrNull(income.annualGrowthRate) !== null
           ? number(income.annualGrowthRate)
           : percentToRate(income.annualGrowthRatePct),
+      })) : [],
+      passiveIncome: Array.isArray(draft.passiveIncome) ? clone(draft.passiveIncome).map((income) => ({
+        ...income,
+        annualCashIncome: nonNegative(income.annualCashIncome),
+        annualTaxableIncome: nonNegative(income.annualTaxableIncome),
+        annualCashGrowthRate: finiteNumberOrNull(income.annualCashGrowthRate) !== null ? number(income.annualCashGrowthRate) : percentToRate(income.annualCashGrowthRatePct),
+        annualTaxableGrowthRate: finiteNumberOrNull(income.annualTaxableGrowthRate) !== null ? number(income.annualTaxableGrowthRate) : percentToRate(income.annualTaxableGrowthRatePct),
       })) : [],
       people: (draft.people || []).map((person, index) => {
         const fullRetirementAge = number(person.fullRetirementAge);
@@ -779,6 +888,9 @@
   }
 
   function warningText(warning) {
+    if (warning && typeof warning === "object") {
+      return warning.message || warning.code || "Projection warning.";
+    }
     const text = String(warning || "");
     if (!text) return "";
     return text
@@ -941,10 +1053,14 @@
       rentalCashIncome: property.rentalCashIncome ?? property.grossRentalIncome,
       rentalCashIncomeGrowthRate: property.rentalCashIncomeGrowthRate,
       rentalCashIncomeGrowthSource: property.rentalCashIncomeGrowthSource,
+      taxableRentalIncome: property.taxableRentalIncome,
+      baseTaxableRentalIncome: property.baseTaxableRentalIncome,
       loanInterest: property.loanInterest,
       loanPrincipal: property.loanPrincipal,
       netPropertyCashflow: property.netPropertyCashflow,
-      cashflowTone: number(property.netPropertyCashflow) < 0 ? "warning" : "positive",
+      hasMissingRentalCashIncome: property.hasMissingRentalCashIncome === true,
+      warnings: asArray(property.warnings).map(warningText).filter(Boolean),
+      cashflowTone: property.hasMissingRentalCashIncome === true || number(property.netPropertyCashflow) < 0 ? "warning" : "positive",
       isRentalInvestmentProperty: property.isRentalInvestmentProperty === true,
     };
   }
@@ -1027,6 +1143,66 @@
           offsetBalanceUsed: debt.offsetBalanceUsed,
         }))
         .filter((item, index, array) => array.findIndex((candidate) => candidate.liabilityId === item.liabilityId) === index),
+    };
+  }
+
+  function passiveIncomeTypeLabel(type = "") {
+    const labels = {
+      interest: "Interest",
+      dividends: "Dividends",
+      distributions: "Distributions",
+      rentalTaxableIncome: "Rental taxable income",
+      otherPassive: "Other passive income",
+      otherTaxableIncome: "Other taxable income",
+    };
+    return labels[type] || String(type || "Passive income");
+  }
+
+  function buildPassiveIncomeResultsViewModel(projection = {}, people = []) {
+    const years = asArray(projection.years);
+    if (!years.length) return { isAvailable: false };
+    const summary = projection.summary || {};
+    const displayRow = rowForCalendarYear(years, summary.householdFullRetirement?.calendarYear)
+      || years.find((row) => row.householdPhase === "semi-retirement")
+      || years[0];
+    const passiveRows = asArray(displayRow?.passiveIncome);
+    const sourceRows = ["interest", "dividends", "rentalTaxableIncome", "distributions", "otherPassive", "otherTaxableIncome"]
+      .map((type) => ({
+        type,
+        label: passiveIncomeTypeLabel(type),
+        taxableIncome: roundDisplayAmount(passiveRows.filter((row) => row.type === type).reduce((total, row) => total + number(row.taxableIncome), 0)),
+        cashIncome: roundDisplayAmount(passiveRows.filter((row) => row.type === type).reduce((total, row) => total + number(row.cashIncome), 0)),
+      }))
+      .filter((row) => row.taxableIncome > 0 || row.cashIncome > 0);
+    const personRows = people.map((person) => {
+      const personYear = asArray(displayRow.people).find((entry) => entry.id === person.id) || {};
+      return {
+        id: person.id,
+        name: person.name,
+        employmentIncome: number(personYear.employmentIncome ?? personYear.grossEmploymentIncome),
+        interestIncome: number(personYear.interestIncome),
+        dividendIncome: number(personYear.dividendIncome),
+        rentalTaxableIncome: number(personYear.rentalTaxableIncome),
+        distributionIncome: number(personYear.distributionIncome),
+        otherTaxableIncome: number(personYear.otherTaxableIncome),
+        totalPassiveTaxableIncome: number(personYear.totalPassiveTaxableIncome),
+        totalTaxableIncome: number(personYear.totalTaxableIncome),
+        incomeTax: number(personYear.incomeTax),
+        medicareLevy: number(personYear.medicareLevy),
+        medicareLevySurcharge: number(personYear.medicareLevySurcharge),
+        stslRepayment: number(personYear.stslRepayment),
+        netIncome: number(personYear.netIncome ?? personYear.netEmploymentIncome),
+      };
+    });
+    return {
+      isAvailable: sourceRows.length > 0 || personRows.some((person) => person.totalPassiveTaxableIncome > 0),
+      calendarYear: displayRow.calendarYear,
+      householdPhaseLabel: phaseLabel(displayRow.householdPhase),
+      ages: rowAges(displayRow, people),
+      sourceRows,
+      personRows,
+      totalPassiveTaxableIncome: roundDisplayAmount(displayRow.household?.totalPassiveTaxableIncome),
+      totalPassiveCashIncome: roundDisplayAmount(displayRow.household?.totalPassiveCashIncome),
     };
   }
 
@@ -1171,6 +1347,7 @@
       assets: asArray(row.assets),
       liabilities: asArray(row.liabilities),
       propertyIncome: asArray(row.propertyIncome),
+      passiveIncome: asArray(row.passiveIncome),
       properties: asArray(row.properties),
       warnings: asArray(row.warnings).map(warningText).filter(Boolean),
     }));
@@ -1236,6 +1413,14 @@
         type: "plain",
       })),
     ];
+    const passiveRows = asArray(inputs.passiveIncome).length
+      ? [{
+        label: "Passive taxable income",
+        value: "Allocated by owner",
+        type: "plain",
+        note: "Interest, dividends, distributions and taxable rental income are included in each person's projected taxable income.",
+      }]
+      : [];
     const offsetRows = asArray(projection.years).some((row) => asArray(row.liabilities).some((debt) => number(debt.offsetBalanceUsed) > 0))
       ? [{ label: "Mortgage offset limitation", value: assumptions.offsetTreatment || "Current offset balance reduces projected interest. Dynamic offset depletion is not modelled.", type: "plain" }]
       : [];
@@ -1271,6 +1456,7 @@
       ...debtRows,
       ...propertyRows,
       ...rentalRows,
+      ...passiveRows,
       ...offsetRows,
       ...noSaleRows,
     ].filter((row) => row.value !== undefined);
@@ -1319,6 +1505,7 @@
       .filter((person) => finiteNumberOrNull(person.superAccessAge) === null)
       .map((person) => `${person.name || person.id}: assumed super access age is missing, so no super-access timeline event is shown.`);
     const debtProperty = buildDebtPropertyResultsViewModel(projection, people);
+    const passiveIncome = buildPassiveIncomeResultsViewModel(projection, people);
 
     return {
       isAvailable: true,
@@ -1381,6 +1568,7 @@
         superWithdrawalsDuringSemiRetirement,
         totalAssetWithdrawalsDuringSemiRetirement,
       },
+      passiveIncome,
       debtProperty,
       annualRows,
       assumptions: {
@@ -1564,6 +1752,9 @@
   global.FFSSemiRetirementUi = {
     buildSemiRetirementScenarioDefaults,
     basePlanSourceKey,
+    projectionPropertyIncomeFromPlan,
+    projectionPassiveIncomeFromPlan,
+    rentalLoansLinkedToIncome,
     getDraftPath,
     setDraftPath,
     validateSemiRetirementScenarioDraft,
@@ -1571,6 +1762,7 @@
     runSemiRetirementProjection,
     buildSemiRetirementResultsViewModel,
     buildDebtPropertyResultsViewModel,
+    buildPassiveIncomeResultsViewModel,
     hasSemiRetirementPhase,
     applyScenarioAdjustment,
     buildScenarioAdjustmentSnapshot,

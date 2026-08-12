@@ -195,6 +195,7 @@
                 <button class="nav-button" type="button" data-engagement-action="ai">AI Coach</button>
                 <button class="nav-button" type="button" data-view="super">Super</button>
                 <button class="nav-button" type="button" data-view="decision">Decision Engine</button>
+                <button class="nav-button hidden" type="button" data-view="semiretirement" data-semi-retirement-nav>Semi-Retirement</button>
                 <button class="nav-button" type="button" data-view="reports">Reports</button>
                 <button class="nav-button" type="button" data-view="scenarios">Saved Scenarios</button>
               </div>
@@ -586,7 +587,14 @@
                   </div>
                   <div id="comparisonSummary" class="summary-grid mt-4"></div>
                 </article>
-                <div id="semiRetirementScenarioRoot" class="mt-6"></div>
+              </section>
+
+              <section class="view-section hidden" data-view-panel="semiretirement">
+                <div class="section-heading">
+                  <h2>Semi-Retirement & Retirement Scenario</h2>
+                  <p>Explore how reducing work, drawing from accessible investments and retiring at different ages may affect future retirement assets.</p>
+                </div>
+                <div id="semiRetirementScenarioRoot"></div>
               </section>
 
               <section class="view-section hidden" data-view-panel="scenarios">

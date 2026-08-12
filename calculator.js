@@ -572,6 +572,40 @@
     return incomeCashAnnualAmount(item);
   }
 
+  function rentalCashIncomeAnnualAmount(item = {}) {
+    const explicitCashSource = rentalCashIncomeSource(item);
+    if (explicitCashSource !== undefined && explicitCashSource !== null && explicitCashSource !== "") {
+      return roundCurrency(annualize(explicitCashSource, item.rentalCashIncomeFrequency || item.cashIncomeFrequency || item.frequency || "annually"));
+    }
+    return null;
+  }
+
+  function rentalCashIncomeSource(item = {}) {
+    const candidates = [
+      item.rentalCashIncomeAnnual,
+      item.annualRentalCashIncome,
+      item.annualCashIncome,
+      item.cashIncome,
+      item.annualNetRentalCashIncome,
+    ];
+    return candidates.find((value) => value !== undefined && value !== null && value !== "");
+  }
+
+  function hasRentalCashIncomeAnnualAmount(item = {}) {
+    return rentalCashIncomeSource(item) !== undefined;
+  }
+
+  function rentalCashIncomeRequiredWarning(propertyIncome = {}) {
+    const propertyName = propertyIncome.propertyName || propertyIncome.name || "Rental property";
+    return {
+      code: "RENTAL_CASH_INCOME_REQUIRED",
+      incomeId: String(propertyIncome.id || ""),
+      linkedAssetId: String(propertyIncome.linkedAssetId || propertyIncome.linkedPropertyAssetId || propertyIncome.assetId || ""),
+      propertyName,
+      message: `Rental cash income required for ${propertyName}. The entered taxable rental profit cannot be used as the property's cash income. Enter the annual rental cash income used for cashflow projections.`,
+    };
+  }
+
   function incomeAllocation(item = {}) {
     const type = normaliseIncomeType(item.type || item.incomeType);
     const owner = normaliseIncomeOwner(item.owner || item.incomeOwner, type);
@@ -756,11 +790,35 @@
 
   function calculateRentalPropertyCashflow(propertyIncome = {}, linkedLoans = []) {
     const treatment = propertyIncome.rentalCashflowTreatment === "beforeInterest" ? "beforeInterest" : "afterInterest";
-    const annualNetRentalCashIncome = roundCurrency(annualize(propertyIncome.amount, propertyIncome.frequency || "annually"));
+    const hasRentalCashIncome = hasRentalCashIncomeAnnualAmount(propertyIncome);
+    const annualNetRentalCashIncome = hasRentalCashIncome ? rentalCashIncomeAnnualAmount(propertyIncome) : null;
     const loanBreakdowns = linkedLoans.map(getAnnualLoanBreakdown);
     const annualLoanRepayments = roundCurrency(loanBreakdowns.reduce((total, item) => total + item.annualRepayments, 0));
     const annualLoanInterest = roundCurrency(loanBreakdowns.reduce((total, item) => total + item.annualInterest, 0));
     const annualLoanPrincipal = roundCurrency(loanBreakdowns.reduce((total, item) => total + item.annualPrincipal, 0));
+    const cashIncomeWarnings = hasRentalCashIncome ? [] : [rentalCashIncomeRequiredWarning(propertyIncome)];
+    if (!hasRentalCashIncome) {
+      return {
+        id: propertyIncome.id || "",
+        name: propertyIncome.propertyName || propertyIncome.name || "Rental property",
+        owner: normaliseIncomeOwner(propertyIncome.owner, propertyIncome.type),
+        treatment,
+        hasRentalCashIncome: false,
+        annualNetRentalCashIncome,
+        linkedLoanCount: linkedLoans.length,
+        linkedLoanIds: linkedLoans.map((loan) => loan.id).filter(Boolean),
+        loanBreakdowns,
+        annualLoanRepayments,
+        annualLoanInterest,
+        annualLoanPrincipal,
+        householdDebtDeduction: 0,
+        rentalPassiveIncomeBeforePrincipal: 0,
+        rentalPrincipalRepayments: 0,
+        rentalHouseholdCashflowAfterPrincipal: 0,
+        householdCashflowContribution: 0,
+        warnings: cashIncomeWarnings,
+      };
+    }
     const householdDebtDeduction = treatment === "beforeInterest" ? annualLoanRepayments : annualLoanPrincipal;
     const rentalPassiveIncomeBeforePrincipal = roundCurrency(treatment === "beforeInterest"
       ? annualNetRentalCashIncome - annualLoanInterest
@@ -784,6 +842,8 @@
       rentalPrincipalRepayments,
       rentalHouseholdCashflowAfterPrincipal,
       householdCashflowContribution: rentalHouseholdCashflowAfterPrincipal,
+      hasRentalCashIncome: true,
+      warnings: [],
     };
   }
 
@@ -807,6 +867,9 @@
         return true;
       });
       return calculateRentalPropertyCashflow(income, linkedLoans);
+    });
+    propertyResults.forEach((property) => {
+      (property.warnings || []).forEach((warning) => warnings.push(warning.message || warning.code || String(warning)));
     });
 
     const unlinkedRentalLoans = rentalLoans.filter((loan) => loan.id && !usedLoanIds.has(loan.id));
@@ -2358,6 +2421,14 @@
     qualifyingEarningsAnnualAmount,
     calculateEmployerSuperForPerson,
     employerSuperSummary,
+    normaliseIncomeType,
+    normaliseIncomeOwner,
+    normalisedIncomeItems,
+    incomeCashAnnualAmount,
+    incomeTaxableAnnualAmount,
+    incomeAllocation,
+    rentalCashIncomeAnnualAmount,
+    hasRentalCashIncomeAnnualAmount,
     incomeBreakdown,
     getAnnualLoanBreakdown,
     calculateRentalPropertyCashflow,

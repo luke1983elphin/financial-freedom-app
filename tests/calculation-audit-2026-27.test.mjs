@@ -374,6 +374,7 @@ test("rental cashflow uses linked loan treatment without deducting loan interest
       type: "rentalNetCashIncome",
       owner: "joint",
       amount: 7000,
+      rentalCashIncomeAnnual: 7000,
       frequency: "annually",
       rentalCashflowTreatment: "afterInterest",
       linkedLoanIds: ["rental-loan"],
@@ -406,6 +407,7 @@ test("rental cashflow uses linked loan treatment without deducting loan interest
   assert.equal(result.passiveIncomeBreakdown.rentalProperties[0].rentalHouseholdCashflowAfterPrincipal, 1000);
 
   plan.incomeItems[0].amount = 22000;
+  plan.incomeItems[0].rentalCashIncomeAnnual = 22000;
   plan.incomeItems[0].rentalCashflowTreatment = "beforeInterest";
   result = CALC.calculatePlan(plan);
   assert.equal(result.rentalPropertyCashflow.annualHouseholdDebtDeduction, 21000);
