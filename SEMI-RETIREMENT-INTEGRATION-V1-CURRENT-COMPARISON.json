@@ -1,0 +1,58 @@
+[
+  {
+    "file": "calculator.js",
+    "matchesCurrent": true
+  },
+  {
+    "file": "weekly-plan.js",
+    "matchesCurrent": true
+  },
+  {
+    "file": "weekly-planner-export.js",
+    "matchesCurrent": true
+  },
+  {
+    "file": "v2-data.js",
+    "matchesCurrent": true
+  },
+  {
+    "file": "api/ai-insights.js",
+    "matchesCurrent": true
+  },
+  {
+    "file": "lib/calculations.ts",
+    "matchesCurrent": true
+  },
+  {
+    "file": "lib/engagement.ts",
+    "matchesCurrent": true
+  },
+  {
+    "file": "lib/sampleData.ts",
+    "matchesCurrent": true
+  },
+  {
+    "file": "lib/types.ts",
+    "matchesCurrent": true
+  },
+  {
+    "file": "app.js",
+    "matchesCurrent": false,
+    "reason": "semi-retirement integration hunks added"
+  },
+  {
+    "file": "styles.css",
+    "matchesCurrent": false,
+    "reason": "semi-retirement integration hunks added"
+  },
+  {
+    "file": "index.html",
+    "matchesCurrent": false,
+    "reason": "semi-retirement integration hunks added"
+  },
+  {
+    "file": "package.json",
+    "matchesCurrent": false,
+    "reason": "semi-retirement integration hunks added"
+  }
+]
