@@ -5,6 +5,628 @@
   --line: #e2e8f0;
   --success: #0f9f6e;
 }
+
+.semi-retirement-scenario {
+  display: grid;
+  gap: 16px;
+}
+
+.semi-retirement-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.semi-retirement-person-card h4,
+.semi-retirement-result-card h4 {
+  color: #0f2742;
+  font-size: 18px;
+  font-weight: 950;
+}
+
+.semi-retirement-field {
+  display: grid;
+  min-width: 0;
+}
+
+.semi-retirement-field .field-input[readonly] {
+  background: #f8fafc;
+  color: #334155;
+}
+
+.field-error {
+  margin-top: 6px;
+  color: #b42318;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.semi-retirement-validation ul,
+.semi-retirement-result-card ul {
+  margin-top: 8px;
+  display: grid;
+  gap: 4px;
+  padding-left: 18px;
+}
+
+.semi-retirement-result-card {
+  border: 1px solid #dbeafe;
+  border-radius: 18px;
+  background: #f8fbff;
+  padding: 18px;
+}
+
+.semi-retirement-warning {
+  display: grid;
+  gap: 4px;
+  border: 1px solid #bbf7d0;
+  border-radius: 16px;
+  background: #f0fdf4;
+  padding: 14px;
+  color: #14532d;
+}
+
+.semi-retirement-warning strong {
+  color: #0f2742;
+}
+
+.semi-retirement-results-dashboard {
+  display: grid;
+  gap: 18px;
+}
+
+.semi-retirement-disclaimer {
+  border: 1px solid #dbeafe;
+  border-radius: 14px;
+  background: #ffffff;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.5;
+  padding: 12px 14px;
+}
+
+.semi-retirement-status {
+  align-items: center;
+  border-radius: 18px;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 16px;
+}
+
+.semi-retirement-status h4 {
+  color: #0f2742;
+  font-size: 20px;
+  font-weight: 950;
+  line-height: 1.2;
+}
+
+.semi-retirement-status p {
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+  margin-top: 4px;
+}
+
+.semi-retirement-status.is-funded {
+  background: #ecfdf5;
+  border: 1px solid #bbf7d0;
+}
+
+.semi-retirement-status.is-shortfall {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+}
+
+.semi-retirement-adjustments {
+  background: #ffffff;
+  border: 1px solid #bfdbfe;
+  border-radius: 18px;
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.semi-retirement-adjustments > .card-subheading {
+  align-items: start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.semi-retirement-adjustment-layout {
+  display: grid;
+  gap: 14px;
+}
+
+.semi-retirement-adjustment-controls {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.semi-retirement-adjustment-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #f8fafc;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
+}
+
+.semi-retirement-adjustment-card.is-disabled {
+  background: #f1f5f9;
+}
+
+.semi-retirement-adjustment-heading {
+  align-items: start;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.semi-retirement-adjustment-heading span {
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 900;
+  padding: 4px 8px;
+}
+
+.semi-retirement-adjustment-range {
+  accent-color: #0f9f6e;
+  width: 100%;
+}
+
+.semi-retirement-adjustment-scale,
+.semi-retirement-adjustment-buttons {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.semi-retirement-adjustment-scale span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.semi-retirement-adjustment-buttons {
+  justify-content: flex-start;
+}
+
+.semi-retirement-impact-panel {
+  border: 1px solid #bbf7d0;
+  border-radius: 16px;
+  background: #f0fdf4;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
+}
+
+.semi-retirement-impact-panel > div {
+  align-items: start;
+  border-top: 1px solid rgba(15, 159, 110, 0.18);
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  padding-top: 10px;
+}
+
+.semi-retirement-impact-panel span {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.semi-retirement-impact-panel strong {
+  color: #0f2742;
+  font-size: 16px;
+  font-weight: 950;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+.semi-retirement-impact-panel small {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 800;
+  grid-column: 1 / -1;
+  line-height: 1.4;
+}
+
+.semi-retirement-impact-delta.is-positive {
+  color: #047857;
+}
+
+.semi-retirement-impact-delta.is-warning {
+  color: #b45309;
+}
+
+.semi-retirement-adjustment-state {
+  border-radius: 12px;
+  background: #ffffff;
+  color: #14532d;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+  padding: 10px;
+}
+
+.semi-retirement-adjustment-state.is-warning {
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.semi-retirement-results-section {
+  background: #ffffff;
+  border: 1px solid #dbeafe;
+  border-radius: 16px;
+  padding: 16px;
+}
+
+.semi-retirement-results-section > summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.semi-retirement-results-section > summary span {
+  display: grid;
+  min-width: 0;
+}
+
+.semi-retirement-results-section > summary strong,
+.semi-retirement-results-section h4 {
+  color: #0f2742;
+  font-size: 18px;
+  font-weight: 950;
+}
+
+.semi-retirement-results-section > summary small {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.semi-retirement-results-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin-top: 14px;
+}
+
+.semi-retirement-results-grid.compact {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.semi-retirement-metric-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #f8fafc;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px;
+}
+
+.semi-retirement-metric-card > span,
+.semi-retirement-person-values span,
+.semi-retirement-detail-rows span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.semi-retirement-metric-card strong {
+  color: #0f2742;
+  font-size: 22px;
+  font-weight: 950;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.semi-retirement-metric-card small {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.semi-retirement-metric-card.is-positive {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.semi-retirement-metric-card.is-warning,
+.semi-retirement-annual-table tr.has-warning,
+.semi-retirement-annual-card.has-warning {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.semi-retirement-debt-warning-list {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  margin-top: 14px;
+}
+
+.semi-retirement-debt-card,
+.semi-retirement-property-card {
+  align-content: start;
+}
+
+.semi-retirement-person-values {
+  display: grid;
+  gap: 8px;
+}
+
+.semi-retirement-person-values div,
+.semi-retirement-annual-detail section > div,
+.semi-retirement-assumption-grid div,
+.semi-retirement-annual-card > div:not(:first-child) {
+  align-items: start;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-width: 0;
+}
+
+.semi-retirement-person-values strong,
+.semi-retirement-annual-detail strong,
+.semi-retirement-assumption-grid strong,
+.semi-retirement-annual-card strong {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.semi-retirement-timeline {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin-top: 14px;
+  padding: 0;
+}
+
+.semi-retirement-timeline > li {
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(120px, 0.4fr) minmax(0, 1fr);
+  padding: 12px;
+}
+
+.semi-retirement-timeline > li.has-warning {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.semi-retirement-timeline > li > div,
+.semi-retirement-timeline ul {
+  display: grid;
+  gap: 4px;
+}
+
+.semi-retirement-timeline ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.semi-retirement-timeline span,
+.semi-retirement-timeline li li span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.semi-retirement-table-wrap {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  width: 100%;
+}
+
+.semi-retirement-annual-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+  min-width: 1420px;
+  width: 100%;
+}
+
+.semi-retirement-annual-table th,
+.semi-retirement-annual-table td {
+  border-bottom: 1px solid #e2e8f0;
+  color: #334155;
+  padding: 10px;
+  text-align: right;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.semi-retirement-annual-table th:first-child,
+.semi-retirement-annual-table td:first-child,
+.semi-retirement-annual-table th:nth-child(4),
+.semi-retirement-annual-table td:nth-child(4) {
+  text-align: left;
+}
+
+.semi-retirement-annual-table th {
+  background: #eff6ff;
+  color: #0f2742;
+  font-weight: 950;
+}
+
+.semi-retirement-annual-detail {
+  display: grid;
+  gap: 12px;
+  margin-top: 10px;
+  min-width: 420px;
+}
+
+.semi-retirement-annual-detail section {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.semi-retirement-annual-detail h5 {
+  color: #0f2742;
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.semi-retirement-annual-subgroup {
+  background: #eff6ff;
+}
+
+.semi-retirement-row-warning {
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  background: #fffbeb;
+  color: #92400e;
+  padding: 10px;
+}
+
+.semi-retirement-annual-cards {
+  display: none;
+}
+
+.semi-retirement-annual-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.semi-retirement-annual-card > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.semi-retirement-annual-card span,
+.semi-retirement-assumption-grid span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.semi-retirement-assumption-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.semi-retirement-notes ul {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  padding-left: 20px;
+}
+
+@media (min-width: 1024px) {
+  .semi-retirement-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .semi-retirement-adjustment-layout {
+    grid-template-columns: minmax(0, 1.35fr) minmax(260px, 0.65fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .semi-retirement-scenario {
+    gap: 12px;
+  }
+
+  .semi-retirement-result-card,
+  .semi-retirement-scenario .form-item-card {
+    padding: 14px;
+  }
+
+  .semi-retirement-scenario .planner-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .semi-retirement-status {
+    align-items: stretch;
+    display: grid;
+  }
+
+  .semi-retirement-adjustments > .card-subheading,
+  .semi-retirement-adjustment-heading,
+  .semi-retirement-impact-panel > div {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .semi-retirement-adjustment-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .semi-retirement-adjustment-heading span {
+    justify-self: start;
+  }
+
+  .semi-retirement-results-grid,
+  .semi-retirement-results-grid.compact,
+  .semi-retirement-assumption-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .semi-retirement-timeline > li {
+    grid-template-columns: 1fr;
+  }
+
+  .semi-retirement-table-wrap {
+    display: none;
+  }
+
+  .semi-retirement-annual-cards {
+    display: grid;
+    gap: 12px;
+  }
+
+  .semi-retirement-person-values div,
+  .semi-retirement-annual-detail section > div,
+  .semi-retirement-assumption-grid div,
+  .semi-retirement-annual-card > div:not(:first-child) {
+    grid-template-columns: 1fr;
+  }
+
+  .semi-retirement-person-values strong,
+  .semi-retirement-annual-detail strong,
+  .semi-retirement-assumption-grid strong,
+  .semi-retirement-annual-card strong {
+    text-align: left;
+  }
+
+  .semi-retirement-annual-detail {
+    min-width: 0;
+  }
+}
 .financial-progress-card,
 .financial-progress-controls,
 .financial-progress-editor,
