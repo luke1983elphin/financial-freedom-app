@@ -301,7 +301,7 @@ test("Stage C passive defaults are applied in the app when income types are norm
   assert.ok(appSource.includes("item.isPassiveIncome = false"));
 });
 
-test("Stage C dedicated Semi-Retirement tab is feature-gated and not rendered inside Decision Engine", () => {
+test("Stage C dedicated Semi-Retirement tab is not rendered inside Decision Engine", () => {
   assert.match(indexSource, /data-view="semiretirement"/);
   assert.match(indexSource, /data-semi-retirement-nav/);
   assert.equal((indexSource.match(/id="semiRetirementScenarioRoot"/g) || []).length, 1);
@@ -309,6 +309,8 @@ test("Stage C dedicated Semi-Retirement tab is feature-gated and not rendered in
   const scenarioStart = indexSource.indexOf('data-view-panel="semiretirement"');
   assert.ok(decisionStart >= 0 && scenarioStart > decisionStart);
   assert.equal(indexSource.slice(decisionStart, scenarioStart).includes("semiRetirementScenarioRoot"), false);
+  assert.equal(UI.isSemiRetirementUiEnabled(ENGINE), true);
+  assert.equal(UI.setSemiRetirementProjectionEnabledForDevelopment(false), false);
   assert.equal(UI.isSemiRetirementUiEnabled(ENGINE), false);
   assert.equal(UI.setSemiRetirementProjectionEnabledForDevelopment(true), true);
   assert.equal(UI.isSemiRetirementUiEnabled(ENGINE), true);

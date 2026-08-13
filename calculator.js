@@ -572,6 +572,40 @@
     return incomeCashAnnualAmount(item);
   }
 
+  function rentalCashIncomeAnnualAmount(item = {}) {
+    const explicitCashSource = rentalCashIncomeSource(item);
+    if (explicitCashSource !== undefined && explicitCashSource !== null && explicitCashSource !== "") {
+      return roundCurrency(annualize(explicitCashSource, item.rentalCashIncomeFrequency || item.cashIncomeFrequency || item.frequency || "annually"));
+    }
+    return null;
+  }
+
+  function rentalCashIncomeSource(item = {}) {
+    const candidates = [
+      item.rentalCashIncomeAnnual,
+      item.annualRentalCashIncome,
+      item.annualCashIncome,
+      item.cashIncome,
+      item.annualNetRentalCashIncome,
+    ];
+    return candidates.find((value) => value !== undefined && value !== null && value !== "");
+  }
+
+  function hasRentalCashIncomeAnnualAmount(item = {}) {
+    return rentalCashIncomeSource(item) !== undefined;
+  }
+
+  function rentalCashIncomeRequiredWarning(propertyIncome = {}) {
+    const propertyName = propertyIncome.propertyName || propertyIncome.name || "Rental property";
+    return {
+      code: "RENTAL_CASH_INCOME_REQUIRED",
+      incomeId: String(propertyIncome.id || ""),
+      linkedAssetId: String(propertyIncome.linkedAssetId || propertyIncome.linkedPropertyAssetId || propertyIncome.assetId || ""),
+      propertyName,
+      message: `Rental cash income required for ${propertyName}. The entered taxable rental profit cannot be used as the property's cash income. Enter the annual rental cash income used for cashflow projections.`,
+    };
+  }
+
   function incomeAllocation(item = {}) {
     const type = normaliseIncomeType(item.type || item.incomeType);
     const owner = normaliseIncomeOwner(item.owner || item.incomeOwner, type);
@@ -756,11 +790,35 @@
 
   function calculateRentalPropertyCashflow(propertyIncome = {}, linkedLoans = []) {
     const treatment = propertyIncome.rentalCashflowTreatment === "beforeInterest" ? "beforeInterest" : "afterInterest";
-    const annualNetRentalCashIncome = roundCurrency(annualize(propertyIncome.amount, propertyIncome.frequency || "annually"));
+    const hasRentalCashIncome = hasRentalCashIncomeAnnualAmount(propertyIncome);
+    const annualNetRentalCashIncome = hasRentalCashIncome ? rentalCashIncomeAnnualAmount(propertyIncome) : null;
     const loanBreakdowns = linkedLoans.map(getAnnualLoanBreakdown);
     const annualLoanRepayments = roundCurrency(loanBreakdowns.reduce((total, item) => total + item.annualRepayments, 0));
     const annualLoanInterest = roundCurrency(loanBreakdowns.reduce((total, item) => total + item.annualInterest, 0));
     const annualLoanPrincipal = roundCurrency(loanBreakdowns.reduce((total, item) => total + item.annualPrincipal, 0));
+    const cashIncomeWarnings = hasRentalCashIncome ? [] : [rentalCashIncomeRequiredWarning(propertyIncome)];
+    if (!hasRentalCashIncome) {
+      return {
+        id: propertyIncome.id || "",
+        name: propertyIncome.propertyName || propertyIncome.name || "Rental property",
+        owner: normaliseIncomeOwner(propertyIncome.owner, propertyIncome.type),
+        treatment,
+        hasRentalCashIncome: false,
+        annualNetRentalCashIncome,
+        linkedLoanCount: linkedLoans.length,
+        linkedLoanIds: linkedLoans.map((loan) => loan.id).filter(Boolean),
+        loanBreakdowns,
+        annualLoanRepayments,
+        annualLoanInterest,
+        annualLoanPrincipal,
+        householdDebtDeduction: 0,
+        rentalPassiveIncomeBeforePrincipal: 0,
+        rentalPrincipalRepayments: 0,
+        rentalHouseholdCashflowAfterPrincipal: 0,
+        householdCashflowContribution: 0,
+        warnings: cashIncomeWarnings,
+      };
+    }
     const householdDebtDeduction = treatment === "beforeInterest" ? annualLoanRepayments : annualLoanPrincipal;
     const rentalPassiveIncomeBeforePrincipal = roundCurrency(treatment === "beforeInterest"
       ? annualNetRentalCashIncome - annualLoanInterest
@@ -784,6 +842,8 @@
       rentalPrincipalRepayments,
       rentalHouseholdCashflowAfterPrincipal,
       householdCashflowContribution: rentalHouseholdCashflowAfterPrincipal,
+      hasRentalCashIncome: true,
+      warnings: [],
     };
   }
 
@@ -807,6 +867,9 @@
         return true;
       });
       return calculateRentalPropertyCashflow(income, linkedLoans);
+    });
+    propertyResults.forEach((property) => {
+      (property.warnings || []).forEach((warning) => warnings.push(warning.message || warning.code || String(warning)));
     });
 
     const unlinkedRentalLoans = rentalLoans.filter((loan) => loan.id && !usedLoanIds.has(loan.id));
@@ -1501,61 +1564,79 @@
     };
   }
 
-  function rateFromPercentOrDecimal(value) {
+  function rateFromPercentageField(value) {
     if (value === null || value === undefined || value === "") return null;
     const parsed = number(value);
     if (!Number.isFinite(parsed)) return null;
-    const rate = Math.abs(parsed) > 1 ? parsed / 100 : parsed;
+    const rate = parsed / 100;
     return rate < -1 ? null : rate;
+  }
+
+  function rateFromDecimalField(value) {
+    if (value === null || value === undefined || value === "") return null;
+    const parsed = number(value);
+    if (!Number.isFinite(parsed)) return null;
+    return parsed < -1 ? null : parsed;
+  }
+
+  function firstFieldContractRate(candidates = []) {
+    for (const candidate of candidates) {
+      if (!candidate) continue;
+      const rate = candidate.unit === "percent"
+        ? rateFromPercentageField(candidate.value)
+        : rateFromDecimalField(candidate.value);
+      if (rate !== null) return rate;
+    }
+    return null;
   }
 
   function propertyGrowthRateForAsset(plan = {}, asset = {}) {
     const candidates = [
-      asset.propertyGrowthRatePct,
-      asset.propertyGrowthRate,
-      asset.capitalGrowthRatePct,
-      asset.capitalGrowthRate,
-      asset.expectedGrowthRatePct,
-      asset.expectedGrowthRate,
-      asset.growthRatePct,
-      asset.growthRate,
-      plan.investing?.investmentPropertyGrowthRatePct,
-      plan.investing?.investmentPropertyGrowthRate,
-      plan.investing?.propertyGrowthRatePct,
-      plan.investing?.propertyGrowthRate,
-      plan.assumptions?.investmentPropertyGrowthRatePct,
-      plan.assumptions?.investmentPropertyGrowthRate,
-      plan.assumptions?.propertyGrowthRatePct,
-      plan.assumptions?.propertyGrowthRate,
+      { value: asset.propertyGrowthRatePct, unit: "percent" },
+      { value: asset.capitalGrowthRatePct, unit: "percent" },
+      { value: asset.expectedGrowthRatePct, unit: "percent" },
+      { value: asset.growthRatePct, unit: "percent" },
+      { value: asset.propertyGrowthRate, unit: "decimal" },
+      { value: asset.capitalGrowthRate, unit: "decimal" },
+      { value: asset.expectedGrowthRate, unit: "decimal" },
+      { value: asset.growthRate, unit: "decimal" },
+      { value: plan.investing?.investmentPropertyGrowthRatePct, unit: "percent" },
+      { value: plan.investing?.propertyGrowthRatePct, unit: "percent" },
+      { value: plan.assumptions?.investmentPropertyGrowthRatePct, unit: "percent" },
+      { value: plan.assumptions?.propertyGrowthRatePct, unit: "percent" },
+      { value: plan.investing?.investmentPropertyGrowthRate, unit: "decimal" },
+      { value: plan.investing?.propertyGrowthRate, unit: "decimal" },
+      { value: plan.assumptions?.investmentPropertyGrowthRate, unit: "decimal" },
+      { value: plan.assumptions?.propertyGrowthRate, unit: "decimal" },
     ];
-    const configuredRate = candidates.map(rateFromPercentOrDecimal).find((rate) => rate !== null);
+    const configuredRate = firstFieldContractRate(candidates);
     return configuredRate ?? DEFAULT_INVESTMENT_PROPERTY_GROWTH_RATE;
   }
 
   function principalResidenceGrowthRateForAsset(plan = {}, asset = {}) {
     const candidates = [
-      asset.principalResidenceGrowthRatePct,
-      asset.principalResidenceGrowthRate,
-      asset.homeGrowthRatePct,
-      asset.homeGrowthRate,
-      asset.propertyGrowthRatePct,
-      asset.propertyGrowthRate,
-      asset.capitalGrowthRatePct,
-      asset.capitalGrowthRate,
-      asset.expectedGrowthRatePct,
-      asset.expectedGrowthRate,
-      asset.growthRatePct,
-      asset.growthRate,
-      plan.investing?.principalResidenceGrowthRatePct,
-      plan.investing?.principalResidenceGrowthRate,
-      plan.investing?.homeGrowthRatePct,
-      plan.investing?.homeGrowthRate,
-      plan.assumptions?.principalResidenceGrowthRatePct,
-      plan.assumptions?.principalResidenceGrowthRate,
-      plan.assumptions?.homeGrowthRatePct,
-      plan.assumptions?.homeGrowthRate,
+      { value: asset.principalResidenceGrowthRatePct, unit: "percent" },
+      { value: asset.homeGrowthRatePct, unit: "percent" },
+      { value: asset.propertyGrowthRatePct, unit: "percent" },
+      { value: asset.capitalGrowthRatePct, unit: "percent" },
+      { value: asset.expectedGrowthRatePct, unit: "percent" },
+      { value: asset.growthRatePct, unit: "percent" },
+      { value: asset.principalResidenceGrowthRate, unit: "decimal" },
+      { value: asset.homeGrowthRate, unit: "decimal" },
+      { value: asset.propertyGrowthRate, unit: "decimal" },
+      { value: asset.capitalGrowthRate, unit: "decimal" },
+      { value: asset.expectedGrowthRate, unit: "decimal" },
+      { value: asset.growthRate, unit: "decimal" },
+      { value: plan.investing?.principalResidenceGrowthRatePct, unit: "percent" },
+      { value: plan.investing?.homeGrowthRatePct, unit: "percent" },
+      { value: plan.assumptions?.principalResidenceGrowthRatePct, unit: "percent" },
+      { value: plan.assumptions?.homeGrowthRatePct, unit: "percent" },
+      { value: plan.investing?.principalResidenceGrowthRate, unit: "decimal" },
+      { value: plan.investing?.homeGrowthRate, unit: "decimal" },
+      { value: plan.assumptions?.principalResidenceGrowthRate, unit: "decimal" },
+      { value: plan.assumptions?.homeGrowthRate, unit: "decimal" },
     ];
-    const configuredRate = candidates.map(rateFromPercentOrDecimal).find((rate) => rate !== null);
+    const configuredRate = firstFieldContractRate(candidates);
     return configuredRate ?? DEFAULT_PRINCIPAL_RESIDENCE_GROWTH_RATE;
   }
 
@@ -2340,6 +2421,14 @@
     qualifyingEarningsAnnualAmount,
     calculateEmployerSuperForPerson,
     employerSuperSummary,
+    normaliseIncomeType,
+    normaliseIncomeOwner,
+    normalisedIncomeItems,
+    incomeCashAnnualAmount,
+    incomeTaxableAnnualAmount,
+    incomeAllocation,
+    rentalCashIncomeAnnualAmount,
+    hasRentalCashIncomeAnnualAmount,
     incomeBreakdown,
     getAnnualLoanBreakdown,
     calculateRentalPropertyCashflow,

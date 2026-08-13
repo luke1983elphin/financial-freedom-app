@@ -152,17 +152,18 @@ function semiRetirementWithdrawalScenario(mutator = () => {}) {
   });
 }
 
-test("Stage 2 feature flag remains off by default and the UI mount is gated", () => {
-  assert.equal(ENGINE.featureFlags.semiRetirementProjectionEnabled, false);
-  assert.equal(UI.isSemiRetirementUiEnabled(ENGINE), false);
+test("Stage 2 feature flag is enabled by default and the UI mount still has an unavailable-state guard", () => {
+  assert.equal(ENGINE.featureFlags.semiRetirementProjectionEnabled, true);
+  assert.equal(UI.isSemiRetirementUiEnabled(ENGINE), true);
   assert.match(indexSource, /id="semiRetirementScenarioRoot"/);
   assert.match(appSource, /if \(!semiRetirementUiEnabled\(\)\) \{/);
 });
 
-test("Stage 2 interface can be enabled by the existing engine feature flag", () => {
+test("Stage 2 interface can be disabled and re-enabled by the existing engine feature flag", () => {
+  ENGINE.featureFlags.semiRetirementProjectionEnabled = false;
+  assert.equal(UI.isSemiRetirementUiEnabled(ENGINE), false);
   ENGINE.featureFlags.semiRetirementProjectionEnabled = true;
   assert.equal(UI.isSemiRetirementUiEnabled(ENGINE), true);
-  ENGINE.featureFlags.semiRetirementProjectionEnabled = false;
 });
 
 test("current app values populate scenario defaults where they are reliable", () => {

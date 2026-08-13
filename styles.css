@@ -272,6 +272,7 @@
   background: #ffffff;
   border: 1px solid #dbeafe;
   border-radius: 16px;
+  overflow: hidden;
   padding: 16px;
 }
 
@@ -442,7 +443,27 @@
 .semi-retirement-table-wrap {
   overflow-x: auto;
   overscroll-behavior-x: contain;
+  max-width: 100%;
   width: 100%;
+}
+
+.semi-retirement-projection-scroll {
+  background: linear-gradient(90deg, #ffffff 0%, #ffffff 88%, rgba(14, 165, 233, 0.08) 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  outline-offset: 3px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.semi-retirement-projection-scroll:focus-visible {
+  outline: 3px solid rgba(14, 165, 233, 0.35);
+}
+
+.semi-retirement-scroll-cue {
+  color: #475569;
+  font-size: 13px;
+  font-weight: 750;
+  margin-top: 12px;
 }
 
 .semi-retirement-annual-table {
@@ -1264,6 +1285,12 @@ main {
 .nav-button.active {
   background: #eff6ff;
   color: #0f2742;
+}
+
+.nav-button-optional {
+  box-shadow: inset 0 1px 0 #e2e8f0;
+  margin-top: 8px;
+  padding-top: 10px;
 }
 
 .premium-hero {

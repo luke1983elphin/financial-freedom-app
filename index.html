@@ -187,16 +187,17 @@
             <nav class="workspace-nav rounded-3xl border border-line bg-white p-3 shadow-soft lg:sticky lg:top-24 lg:h-fit">
               <p class="nav-title">Plan workspace</p>
               <div class="grid gap-1" id="sideNav">
-                <button class="nav-button" type="button" data-view="setup" id="setupNavButton">Setup Wizard</button>
                 <button class="nav-button active" type="button" data-view="dashboard">Dashboard</button>
-                <button class="nav-button" type="button" data-view="weeklyplan">Weekly Plan</button>
+                <button class="nav-button" type="button" data-view="setup" id="setupNavButton">Setup Wizard</button>
                 <button class="nav-button" type="button" data-view="investments">Investments</button>
                 <button class="nav-button" type="button" data-view="goals">Goals</button>
-                <button class="nav-button" type="button" data-engagement-action="ai">AI Coach</button>
                 <button class="nav-button" type="button" data-view="super">Super</button>
                 <button class="nav-button" type="button" data-view="decision">Decision Engine</button>
+                <button class="nav-button" type="button" data-view="semiretirement" data-semi-retirement-nav>Semi-Retirement</button>
                 <button class="nav-button" type="button" data-view="reports">Reports</button>
                 <button class="nav-button" type="button" data-view="scenarios">Saved Scenarios</button>
+                <button class="nav-button" type="button" data-engagement-action="ai">AI Coach</button>
+                <button class="nav-button nav-button-optional" type="button" data-view="weeklyplan">Weekly Plan</button>
               </div>
             </nav>
 
@@ -586,7 +587,14 @@
                   </div>
                   <div id="comparisonSummary" class="summary-grid mt-4"></div>
                 </article>
-                <div id="semiRetirementScenarioRoot" class="mt-6"></div>
+              </section>
+
+              <section class="view-section hidden" data-view-panel="semiretirement">
+                <div class="section-heading">
+                  <h2>Semi-Retirement & Retirement Scenario</h2>
+                  <p>Explore how reducing work, drawing from accessible investments and retiring at different ages may affect future retirement assets.</p>
+                </div>
+                <div id="semiRetirementScenarioRoot"></div>
               </section>
 
               <section class="view-section hidden" data-view-panel="scenarios">

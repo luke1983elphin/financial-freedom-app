@@ -160,9 +160,9 @@ function assertSuperReconciliation(row) {
   });
 }
 
-test("semi-retirement projection is feature-flagged off by default", () => {
+test("semi-retirement projection is enabled by default for normal users", () => {
   const { ENGINE } = loadProjectionEngine();
-  assert.equal(ENGINE.featureFlags.semiRetirementProjectionEnabled, false);
+  assert.equal(ENGINE.featureFlags.semiRetirementProjectionEnabled, true);
   assert.equal(typeof ENGINE.projectRetirementScenario, "function");
 });
 
