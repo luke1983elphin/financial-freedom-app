@@ -1506,12 +1506,6 @@
         item.rentalCashflowTreatment = item.rentalCashflowTreatment === "beforeInterest" ? "beforeInterest" : "afterInterest";
         if (!Array.isArray(item.linkedLoanIds)) item.linkedLoanIds = item.linkedLoanId ? [item.linkedLoanId] : [];
       }
-      if (["interest", "dividends", "rentalNetCashIncome", "distributions"].includes(item.type)) {
-        item.isPassiveIncome = true;
-      }
-      if (item.type === "salaryWages") {
-        item.isPassiveIncome = false;
-      }
       if (item.type === "dividends") {
         const grossedUp = Number(item.totalTaxableGrossedUpDividend ?? item.grossedUpDividend) || 0;
         const cashDividend = Number(item.cashDividend) || 0;
@@ -1621,22 +1615,7 @@
       if (item.type !== "rentalNetCashIncome") return;
       item.frequency = "annually";
       item.rentalCashflowTreatment = item.rentalCashflowTreatment === "beforeInterest" ? "beforeInterest" : "afterInterest";
-      const linkedAssetId = String(item.linkedAssetId || item.linkedPropertyAssetId || "");
-      const deterministicLoanIds = plan.liabilityItems
-        .filter((loan) => loan.type === "rentalPropertyLoan")
-        .filter((loan) => {
-          const loanLinkedAssetId = String(loan.linkedAssetId || loan.investmentLink?.linkedAssetId || "");
-          return linkedAssetId && loanLinkedAssetId && loanLinkedAssetId === linkedAssetId;
-        })
-        .map((loan) => String(loan.id));
-      item.linkedLoanIds = Array.from(new Set([...linkedLoanIds(item), ...deterministicLoanIds]))
-        .filter((id) => rentalLoanIds.has(id))
-        .filter((id) => {
-          const loan = plan.liabilityItems.find((candidate) => String(candidate.id) === String(id));
-          const loanLinkedAssetId = String(loan?.linkedAssetId || loan?.investmentLink?.linkedAssetId || "");
-          return !linkedAssetId || !loanLinkedAssetId || linkedAssetId === loanLinkedAssetId || String(loan?.linkedRentalIncomeId || "") === String(item.id || "");
-        });
-      item.linkedLoanId = item.linkedLoanIds.length === 1 ? item.linkedLoanIds[0] : "";
+      item.linkedLoanIds = linkedLoanIds(item).filter((id) => rentalLoanIds.has(id));
     });
     plan.liabilityItems.forEach((item) => {
       if (item.type === "rentalPropertyLoan") {
@@ -1652,17 +1631,6 @@
         const linkedIncome = item.linkedRentalIncomeId ? rentalIncomeById.get(String(item.linkedRentalIncomeId)) : null;
         if (linkedIncome && item.id && !linkedLoanIds(linkedIncome).includes(String(item.id))) {
           linkedIncome.linkedLoanIds = [...linkedLoanIds(linkedIncome), String(item.id)];
-        }
-        const linkedAssetId = String(item.linkedAssetId || item.investmentLink?.linkedAssetId || "");
-        if (linkedAssetId) {
-          plan.incomeItems.forEach((income) => {
-            if (income.type !== "rentalNetCashIncome") return;
-            if (String(income.linkedAssetId || income.linkedPropertyAssetId || "") !== linkedAssetId) return;
-            if (item.id && !linkedLoanIds(income).includes(String(item.id))) {
-              income.linkedLoanIds = [...linkedLoanIds(income), String(item.id)];
-              income.linkedLoanId = income.linkedLoanIds.length === 1 ? income.linkedLoanIds[0] : "";
-            }
-          });
         }
       }
       if (item.type === "investmentLoan") {
@@ -4002,9 +3970,6 @@
       super: "super",
       "decision-engine": "decision",
       decision: "decision",
-      "semi-retirement": "semiretirement",
-      semiretirement: "semiretirement",
-      "retirement-scenario": "semiretirement",
       reports: "reports",
       scenarios: "scenarios",
       "saved-scenarios": "scenarios",
@@ -4018,10 +3983,6 @@
 
   function navigateToSection(sectionId, options = {}) {
     const target = normaliseNavigationTarget(sectionId);
-    if (target === "semiretirement" && !semiRetirementUiEnabled()) {
-      updateSaveStatus("Semi-Retirement is available only when the private projection beta is enabled.");
-      return false;
-    }
     if (target === "ai") {
       if (aiInsightsConfig.enabled) openAiInsights();
       else updateSaveStatus("AI Insights private beta is not enabled in this environment.");
@@ -4054,7 +4015,6 @@
       forecast: "dashboard",
     };
     view = viewAliases[view] || view;
-    if (view === "semiretirement" && !semiRetirementUiEnabled()) view = "decision";
     const targetPanel = document.querySelector(`[data-view-panel="${view}"]`);
     if (!targetPanel) {
       console.error(`Navigation target not found: ${view}`);
@@ -4071,16 +4031,6 @@
     });
     if (view === "setup") renderWizardStep();
     return true;
-  }
-
-  function updateSemiRetirementNavigation() {
-    const enabled = semiRetirementUiEnabled();
-    document.querySelectorAll("[data-semi-retirement-nav]").forEach((button) => {
-      button.classList.toggle("hidden", !enabled);
-      button.disabled = !enabled;
-      button.setAttribute("aria-hidden", enabled ? "false" : "true");
-    });
-    if (!enabled && activeView === "semiretirement") setView("decision");
   }
 
   function optionsHtml(selected) {
@@ -4430,19 +4380,6 @@
     item.owner = owner;
     const typeLabel = incomeTypeLabels[type] || "Income";
     const ownerLabel = owner === "joint" ? "Joint" : personDisplayName(owner === "person2" ? 2 : 1);
-    const hasRentalCashInput = [
-      item.rentalCashIncomeAnnual,
-      item.annualRentalCashIncome,
-      item.annualCashIncome,
-      item.cashIncome,
-      item.annualNetRentalCashIncome,
-    ].some((value) => value !== undefined && value !== null && value !== "");
-    const rentalCashHelpText = item.rentalCashflowTreatment === "beforeInterest"
-      ? "Enter the expected annual property cash income before loan interest and principal repayments."
-      : "Enter the expected annual property cash income after loan interest and before principal repayments.";
-    const rentalCashInputNote = type === "rentalNetCashIncome"
-      ? `<p class="${hasRentalCashInput ? "field-help" : "tax-note"} mt-3">${hasRentalCashInput ? "" : "<strong>Rental cash income required for semi-retirement cashflow:</strong> "}${escapeHtml(rentalCashHelpText)} This is separate from taxable rental profit.</p>`
-      : "";
     const incomeFields = type === "rentalNetCashIncome" ? `
           ${dynamicInput("incomeItems", item, "name", "Income description", { kind: "text", placeholder: "e.g. Rental property cashflow" })}
           ${dynamicInput("incomeItems", item, "type", "Income type", { type: "select", options: incomeTypeOptions, infoKey: "rentalNetCashIncome" })}
@@ -4451,8 +4388,6 @@
           ${dynamicInput("incomeItems", item, "owner", "Income owner", { type: "select", options: incomeOwnerOptions(type) })}
           ${incomeAllocationFields(item, owner)}
           ${dynamicInput("incomeItems", item, "amount", "Annual net taxable profit after deductible interest", { step: "100", infoKey: "rentalNetCashIncome" })}
-          ${dynamicInput("incomeItems", item, "rentalCashIncomeAnnual", "Annual rental cash income for cashflow", { step: "100", placeholder: "Required for semi-retirement cashflow" })}
-          ${rentalCashInputNote}
           ${dynamicInput("incomeItems", item, "rentalCashflowTreatment", "Rental cashflow treatment", { type: "select", options: rentalCashflowTreatmentOptions })}
           ${dynamicInput("incomeItems", item, "note", "Optional notes", { kind: "text", placeholder: "Optional context" })}
         ` : type === "dividends" ? `
@@ -6940,46 +6875,6 @@
     `;
   }
 
-  function renderSemiRetirementPassiveIncomeHtml(viewModel) {
-    const passive = viewModel.passiveIncome || {};
-    if (!passive.isAvailable) return "";
-    const sourceRows = passive.sourceRows || [];
-    const personRows = passive.personRows || [];
-    return `
-      <details class="semi-retirement-results-section" open>
-        <summary>
-          <span><strong>Passive Income & Taxable Income</strong><small>${escapeHtml(passive.calendarYear ? `${passive.calendarYear} - ${passive.householdPhaseLabel}` : "Projection income breakdown")}</small></span>
-          <span>Expand</span>
-        </summary>
-        <p class="field-help mt-3">Passive taxable income is allocated by owner and included in each person's projected tax calculation. Rental cashflow is shown separately from taxable rental income.</p>
-        <div class="semi-retirement-results-grid compact mt-4">
-          ${sourceRows.map((row) => semiRetirementMetricCard(row.label, semiRetirementMoney(row.taxableIncome), row.cashIncome !== row.taxableIncome ? `Cash income: ${semiRetirementMoney(row.cashIncome)}` : "Taxable income included in the projection")).join("")}
-          ${semiRetirementMetricCard("Total passive taxable income", semiRetirementMoney(passive.totalPassiveTaxableIncome), "Household total allocated across people.")}
-          ${semiRetirementMetricCard("Passive cash income", semiRetirementMoney(passive.totalPassiveCashIncome), "Cash receipts before tax, excluding rental cashflow already shown in property cashflow.")}
-        </div>
-        <div class="semi-retirement-results-grid mt-4">
-          ${personRows.map((person) => `
-            <article class="semi-retirement-metric-card">
-              <span>Taxable income by person</span>
-              <strong>${escapeHtml(person.name || person.id)}</strong>
-              <div class="semi-retirement-person-values">
-                <div><span>Employment</span><strong>${semiRetirementMoney(person.employmentIncome)}</strong></div>
-                <div><span>Interest</span><strong>${semiRetirementMoney(person.interestIncome)}</strong></div>
-                <div><span>Dividends</span><strong>${semiRetirementMoney(person.dividendIncome)}</strong></div>
-                <div><span>Rental income</span><strong>${semiRetirementMoney(person.rentalTaxableIncome)}</strong></div>
-                <div><span>Distributions</span><strong>${semiRetirementMoney(person.distributionIncome)}</strong></div>
-                <div><span>Other taxable income</span><strong>${semiRetirementMoney(person.otherTaxableIncome)}</strong></div>
-                <div><span>Total taxable income</span><strong>${semiRetirementMoney(person.totalTaxableIncome)}</strong></div>
-                <div><span>Estimated tax</span><strong>${semiRetirementMoney(person.incomeTax + person.medicareLevy + person.medicareLevySurcharge + person.stslRepayment)}</strong></div>
-                <div><span>Net cash income</span><strong>${semiRetirementMoney(person.netIncome)}</strong></div>
-              </div>
-            </article>
-          `).join("")}
-        </div>
-      </details>
-    `;
-  }
-
   function renderSemiRetirementDebtWarningsHtml(debtProperty = {}) {
     const negative = debtProperty.warnings?.negativeAmortisation || [];
     const balloons = debtProperty.warnings?.balloonRepayments || [];
@@ -7030,7 +6925,6 @@
   }
 
   function renderSemiRetirementPropertyCard(card) {
-    const warningRows = (card.warnings || []).map((warning) => `<p class="tax-note mt-3">${escapeHtml(warning)}</p>`).join("");
     return `
       <article class="semi-retirement-metric-card semi-retirement-property-card ${card.cashflowTone === "warning" ? "is-warning" : "is-positive"}">
         <span>Rental / Investment Property</span>
@@ -7042,10 +6936,8 @@
           <div><span>Linked property debt</span><strong>${semiRetirementMoney(card.linkedPropertyDebt)}</strong></div>
           <div><span>Projected property equity</span><strong>${semiRetirementMoney(card.projectedPropertyEquity)}</strong></div>
           <div><span>Rental cash income</span><strong>${semiRetirementMoney(card.rentalCashIncome)} p.a.</strong></div>
-          <div><span>Taxable rental income</span><strong>${semiRetirementMoney(card.taxableRentalIncome)} p.a.</strong></div>
           <div><span>Net property cashflow</span><strong>${semiRetirementSignedMoney(card.netPropertyCashflow, " p.a.")}</strong></div>
         </div>
-        ${warningRows}
         <p class="field-help">${escapeHtml(card.growthRateSourceLabel || "Based on the selected assumptions.")}. Property equity contributes to projected net worth but is not treated as available retirement spending unless a future property sale is modelled.</p>
       </article>
     `;
@@ -7146,27 +7038,18 @@
           { label: "Capital growth assumption", value: semiRetirementAssumptionValue({ value: property.annualGrowthRate, type: "percentRate" }) },
           { label: "Growth", value: semiRetirementMoney(property.propertyGrowth) },
           { label: "Closing property value", value: semiRetirementMoney(property.closingValue) },
-          Number(property.baseRentalCashIncome || 0) && Number(property.baseRentalCashIncome || 0) !== Number(property.rentalCashIncome ?? property.grossRentalIncome ?? 0)
-            ? { label: "Base rental cash income", value: semiRetirementMoney(property.baseRentalCashIncome) }
-            : null,
-          property.rentalCashIncomeGrowthSource === "cpi"
-            ? { label: "Rental cash income growth", value: "CPI" }
-            : null,
           { label: "Rental cash income", value: semiRetirementMoney(property.rentalCashIncome ?? property.grossRentalIncome) },
-          { label: "Taxable rental income", value: semiRetirementMoney(property.taxableRentalIncome) },
           { label: "Loan interest", value: semiRetirementMoney(property.loanInterest) },
           { label: "Loan principal", value: semiRetirementMoney(property.loanPrincipal) },
           { label: "Net property cashflow", value: semiRetirementSignedMoney(property.netPropertyCashflow) },
           { label: "Linked loan balance", value: semiRetirementMoney(property.linkedLoanClosingBalance) },
           { label: "Property equity", value: semiRetirementMoney(property.propertyEquity) },
-        ].filter(Boolean))}
+        ])}
       </section>
     `).join("");
     const householdRows = [
       ["Projected spending", semiRetirementMoney(household.applicableLifestyleSpending)],
       ["Other income", semiRetirementMoney(household.otherIncome)],
-      ["Passive taxable income", semiRetirementMoney(household.totalPassiveTaxableIncome)],
-      ["Passive cash income", semiRetirementMoney(household.totalPassiveCashIncome)],
       ["Net household cash income", semiRetirementMoney(household.netHouseholdCashIncome)],
       ["Cash surplus or shortfall", semiRetirementMoney(household.cashSurplusOrShortfall)],
       ["Total debt", semiRetirementMoney(household.totalDebt)],
@@ -7196,16 +7079,11 @@
             ${semiRetirementDetailRows([
               { label: "Employment phase", value: person.employmentPhaseLabel },
               { label: "Gross employment income", value: semiRetirementMoney(person.grossEmploymentIncome) },
-              { label: "Interest income", value: semiRetirementMoney(person.interestIncome) },
-              { label: "Dividend income", value: semiRetirementMoney(person.dividendIncome) },
-              { label: "Rental taxable income", value: semiRetirementMoney(person.rentalTaxableIncome) },
-              { label: "Distribution income", value: semiRetirementMoney(person.distributionIncome) },
-              { label: "Total taxable income", value: semiRetirementMoney(person.totalTaxableIncome) },
               { label: "Income tax", value: semiRetirementMoney(person.incomeTax) },
               { label: "Medicare", value: semiRetirementMoney(person.medicareLevy) },
               { label: "Medicare Levy Surcharge", value: semiRetirementMoney(person.medicareLevySurcharge) },
               { label: "STSL", value: semiRetirementMoney(person.stslRepayment) },
-              { label: "Net cash income", value: semiRetirementMoney(person.netIncome ?? person.netEmploymentIncome) },
+              { label: "Net employment income", value: semiRetirementMoney(person.netEmploymentIncome) },
               { label: "Employer super", value: semiRetirementMoney(person.employerSuperContribution) },
               { label: "Additional super contribution", value: semiRetirementMoney(person.additionalSuperContribution) },
               { label: "Opening super", value: semiRetirementMoney(person.openingSuperBalance) },
@@ -7239,7 +7117,7 @@
           <table class="semi-retirement-annual-table">
             <thead>
               <tr>
-                <th>Year</th><th>Person 1 age</th><th>Person 2 age</th><th>Household phase</th><th>Net cash income</th><th>Projected spending</th><th>Accessible withdrawal</th><th>Accessible investments</th><th>Super</th><th>Total investable assets</th><th>Total debt</th><th>Net rental cashflow</th><th>Projected net worth</th><th>Unfunded spending</th><th>Details</th>
+                <th>Year</th><th>Person 1 age</th><th>Person 2 age</th><th>Household phase</th><th>Net employment income</th><th>Projected spending</th><th>Accessible withdrawal</th><th>Accessible investments</th><th>Super</th><th>Total investable assets</th><th>Total debt</th><th>Net rental cashflow</th><th>Projected net worth</th><th>Unfunded spending</th><th>Details</th>
               </tr>
             </thead>
             <tbody>
@@ -7358,7 +7236,6 @@
         ${renderSemiRetirementTimelineHtml(viewModel)}
         ${renderSemiRetirementLongevityHtml(viewModel)}
         ${renderSemiRetirementFundingHtml(viewModel)}
-        ${renderSemiRetirementPassiveIncomeHtml(viewModel)}
         ${renderSemiRetirementDebtPropertyHtml(viewModel)}
         ${renderSemiRetirementAnnualProjectionHtml(viewModel)}
         ${renderSemiRetirementAssumptionsHtml(viewModel)}
@@ -7451,6 +7328,7 @@
         </div>
       </article>
     `).join("");
+    renderSemiRetirementScenario(result);
   }
 
   function updateSemiRetirementDraftFromInput(target) {
@@ -11497,7 +11375,6 @@
       updateSetupNavigationLabel();
       updatePersonDependentLabels();
       updateSaveStatus();
-      updateSemiRetirementNavigation();
     });
     safeRenderModule("Engagement Home", () => renderEngagementHome(result));
     safeRenderModule("Home preview", () => updatePreview(result));
@@ -11512,7 +11389,6 @@
     safeRenderModule("Forecast", () => renderForecast(result));
     safeRenderModule("Goals", () => renderGoalsSummary(result));
     safeRenderModule("Decision Engine", () => renderDecision(result));
-    safeRenderModule("Semi-Retirement", () => renderSemiRetirementScenario(result));
     safeRenderModule("Saved Scenarios", () => renderScenarios());
     safeRenderModule("Reports", () => renderReports(result));
     safeRenderModule("Weekly Plan", () => renderWeeklyPlan(result));
@@ -11868,14 +11744,11 @@
         if (target.dataset.collection === "incomeItems") {
           item.type = normaliseIncomeType(item.type, plan.incomeItems.indexOf(item));
           item.owner = normaliseIncomeOwner(item.owner, item.type, plan.incomeItems.indexOf(item));
-          if (["interest", "dividends", "rentalNetCashIncome", "distributions"].includes(item.type)) item.isPassiveIncome = true;
-          if (item.type === "salaryWages") item.isPassiveIncome = false;
           if (item.type === "rentalNetCashIncome") {
             item.frequency = "annually";
             item.rentalCashflowTreatment = item.rentalCashflowTreatment === "beforeInterest" ? "beforeInterest" : "afterInterest";
             if (!Array.isArray(item.linkedLoanIds)) item.linkedLoanIds = linkedLoanIds(item);
           }
-          normaliseRentalPropertyData();
         }
         if (target.dataset.collection === "liabilityItems") {
           if (item.type === "rentalPropertyLoan") {
@@ -11913,7 +11786,7 @@
           renderAll();
           return;
         }
-        if (target.dataset.collection === "incomeItems" && (target.dataset.key === "type" || target.dataset.key === "owner" || target.dataset.key === "linkedAssetId")) {
+        if (target.dataset.collection === "incomeItems" && (target.dataset.key === "type" || target.dataset.key === "owner")) {
           renderAll();
           return;
         }

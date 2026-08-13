@@ -318,15 +318,14 @@ test("Stage A semi-retirement defaults map property data and do not double count
   plan.incomeItems = [
     { id: "salary", type: "salaryWages", owner: "person1", amount: 100000, frequency: "annually" },
     { id: "interest", type: "interest", owner: "person1", amount: 2000, frequency: "annually" },
-    { id: "rent", type: "rentalNetCashIncome", owner: "joint", amount: 10000, rentalCashIncomeAnnual: 10000, frequency: "annually", linkedAssetId: "rental", linkedLoanIds: ["rental-loan"], rentalCashflowTreatment: "afterInterest" },
+    { id: "rent", type: "rentalNetCashIncome", owner: "joint", amount: 10000, frequency: "annually", linkedAssetId: "rental", linkedLoanIds: ["rental-loan"], rentalCashflowTreatment: "afterInterest" },
   ];
   plan.assetItems = [{ id: "rental", category: "rentalInvestmentProperty", value: 500000 }];
   plan.liabilityItems = [{ id: "rental-loan", type: "rentalPropertyLoan", linkedAssetId: "rental", balance: 100000, interestRatePct: 0, repayment: 500, repaymentFrequency: "monthly", termYears: 30 }];
   const result = CALC.calculatePlan(plan);
   const draft = UI.buildSemiRetirementScenarioDefaults(plan, result).draft;
   const inputs = UI.scenarioDraftToProjectionInputs(draft);
-  assert.equal(inputs.household.otherAnnualIncome, 0);
-  assert.equal(inputs.passiveIncome.find((item) => item.type === "interest").annualCashIncome, 2000);
+  assert.equal(inputs.household.otherAnnualIncome, 2000);
   assert.equal(inputs.propertyIncome[0].annualIncome, 10000);
   assert.equal(inputs.propertyIncome[0].linkedAssetId, "rental");
 });
