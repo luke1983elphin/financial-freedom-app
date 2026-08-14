@@ -443,11 +443,18 @@
   }
 
   function normalisePropertyIncome(item = {}, index = 0, inflationRate = 0) {
+    const grossSource = firstGrossRentalIncomeSource(item);
+    const expenseSource = firstPropertyOperatingExpenseSource(item);
+    const hasGrossRentalIncome = grossSource !== undefined;
+    const hasOperatingExpenses = hasPropertyOperatingExpenseSource(item);
+    const hasRentalPropertyDetails = hasGrossRentalIncome && hasOperatingExpenses;
     const rentalCashSource = firstRentalCashIncomeSource(item);
-    const hasRentalCashIncome = item.missingRentalCashIncome === true || item.hasRentalCashIncome === false
-      ? false
-      : rentalCashSource !== undefined;
-    const annualIncome = hasRentalCashIncome ? number(rentalCashSource) : null;
+    const hasRentalCashIncome = hasRentalPropertyDetails
+      ? true
+      : item.missingRentalCashIncome === true || item.hasRentalCashIncome === false
+        ? false
+        : rentalCashSource !== undefined;
+    const annualIncome = hasRentalPropertyDetails ? null : hasRentalCashIncome ? number(rentalCashSource) : null;
     const annualTaxableIncome = hasFiniteNumber(item.taxableRentalIncomeAnnual)
       ? number(item.taxableRentalIncomeAnnual)
       : hasFiniteNumber(item.annualTaxableIncome)
@@ -455,18 +462,34 @@
         : hasFiniteNumber(item.taxableIncome)
           ? number(item.taxableIncome)
           : 0;
-    const treatment = item.rentalCashflowTreatment === "beforeInterest" || item.cashflowTreatment === "beforeInterest"
-      ? "beforeInterest"
-      : "afterInterest";
+    const treatment = hasRentalPropertyDetails
+      ? "grossRent"
+      : item.rentalCashflowTreatment === "beforeInterest" || item.cashflowTreatment === "beforeInterest"
+        ? "beforeInterest"
+        : "afterInterest";
+    const owner = normaliseIncomeOwner(item.owner || item.incomeOwner);
+    const shares = ownershipShares({ ...item, owner });
     return {
       id: normaliseRecordId(item, "property-income", index),
       name: String(item.propertyName || item.name || item.description || `Property income ${index + 1}`),
+      owner,
+      shares,
       linkedAssetId: String(item.linkedAssetId || item.linkedPropertyAssetId || item.assetId || ""),
       linkedLoanIds: linkedLoanIds(item.linkedLoanIds || item.linkedLoanId),
       annualIncome: annualIncome === null ? null : roundCurrency(annualIncome),
       baseRentalCashIncome: annualIncome === null ? null : roundCurrency(annualIncome),
       hasRentalCashIncome,
       missingRentalCashIncome: !hasRentalCashIncome,
+      hasRentalPropertyDetails,
+      hasGrossRentalIncome,
+      hasOperatingExpenses,
+      annualGrossRentalIncome: hasGrossRentalIncome ? roundCurrency(Math.max(0, number(grossSource))) : null,
+      baseGrossRentalIncome: hasGrossRentalIncome ? roundCurrency(Math.max(0, number(grossSource))) : null,
+      annualPropertyOperatingExpenses: hasOperatingExpenses ? roundCurrency(Math.max(0, number(expenseSource))) : null,
+      basePropertyOperatingExpenses: hasOperatingExpenses ? roundCurrency(Math.max(0, number(expenseSource))) : null,
+      grossRentalIncomeGrowthRate: number(item.grossRentalIncomeGrowthRate ?? item.rentalIncomeGrowthRate ?? inflationRate),
+      propertyExpenseGrowthRate: number(item.propertyExpenseGrowthRate ?? item.propertyExpensesGrowthRate ?? inflationRate),
+      legacyTaxableRentalProfitAnnual: roundCurrency(number(item.legacyTaxableRentalProfitAnnual ?? item.existingTaxableRentalProfitAnnual ?? annualTaxableIncome)),
       annualGrowthRate: number(inflationRate),
       rentalCashIncomeGrowthRate: number(inflationRate),
       rentalCashIncomeGrowthSource: "cpi",
@@ -489,6 +512,33 @@
     return candidates.find(hasFiniteNumber);
   }
 
+  function firstGrossRentalIncomeSource(item = {}) {
+    const candidates = [
+      item.annualGrossRentalIncome,
+      item.grossRentalIncomeAnnual,
+      item.grossRentAnnual,
+      item.annualRentalGrossIncome,
+      item.rentalGrossIncomeAnnual,
+    ];
+    return candidates.find(hasFiniteNumber);
+  }
+
+  function firstPropertyOperatingExpenseSource(item = {}) {
+    const candidates = [
+      item.annualPropertyOperatingExpenses,
+      item.propertyOperatingExpensesAnnual,
+      item.annualPropertyExpenses,
+      item.propertyExpensesAnnual,
+      item.operatingExpensesAnnual,
+      item.annualOperatingExpenses,
+    ];
+    return candidates.find(hasFiniteNumber);
+  }
+
+  function hasPropertyOperatingExpenseSource(item = {}) {
+    return firstPropertyOperatingExpenseSource(item) !== undefined;
+  }
+
   function rentalCashIncomeRequiredWarning(income = {}) {
     const propertyName = income.name || "Rental property";
     return {
@@ -497,6 +547,17 @@
       linkedAssetId: income.linkedAssetId,
       propertyName,
       message: `Rental cash income required for ${propertyName}. The entered taxable rental profit cannot be used as the property's cash income. Enter the annual rental cash income used for cashflow projections.`,
+    };
+  }
+
+  function rentalPropertyDetailsRequiredWarning(income = {}) {
+    const propertyName = income.name || "Rental property";
+    return {
+      code: "RENTAL_PROPERTY_DETAILS_REQUIRED",
+      incomeId: income.id,
+      linkedAssetId: income.linkedAssetId,
+      propertyName,
+      message: `${propertyName} needs gross rental income and annual property expenses before the linked rental projection can be calculated.`,
     };
   }
 
@@ -759,15 +820,60 @@
       const loanInterest = roundCurrency(linkedLoanRows.reduce((total, row) => total + row.interestCharged, 0));
       const loanPrincipal = roundCurrency(linkedLoanRows.reduce((total, row) => total + row.principalRepaid, 0));
       const fullLoanRepayments = roundCurrency(linkedLoanRows.reduce((total, row) => total + row.totalRepayment, 0));
-      if (income.hasRentalCashIncome === false || !hasFiniteNumber(income.baseRentalCashIncome ?? income.annualIncome)) {
-        const warning = rentalCashIncomeRequiredWarning(income);
+      const baseFields = {
+        id: income.id,
+        name: income.name,
+        owner: income.owner,
+        shares: { ...income.shares },
+        linkedAssetId: income.linkedAssetId,
+        linkedLoanIds: Array.from(loanIds),
+        rentalCashflowTreatment: income.rentalCashflowTreatment,
+        rentalIncomeTreatment: income.rentalCashflowTreatment,
+        loanInterest,
+        loanPrincipal,
+        fullLoanRepayments,
+      };
+      if (income.hasRentalPropertyDetails === true) {
+        const baseGrossRentalIncome = roundCurrency(income.baseGrossRentalIncome ?? income.annualGrossRentalIncome);
+        const basePropertyOperatingExpenses = roundCurrency(income.basePropertyOperatingExpenses ?? income.annualPropertyOperatingExpenses);
+        const grossRentalIncome = grownAmount(baseGrossRentalIncome, number(income.grossRentalIncomeGrowthRate, normalised.inflationRate), yearIndex);
+        const propertyExpenses = grownAmount(basePropertyOperatingExpenses, number(income.propertyExpenseGrowthRate, normalised.inflationRate), yearIndex);
+        const taxableRentalIncome = roundCurrency(grossRentalIncome - propertyExpenses - loanInterest);
+        const netPropertyCashflow = roundCurrency(grossRentalIncome - propertyExpenses - fullLoanRepayments);
         return {
-          id: income.id,
-          name: income.name,
-          linkedAssetId: income.linkedAssetId,
-          linkedLoanIds: Array.from(loanIds),
-          rentalCashflowTreatment: income.rentalCashflowTreatment,
-          rentalIncomeTreatment: income.rentalCashflowTreatment,
+          ...baseFields,
+          hasRentalPropertyDetails: true,
+          hasRentalCashIncome: true,
+          missingRentalCashIncome: false,
+          baseGrossRentalIncome,
+          annualGrossRentalIncome: grossRentalIncome,
+          grossRentalIncome,
+          basePropertyOperatingExpenses,
+          annualPropertyOperatingExpenses: propertyExpenses,
+          propertyExpenses,
+          baseRentalCashIncome: baseGrossRentalIncome,
+          rentalCashIncome: grossRentalIncome,
+          rentalCashIncomeGrowthRate: number(income.grossRentalIncomeGrowthRate, normalised.inflationRate),
+          rentalCashIncomeGrowthSource: "cpi",
+          baseTaxableRentalIncome: roundCurrency(baseGrossRentalIncome - basePropertyOperatingExpenses - loanInterest),
+          taxableRentalIncome,
+          taxableRentalIncomeGrowthRate: null,
+          person1TaxableIncome: roundCurrency(taxableRentalIncome * income.shares.person1),
+          person2TaxableIncome: roundCurrency(taxableRentalIncome * income.shares.person2),
+          incomeAfterInterest: taxableRentalIncome,
+          netPropertyCashflow,
+          interestAlreadyIncluded: false,
+          warnings: [],
+        };
+      }
+      if (income.hasRentalCashIncome === false || !hasFiniteNumber(income.baseRentalCashIncome ?? income.annualIncome)) {
+        const warning = income.hasGrossRentalIncome || income.hasOperatingExpenses || income.rentalCashflowTreatment === "grossRent"
+          ? rentalPropertyDetailsRequiredWarning(income)
+          : rentalCashIncomeRequiredWarning(income);
+        const taxableRentalIncome = grownAmount(income.legacyTaxableRentalProfitAnnual ?? income.baseTaxableRentalIncome ?? income.taxableRentalIncomeAnnual, number(income.taxableRentalIncomeGrowthRate), yearIndex);
+        return {
+          ...baseFields,
+          hasRentalPropertyDetails: false,
           hasRentalCashIncome: false,
           missingRentalCashIncome: true,
           baseRentalCashIncome: null,
@@ -775,13 +881,13 @@
           rentalCashIncomeGrowthRate: number(income.rentalCashIncomeGrowthRate ?? income.annualGrowthRate),
           rentalCashIncomeGrowthSource: income.rentalCashIncomeGrowthSource || "cpi",
           baseTaxableRentalIncome: roundCurrency(income.baseTaxableRentalIncome ?? income.taxableRentalIncomeAnnual),
-          taxableRentalIncome: grownAmount(income.baseTaxableRentalIncome ?? income.taxableRentalIncomeAnnual, number(income.taxableRentalIncomeGrowthRate), yearIndex),
+          taxableRentalIncome,
           taxableRentalIncomeGrowthRate: number(income.taxableRentalIncomeGrowthRate),
+          legacyTaxableRentalProfitAnnual: roundCurrency(income.legacyTaxableRentalProfitAnnual),
+          person1TaxableIncome: roundCurrency(taxableRentalIncome * income.shares.person1),
+          person2TaxableIncome: roundCurrency(taxableRentalIncome * income.shares.person2),
           grossRentalIncome: null,
           propertyExpenses: 0,
-          loanInterest,
-          loanPrincipal,
-          fullLoanRepayments,
           incomeAfterInterest: null,
           netPropertyCashflow: 0,
           interestAlreadyIncluded: income.rentalCashflowTreatment === "afterInterest",
@@ -800,12 +906,8 @@
         ? roundCurrency(rentalCashIncome - fullLoanRepayments)
         : roundCurrency(rentalCashIncome - loanPrincipal);
       return {
-        id: income.id,
-        name: income.name,
-        linkedAssetId: income.linkedAssetId,
-        linkedLoanIds: Array.from(loanIds),
-        rentalCashflowTreatment: income.rentalCashflowTreatment,
-        rentalIncomeTreatment: income.rentalCashflowTreatment,
+        ...baseFields,
+        hasRentalPropertyDetails: false,
         baseRentalCashIncome,
         rentalCashIncome,
         rentalCashIncomeGrowthRate,
@@ -813,11 +915,10 @@
         baseTaxableRentalIncome,
         taxableRentalIncome,
         taxableRentalIncomeGrowthRate: number(income.taxableRentalIncomeGrowthRate),
+        person1TaxableIncome: roundCurrency(taxableRentalIncome * income.shares.person1),
+        person2TaxableIncome: roundCurrency(taxableRentalIncome * income.shares.person2),
         grossRentalIncome: rentalCashIncome,
         propertyExpenses: 0,
-        loanInterest,
-        loanPrincipal,
-        fullLoanRepayments,
         incomeAfterInterest,
         netPropertyCashflow,
         interestAlreadyIncluded: income.rentalCashflowTreatment === "afterInterest",
@@ -855,21 +956,28 @@
           annualGrowthRatePct: asset.annualGrowthRatePct,
           growthRateSource: asset.growthRateSource,
           rentalCashIncome: hasValidRentalCashIncome
-            ? roundCurrency(linkedIncomeRows.reduce((total, income) => total + number(income.rentalCashIncome), 0))
+            ? roundCurrency(linkedIncomeRows.reduce((total, income) => total + number(income.rentalCashIncome ?? income.grossRentalIncome), 0))
             : hasLinkedIncome ? null : 0,
           baseRentalCashIncome: hasValidRentalCashIncome
-            ? roundCurrency(linkedIncomeRows.reduce((total, income) => total + number(income.baseRentalCashIncome ?? income.rentalCashIncome), 0))
+            ? roundCurrency(linkedIncomeRows.reduce((total, income) => total + number(income.baseRentalCashIncome ?? income.baseGrossRentalIncome ?? income.rentalCashIncome), 0))
             : hasLinkedIncome ? null : 0,
           rentalCashIncomeGrowthRate: linkedIncomeRows[0]?.rentalCashIncomeGrowthRate ?? normalised.inflationRate,
           rentalCashIncomeGrowthSource: linkedIncomeRows[0]?.rentalCashIncomeGrowthSource || "cpi",
           taxableRentalIncome: roundCurrency(linkedIncomeRows.reduce((total, income) => total + number(income.taxableRentalIncome), 0)),
           baseTaxableRentalIncome: roundCurrency(linkedIncomeRows.reduce((total, income) => total + number(income.baseTaxableRentalIncome), 0)),
           grossRentalIncome: hasValidRentalCashIncome
-            ? roundCurrency(linkedIncomeRows.reduce((total, income) => total + number(income.rentalCashIncome), 0))
+            ? roundCurrency(linkedIncomeRows.reduce((total, income) => total + number(income.grossRentalIncome ?? income.rentalCashIncome), 0))
             : hasLinkedIncome ? null : 0,
-          propertyExpenses: 0,
+          baseGrossRentalIncome: roundCurrency(linkedIncomeRows.reduce((total, income) => total + number(income.baseGrossRentalIncome), 0)),
+          annualGrossRentalIncome: hasValidRentalCashIncome
+            ? roundCurrency(linkedIncomeRows.reduce((total, income) => total + number(income.annualGrossRentalIncome ?? income.grossRentalIncome), 0))
+            : hasLinkedIncome ? null : 0,
+          basePropertyOperatingExpenses: roundCurrency(linkedIncomeRows.reduce((total, income) => total + number(income.basePropertyOperatingExpenses), 0)),
+          annualPropertyOperatingExpenses: roundCurrency(linkedIncomeRows.reduce((total, income) => total + number(income.annualPropertyOperatingExpenses ?? income.propertyExpenses), 0)),
+          propertyExpenses: roundCurrency(linkedIncomeRows.reduce((total, income) => total + number(income.propertyExpenses), 0)),
           loanInterest,
           loanPrincipal,
+          fullLoanRepayments: roundCurrency(linkedIncomeRows.reduce((total, income) => total + number(income.fullLoanRepayments), 0)),
           netPropertyCashflow,
           linkedLoanOpeningBalance,
           linkedLoanClosingBalance,
@@ -882,8 +990,11 @@
     return rows;
   }
 
-  function projectPassiveIncomeRows(normalised, yearIndex) {
-    return normalised.passiveIncome.map((income) => {
+  function projectPassiveIncomeRows(normalised, yearIndex, propertyIncomeRows = []) {
+    const hasPropertyRentalTaxableIncome = propertyIncomeRows.some((income) => number(income.taxableRentalIncome) !== 0);
+    return normalised.passiveIncome
+      .filter((income) => !(income.type === "rentalTaxableIncome" && hasPropertyRentalTaxableIncome))
+      .map((income) => {
       const cashIncome = grownAmount(income.annualCashIncome, income.annualCashGrowthRate, yearIndex);
       const taxableIncome = grownAmount(income.annualTaxableIncome, income.annualTaxableGrowthRate, yearIndex);
       return {
@@ -925,6 +1036,19 @@
       distributionIncome: 0,
       rentalTaxableIncome: 0,
       otherTaxableIncome: 0,
+    });
+  }
+
+  function propertyIncomeForPerson(propertyIncomeRows, personId) {
+    const personKey = personId === "person2" ? "person2" : "person1";
+    return propertyIncomeRows.reduce((summary, income) => {
+      const taxable = number(income[`${personKey}TaxableIncome`]);
+      summary.taxableIncome = roundCurrency(summary.taxableIncome + taxable);
+      summary.rentalTaxableIncome = roundCurrency(summary.rentalTaxableIncome + taxable);
+      return summary;
+    }, {
+      taxableIncome: 0,
+      rentalTaxableIncome: 0,
     });
   }
 
@@ -1364,18 +1488,43 @@
           warnings: [],
         };
       });
-      const passiveIncomeRows = projectPassiveIncomeRows(normalised, yearIndex);
+      const assetRows = normalised.assets.map((asset) => {
+        const row = projectAssetYear(asset, assetStates[asset.id]);
+        assetStates[asset.id] = row.closingValue;
+        return row;
+      });
+      const liabilityRows = normalised.liabilities.map((liability) => {
+        const row = projectDebtYear(liability, liabilityStates[liability.id], yearIndex, calendarYear);
+        liabilityStates[liability.id] = row.closingBalance;
+        if (row.paidOffThisYear && !debtPayoffRecorded.has(row.id)) {
+          summary.debtPayoffMilestones.push({
+            liabilityId: row.id,
+            name: row.name,
+            calendarYear,
+            person1Age: peopleYear[0]?.age ?? null,
+            person2Age: peopleYear[1]?.age ?? null,
+            type: row.type,
+          });
+          debtPayoffRecorded.add(row.id);
+        }
+        row.warnings.forEach((warning) => warnings.push(`${calendarYear} ${row.name}: ${warningCodeMessage(warning)}`));
+        return row;
+      });
+      const propertyIncomeRows = projectPropertyIncomeRows(normalised, liabilityRows, yearIndex);
+      const propertyRows = projectPropertyRows(normalised, assetRows, liabilityRows, propertyIncomeRows);
+      const passiveIncomeRows = projectPassiveIncomeRows(normalised, yearIndex, propertyIncomeRows);
       peopleYear.forEach((person) => {
         const passive = passiveIncomeForPerson(passiveIncomeRows, person.id);
+        const propertyTaxable = propertyIncomeForPerson(propertyIncomeRows, person.id);
         person.employmentIncome = roundCurrency(person.grossEmploymentIncome);
         person.interestIncome = passive.interestIncome;
         person.dividendIncome = passive.dividendIncome;
-        person.rentalTaxableIncome = passive.rentalTaxableIncome;
+        person.rentalTaxableIncome = roundCurrency(passive.rentalTaxableIncome + propertyTaxable.rentalTaxableIncome);
         person.distributionIncome = passive.distributionIncome;
         person.otherTaxableIncome = passive.otherTaxableIncome;
-        person.totalPassiveTaxableIncome = passive.taxableIncome;
+        person.totalPassiveTaxableIncome = roundCurrency(passive.taxableIncome + propertyTaxable.taxableIncome);
         person.totalPassiveCashIncome = passive.cashIncome;
-        person.totalTaxableIncome = roundCurrency(person.grossEmploymentIncome + passive.taxableIncome);
+        person.totalTaxableIncome = roundCurrency(person.grossEmploymentIncome + passive.taxableIncome + propertyTaxable.taxableIncome);
         person.totalCashIncomeBeforeTax = roundCurrency(person.grossEmploymentIncome + passive.cashIncome);
       });
 
@@ -1417,30 +1566,6 @@
         person.superWithdrawal = 0;
       });
 
-      const assetRows = normalised.assets.map((asset) => {
-        const row = projectAssetYear(asset, assetStates[asset.id]);
-        assetStates[asset.id] = row.closingValue;
-        return row;
-      });
-      const liabilityRows = normalised.liabilities.map((liability) => {
-        const row = projectDebtYear(liability, liabilityStates[liability.id], yearIndex, calendarYear);
-        liabilityStates[liability.id] = row.closingBalance;
-        if (row.paidOffThisYear && !debtPayoffRecorded.has(row.id)) {
-          summary.debtPayoffMilestones.push({
-            liabilityId: row.id,
-            name: row.name,
-            calendarYear,
-            person1Age: peopleYear[0]?.age ?? null,
-            person2Age: peopleYear[1]?.age ?? null,
-            type: row.type,
-          });
-          debtPayoffRecorded.add(row.id);
-        }
-        row.warnings.forEach((warning) => warnings.push(`${calendarYear} ${row.name}: ${warningCodeMessage(warning)}`));
-        return row;
-      });
-      const propertyIncomeRows = projectPropertyIncomeRows(normalised, liabilityRows, yearIndex);
-      const propertyRows = projectPropertyRows(normalised, assetRows, liabilityRows, propertyIncomeRows);
       const debtIdsLinkedToPropertyIncome = new Set(propertyIncomeRows.flatMap((income) => income.linkedLoanIds));
       const totalDebtRepayments = roundCurrency(liabilityRows.reduce((total, debt) => total + debt.totalRepayment, 0));
       const totalLoanInterest = roundCurrency(liabilityRows.reduce((total, debt) => total + debt.interestCharged, 0));
@@ -1472,12 +1597,16 @@
           : normalised.household.currentLifestyleSpending;
       const applicableLifestyleSpending = todayDollarAmount(lifestyleBase, normalised.inflationRate, yearIndex);
       const totalNetEmploymentIncome = roundCurrency(peopleYear.reduce((total, person) => total + person.netEmploymentIncome, 0));
-      const totalPassiveCashIncome = roundCurrency(passiveIncomeRows.reduce((total, income) => total + income.cashIncome, 0));
-      const totalPassiveTaxableIncome = roundCurrency(passiveIncomeRows.reduce((total, income) => total + income.taxableIncome, 0));
+      const totalPropertyTaxableIncome = roundCurrency(propertyIncomeRows.reduce((total, income) => total + number(income.taxableRentalIncome), 0));
+      const totalPassiveCashIncome = roundCurrency(passiveIncomeRows.reduce((total, income) => total + income.cashIncome, 0) + netRentalCashflow);
+      const totalPassiveTaxableIncome = roundCurrency(passiveIncomeRows.reduce((total, income) => total + income.taxableIncome, 0) + totalPropertyTaxableIncome);
       const totalInterestCashIncome = roundCurrency(passiveIncomeRows.filter((income) => income.type === "interest").reduce((total, income) => total + income.cashIncome, 0));
       const totalDividendCashIncome = roundCurrency(passiveIncomeRows.filter((income) => income.type === "dividends").reduce((total, income) => total + income.cashIncome, 0));
       const totalDistributionCashIncome = roundCurrency(passiveIncomeRows.filter((income) => income.type === "distributions").reduce((total, income) => total + income.cashIncome, 0));
-      const totalRentalTaxableIncome = roundCurrency(passiveIncomeRows.filter((income) => income.type === "rentalTaxableIncome").reduce((total, income) => total + income.taxableIncome, 0));
+      const totalRentalTaxableIncome = roundCurrency(
+        passiveIncomeRows.filter((income) => income.type === "rentalTaxableIncome").reduce((total, income) => total + income.taxableIncome, 0)
+        + totalPropertyTaxableIncome,
+      );
       const otherIncome = roundCurrency(normalised.household.otherAnnualIncome);
       const totalAdditionalSuperContribution = roundCurrency(peopleYear.reduce((total, person) => total + person.additionalSuperContribution, 0));
       const householdCashRequirement = roundCurrency(applicableLifestyleSpending + annualDebtCashRequirement + totalAdditionalSuperContribution);

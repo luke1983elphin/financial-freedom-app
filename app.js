@@ -1614,13 +1614,28 @@
 
   function normaliseRentalPropertyData() {
     if (!Array.isArray(plan.incomeItems)) plan.incomeItems = [];
+    if (!Array.isArray(plan.assetItems)) plan.assetItems = [];
     if (!Array.isArray(plan.liabilityItems)) plan.liabilityItems = [];
+    rentalPropertyAssets().forEach((asset) => {
+      asset.category = asset.category || asset.type || "rentalInvestmentProperty";
+      asset.owner = normaliseIncomeOwner(asset.owner || asset.incomeOwner, "rentalNetCashIncome");
+      if (asset.owner === "joint") {
+        asset.person1AllocationPercentage = asset.person1AllocationPercentage ?? 50;
+        asset.person2AllocationPercentage = asset.person2AllocationPercentage ?? 50;
+      }
+      const existingIncome = rentalIncomeForProperty(asset);
+      if (existingIncome && (asset.legacyTaxableRentalProfitAnnual === undefined || asset.legacyTaxableRentalProfitAnnual === "")) {
+        const legacyAmount = existingIncome.legacyTaxableRentalProfitAnnual ?? existingIncome.taxableRentalIncomeAnnual ?? existingIncome.amount;
+        if (legacyAmount !== undefined && legacyAmount !== null && legacyAmount !== "") asset.legacyTaxableRentalProfitAnnual = legacyAmount;
+      }
+      ensureDerivedRentalIncomeForProperty(asset);
+    });
     const rentalLoanIds = new Set(plan.liabilityItems.filter((item) => item.type === "rentalPropertyLoan").map((item) => String(item.id)));
     const rentalIncomeById = new Map(plan.incomeItems.filter((item) => item.type === "rentalNetCashIncome").map((item) => [String(item.id), item]));
     plan.incomeItems.forEach((item) => {
       if (item.type !== "rentalNetCashIncome") return;
       item.frequency = "annually";
-      item.rentalCashflowTreatment = item.rentalCashflowTreatment === "beforeInterest" ? "beforeInterest" : "afterInterest";
+      item.rentalCashflowTreatment = item.derivedFromProperty ? "grossRent" : item.rentalCashflowTreatment === "beforeInterest" ? "beforeInterest" : "afterInterest";
       const linkedAssetId = String(item.linkedAssetId || item.linkedPropertyAssetId || "");
       const deterministicLoanIds = plan.liabilityItems
         .filter((loan) => loan.type === "rentalPropertyLoan")
@@ -1674,6 +1689,27 @@
           linkedAssetId: item.linkedAssetId,
           description: item.investmentLinkDescription,
         };
+      }
+    });
+    const propertySummary = CALC.calculateRentalPropertySummary?.(plan) || CALC.calculateRentalCashflowSummary?.(plan);
+    (propertySummary?.propertyResults || []).forEach((property) => {
+      const income = plan.incomeItems.find((item) => String(item.id || "") === String(property.incomeId || property.id || ""));
+      const asset = plan.assetItems.find((item) => String(item.id || "") === String(property.linkedAssetId || property.propertyId || ""));
+      if (income?.derivedFromProperty) {
+        income.amount = property.currentTaxableRentalProfit ?? property.taxableRentalProfit ?? property.legacyTaxableRentalProfitAnnual ?? 0;
+        income.taxableRentalIncomeAnnual = income.amount;
+        income.annualGrossRentalIncome = property.annualGrossRentalIncome ?? "";
+        income.propertyOperatingExpensesAnnual = property.annualPropertyOperatingExpenses ?? "";
+        income.linkedLoanIds = property.linkedLoanIds || income.linkedLoanIds || [];
+        income.linkedLoanId = income.linkedLoanIds.length === 1 ? income.linkedLoanIds[0] : "";
+        income.hasRentalPropertyDetails = property.hasRentalPropertyDetails === true;
+        income.rentalPropertyDetailsNeedUpdating = property.hasRentalPropertyDetails !== true;
+        income.legacyTaxableRentalProfitAnnual = property.legacyTaxableRentalProfitAnnual ?? income.legacyTaxableRentalProfitAnnual ?? "";
+      }
+      if (asset) {
+        asset.currentTaxableRentalProfit = property.currentTaxableRentalProfit ?? property.taxableRentalProfit ?? 0;
+        asset.currentNetPropertyCashflow = property.currentNetPropertyCashflow ?? property.netPropertyCashflow ?? 0;
+        asset.rentalPropertyDetailsNeedUpdating = property.hasRentalPropertyDetails !== true;
       }
     });
   }
@@ -4252,13 +4288,74 @@
   }
 
   function rentalPropertyLoanItems() {
-    ensureCollectionData();
-    return (plan.liabilityItems || []).filter((item) => item.type === "rentalPropertyLoan");
+    return (Array.isArray(plan.liabilityItems) ? plan.liabilityItems : []).filter((item) => item.type === "rentalPropertyLoan");
   }
 
   function rentalIncomeItems() {
-    ensureCollectionData();
-    return (plan.incomeItems || []).filter((item) => item.type === "rentalNetCashIncome");
+    return (Array.isArray(plan.incomeItems) ? plan.incomeItems : []).filter((item) => item.type === "rentalNetCashIncome");
+  }
+
+  function rentalPropertyAssets() {
+    return (Array.isArray(plan.assetItems) ? plan.assetItems : []).filter((item) => propertyAssetCategories.includes(item.category || item.type));
+  }
+
+  function rentalIncomeForProperty(asset = {}) {
+    const assetId = String(asset.id || "");
+    return rentalIncomeItems().find((item) => String(item.linkedAssetId || item.linkedPropertyAssetId || "") === assetId);
+  }
+
+  function rentalLoansForProperty(asset = {}) {
+    const assetId = String(asset.id || "");
+    return rentalPropertyLoanItems().filter((loan) => String(loan.linkedAssetId || loan.investmentLink?.linkedAssetId || "") === assetId);
+  }
+
+  function currentRentalPropertyResult(asset = {}) {
+    const summary = CALC.calculateRentalPropertySummary?.(plan) || CALC.calculateRentalCashflowSummary?.(plan);
+    return (summary?.propertyResults || []).find((item) => String(item.linkedAssetId || item.propertyId || "") === String(asset.id || ""));
+  }
+
+  function ensureDerivedRentalIncomeForProperty(asset = {}) {
+    if (!asset?.id || !propertyAssetCategories.includes(asset.category || asset.type)) return null;
+    const linkedLoans = rentalLoansForProperty(asset);
+    let income = rentalIncomeForProperty(asset);
+    if (!income) {
+      const preferredId = `income-rental-${asset.id}`;
+      const id = plan.incomeItems.some((item) => item.id === preferredId) ? makeId("income-rental") : preferredId;
+      income = {
+        id,
+        name: asset.name || "Rental property income",
+        propertyName: asset.name || "Rental property",
+        type: "rentalNetCashIncome",
+        owner: asset.owner || "joint",
+        person1AllocationPercentage: asset.person1AllocationPercentage ?? 50,
+        person2AllocationPercentage: asset.person2AllocationPercentage ?? 50,
+        amount: 0,
+        frequency: "annually",
+        linkedAssetId: asset.id,
+        linkedLoanIds: linkedLoans.map((loan) => loan.id).filter(Boolean),
+        rentalCashflowTreatment: "grossRent",
+        derivedFromProperty: true,
+        managedByPropertyAsset: true,
+      };
+      plan.incomeItems.push(income);
+    }
+    income.name = asset.name || income.name || "Rental property income";
+    income.propertyName = asset.name || income.propertyName || "Rental property";
+    income.type = "rentalNetCashIncome";
+    income.frequency = "annually";
+    income.owner = asset.owner || income.owner || "joint";
+    income.person1AllocationPercentage = asset.person1AllocationPercentage ?? income.person1AllocationPercentage ?? 50;
+    income.person2AllocationPercentage = asset.person2AllocationPercentage ?? income.person2AllocationPercentage ?? 50;
+    income.linkedAssetId = asset.id;
+    income.linkedPropertyAssetId = asset.id;
+    income.linkedLoanIds = Array.from(new Set([...linkedLoanIds(income), ...linkedLoans.map((loan) => String(loan.id || "")).filter(Boolean)]));
+    income.linkedLoanId = income.linkedLoanIds.length === 1 ? income.linkedLoanIds[0] : "";
+    income.annualGrossRentalIncome = asset.annualGrossRentalIncome ?? asset.grossRentalIncomeAnnual ?? "";
+    income.propertyOperatingExpensesAnnual = asset.annualPropertyOperatingExpenses ?? asset.propertyOperatingExpensesAnnual ?? "";
+    income.rentalCashflowTreatment = "grossRent";
+    income.derivedFromProperty = true;
+    income.managedByPropertyAsset = true;
+    return income;
   }
 
   function linkedLoanIds(item) {
@@ -4410,6 +4507,134 @@
     `;
   }
 
+  function rentalPropertyOwnershipFields(item) {
+    const owner = normaliseIncomeOwner(item.owner, "rentalNetCashIncome");
+    if (owner !== "joint") return "";
+    const p1 = Number(item.person1AllocationPercentage) || 0;
+    const p2 = Number(item.person2AllocationPercentage) || 0;
+    const total = p1 + p2;
+    const warning = Math.round(total) !== 100
+      ? `<p class="tax-note mt-3"><strong>Check ownership:</strong> Rental property ownership percentages should total 100%.</p>`
+      : "";
+    return `
+      ${dynamicInput("assetItems", item, "person1AllocationPercentage", `${personDisplayName(1)} ownership %`, { step: "1" })}
+      ${dynamicInput("assetItems", item, "person2AllocationPercentage", `${personDisplayName(2)} ownership %`, { step: "1" })}
+      ${warning}
+    `;
+  }
+
+  function propertyLoanLinkControls(asset) {
+    const loans = rentalPropertyLoanItems();
+    const linked = new Set(rentalLoansForProperty(asset).map((loan) => String(loan.id || "")));
+    const existingLoanControls = loans.length ? `
+      <div class="rental-loan-link-list mt-4">
+        <span class="field-label">Investment property loan</span>
+        ${loans.map((loan) => `
+          <label class="checkbox-row">
+            <input type="checkbox" data-property-loan-link="${escapeHtml(asset.id)}" data-loan-id="${escapeHtml(loan.id)}"${linked.has(String(loan.id)) ? " checked" : ""}>
+            <span>${escapeHtml(loan.name || "Investment property loan")}</span>
+          </label>
+        `).join("")}
+      </div>
+    ` : `<p class="field-help mt-3">No investment property loans have been added yet.</p>`;
+    return `
+      ${existingLoanControls}
+      <button class="btn mt-3" type="button" data-add-property-loan="${escapeHtml(asset.id)}">Add new investment property loan</button>
+    `;
+  }
+
+  function updatePropertyLoanLink(input) {
+    ensureCollectionData();
+    const assetId = String(input.dataset.propertyLoanLink || "");
+    const loanId = String(input.dataset.loanId || "");
+    const loan = plan.liabilityItems.find((item) => String(item.id || "") === loanId);
+    if (!loan || !assetId) return;
+    if (input.checked) {
+      loan.type = "rentalPropertyLoan";
+      loan.linkedAssetId = assetId;
+      loan.investmentLink = { ...(loan.investmentLink || {}), assetCategory: "rental_property", linkedAssetId: assetId };
+    } else if (String(loan.linkedAssetId || loan.investmentLink?.linkedAssetId || "") === assetId) {
+      loan.linkedAssetId = "";
+      loan.linkedRentalIncomeId = "";
+      loan.investmentLink = { ...(loan.investmentLink || {}), assetCategory: "rental_property", linkedAssetId: "" };
+    }
+    normaliseRentalPropertyData();
+    syncCollectionsToLegacy();
+    generatedWeeklyPlanner = null;
+    if (weeklyPlan) {
+      markWeeklyTimingReviewRequired();
+      saveWeeklyPlan();
+    }
+    autosavePlan();
+    renderAll();
+  }
+
+  function addPropertyLoan(assetId) {
+    ensureCollectionData();
+    const asset = plan.assetItems.find((item) => String(item.id || "") === String(assetId));
+    if (!asset) return;
+    plan.liabilityItems.push({
+      id: makeId("rental-loan"),
+      name: `${asset.name || "Rental property"} loan`,
+      type: "rentalPropertyLoan",
+      owner: asset.owner || "joint",
+      balance: 0,
+      interestRatePct: 0,
+      repayment: 0,
+      repaymentFrequency: "monthly",
+      termYears: 30,
+      repaymentType: "principalAndInterest",
+      linkedAssetId: asset.id,
+      investmentLink: {
+        assetCategory: "rental_property",
+        linkedAssetId: asset.id,
+        description: "",
+      },
+    });
+    normaliseRentalPropertyData();
+    syncCollectionsToLegacy();
+    autosavePlan();
+    renderAll();
+  }
+
+  function rentalPropertySummaryHtml(asset) {
+    const property = currentRentalPropertyResult(asset);
+    if (!property) return "";
+    const hasDetails = property.hasRentalPropertyDetails === true;
+    const ownershipRows = normaliseIncomeOwner(property.owner, "rentalNetCashIncome") === "joint"
+      ? `
+        <div><span>${escapeHtml(personDisplayName(1))} taxable share</span><strong>${money((Number(property.currentTaxableRentalProfit) || 0) * (Number(property.person1AllocationPercentage) || 0) / 100)}</strong></div>
+        <div><span>${escapeHtml(personDisplayName(2))} taxable share</span><strong>${money((Number(property.currentTaxableRentalProfit) || 0) * (Number(property.person2AllocationPercentage) || 0) / 100)}</strong></div>
+      `
+      : "";
+    const legacyNote = !hasDetails && property.legacyTaxableRentalProfitAnnual !== null && property.legacyTaxableRentalProfitAnnual !== undefined
+      ? `<p class="tax-note mt-3"><strong>Existing taxable rental profit:</strong> ${money(property.legacyTaxableRentalProfitAnnual)}. This legacy amount is retained for reference. Enter gross rent and property expenses to enable the new annual projection.</p>`
+      : "";
+    return `
+      <section class="rental-property-summary mt-4">
+        <div class="card-subheading">
+          <h4>Current Property Summary</h4>
+          <p>Derived from this property and its linked investment-property loans.</p>
+        </div>
+        ${!hasDetails ? `<p class="tax-note mt-3"><strong>Rental property details need updating:</strong> Enter gross rental income and annual property expenses before relying on the new property projection.</p>` : ""}
+        <div class="rental-property-summary-grid mt-4">
+          <div><span>Gross rental income</span><strong>${hasDetails ? money(property.annualGrossRentalIncome) : "Not entered"}</strong></div>
+          <div><span>Operating expenses</span><strong>${hasDetails ? money(property.annualPropertyOperatingExpenses) : "Not entered"}</strong></div>
+          <div><span>Loan interest</span><strong>${money(property.annualLoanInterest)}</strong></div>
+          <div><span>Current taxable rental profit</span><strong>${money(property.currentTaxableRentalProfit)}</strong></div>
+          <div><span>Loan principal</span><strong>${money(property.annualLoanPrincipal)}</strong></div>
+          <div><span>Current net property cashflow</span><strong>${money(property.currentNetPropertyCashflow)}</strong></div>
+          ${ownershipRows}
+        </div>
+        <div class="field-help mt-3">
+          <p><strong>Taxable rental profit:</strong> Gross rent less operating expenses and deductible loan interest. Used for projected taxable income.</p>
+          <p><strong>Net property cashflow:</strong> Gross rent less operating expenses and total loan repayments. Used for household cashflow.</p>
+        </div>
+        ${legacyNote}
+      </section>
+    `;
+  }
+
   function dividendTaxFields(item, type) {
     return "";
   }
@@ -4433,6 +4658,29 @@
     item.owner = owner;
     const typeLabel = incomeTypeLabels[type] || "Income";
     const ownerLabel = owner === "joint" ? "Joint" : personDisplayName(owner === "person2" ? 2 : 1);
+    if (type === "rentalNetCashIncome" && item.derivedFromProperty) {
+      const property = plan.assetItems.find((asset) => String(asset.id || "") === String(item.linkedAssetId || item.linkedPropertyAssetId || ""));
+      const result = property ? currentRentalPropertyResult(property) : null;
+      const needsUpdate = result?.hasRentalPropertyDetails !== true;
+      return `
+        <article class="form-item-card dynamic-item-card rental-income-derived-card">
+          <div class="item-card-title">
+            <div>
+              <span>Rental Property Income</span>
+              <h4>${escapeHtml(item.propertyName || item.name || "Rental property")}</h4>
+              <small>Managed under Rental / Investment Property</small>
+            </div>
+          </div>
+          <div class="summary-grid mt-4">
+            ${summaryTile("Derived taxable rental income", needsUpdate ? "Needs property details" : money(result.currentTaxableRentalProfit))}
+            ${summaryTile("Derived net property cashflow", needsUpdate ? "Needs property details" : money(result.currentNetPropertyCashflow))}
+            ${summaryTile("Linked loans", String(result?.linkedLoanCount || 0))}
+          </div>
+          ${needsUpdate ? `<p class="tax-note mt-3"><strong>Rental property details need updating:</strong> enter gross rent and property expenses in the linked property card.</p>` : `<p class="field-help mt-3">Derived from ${escapeHtml(property?.name || "the linked property")} property details and linked investment-property loans.</p>`}
+          <button class="btn mt-3" type="button" data-view="setup">Edit property</button>
+        </article>
+      `;
+    }
     const hasRentalCashInput = [
       item.rentalCashIncomeAnnual,
       item.annualRentalCashIncome,
@@ -4493,9 +4741,17 @@
   }
 
   function assetCard(item, index) {
-    const rentalInvestmentNote = item.category === "rentalInvestmentProperty"
-      ? `<p class="field-help mt-3">Use this for a property held to earn rent and/or for investment purposes.</p>`
+    const isRentalInvestmentProperty = propertyAssetCategories.includes(item.category || item.type);
+    const rentalInvestmentNote = isRentalInvestmentProperty
+      ? `<p class="field-help mt-3">Use this for a property held to earn rent and/or for investment purposes. The figures below drive taxable rental profit and property cashflow projections.</p>`
       : "";
+    const rentalPropertyFields = isRentalInvestmentProperty ? `
+          ${dynamicInput("assetItems", item, "owner", "Property owner", { type: "select", options: incomeOwnerOptions("rentalNetCashIncome") })}
+          ${rentalPropertyOwnershipFields(item)}
+          ${dynamicInput("assetItems", item, "annualGrossRentalIncome", "Annual gross rental income", { step: "100", placeholder: "Expected annual rent before expenses and loan payments" })}
+          ${dynamicInput("assetItems", item, "annualPropertyOperatingExpenses", "Annual property expenses", { step: "100", placeholder: "Exclude loan interest and principal" })}
+          ${dynamicInput("assetItems", item, "propertyGrowthRatePct", "Capital growth assumption (%)", { step: "0.1" })}
+        ` : "";
     return `
       <article class="form-item-card dynamic-item-card">
         <div class="item-card-title">
@@ -4509,8 +4765,11 @@
           ${dynamicInput("assetItems", item, "name", "Asset name", { kind: "text", placeholder: "e.g. Offset account" })}
           ${dynamicInput("assetItems", item, "category", "Asset type", { type: "select", options: assetCategoryOptions })}
           ${dynamicInput("assetItems", item, "value", "Asset value", { step: "1000" })}
+          ${rentalPropertyFields}
         </div>
         ${rentalInvestmentNote}
+        ${isRentalInvestmentProperty ? propertyLoanLinkControls(item) : ""}
+        ${isRentalInvestmentProperty ? rentalPropertySummaryHtml(item) : ""}
       </article>
     `;
   }
@@ -7044,8 +7303,11 @@
           <div><span>Projected property value</span><strong>${semiRetirementMoney(card.projectedPropertyValue)}</strong></div>
           <div><span>Linked property debt</span><strong>${semiRetirementMoney(card.linkedPropertyDebt)}</strong></div>
           <div><span>Projected property equity</span><strong>${semiRetirementMoney(card.projectedPropertyEquity)}</strong></div>
-          <div><span>Rental cash income</span><strong>${semiRetirementMoney(card.rentalCashIncome)} p.a.</strong></div>
-          <div><span>Taxable rental income</span><strong>${semiRetirementMoney(card.taxableRentalIncome)} p.a.</strong></div>
+          <div><span>Projected gross rental income</span><strong>${semiRetirementMoney(card.grossRentalIncome ?? card.rentalCashIncome)} p.a.</strong></div>
+          <div><span>Projected operating expenses</span><strong>${semiRetirementMoney(card.propertyExpenses)} p.a.</strong></div>
+          <div><span>Projected loan interest</span><strong>${semiRetirementMoney(card.loanInterest)} p.a.</strong></div>
+          <div><span>Projected loan principal</span><strong>${semiRetirementMoney(card.loanPrincipal)} p.a.</strong></div>
+          <div><span>Projected taxable rental profit</span><strong>${semiRetirementSignedMoney(card.taxableRentalProfit ?? card.taxableRentalIncome, " p.a.")}</strong></div>
           <div><span>Net property cashflow</span><strong>${semiRetirementSignedMoney(card.netPropertyCashflow, " p.a.")}</strong></div>
         </div>
         ${warningRows}
@@ -11881,6 +12143,16 @@
           }
           normaliseRentalPropertyData();
         }
+        if (target.dataset.collection === "assetItems") {
+          if (propertyAssetCategories.includes(item.category || item.type)) {
+            item.owner = normaliseIncomeOwner(item.owner, "rentalNetCashIncome");
+            if (item.owner === "joint") {
+              item.person1AllocationPercentage = item.person1AllocationPercentage ?? 50;
+              item.person2AllocationPercentage = item.person2AllocationPercentage ?? 50;
+            }
+          }
+          normaliseRentalPropertyData();
+        }
         if (target.dataset.collection === "liabilityItems") {
           if (item.type === "rentalPropertyLoan") {
             item.owner = item.owner || "joint";
@@ -11914,6 +12186,10 @@
         syncCollectionsToLegacy();
         autosavePlan();
         if (target.dataset.collection === "liabilityItems" && (target.dataset.key === "type" || target.dataset.key === "investmentAssetCategory")) {
+          renderAll();
+          return;
+        }
+        if (target.dataset.collection === "assetItems" && ["category", "owner", "linkedAssetId"].includes(target.dataset.key)) {
           renderAll();
           return;
         }
@@ -11990,6 +12266,11 @@
       const rentalLoanLink = target.closest("[data-rental-loan-link]");
       if (rentalLoanLink) {
         updateRentalIncomeLoanLink(rentalLoanLink);
+        return;
+      }
+      const propertyLoanLink = target.closest("[data-property-loan-link]");
+      if (propertyLoanLink) {
+        updatePropertyLoanLink(propertyLoanLink);
         return;
       }
       if (target.id === "aiInsightsConsent") {
@@ -12272,6 +12553,12 @@
           resetWeeklyPlanStorage("Weekly Plan reset.");
           renderAll();
         }
+        return;
+      }
+
+      const addPropertyLoanButton = event.target.closest("[data-add-property-loan]");
+      if (addPropertyLoanButton) {
+        addPropertyLoan(addPropertyLoanButton.dataset.addPropertyLoan);
         return;
       }
 

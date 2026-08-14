@@ -267,6 +267,68 @@
     });
   }
 
+  function firstFinitePropertyNumber(item = {}, fields = []) {
+    for (const field of fields) {
+      const value = item[field];
+      if (value !== undefined && value !== null && value !== "") {
+        const parsed = Number(value);
+        if (Number.isFinite(parsed)) return parsed;
+      }
+    }
+    return null;
+  }
+
+  function grossRentalIncomeAnnualFromSource(item = {}) {
+    return firstFinitePropertyNumber(item, [
+      "annualGrossRentalIncome",
+      "grossRentalIncomeAnnual",
+      "grossRentAnnual",
+      "annualRentalGrossIncome",
+      "rentalGrossIncomeAnnual",
+    ]);
+  }
+
+  function propertyOperatingExpensesAnnualFromSource(item = {}) {
+    return firstFinitePropertyNumber(item, [
+      "annualPropertyOperatingExpenses",
+      "propertyOperatingExpensesAnnual",
+      "annualPropertyExpenses",
+      "propertyExpensesAnnual",
+      "operatingExpensesAnnual",
+      "annualOperatingExpenses",
+    ]);
+  }
+
+  function rentalPropertyAssetItems(plan = {}) {
+    return (Array.isArray(plan.assetItems) ? plan.assetItems : [])
+      .filter((item) => RENTAL_INVESTMENT_PROPERTY_TYPES.has(item.category || item.type));
+  }
+
+  function rentalIncomeLinkedToAsset(plan = {}, assetId = "") {
+    return normalisedIncomeItems(plan).find((item) => {
+      if (!(item.type === "rentalNetCashIncome" || item.incomeType === "rentalNetCashIncome")) return false;
+      return String(item.linkedAssetId || item.linkedPropertyAssetId || "") === String(assetId);
+    }) || null;
+  }
+
+  function rentalIncomeHasLinkedPropertyDetails(plan = {}, income = {}) {
+    const assetId = String(income.linkedAssetId || income.linkedPropertyAssetId || "");
+    const asset = rentalPropertyAssetItems(plan).find((item) => String(item.id || "") === assetId) || {};
+    const grossRentalIncome = grossRentalIncomeAnnualFromSource(income) ?? grossRentalIncomeAnnualFromSource(asset);
+    const operatingExpenses = propertyOperatingExpensesAnnualFromSource(income) ?? propertyOperatingExpensesAnnualFromSource(asset);
+    return grossRentalIncome !== null && operatingExpenses !== null;
+  }
+
+  function rentalLoanIdsLinkedToAsset(plan = {}, assetId = "") {
+    const id = String(assetId || "");
+    if (!id) return [];
+    return (Array.isArray(plan.liabilityItems) ? plan.liabilityItems : [])
+      .filter((loan) => loan.type === "rentalPropertyLoan")
+      .filter((loan) => String(loan.linkedAssetId || loan.investmentLink?.linkedAssetId || "") === id)
+      .map((loan) => String(loan.id || ""))
+      .filter(Boolean);
+  }
+
   function projectionAssetsFromPlan(plan = {}) {
     const items = Array.isArray(plan.assetItems) ? plan.assetItems : [];
     const propertyLike = new Set(["home", "principalResidence", "principal_residence", "otherProperty", "rentalInvestmentProperty", "rentalProperty", "investmentProperty", "vehicle"]);
@@ -403,8 +465,42 @@
   }
 
   function projectionPropertyIncomeFromPlan(plan = {}) {
-    return normalisedIncomeItems(plan)
+    const usedIncomeIds = new Set();
+    const propertyRecords = rentalPropertyAssetItems(plan).map((asset, index) => {
+      const linkedIncome = rentalIncomeLinkedToAsset(plan, asset.id);
+      if (linkedIncome?.id) usedIncomeIds.add(String(linkedIncome.id));
+      const grossRentalIncome = grossRentalIncomeAnnualFromSource(asset) ?? grossRentalIncomeAnnualFromSource(linkedIncome || {});
+      const operatingExpenses = propertyOperatingExpensesAnnualFromSource(asset) ?? propertyOperatingExpensesAnnualFromSource(linkedIncome || {});
+      const hasLegacyRentalCashIncome = linkedIncome ? hasRentalCashIncomeAnnualAmount(linkedIncome) : false;
+      const legacyAnnualIncome = hasLegacyRentalCashIncome ? rentalCashIncomeAnnualAmount(linkedIncome) : null;
+      const hasRentalPropertyDetails = grossRentalIncome !== null && operatingExpenses !== null;
+      const linkedLoanIds = Array.from(new Set([
+        ...rentalLoanIdsLinkedToAsset(plan, asset.id),
+        ...(linkedIncome ? rentalLoansLinkedToIncome(plan, linkedIncome) : []),
+      ])).filter(Boolean);
+      return {
+        id: String(linkedIncome?.id || `property-income-${asset.id || index + 1}`),
+        name: String(asset.name || linkedIncome?.propertyName || linkedIncome?.name || `Rental property ${index + 1}`),
+        linkedAssetId: String(asset.id || linkedIncome?.linkedAssetId || ""),
+        linkedLoanIds,
+        owner: asset.owner || asset.incomeOwner || linkedIncome?.owner || linkedIncome?.incomeOwner || "joint",
+        person1AllocationPercentage: number(asset.person1AllocationPercentage ?? asset.person1AllocationPct ?? linkedIncome?.person1AllocationPercentage ?? linkedIncome?.person1AllocationPct ?? 50),
+        person2AllocationPercentage: number(asset.person2AllocationPercentage ?? asset.person2AllocationPct ?? linkedIncome?.person2AllocationPercentage ?? linkedIncome?.person2AllocationPct ?? 50),
+        annualGrossRentalIncome: grossRentalIncome === null ? null : nonNegative(grossRentalIncome),
+        annualPropertyOperatingExpenses: operatingExpenses === null ? null : nonNegative(operatingExpenses),
+        annualIncome: hasRentalPropertyDetails ? null : legacyAnnualIncome,
+        hasRentalPropertyDetails,
+        hasRentalCashIncome: hasRentalPropertyDetails || hasLegacyRentalCashIncome,
+        missingRentalCashIncome: !hasRentalPropertyDetails && !hasLegacyRentalCashIncome,
+        legacyTaxableRentalProfitAnnual: nonNegative(asset.legacyTaxableRentalProfitAnnual ?? linkedIncome?.legacyTaxableRentalProfitAnnual ?? linkedIncome?.taxableRentalIncomeAnnual ?? linkedIncome?.amount),
+        taxableRentalIncomeAnnual: nonNegative(linkedIncome?.taxableRentalIncomeAnnual ?? asset.legacyTaxableRentalProfitAnnual ?? linkedIncome?.amount),
+        annualGrowthRatePct: number(linkedIncome?.annualGrowthRatePct ?? linkedIncome?.growthRatePct ?? 0),
+        rentalCashflowTreatment: hasRentalPropertyDetails ? "grossRent" : linkedIncome?.rentalCashflowTreatment === "beforeInterest" ? "beforeInterest" : "afterInterest",
+      };
+    });
+    const legacyIncomeRecords = normalisedIncomeItems(plan)
       .filter((item) => item.type === "rentalNetCashIncome" || item.incomeType === "rentalNetCashIncome")
+      .filter((item) => !usedIncomeIds.has(String(item.id || "")))
       .map((item, index) => {
         const hasRentalCashIncome = hasRentalCashIncomeAnnualAmount(item);
         return {
@@ -412,19 +508,26 @@
           name: String(item.propertyName || item.name || `Rental property ${index + 1}`),
           linkedAssetId: String(item.linkedAssetId || item.linkedPropertyAssetId || ""),
           linkedLoanIds: rentalLoansLinkedToIncome(plan, item),
+          owner: item.owner || item.incomeOwner || "joint",
+          person1AllocationPercentage: number(item.person1AllocationPercentage ?? item.person1AllocationPct ?? 50),
+          person2AllocationPercentage: number(item.person2AllocationPercentage ?? item.person2AllocationPct ?? 50),
           annualIncome: hasRentalCashIncome ? rentalCashIncomeAnnualAmount(item) : null,
           hasRentalCashIncome,
           missingRentalCashIncome: !hasRentalCashIncome,
+          hasRentalPropertyDetails: false,
+          legacyTaxableRentalProfitAnnual: incomeTaxableAnnualAmount(item),
           taxableRentalIncomeAnnual: incomeTaxableAnnualAmount(item),
           annualGrowthRatePct: number(item.annualGrowthRatePct ?? item.growthRatePct ?? 0),
           rentalCashflowTreatment: item.rentalCashflowTreatment === "beforeInterest" ? "beforeInterest" : "afterInterest",
         };
       });
+    return [...propertyRecords, ...legacyIncomeRecords];
   }
 
   function projectionPassiveIncomeFromPlan(plan = {}) {
     return normalisedIncomeItems(plan)
       .filter((item) => {
+        if (item.type === "rentalNetCashIncome" || item.incomeType === "rentalNetCashIncome") return !rentalIncomeHasLinkedPropertyDetails(plan, item);
         if (PASSIVE_TAXABLE_INCOME_TYPES.has(item.type)) return true;
         return item.type === "other" && (item.isPassiveIncome === true || item.passiveIncome === true || item.isPassive === true);
       })
@@ -569,9 +672,12 @@
     const propertyIncome = projectionPropertyIncomeFromPlan(plan);
     const passiveIncome = projectionPassiveIncomeFromPlan(plan);
     const propertyGrowthAssumptions = propertyGrowthAssumptionsFromPlan(plan);
-    const mappedPropertyIncomeTotal = roundCurrency(propertyIncome.reduce((total, item) => total + number(item.annualIncome), 0));
+    const mappedPropertyTaxableIncomeTotal = roundCurrency(
+      number(result.rentalPropertySummary?.annualCurrentTaxableRentalProfit ?? result.rentalPropertyCashflow?.annualCurrentTaxableRentalProfit)
+      || propertyIncome.reduce((total, item) => total + number(item.taxableRentalIncomeAnnual ?? item.legacyTaxableRentalProfitAnnual ?? item.annualIncome), 0),
+    );
     const mappedPassiveCashIncomeTotal = roundCurrency(passiveIncome.reduce((total, item) => total + number(item.annualCashIncome), 0));
-    const otherAnnualIncome = roundCurrency(Math.max(0, number(result.otherAnnualIncome) - mappedPropertyIncomeTotal - mappedPassiveCashIncomeTotal));
+    const otherAnnualIncome = roundCurrency(Math.max(0, number(result.otherAnnualIncome) - mappedPropertyTaxableIncomeTotal - mappedPassiveCashIncomeTotal));
     const draft = {
       version: 1,
       projectionStartYear: currentYear(),
@@ -745,9 +851,20 @@
       })) : [],
       propertyIncome: Array.isArray(draft.propertyIncome) ? clone(draft.propertyIncome).map((income) => ({
         ...income,
+        annualGrossRentalIncome: finiteNumberOrNull(income.annualGrossRentalIncome) === null ? null : nonNegative(income.annualGrossRentalIncome),
+        annualPropertyOperatingExpenses: finiteNumberOrNull(income.annualPropertyOperatingExpenses) === null ? null : nonNegative(income.annualPropertyOperatingExpenses),
+        hasRentalPropertyDetails: income.hasRentalPropertyDetails === true
+          || (finiteNumberOrNull(income.annualGrossRentalIncome) !== null && finiteNumberOrNull(income.annualPropertyOperatingExpenses) !== null),
         annualIncome: finiteNumberOrNull(income.annualIncome) === null ? null : number(income.annualIncome),
-        hasRentalCashIncome: income.hasRentalCashIncome === true && finiteNumberOrNull(income.annualIncome) !== null,
-        missingRentalCashIncome: income.missingRentalCashIncome === true || finiteNumberOrNull(income.annualIncome) === null,
+        hasRentalCashIncome: income.hasRentalPropertyDetails === true
+          || (finiteNumberOrNull(income.annualGrossRentalIncome) !== null && finiteNumberOrNull(income.annualPropertyOperatingExpenses) !== null)
+          || (income.hasRentalCashIncome === true && finiteNumberOrNull(income.annualIncome) !== null),
+        missingRentalCashIncome: income.missingRentalCashIncome === true
+          || (
+            finiteNumberOrNull(income.annualIncome) === null
+            && !(income.hasRentalPropertyDetails === true || (finiteNumberOrNull(income.annualGrossRentalIncome) !== null && finiteNumberOrNull(income.annualPropertyOperatingExpenses) !== null))
+          ),
+        legacyTaxableRentalProfitAnnual: number(income.legacyTaxableRentalProfitAnnual),
         taxableRentalIncomeAnnual: number(income.taxableRentalIncomeAnnual),
         annualGrowthRate: finiteNumberOrNull(income.annualGrowthRate) !== null
           ? number(income.annualGrowthRate)
@@ -920,7 +1037,9 @@
   }
 
   function rentalTreatmentLabel(treatment = "") {
-    return treatment === "beforeInterest"
+    return treatment === "grossRent"
+      ? "Gross rent, property expenses and linked loan interest are projected separately."
+      : treatment === "beforeInterest"
       ? "Loan interest is deducted separately in this projection."
       : "Rental cash income entered after loan interest.";
   }
@@ -1053,10 +1172,16 @@
       rentalCashIncome: property.rentalCashIncome ?? property.grossRentalIncome,
       rentalCashIncomeGrowthRate: property.rentalCashIncomeGrowthRate,
       rentalCashIncomeGrowthSource: property.rentalCashIncomeGrowthSource,
+      grossRentalIncome: property.grossRentalIncome,
+      annualGrossRentalIncome: property.annualGrossRentalIncome ?? property.grossRentalIncome,
+      propertyExpenses: property.propertyExpenses,
+      annualPropertyOperatingExpenses: property.annualPropertyOperatingExpenses ?? property.propertyExpenses,
       taxableRentalIncome: property.taxableRentalIncome,
+      taxableRentalProfit: property.taxableRentalIncome,
       baseTaxableRentalIncome: property.baseTaxableRentalIncome,
       loanInterest: property.loanInterest,
       loanPrincipal: property.loanPrincipal,
+      fullLoanRepayments: property.fullLoanRepayments,
       netPropertyCashflow: property.netPropertyCashflow,
       hasMissingRentalCashIncome: property.hasMissingRentalCashIncome === true,
       warnings: asArray(property.warnings).map(warningText).filter(Boolean),
