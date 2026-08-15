@@ -175,9 +175,9 @@ test("Stage A1 mortgage interest is reduced by opening offset balance", () => {
     liabilities: [{ id: "home", type: "homeLoan", openingBalance: 400000, openingOffsetBalance: 200000, interestRatePct: 6, repaymentType: "interestOnly" }],
   });
   const row = firstDebt(result);
-  assert.equal(row.offsetBalanceUsed, 200000);
-  assert.equal(row.interestBearingBalance, 200000);
-  assert.equal(row.interestCharged, 12000);
+  assert.equal(row.offsetBalanceUsed, 100000);
+  assert.equal(row.interestBearingBalance, 300000);
+  assert.equal(row.interestCharged, 18000);
 });
 
 test("Stage A1 offset greater than loan does not create negative interest", () => {
@@ -305,8 +305,8 @@ test("Stage A1 property equity still does not fund retirement cashflow automatic
 test("Stage A1 assumptions document debt, offset and rental limitations", () => {
   const result = project();
   assert.match(result.assumptions.debtAndPropertyTreatment, /capitalised interest/i);
-  assert.match(result.assumptions.offsetTreatment, /current offset balance/i);
+  assert.match(result.assumptions.offsetTreatment, /remaining offset balance/i);
   assert.match(result.assumptions.rentalTaxModel, /cashflow, not full future taxable rental profit\/loss/i);
-  assert.ok(result.assumptions.limitations.some((item) => /dynamic offset depletion/i.test(item)));
+  assert.match(result.assumptions.offsetTreatment, /next projection year/i);
   assert.ok(result.assumptions.limitations.some((item) => /negative-gearing/i.test(item)));
 });

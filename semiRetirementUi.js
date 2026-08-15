@@ -267,68 +267,6 @@
     });
   }
 
-  function firstFinitePropertyNumber(item = {}, fields = []) {
-    for (const field of fields) {
-      const value = item[field];
-      if (value !== undefined && value !== null && value !== "") {
-        const parsed = Number(value);
-        if (Number.isFinite(parsed)) return parsed;
-      }
-    }
-    return null;
-  }
-
-  function grossRentalIncomeAnnualFromSource(item = {}) {
-    return firstFinitePropertyNumber(item, [
-      "annualGrossRentalIncome",
-      "grossRentalIncomeAnnual",
-      "grossRentAnnual",
-      "annualRentalGrossIncome",
-      "rentalGrossIncomeAnnual",
-    ]);
-  }
-
-  function propertyOperatingExpensesAnnualFromSource(item = {}) {
-    return firstFinitePropertyNumber(item, [
-      "annualPropertyOperatingExpenses",
-      "propertyOperatingExpensesAnnual",
-      "annualPropertyExpenses",
-      "propertyExpensesAnnual",
-      "operatingExpensesAnnual",
-      "annualOperatingExpenses",
-    ]);
-  }
-
-  function rentalPropertyAssetItems(plan = {}) {
-    return (Array.isArray(plan.assetItems) ? plan.assetItems : [])
-      .filter((item) => RENTAL_INVESTMENT_PROPERTY_TYPES.has(item.category || item.type));
-  }
-
-  function rentalIncomeLinkedToAsset(plan = {}, assetId = "") {
-    return normalisedIncomeItems(plan).find((item) => {
-      if (!(item.type === "rentalNetCashIncome" || item.incomeType === "rentalNetCashIncome")) return false;
-      return String(item.linkedAssetId || item.linkedPropertyAssetId || "") === String(assetId);
-    }) || null;
-  }
-
-  function rentalIncomeHasLinkedPropertyDetails(plan = {}, income = {}) {
-    const assetId = String(income.linkedAssetId || income.linkedPropertyAssetId || "");
-    const asset = rentalPropertyAssetItems(plan).find((item) => String(item.id || "") === assetId) || {};
-    const grossRentalIncome = grossRentalIncomeAnnualFromSource(income) ?? grossRentalIncomeAnnualFromSource(asset);
-    const operatingExpenses = propertyOperatingExpensesAnnualFromSource(income) ?? propertyOperatingExpensesAnnualFromSource(asset);
-    return grossRentalIncome !== null && operatingExpenses !== null;
-  }
-
-  function rentalLoanIdsLinkedToAsset(plan = {}, assetId = "") {
-    const id = String(assetId || "");
-    if (!id) return [];
-    return (Array.isArray(plan.liabilityItems) ? plan.liabilityItems : [])
-      .filter((loan) => loan.type === "rentalPropertyLoan")
-      .filter((loan) => String(loan.linkedAssetId || loan.investmentLink?.linkedAssetId || "") === id)
-      .map((loan) => String(loan.id || ""))
-      .filter(Boolean);
-  }
-
   function projectionAssetsFromPlan(plan = {}) {
     const items = Array.isArray(plan.assetItems) ? plan.assetItems : [];
     const propertyLike = new Set(["home", "principalResidence", "principal_residence", "otherProperty", "rentalInvestmentProperty", "rentalProperty", "investmentProperty", "vehicle"]);
@@ -465,42 +403,8 @@
   }
 
   function projectionPropertyIncomeFromPlan(plan = {}) {
-    const usedIncomeIds = new Set();
-    const propertyRecords = rentalPropertyAssetItems(plan).map((asset, index) => {
-      const linkedIncome = rentalIncomeLinkedToAsset(plan, asset.id);
-      if (linkedIncome?.id) usedIncomeIds.add(String(linkedIncome.id));
-      const grossRentalIncome = grossRentalIncomeAnnualFromSource(asset) ?? grossRentalIncomeAnnualFromSource(linkedIncome || {});
-      const operatingExpenses = propertyOperatingExpensesAnnualFromSource(asset) ?? propertyOperatingExpensesAnnualFromSource(linkedIncome || {});
-      const hasLegacyRentalCashIncome = linkedIncome ? hasRentalCashIncomeAnnualAmount(linkedIncome) : false;
-      const legacyAnnualIncome = hasLegacyRentalCashIncome ? rentalCashIncomeAnnualAmount(linkedIncome) : null;
-      const hasRentalPropertyDetails = grossRentalIncome !== null && operatingExpenses !== null;
-      const linkedLoanIds = Array.from(new Set([
-        ...rentalLoanIdsLinkedToAsset(plan, asset.id),
-        ...(linkedIncome ? rentalLoansLinkedToIncome(plan, linkedIncome) : []),
-      ])).filter(Boolean);
-      return {
-        id: String(linkedIncome?.id || `property-income-${asset.id || index + 1}`),
-        name: String(asset.name || linkedIncome?.propertyName || linkedIncome?.name || `Rental property ${index + 1}`),
-        linkedAssetId: String(asset.id || linkedIncome?.linkedAssetId || ""),
-        linkedLoanIds,
-        owner: asset.owner || asset.incomeOwner || linkedIncome?.owner || linkedIncome?.incomeOwner || "joint",
-        person1AllocationPercentage: number(asset.person1AllocationPercentage ?? asset.person1AllocationPct ?? linkedIncome?.person1AllocationPercentage ?? linkedIncome?.person1AllocationPct ?? 50),
-        person2AllocationPercentage: number(asset.person2AllocationPercentage ?? asset.person2AllocationPct ?? linkedIncome?.person2AllocationPercentage ?? linkedIncome?.person2AllocationPct ?? 50),
-        annualGrossRentalIncome: grossRentalIncome === null ? null : nonNegative(grossRentalIncome),
-        annualPropertyOperatingExpenses: operatingExpenses === null ? null : nonNegative(operatingExpenses),
-        annualIncome: hasRentalPropertyDetails ? null : legacyAnnualIncome,
-        hasRentalPropertyDetails,
-        hasRentalCashIncome: hasRentalPropertyDetails || hasLegacyRentalCashIncome,
-        missingRentalCashIncome: !hasRentalPropertyDetails && !hasLegacyRentalCashIncome,
-        legacyTaxableRentalProfitAnnual: nonNegative(asset.legacyTaxableRentalProfitAnnual ?? linkedIncome?.legacyTaxableRentalProfitAnnual ?? linkedIncome?.taxableRentalIncomeAnnual ?? linkedIncome?.amount),
-        taxableRentalIncomeAnnual: nonNegative(linkedIncome?.taxableRentalIncomeAnnual ?? asset.legacyTaxableRentalProfitAnnual ?? linkedIncome?.amount),
-        annualGrowthRatePct: number(linkedIncome?.annualGrowthRatePct ?? linkedIncome?.growthRatePct ?? 0),
-        rentalCashflowTreatment: hasRentalPropertyDetails ? "grossRent" : linkedIncome?.rentalCashflowTreatment === "beforeInterest" ? "beforeInterest" : "afterInterest",
-      };
-    });
-    const legacyIncomeRecords = normalisedIncomeItems(plan)
+    return normalisedIncomeItems(plan)
       .filter((item) => item.type === "rentalNetCashIncome" || item.incomeType === "rentalNetCashIncome")
-      .filter((item) => !usedIncomeIds.has(String(item.id || "")))
       .map((item, index) => {
         const hasRentalCashIncome = hasRentalCashIncomeAnnualAmount(item);
         return {
@@ -508,26 +412,19 @@
           name: String(item.propertyName || item.name || `Rental property ${index + 1}`),
           linkedAssetId: String(item.linkedAssetId || item.linkedPropertyAssetId || ""),
           linkedLoanIds: rentalLoansLinkedToIncome(plan, item),
-          owner: item.owner || item.incomeOwner || "joint",
-          person1AllocationPercentage: number(item.person1AllocationPercentage ?? item.person1AllocationPct ?? 50),
-          person2AllocationPercentage: number(item.person2AllocationPercentage ?? item.person2AllocationPct ?? 50),
           annualIncome: hasRentalCashIncome ? rentalCashIncomeAnnualAmount(item) : null,
           hasRentalCashIncome,
           missingRentalCashIncome: !hasRentalCashIncome,
-          hasRentalPropertyDetails: false,
-          legacyTaxableRentalProfitAnnual: incomeTaxableAnnualAmount(item),
           taxableRentalIncomeAnnual: incomeTaxableAnnualAmount(item),
           annualGrowthRatePct: number(item.annualGrowthRatePct ?? item.growthRatePct ?? 0),
           rentalCashflowTreatment: item.rentalCashflowTreatment === "beforeInterest" ? "beforeInterest" : "afterInterest",
         };
       });
-    return [...propertyRecords, ...legacyIncomeRecords];
   }
 
   function projectionPassiveIncomeFromPlan(plan = {}) {
     return normalisedIncomeItems(plan)
       .filter((item) => {
-        if (item.type === "rentalNetCashIncome" || item.incomeType === "rentalNetCashIncome") return !rentalIncomeHasLinkedPropertyDetails(plan, item);
         if (PASSIVE_TAXABLE_INCOME_TYPES.has(item.type)) return true;
         return item.type === "other" && (item.isPassiveIncome === true || item.passiveIncome === true || item.isPassive === true);
       })
@@ -672,12 +569,9 @@
     const propertyIncome = projectionPropertyIncomeFromPlan(plan);
     const passiveIncome = projectionPassiveIncomeFromPlan(plan);
     const propertyGrowthAssumptions = propertyGrowthAssumptionsFromPlan(plan);
-    const mappedPropertyTaxableIncomeTotal = roundCurrency(
-      number(result.rentalPropertySummary?.annualCurrentTaxableRentalProfit ?? result.rentalPropertyCashflow?.annualCurrentTaxableRentalProfit)
-      || propertyIncome.reduce((total, item) => total + number(item.taxableRentalIncomeAnnual ?? item.legacyTaxableRentalProfitAnnual ?? item.annualIncome), 0),
-    );
+    const mappedPropertyIncomeTotal = roundCurrency(propertyIncome.reduce((total, item) => total + number(item.annualIncome), 0));
     const mappedPassiveCashIncomeTotal = roundCurrency(passiveIncome.reduce((total, item) => total + number(item.annualCashIncome), 0));
-    const otherAnnualIncome = roundCurrency(Math.max(0, number(result.otherAnnualIncome) - mappedPropertyTaxableIncomeTotal - mappedPassiveCashIncomeTotal));
+    const otherAnnualIncome = roundCurrency(Math.max(0, number(result.otherAnnualIncome) - mappedPropertyIncomeTotal - mappedPassiveCashIncomeTotal));
     const draft = {
       version: 1,
       projectionStartYear: currentYear(),
@@ -691,6 +585,7 @@
       },
       accessibleInvestments: {
         openingBalance: nonNegative(result.accessibleInvestmentAssets),
+        openingOffsetBalance: Math.min(nonNegative(result.accessibleInvestmentAssets), nonNegative(plan.assets?.offsetBalance)),
         annualReturnRatePct: number(plan.investing?.expectedInvestmentReturnPct, 7),
         annualFeesRatePct: 0,
         externalAnnualAccessibleContribution: 0,
@@ -701,7 +596,9 @@
         investmentPropertyCapitalGrowthRatePct: propertyGrowthAssumptions.investmentPropertyCapitalGrowthRatePct,
       },
       scenario: {
+        optionalAdditionalLifestyleWithdrawal: 0,
         semiRetirementAccessibleWithdrawal: 0,
+        surplusDestination: "enjoyment",
         minimumAccessibleBalance: 0,
         minimumEstateBalanceAtEndAge: 0,
         withdrawalOrder: "accessible-first",
@@ -770,7 +667,9 @@
       ["household.semiRetirementLifestyleSpending", draft.household?.semiRetirementLifestyleSpending, "Lifestyle spending cannot be negative."],
       ["household.fullRetirementLifestyleSpending", draft.household?.fullRetirementLifestyleSpending, "Lifestyle spending cannot be negative."],
       ["accessibleInvestments.openingBalance", draft.accessibleInvestments?.openingBalance, "Accessible investment balance cannot be negative."],
+      ["accessibleInvestments.openingOffsetBalance", draft.accessibleInvestments?.openingOffsetBalance, "Opening offset balance cannot be negative."],
       ["accessibleInvestments.externalAnnualAccessibleContribution", draft.accessibleInvestments?.externalAnnualAccessibleContribution, "Additional planned investment contribution cannot be negative."],
+      ["scenario.optionalAdditionalLifestyleWithdrawal", draft.scenario?.optionalAdditionalLifestyleWithdrawal, "Optional additional lifestyle draw cannot be negative."],
       ["scenario.semiRetirementAccessibleWithdrawal", draft.scenario?.semiRetirementAccessibleWithdrawal, "Planned withdrawal cannot be negative."],
     ].forEach(([path, value, message]) => {
       if (number(value) < 0) add(path, message);
@@ -818,6 +717,7 @@
       },
       accessibleInvestments: {
         openingBalance: nonNegative(draft.accessibleInvestments?.openingBalance),
+        openingOffsetBalance: nonNegative(draft.accessibleInvestments?.openingOffsetBalance),
         annualReturnRate: percentToRate(draft.accessibleInvestments?.annualReturnRatePct),
         annualFeesRate: percentToRate(draft.accessibleInvestments?.annualFeesRatePct),
         externalAnnualAccessibleContribution: nonNegative(draft.accessibleInvestments?.externalAnnualAccessibleContribution),
@@ -851,20 +751,9 @@
       })) : [],
       propertyIncome: Array.isArray(draft.propertyIncome) ? clone(draft.propertyIncome).map((income) => ({
         ...income,
-        annualGrossRentalIncome: finiteNumberOrNull(income.annualGrossRentalIncome) === null ? null : nonNegative(income.annualGrossRentalIncome),
-        annualPropertyOperatingExpenses: finiteNumberOrNull(income.annualPropertyOperatingExpenses) === null ? null : nonNegative(income.annualPropertyOperatingExpenses),
-        hasRentalPropertyDetails: income.hasRentalPropertyDetails === true
-          || (finiteNumberOrNull(income.annualGrossRentalIncome) !== null && finiteNumberOrNull(income.annualPropertyOperatingExpenses) !== null),
         annualIncome: finiteNumberOrNull(income.annualIncome) === null ? null : number(income.annualIncome),
-        hasRentalCashIncome: income.hasRentalPropertyDetails === true
-          || (finiteNumberOrNull(income.annualGrossRentalIncome) !== null && finiteNumberOrNull(income.annualPropertyOperatingExpenses) !== null)
-          || (income.hasRentalCashIncome === true && finiteNumberOrNull(income.annualIncome) !== null),
-        missingRentalCashIncome: income.missingRentalCashIncome === true
-          || (
-            finiteNumberOrNull(income.annualIncome) === null
-            && !(income.hasRentalPropertyDetails === true || (finiteNumberOrNull(income.annualGrossRentalIncome) !== null && finiteNumberOrNull(income.annualPropertyOperatingExpenses) !== null))
-          ),
-        legacyTaxableRentalProfitAnnual: number(income.legacyTaxableRentalProfitAnnual),
+        hasRentalCashIncome: income.hasRentalCashIncome === true && finiteNumberOrNull(income.annualIncome) !== null,
+        missingRentalCashIncome: income.missingRentalCashIncome === true || finiteNumberOrNull(income.annualIncome) === null,
         taxableRentalIncomeAnnual: number(income.taxableRentalIncomeAnnual),
         annualGrowthRate: finiteNumberOrNull(income.annualGrowthRate) !== null
           ? number(income.annualGrowthRate)
@@ -902,7 +791,9 @@
         };
       }),
       scenario: {
-        semiRetirementAccessibleWithdrawal: nonNegative(draft.scenario?.semiRetirementAccessibleWithdrawal),
+        optionalAdditionalLifestyleWithdrawal: nonNegative(draft.scenario?.semiRetirementAccessibleWithdrawal ?? draft.scenario?.optionalAdditionalLifestyleWithdrawal),
+        semiRetirementAccessibleWithdrawal: nonNegative(draft.scenario?.semiRetirementAccessibleWithdrawal ?? draft.scenario?.optionalAdditionalLifestyleWithdrawal),
+        surplusDestination: draft.scenario?.surplusDestination || "enjoyment",
         fullRetirementAnnualSpending: nonNegative(draft.household?.fullRetirementLifestyleSpending),
         minimumAccessibleBalance: nonNegative(draft.scenario?.minimumAccessibleBalance),
         minimumEstateBalanceAtEndAge: nonNegative(draft.scenario?.minimumEstateBalanceAtEndAge),
@@ -1000,6 +891,16 @@
     return labels[phase] || String(phase || "Not available");
   }
 
+  function surplusDestinationLabel(value = "") {
+    const labels = {
+      enjoyment: "Extra lifestyle / enjoyment",
+      super: "Contribute to super",
+      "accessible-investments": "Contribute to accessible investments",
+      unallocated: "Leave as unallocated surplus",
+    };
+    return labels[value] || labels.enjoyment;
+  }
+
   function roundDisplayAmount(value) {
     return Math.round((number(value) + Number.EPSILON) * 100) / 100;
   }
@@ -1037,9 +938,7 @@
   }
 
   function rentalTreatmentLabel(treatment = "") {
-    return treatment === "grossRent"
-      ? "Gross rent, property expenses and linked loan interest are projected separately."
-      : treatment === "beforeInterest"
+    return treatment === "beforeInterest"
       ? "Loan interest is deducted separately in this projection."
       : "Rental cash income entered after loan interest.";
   }
@@ -1172,16 +1071,10 @@
       rentalCashIncome: property.rentalCashIncome ?? property.grossRentalIncome,
       rentalCashIncomeGrowthRate: property.rentalCashIncomeGrowthRate,
       rentalCashIncomeGrowthSource: property.rentalCashIncomeGrowthSource,
-      grossRentalIncome: property.grossRentalIncome,
-      annualGrossRentalIncome: property.annualGrossRentalIncome ?? property.grossRentalIncome,
-      propertyExpenses: property.propertyExpenses,
-      annualPropertyOperatingExpenses: property.annualPropertyOperatingExpenses ?? property.propertyExpenses,
       taxableRentalIncome: property.taxableRentalIncome,
-      taxableRentalProfit: property.taxableRentalIncome,
       baseTaxableRentalIncome: property.baseTaxableRentalIncome,
       loanInterest: property.loanInterest,
       loanPrincipal: property.loanPrincipal,
-      fullLoanRepayments: property.fullLoanRepayments,
       netPropertyCashflow: property.netPropertyCashflow,
       hasMissingRentalCashIncome: property.hasMissingRentalCashIncome === true,
       warnings: asArray(property.warnings).map(warningText).filter(Boolean),
@@ -1547,7 +1440,7 @@
       }]
       : [];
     const offsetRows = asArray(projection.years).some((row) => asArray(row.liabilities).some((debt) => number(debt.offsetBalanceUsed) > 0))
-      ? [{ label: "Mortgage offset limitation", value: assumptions.offsetTreatment || "Current offset balance reduces projected interest. Dynamic offset depletion is not modelled.", type: "plain" }]
+      ? [{ label: "Mortgage offset treatment", value: assumptions.offsetTreatment || "Offset cash reduces projected interest and is dynamically depleted if used for retirement spending.", type: "plain" }]
       : [];
     const noSaleRows = asArray(projection.years).some((row) => asArray(row.properties).length)
       ? [
@@ -1561,13 +1454,15 @@
       { label: "Inflation", value: inputs.inflationRate, type: "percentRate" },
       { label: "Accessible investment return", value: inputs.accessibleInvestments?.annualReturnRate, type: "percentRate" },
       { label: "Accessible investment fees", value: inputs.accessibleInvestments?.annualFeesRate, type: "percentRate" },
-      { label: "Additional planned investment contribution", value: inputs.accessibleInvestments?.externalAnnualAccessibleContribution ?? inputs.accessibleInvestments?.currentAnnualContributions, type: "currency" },
+      { label: "Working-phase planned investment contribution", value: inputs.accessibleInvestments?.externalAnnualAccessibleContribution ?? inputs.accessibleInvestments?.currentAnnualContributions, type: "currency" },
+      { label: "Opening offset balance inside accessible assets", value: inputs.accessibleInvestments?.openingOffsetBalance, type: "currency" },
       { label: "Current lifestyle spending", value: inputs.household?.currentLifestyleSpending, type: "currency" },
       { label: "Semi-retirement lifestyle spending", value: inputs.household?.semiRetirementLifestyleSpending, type: "currency" },
       { label: "Full-retirement lifestyle spending", value: inputs.household?.fullRetirementLifestyleSpending ?? inputs.scenario?.fullRetirementAnnualSpending, type: "currency" },
       { label: "Annual loan principal repayments", value: inputs.household?.annualLoanPrincipalRepayments, type: "currency" },
       { label: "Other annual income", value: inputs.household?.otherAnnualIncome, type: "currency" },
-      { label: "Planned semi-retirement accessible withdrawal", value: inputs.scenario?.semiRetirementAccessibleWithdrawal, type: "currency" },
+      { label: "Optional additional lifestyle draw", value: inputs.scenario?.optionalAdditionalLifestyleWithdrawal ?? inputs.scenario?.semiRetirementAccessibleWithdrawal, type: "currency" },
+      { label: "Retirement surplus destination", value: surplusDestinationLabel(inputs.scenario?.surplusDestination), type: "plain" },
       { label: "Minimum accessible balance", value: inputs.scenario?.minimumAccessibleBalance, type: "currency" },
       { label: "Withdrawal order", value: inputs.scenario?.withdrawalOrder || assumptions.withdrawalOrder || "accessible investments first", type: "plain" },
       ...people.flatMap((person) => [
@@ -1686,8 +1581,8 @@
         firstUnfundedSpending: summary.firstUnfundedSpending,
         totalUnfundedSpending: roundDisplayAmount(summary.totalUnfundedSpending),
       },
-      semiRetirementFunding: {
-        plannedAnnualAccessibleWithdrawal: inputs.scenario?.semiRetirementAccessibleWithdrawal ?? draft.scenario?.semiRetirementAccessibleWithdrawal ?? 0,
+    semiRetirementFunding: {
+        plannedAnnualAccessibleWithdrawal: inputs.scenario?.optionalAdditionalLifestyleWithdrawal ?? inputs.scenario?.semiRetirementAccessibleWithdrawal ?? draft.scenario?.optionalAdditionalLifestyleWithdrawal ?? draft.scenario?.semiRetirementAccessibleWithdrawal ?? 0,
         totalPlannedSemiRetirementWithdrawals: plannedSemiRetirementWithdrawals,
         requiredAccessibleWithdrawalsDuringSemiRetirement,
         superWithdrawalsDuringSemiRetirement,
@@ -1707,7 +1602,7 @@
   const SCENARIO_ADJUSTMENT_FIELDS = {
     semiRetirementAccessibleWithdrawal: {
       path: "scenario.semiRetirementAccessibleWithdrawal",
-      label: "Annual semi-retirement withdrawal",
+      label: "Optional additional lifestyle draw",
     },
     fullRetirementLifestyleSpending: {
       path: "household.fullRetirementLifestyleSpending",
@@ -1728,6 +1623,9 @@
 
   function scenarioAdjustmentValue(draft = {}, field) {
     const config = SCENARIO_ADJUSTMENT_FIELDS[field];
+    if (field === "semiRetirementAccessibleWithdrawal") {
+      return number(draft.scenario?.semiRetirementAccessibleWithdrawal ?? draft.scenario?.optionalAdditionalLifestyleWithdrawal);
+    }
     return config ? number(getDraftPath(draft, config.path)) : 0;
   }
 
@@ -1735,7 +1633,11 @@
     const config = SCENARIO_ADJUSTMENT_FIELDS[field];
     if (!config) return draft;
     const parsed = Number(value);
-    setDraftPath(draft, config.path, Number.isFinite(parsed) ? parsed : value);
+    const nextValue = Number.isFinite(parsed) ? parsed : value;
+    setDraftPath(draft, config.path, nextValue);
+    if (field === "semiRetirementAccessibleWithdrawal") {
+      setDraftPath(draft, "scenario.optionalAdditionalLifestyleWithdrawal", nextValue);
+    }
     return draft;
   }
 

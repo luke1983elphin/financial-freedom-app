@@ -301,11 +301,13 @@ test("Stage C1 retirement result changes only when valid rental cashflow is supp
   }];
   const missing = project({
     household: { currentLifestyleSpending: 25000 },
+    scenario: { surplusDestination: "accessible-investments" },
     propertyIncome: [missingRentalCashIncome()],
     passiveIncome: commonPassiveTax,
   }).result;
   const supplied = project({
     household: { currentLifestyleSpending: 25000 },
+    scenario: { surplusDestination: "accessible-investments" },
     propertyIncome: [rentalIncome({ annualIncome: 38000, rentalCashflowTreatment: "afterInterest" })],
     passiveIncome: commonPassiveTax,
   }).result;

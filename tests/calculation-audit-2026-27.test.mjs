@@ -63,7 +63,7 @@ test("LITO reduces income tax only and is capped at income tax before Medicare",
   assert.equal(lowIncome.incomeTaxBeforeOffsets, 270);
   assert.equal(lowIncome.lito, 270);
   assert.equal(lowIncome.incomeTax, 0);
-  assert.equal(lowIncome.medicareLevy, 400);
+  assert.equal(lowIncome.medicareLevy, 0);
 
   const midIncome = CALC.individualTaxBreakdown(50000);
   assert.equal(midIncome.incomeTaxBeforeOffsets, 5520);

@@ -613,8 +613,7 @@
 
   .semi-retirement-results-grid,
   .semi-retirement-results-grid.compact,
-  .semi-retirement-assumption-grid,
-  .rental-property-summary-grid {
+  .semi-retirement-assumption-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1294,37 +1293,6 @@ main {
   padding-top: 10px;
 }
 
-.rental-property-summary {
-  border: 1px solid #dbeafe;
-  border-radius: 16px;
-  background: #f8fbff;
-  padding: 14px;
-}
-
-.rental-property-summary-grid {
-  display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.rental-property-summary-grid > div {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-
-.rental-property-summary-grid span {
-  color: #64748b;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.rental-property-summary-grid strong {
-  color: #0f2742;
-  font-size: 16px;
-  overflow-wrap: anywhere;
-}
-
 .premium-hero {
   display: grid;
   gap: 22px;
@@ -1696,6 +1664,137 @@ main {
 
 .rental-property-row small {
   line-height: 1.4;
+}
+
+.linked-property-section {
+  display: grid;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.linked-property-list {
+  display: grid;
+  gap: 16px;
+}
+
+.linked-property-card {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  border: 1px solid #cfe7dc;
+  border-radius: 18px;
+  background: #f8fcfa;
+  padding: 18px;
+}
+
+.linked-property-card-header,
+.linked-property-loan-heading {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.linked-property-card-header h4 {
+  margin: 2px 0 4px;
+  color: #0f2742;
+  font-size: 20px;
+  font-weight: 950;
+  line-height: 1.2;
+}
+
+.linked-property-card-header p,
+.linked-property-reconciliation p {
+  margin: 0;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.linked-property-badge {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #e7f7ef;
+  padding: 6px 10px;
+  color: #166534;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.linked-property-summary-grid,
+.linked-property-mini-grid {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.linked-property-detail {
+  min-width: 0;
+  border: 1px solid #dbeafe;
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 12px;
+}
+
+.linked-property-detail > summary {
+  cursor: pointer;
+  color: #0f2742;
+  font-size: 14px;
+  font-weight: 900;
+  list-style-position: outside;
+}
+
+.linked-property-income,
+.linked-property-loan,
+.linked-property-reconciliation {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  margin-top: 12px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 12px;
+}
+
+.linked-property-loan-heading strong,
+.linked-property-loan-heading span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.linked-property-loan-heading span {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 850;
+  text-align: right;
+}
+
+@media (max-width: 640px) {
+  .linked-property-card {
+    border-radius: 14px;
+    padding: 14px;
+  }
+
+  .linked-property-card-header,
+  .linked-property-loan-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .linked-property-badge {
+    justify-self: start;
+    width: fit-content;
+    white-space: normal;
+  }
+
+  .linked-property-loan-heading span {
+    text-align: left;
+  }
+
+  .linked-property-summary-grid,
+  .linked-property-mini-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .passive-income-card {

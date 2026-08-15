@@ -998,7 +998,7 @@ test("Stage 4N assumptions display adjusted values", () => {
     semiRetirementAccessibleWithdrawal: 30000,
     fullRetirementLifestyleSpending: 60000,
   });
-  assert.equal(assumptionRow(adjusted.viewModel, "Planned semi-retirement accessible withdrawal").value, 30000);
+  assert.equal(assumptionRow(adjusted.viewModel, "Optional additional lifestyle draw").value, 30000);
   assert.equal(assumptionRow(adjusted.viewModel, "Full-retirement lifestyle spending").value, 60000);
 });
 

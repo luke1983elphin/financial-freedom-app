@@ -3,374 +3,400 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import vm from "node:vm";
 
-const context = { console, URLSearchParams };
-context.globalThis = context;
-vm.runInNewContext(readFileSync(new URL("../calculator.js", import.meta.url), "utf8"), context);
-vm.runInNewContext(readFileSync(new URL("../semiRetirementProjection.js", import.meta.url), "utf8"), context);
-vm.runInNewContext(readFileSync(new URL("../semiRetirementUi.js", import.meta.url), "utf8"), context);
-
-const CALC = context.FFSCalculator;
-const ENGINE = context.FFSSemiRetirementProjection;
-const UI = context.FFSSemiRetirementUi;
-const appSource = readFileSync(new URL("../app.js", import.meta.url), "utf8");
-const stylesSource = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
-
-function rentalLoan(overrides = {}) {
-  return {
-    id: "smith-loan",
-    name: "Smith St loan",
-    type: "rentalPropertyLoan",
-    balance: 400000,
-    interestRatePct: 5,
-    repayment: 32000,
-    repaymentFrequency: "annually",
-    termYears: 30,
-    linkedAssetId: "smith-st",
-    ...overrides,
-  };
+function loadEngine() {
+  const context = { console, URLSearchParams };
+  context.globalThis = context;
+  vm.runInNewContext(readFileSync(new URL("../calculator.js", import.meta.url), "utf8"), context);
+  vm.runInNewContext(readFileSync(new URL("../semiRetirementProjection.js", import.meta.url), "utf8"), context);
+  vm.runInNewContext(readFileSync(new URL("../semiRetirementUi.js", import.meta.url), "utf8"), context);
+  return context;
 }
 
-function propertyAsset(overrides = {}) {
-  return {
-    id: "smith-st",
-    name: "Smith St",
-    category: "rentalInvestmentProperty",
-    value: 600000,
-    owner: "joint",
-    person1AllocationPercentage: 50,
-    person2AllocationPercentage: 50,
-    annualGrossRentalIncome: 50000,
-    annualPropertyOperatingExpenses: 10000,
-    propertyGrowthRatePct: 3,
-    ...overrides,
-  };
+function mergeDeep(base, override) {
+  if (Array.isArray(override)) return override.map((item) => mergeDeep({}, item));
+  if (!override || typeof override !== "object") return override;
+  const output = { ...base };
+  for (const [key, value] of Object.entries(override)) {
+    if (Array.isArray(value)) {
+      output[key] = value.map((item) => mergeDeep({}, item));
+    } else if (value && typeof value === "object" && base?.[key] && typeof base[key] === "object" && !Array.isArray(base[key])) {
+      output[key] = mergeDeep(base[key], value);
+    } else {
+      output[key] = value;
+    }
+  }
+  return output;
 }
 
-function planWithProperty({ asset = propertyAsset(), liabilities = [rentalLoan()], incomeItems = [] } = {}) {
-  const plan = CALC.emptyPlan();
-  plan.personal.person1Name = "Luke";
-  plan.personal.person2Name = "Lisa";
-  plan.personal.person1Age = 43;
-  plan.personal.person2Age = 41;
-  plan.personal.fullRetirementAge = 60;
-  plan.personal.targetAnnualSpending = 90000;
-  plan.investing.inflationPct = 2.5;
-  plan.investing.expectedInvestmentReturnPct = 7;
-  plan.investing.expectedSuperReturnPct = 6.5;
-  plan.assetItems = [asset];
-  plan.liabilityItems = liabilities;
-  plan.incomeItems = [
-    { id: "salary-luke", name: "Luke salary", type: "salaryWages", owner: "person1", amount: 120000, frequency: "annually" },
-    { id: "salary-lisa", name: "Lisa salary", type: "salaryWages", owner: "person2", amount: 85000, frequency: "annually" },
-    ...incomeItems,
-  ];
-  return plan;
+function person(overrides = {}) {
+  return mergeDeep({
+    id: "person1",
+    name: "Person 1",
+    currentAge: 54,
+    currentGrossEmploymentIncome: 100000,
+    annualIncomeGrowthRate: 0,
+    semiRetirementAge: 55,
+    semiRetirementGrossIncome: 50000,
+    fullRetirementAge: 65,
+    superAccessAge: 60,
+    openingSuperBalance: 100000,
+    superReturnBeforeRetirement: 0,
+    superReturnAfterRetirement: 0,
+    superAnnualFeesRate: 0,
+    employerSuperRate: 0.12,
+    existingAdditionalConcessionalContributions: 0,
+    additionalContributionsStopAge: 65,
+    stslOpeningBalance: 0,
+    hasPrivateHealthCover: true,
+  }, overrides);
 }
 
-function propertyResult(plan = planWithProperty()) {
-  const summary = CALC.calculateRentalPropertySummary(plan);
-  const result = summary.propertyResults.find((item) => item.linkedAssetId === "smith-st");
-  assert.ok(result, "Expected Smith St property result");
-  return { summary, result };
-}
-
-function project(plan = planWithProperty(), mutator = () => {}) {
-  const result = CALC.calculatePlan(plan);
-  const defaults = UI.buildSemiRetirementScenarioDefaults(plan, result).draft;
-  defaults.projectionEndAge = 80;
-  defaults.accessibleInvestments.openingBalance = 500000;
-  defaults.accessibleInvestments.externalAnnualAccessibleContribution = 0;
-  mutator(defaults);
-  const run = UI.runSemiRetirementProjection(ENGINE, defaults);
-  assert.equal(run.validation.isValid, true, JSON.stringify(run.validation.errors));
-  return run.result;
-}
-
-test("Stage E Phase 1 property editor is the authoritative rental-property entry point", () => {
-  assert.match(appSource, /Annual gross rental income/);
-  assert.match(appSource, /Annual property expenses/);
-  assert.match(appSource, /Investment property loan/);
-  assert.match(appSource, /data-add-property-loan/);
-  assert.match(appSource, /data-property-loan-link/);
-  assert.match(appSource, /Managed under Rental \/ Investment Property/);
-  assert.match(appSource, /ensureDerivedRentalIncomeForProperty/);
-});
-
-test("Stage E Phase 1 uses stable property and loan IDs for rental linking", () => {
-  assert.match(appSource, /linkedAssetId: asset\.id/);
-  assert.match(appSource, /linkedLoanIds/);
-  assert.doesNotMatch(appSource, /linkedAssetName/);
-  assert.match(appSource, /loan\.linkedAssetId = assetId/);
-});
-
-test("Stage E legacy rental record loads without fabricating gross rent or expenses", () => {
-  const plan = planWithProperty({
-    asset: propertyAsset({
-      annualGrossRentalIncome: undefined,
-      annualPropertyOperatingExpenses: undefined,
-    }),
+function baseInput(overrides = {}) {
+  return mergeDeep({
+    projectionStartYear: 2026,
+    projectionEndAge: 66,
+    inflationRate: 0,
+    household: {
+      currentLifestyleSpending: 70000,
+      semiRetirementLifestyleSpending: 70000,
+      fullRetirementLifestyleSpending: 70000,
+      otherAnnualIncome: 0,
+      annualLoanPrincipalRepayments: 0,
+    },
+    accessibleInvestments: {
+      openingBalance: 100000,
+      openingOffsetBalance: 0,
+      annualReturnRate: 0,
+      annualFeesRate: 0,
+      currentAnnualContributions: 0,
+      externalAnnualAccessibleContribution: 0,
+    },
+    people: [person()],
+    scenario: {
+      semiRetirementAccessibleWithdrawal: 0,
+      optionalAdditionalLifestyleWithdrawal: 0,
+      surplusDestination: "enjoyment",
+      fullRetirementAnnualSpending: 70000,
+      minimumAccessibleBalance: 0,
+      minimumEstateBalanceAtEndAge: 0,
+      withdrawalOrder: "accessible-first",
+    },
     liabilities: [],
-    incomeItems: [{
-      id: "legacy-rent",
-      name: "Smith St legacy rent",
-      type: "rentalNetCashIncome",
-      owner: "joint",
-      amount: 8000,
-      taxableRentalIncomeAnnual: 8000,
-      linkedAssetId: "smith-st",
-    }],
-  });
-  const { result } = propertyResult(plan);
-  assert.equal(result.hasRentalPropertyDetails, false);
-  assert.equal(result.annualGrossRentalIncome, null);
-  assert.equal(result.annualPropertyOperatingExpenses, null);
-  assert.equal(result.legacyTaxableRentalProfitAnnual, 8000);
-  assert.match(result.warnings[0].message, /needs gross rental income and annual property expenses/i);
+    assets: [],
+    propertyIncome: [],
+    passiveIncome: [],
+  }, overrides);
+}
+
+function runProjection(overrides = {}) {
+  const { FFSSemiRetirementProjection: engine } = loadEngine();
+  const result = engine.projectRetirementScenario(baseInput(overrides));
+  assert.equal(result.validation.isValid, true);
+  return result;
+}
+
+function rowForAge(result, age, personId = "person1") {
+  const row = result.years.find((entry) => entry.people.some((candidate) => candidate.id === personId && candidate.age === age));
+  assert.ok(row, `Expected projection row for ${personId} age ${age}`);
+  return row;
+}
+
+function approx(actual, expected, tolerance = 0.02) {
+  assert.ok(Math.abs(Number(actual) - Number(expected)) <= tolerance, `Expected ${actual} to be within ${tolerance} of ${expected}`);
+}
+
+test("Stage E Medicare levy honours 2026-27 lower threshold and phase-in", () => {
+  const { FFSCalculator: calc } = loadEngine();
+  assert.equal(calc.calculateMedicareLevy(20000), 0);
+  assert.equal(calc.calculateMedicareLevy(28011), 0);
+  assert.equal(calc.calculateMedicareLevy(28012), 0.1);
+  assert.equal(calc.calculateMedicareLevy(31512), 350.1);
+  assert.equal(calc.calculateMedicareLevy(35013), 700.2);
+  assert.equal(calc.calculateMedicareLevy(50000), 1000);
+  assert.equal(calc.individualTaxBreakdown(31512).medicareLevyEstimateType, "phase-in");
 });
 
-test("Stage E rental-property summary CSS is responsive", () => {
-  assert.match(stylesSource, /\.rental-property-summary-grid\s*\{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/s);
-  assert.match(stylesSource, /@media \(max-width: 640px\)[\s\S]*\.rental-property-summary-grid\s*\{[\s\S]*grid-template-columns: 1fr;/);
-});
-
-test("Stage E Phase 2 current-year rental property derives taxable profit and household cashflow", () => {
-  const plan = planWithProperty({
-    liabilities: [rentalLoan({
-      repayment: 20000,
-      repaymentFrequency: "annually",
-      repaymentType: "interestOnly",
-      additionalPrincipalRepayment: 12000,
-      additionalPrincipalFrequency: "annually",
+test("Stage E tax-free super withdrawals do not create taxable income, Medicare levy or MLS", () => {
+  const result = runProjection({
+    people: [person({
+      currentAge: 65,
+      currentGrossEmploymentIncome: 0,
+      semiRetirementAge: 65,
+      semiRetirementGrossIncome: 0,
+      fullRetirementAge: 65,
+      superAccessAge: 60,
+      openingSuperBalance: 100000,
+      employerSuperRate: 0,
+      hasPrivateHealthCover: false,
     })],
+    accessibleInvestments: { openingBalance: 0 },
+    household: { fullRetirementLifestyleSpending: 70000, otherAnnualIncome: 0 },
+    scenario: { fullRetirementAnnualSpending: 70000 },
   });
-  const { summary, result } = propertyResult(plan);
-  assert.equal(result.annualGrossRentalIncome, 50000);
-  assert.equal(result.annualPropertyOperatingExpenses, 10000);
-  assert.equal(result.annualLoanInterest, 20000);
-  assert.equal(result.annualLoanPrincipal, 12000);
-  assert.equal(result.annualLoanRepayments, 32000);
-  assert.equal(result.currentTaxableRentalProfit, 20000);
-  assert.equal(result.currentNetPropertyCashflow, 8000);
-  assert.equal(result.householdCashflowContribution, 8000);
-  assert.equal(summary.annualGrossRentalIncome, 50000);
-  assert.equal(summary.annualPropertyOperatingExpenses, 10000);
-  assert.equal(summary.annualCurrentTaxableRentalProfit, 20000);
-  assert.equal(summary.annualCurrentNetPropertyCashflow, 8000);
+  const year = rowForAge(result, 65);
+  assert.equal(year.people[0].totalTaxableIncome, 0);
+  assert.equal(year.people[0].medicareLevy, 0);
+  assert.equal(year.people[0].medicareLevySurcharge, 0);
+  assert.equal(year.household.totalSuperWithdrawal, 70000);
 });
 
-test("Stage E Phase 2 rental taxable profit follows property ownership while household cashflow is counted once", () => {
-  const plan = planWithProperty({
-    asset: propertyAsset({
-      owner: "joint",
-      person1AllocationPercentage: 50,
-      person2AllocationPercentage: 50,
-    }),
-    liabilities: [rentalLoan({
-      repayment: 20000,
-      repaymentFrequency: "annually",
-      repaymentType: "interestOnly",
-      additionalPrincipalRepayment: 12000,
-      additionalPrincipalFrequency: "annually",
+test("Stage E Medicare uses taxable income only when tax-free super is also funding spending", () => {
+  const result = runProjection({
+    people: [person({
+      currentAge: 65,
+      currentGrossEmploymentIncome: 0,
+      semiRetirementAge: 65,
+      semiRetirementGrossIncome: 0,
+      fullRetirementAge: 65,
+      superAccessAge: 60,
+      openingSuperBalance: 100000,
+      employerSuperRate: 0,
     })],
+    accessibleInvestments: { openingBalance: 0 },
+    passiveIncome: [{ id: "interest", type: "interest", owner: "person1", annualCashIncome: 20000, annualTaxableIncome: 20000 }],
+    household: { fullRetirementLifestyleSpending: 90000 },
+    scenario: { fullRetirementAnnualSpending: 90000 },
   });
-  const income = CALC.incomeBreakdown(plan, CALC.calculateRentalPropertySummary(plan));
-  assert.equal(income.person1TaxableOther, 10000);
-  assert.equal(income.person2TaxableOther, 10000);
-  assert.equal(income.jointOtherTaxable, 20000);
-  assert.equal(income.otherIncome, 20000);
-  const result = CALC.calculatePlan(plan);
-  assert.equal(result.rentalPropertySummary.annualHouseholdCashflowContribution, 8000);
-  assert.equal(result.annualRentalLoanCashflowRepayments, 12000);
-  assert.equal(result.otherAnnualIncome, 20000);
-  assert.equal(result.incomeBreakdown.otherIncome, 20000);
+  const year = rowForAge(result, 65);
+  assert.equal(year.people[0].totalTaxableIncome, 20000);
+  assert.equal(year.people[0].medicareLevy, 0);
+  assert.equal(year.household.totalSuperWithdrawal, 70000);
 });
 
-test("Stage E Phase 2 rental ownership can allocate taxable profit unequally without duplicate household income", () => {
-  const plan = planWithProperty({
-    asset: propertyAsset({
-      owner: "joint",
-      person1AllocationPercentage: 70,
-      person2AllocationPercentage: 30,
-    }),
-    liabilities: [rentalLoan({
-      repayment: 20000,
-      repaymentFrequency: "annually",
-      repaymentType: "interestOnly",
-      additionalPrincipalRepayment: 12000,
-      additionalPrincipalFrequency: "annually",
+test("Stage E Medicare phase-in uses taxable income only when super cashflow is present", () => {
+  const result = runProjection({
+    people: [person({
+      currentAge: 65,
+      currentGrossEmploymentIncome: 0,
+      semiRetirementAge: 65,
+      semiRetirementGrossIncome: 0,
+      fullRetirementAge: 65,
+      superAccessAge: 60,
+      openingSuperBalance: 100000,
+      employerSuperRate: 0,
     })],
+    accessibleInvestments: { openingBalance: 0 },
+    passiveIncome: [{ id: "interest", type: "interest", owner: "person1", annualCashIncome: 31512, annualTaxableIncome: 31512 }],
+    household: { fullRetirementLifestyleSpending: 90000 },
+    scenario: { fullRetirementAnnualSpending: 90000 },
   });
-  const income = CALC.incomeBreakdown(plan, CALC.calculateRentalPropertySummary(plan));
-  assert.equal(income.person1TaxableOther, 14000);
-  assert.equal(income.person2TaxableOther, 6000);
-  assert.equal(income.taxableTotal, 225000);
-  assert.equal(income.total, 225000);
+  const year = rowForAge(result, 65);
+  assert.equal(year.people[0].totalTaxableIncome, 31512);
+  assert.equal(year.people[0].medicareLevy, 350.1);
+  assert.ok(year.household.totalSuperWithdrawal > 0);
 });
 
-test("Stage E Phase 3 future property rows grow gross rent and expenses with CPI and use the debt schedule", () => {
-  const plan = planWithProperty({
-    liabilities: [rentalLoan({
-      repayment: 20000,
-      repaymentFrequency: "annually",
-      repaymentType: "interestOnly",
-      additionalPrincipalRepayment: 12000,
-      additionalPrincipalFrequency: "annually",
-      termYears: 30,
-    })],
+test("Stage E MLS remains separate from Medicare levy thresholds and honours cover and low-income spouse protection", () => {
+  const { FFSCalculator: calc } = loadEngine();
+  assert.equal(calc.calculateMedicareLevySurcharge({
+    person1TaxableIncome: 100000,
+    person1CoverStatus: "no-cover",
+    hasPartner: false,
+    dependants: 0,
+  }).annualSurcharge, 0);
+  assert.equal(calc.calculateMedicareLevySurcharge({
+    person1TaxableIncome: 120000,
+    person1CoverStatus: "full-year",
+    hasPartner: false,
+    dependants: 0,
+  }).annualSurcharge, 0);
+  assert.equal(calc.calculateMedicareLevySurcharge({
+    person1TaxableIncome: 120000,
+    person1CoverStatus: "no-cover",
+    hasPartner: false,
+    dependants: 0,
+  }).annualSurcharge, 1200);
+  const family = calc.calculateMedicareLevySurcharge({
+    person1TaxableIncome: 230000,
+    person2TaxableIncome: 27222,
+    person1MLSIncomeForThreshold: 230000,
+    person2MLSIncomeForThreshold: 27222,
+    person1CoverStatus: "no-cover",
+    person2CoverStatus: "no-cover",
+    hasPartner: true,
+    spouseForFullYear: true,
+    dependants: 0,
   });
-  const result = project(plan);
-  const year0 = result.years[0].propertyIncome[0];
-  const year1 = result.years[1].propertyIncome[0];
-  assert.equal(year0.grossRentalIncome, 50000);
-  assert.equal(year0.propertyExpenses, 10000);
-  assert.equal(year0.loanInterest, 20000);
-  assert.equal(year0.loanPrincipal, 12000);
-  assert.equal(year0.fullLoanRepayments, 32000);
-  assert.equal(year0.taxableRentalIncome, 20000);
-  assert.equal(year0.netPropertyCashflow, 8000);
-  assert.equal(year0.person1TaxableIncome, 10000);
-  assert.equal(year0.person2TaxableIncome, 10000);
-  assert.equal(result.years[0].people[0].rentalTaxableIncome, 10000);
-  assert.equal(result.years[0].people[1].rentalTaxableIncome, 10000);
-  assert.equal(result.years[0].household.totalRentalTaxableIncome, 20000);
-  assert.equal(result.years[0].household.netRentalCashflow, 8000);
-  assert.equal(year1.grossRentalIncome, 51250);
-  assert.equal(year1.propertyExpenses, 10250);
-  assert.equal(year1.loanInterest, 19400);
-  assert.equal(year1.loanPrincipal, 12600);
-  assert.equal(year1.fullLoanRepayments, 32000);
-  assert.equal(year1.taxableRentalIncome, 21600);
-  assert.equal(year1.netPropertyCashflow, 9000);
+  assert.equal(family.person1Surcharge, 2875);
+  assert.equal(family.person2Surcharge, 0);
+  assert.equal(family.person2LowIncomeSpouseExempt, true);
 });
 
-test("Stage E Phase 3 rent and expenses continue after a linked rental loan is repaid", () => {
-  const plan = planWithProperty({
-    liabilities: [rentalLoan({
-      balance: 12000,
-      interestRatePct: 0,
-      repayment: 0,
-      repaymentFrequency: "annually",
-      repaymentType: "interestOnly",
-      additionalPrincipalRepayment: 12000,
-      additionalPrincipalFrequency: "annually",
-      termYears: 30,
-    })],
-  });
-  const result = project(plan);
-  const year0 = result.years[0].propertyIncome[0];
-  const year1 = result.years[1].propertyIncome[0];
-  assert.equal(year0.loanPrincipal, 12000);
-  assert.equal(year0.netPropertyCashflow, 28000);
-  assert.equal(year1.loanInterest, 0);
-  assert.equal(year1.loanPrincipal, 0);
-  assert.equal(year1.fullLoanRepayments, 0);
-  assert.equal(year1.grossRentalIncome, 51250);
-  assert.equal(year1.propertyExpenses, 10250);
-  assert.equal(year1.taxableRentalIncome, 41000);
-  assert.equal(year1.netPropertyCashflow, 41000);
-});
-
-test("Stage E Phase 3 multiple linked rental loans are combined once", () => {
-  const plan = planWithProperty({
-    liabilities: [
-      rentalLoan({
-        id: "smith-loan-1",
-        repayment: 20000,
-        repaymentFrequency: "annually",
-        repaymentType: "interestOnly",
-        additionalPrincipalRepayment: 12000,
-        additionalPrincipalFrequency: "annually",
+test("Stage E person-specific planned contributions cease at each person's semi-retirement age while employer super continues", () => {
+  const result = runProjection({
+    people: [
+      person({
+        id: "person1",
+        currentAge: 54,
+        currentGrossEmploymentIncome: 100000,
+        semiRetirementAge: 55,
+        semiRetirementGrossIncome: 50000,
+        fullRetirementAge: 65,
+        existingAdditionalConcessionalContributions: 10000,
       }),
-      rentalLoan({
-        id: "smith-loan-2",
-        name: "Second Smith St loan",
-        balance: 100000,
-        interestRatePct: 5,
-        repayment: 5000,
-        repaymentFrequency: "annually",
-        repaymentType: "interestOnly",
-        additionalPrincipalRepayment: 3000,
-        additionalPrincipalFrequency: "annually",
+      person({
+        id: "person2",
+        name: "Person 2",
+        currentAge: 54,
+        currentGrossEmploymentIncome: 80000,
+        semiRetirementAge: 58,
+        semiRetirementGrossIncome: 40000,
+        fullRetirementAge: 65,
+        openingSuperBalance: 80000,
+        existingAdditionalConcessionalContributions: 5000,
       }),
     ],
+    household: { currentLifestyleSpending: 40000, semiRetirementLifestyleSpending: 40000, fullRetirementLifestyleSpending: 40000 },
   });
-  const result = project(plan);
-  const row = result.years[0].propertyIncome[0];
-  assert.equal(Array.from(row.linkedLoanIds).sort().join(","), "smith-loan-1,smith-loan-2");
-  assert.equal(row.loanInterest, 25000);
-  assert.equal(row.loanPrincipal, 15000);
-  assert.equal(row.fullLoanRepayments, 40000);
-  assert.equal(row.taxableRentalIncome, 15000);
-  assert.equal(row.netPropertyCashflow, 0);
-  assert.equal(result.years[0].household.propertyDebtRepayments, 40000);
+  const workingYear = rowForAge(result, 54);
+  assert.equal(workingYear.people.find((entry) => entry.id === "person1").additionalSuperContribution, 10000);
+  assert.equal(workingYear.people.find((entry) => entry.id === "person2").additionalSuperContribution, 5000);
+
+  const semiYear = rowForAge(result, 55);
+  const p1 = semiYear.people.find((entry) => entry.id === "person1");
+  const p2 = semiYear.people.find((entry) => entry.id === "person2");
+  assert.equal(p1.additionalSuperContribution, 0);
+  assert.ok(p1.employerSuperContribution > 0);
+  assert.equal(p2.additionalSuperContribution, 5000);
 });
 
-test("Stage E Phase 3 rental income is not duplicated as passive income in semi-retirement inputs", () => {
-  const plan = planWithProperty({
-    incomeItems: [{
-      id: "income-rental-smith-st",
-      name: "Smith St derived rent",
-      type: "rentalNetCashIncome",
-      owner: "joint",
-      amount: 20000,
-      annualGrossRentalIncome: 50000,
-      annualPropertyOperatingExpenses: 10000,
-      linkedAssetId: "smith-st",
-      derivedFromProperty: true,
+test("Stage E funds ordinary lifestyle shortfalls before optional lifestyle draws", () => {
+  const result = runProjection({
+    people: [person({ currentAge: 55, currentGrossEmploymentIncome: 0, semiRetirementAge: 55, semiRetirementGrossIncome: 0, fullRetirementAge: 65, employerSuperRate: 0 })],
+    household: { semiRetirementLifestyleSpending: 70000, otherAnnualIncome: 40000 },
+    accessibleInvestments: { openingBalance: 100000, externalAnnualAccessibleContribution: 10000 },
+    scenario: { semiRetirementAccessibleWithdrawal: 0, optionalAdditionalLifestyleWithdrawal: 0 },
+  });
+  const year = rowForAge(result, 55);
+  assert.equal(year.household.annualLifestyleSurplusOrShortfall, -30000);
+  assert.equal(year.household.requiredTotalPortfolioWithdrawal, 30000);
+  assert.equal(year.household.requiredAccessibleWithdrawal, 30000);
+  assert.equal(year.household.optionalAdditionalLifestyleWithdrawal, 0);
+  assert.equal(year.household.accessibleInvestmentContribution, 0);
+  assert.equal(year.household.ceasedExternalAccessibleContribution, 10000);
+});
+
+test("Stage E retirement surplus can be enjoyed, contributed to super, invested or left unallocated", () => {
+  const common = {
+    people: [person({ currentAge: 65, currentGrossEmploymentIncome: 0, semiRetirementAge: 65, semiRetirementGrossIncome: 0, fullRetirementAge: 65, employerSuperRate: 0, openingSuperBalance: 0 })],
+    accessibleInvestments: { openingBalance: 0, annualReturnRate: 0 },
+    household: { fullRetirementLifestyleSpending: 100000, otherAnnualIncome: 120000 },
+    scenario: { fullRetirementAnnualSpending: 100000 },
+  };
+  const enjoyment = rowForAge(runProjection(mergeDeep(common, { scenario: { surplusDestination: "enjoyment" } })), 65).household;
+  assert.equal(enjoyment.surplusAvailableForEnjoyment, 20000);
+  assert.equal(enjoyment.accessibleInvestmentContribution, 0);
+  assert.equal(enjoyment.surplusToSuper, 0);
+
+  const superRow = rowForAge(runProjection(mergeDeep(common, { scenario: { surplusDestination: "super" } })), 65);
+  assert.equal(superRow.household.surplusToSuper, 20000);
+  assert.equal(superRow.people[0].surplusAdditionalSuperContribution, 20000);
+  assert.equal(superRow.people[0].closingSuperBalance, 17000);
+
+  const investments = rowForAge(runProjection(mergeDeep(common, { scenario: { surplusDestination: "accessible-investments" } })), 65).household;
+  assert.equal(investments.surplusToAccessibleInvestments, 20000);
+  assert.equal(investments.accessibleInvestmentContribution, 20000);
+  assert.equal(investments.closingAccessibleInvestmentBalance, 20000);
+
+  const unallocated = rowForAge(runProjection(mergeDeep(common, { scenario: { surplusDestination: "unallocated" } })), 65).household;
+  assert.equal(unallocated.unallocatedSurplus, 20000);
+  assert.equal(unallocated.unallocatedSurplusClosingBalance, 20000);
+  assert.equal(unallocated.closingAccessibleInvestmentBalance, 0);
+  assert.equal(unallocated.accessibleInvestmentEarnings, 0);
+});
+
+test("Stage E offset cash remains accessible but earns no investment return while linked debt exists", () => {
+  const result = runProjection({
+    people: [person({ currentAge: 65, currentGrossEmploymentIncome: 0, semiRetirementAge: 65, semiRetirementGrossIncome: 0, fullRetirementAge: 65, employerSuperRate: 0, openingSuperBalance: 0 })],
+    household: { fullRetirementLifestyleSpending: 0, otherAnnualIncome: 0 },
+    accessibleInvestments: { openingBalance: 100000, openingOffsetBalance: 100000, annualReturnRate: 0.1 },
+    liabilities: [{
+      id: "home-loan",
+      name: "Home loan",
+      type: "homeLoan",
+      openingBalance: 400000,
+      openingOffsetBalance: 100000,
+      annualInterestRate: 0.05,
+      repaymentAmount: 0,
+      repaymentFrequency: "annually",
+      remainingTermYears: 30,
     }],
+    scenario: { fullRetirementAnnualSpending: 0 },
   });
-  const result = CALC.calculatePlan(plan);
-  const draft = UI.buildSemiRetirementScenarioDefaults(plan, result).draft;
-  assert.equal(draft.propertyIncome.length, 1);
-  assert.equal(draft.propertyIncome[0].annualGrossRentalIncome, 50000);
-  assert.equal(draft.propertyIncome[0].annualPropertyOperatingExpenses, 10000);
-  assert.equal(draft.passiveIncome.some((item) => item.type === "rentalTaxableIncome"), false);
+  const year = rowForAge(result, 65);
+  assert.equal(year.household.offsetOpeningBalance, 100000);
+  assert.equal(year.household.accessibleInvestmentEarnings, 0);
+  assert.equal(year.liabilities[0].interestBearingBalance, 300000);
+  assert.ok(year.liabilities[0].interestCharged > 0);
+  assert.ok(year.liabilities[0].interestCharged < 400000 * 0.05);
 });
 
-test("Stage E Phase 4 semi-retirement property cards expose the full rental cashflow model", () => {
-  const plan = planWithProperty({
-    liabilities: [rentalLoan({
-      repayment: 20000,
+test("Stage E offset depletion reduces later loan-interest offset benefit", () => {
+  const result = runProjection({
+    projectionEndAge: 67,
+    people: [person({ currentAge: 65, currentGrossEmploymentIncome: 0, semiRetirementAge: 65, semiRetirementGrossIncome: 0, fullRetirementAge: 65, employerSuperRate: 0, openingSuperBalance: 0 })],
+    household: { fullRetirementLifestyleSpending: 20000, otherAnnualIncome: 0 },
+    accessibleInvestments: { openingBalance: 100000, openingOffsetBalance: 100000, annualReturnRate: 0 },
+    liabilities: [{
+      id: "home-loan",
+      name: "Home loan",
+      type: "homeLoan",
+      openingBalance: 400000,
+      openingOffsetBalance: 100000,
+      annualInterestRate: 0.05,
+      repaymentAmount: 0,
       repaymentFrequency: "annually",
-      repaymentType: "interestOnly",
-      additionalPrincipalRepayment: 12000,
-      additionalPrincipalFrequency: "annually",
-      termYears: 30,
-    })],
+      remainingTermYears: 30,
+    }],
+    scenario: { fullRetirementAnnualSpending: 20000 },
   });
-  const result = project(plan);
-  const view = UI.buildDebtPropertyResultsViewModel(result, result.years[0].people);
-  const card = view.propertyCards.find((item) => item.id === "smith-st");
-  assert.ok(card, "Expected Smith St property card");
-  assert.equal(card.grossRentalIncome > 0, true);
-  assert.equal(card.propertyExpenses > 0, true);
-  assert.equal(Number.isFinite(card.loanInterest), true);
-  assert.equal(Number.isFinite(card.loanPrincipal), true);
-  assert.equal(Number.isFinite(card.taxableRentalProfit), true);
-  assert.equal(Number.isFinite(card.netPropertyCashflow), true);
-  assert.match(appSource, /Projected gross rental income/);
-  assert.match(appSource, /Projected operating expenses/);
-  assert.match(appSource, /Projected loan interest/);
-  assert.match(appSource, /Projected loan principal/);
-  assert.match(appSource, /Projected taxable rental profit/);
+  const first = rowForAge(result, 65);
+  const second = rowForAge(result, 66);
+  assert.equal(first.household.offsetWithdrawals, 20000);
+  assert.equal(first.household.offsetClosingBalance, 80000);
+  assert.equal(second.liabilities[0].offsetBalanceUsed, 80000);
+  approx(second.liabilities[0].interestBearingBalance, first.liabilities[0].closingBalance - 80000);
 });
 
-test("Stage E Phase 4 household cashflow includes whole-property net cashflow once", () => {
-  const plan = planWithProperty({
-    liabilities: [rentalLoan({
-      repayment: 20000,
+test("Stage E remaining offset cash earns ordinary accessible return from the year after linked loan payoff", () => {
+  const result = runProjection({
+    projectionEndAge: 67,
+    people: [person({ currentAge: 65, currentGrossEmploymentIncome: 0, semiRetirementAge: 65, semiRetirementGrossIncome: 0, fullRetirementAge: 65, employerSuperRate: 0, openingSuperBalance: 0 })],
+    household: { fullRetirementLifestyleSpending: 0, otherAnnualIncome: 10000 },
+    accessibleInvestments: { openingBalance: 10000, openingOffsetBalance: 10000, annualReturnRate: 0.1 },
+    liabilities: [{
+      id: "home-loan",
+      name: "Home loan",
+      type: "homeLoan",
+      openingBalance: 10000,
+      openingOffsetBalance: 10000,
+      annualInterestRate: 0.05,
+      repaymentAmount: 10000,
       repaymentFrequency: "annually",
-      repaymentType: "interestOnly",
-      additionalPrincipalRepayment: 12000,
-      additionalPrincipalFrequency: "annually",
-      termYears: 30,
-    })],
+      remainingTermYears: 1,
+    }],
+    scenario: { fullRetirementAnnualSpending: 0 },
   });
-  const result = project(plan);
-  const year0 = result.years[0];
-  assert.equal(year0.household.netRentalCashflow, 8000);
-  assert.equal(year0.household.otherIncome, 0);
-  assert.equal(year0.household.netHouseholdCashIncome, year0.household.totalNetEmploymentIncome + 8000);
-  assert.equal(year0.household.scheduledDebtCashRequirement, 0);
-  assert.equal(year0.household.propertyDebtRepayments, 32000);
+  const first = rowForAge(result, 65);
+  const second = rowForAge(result, 66);
+  assert.equal(first.household.accessibleInvestmentEarnings, 0);
+  assert.equal(first.liabilities[0].closingBalance, 0);
+  assert.equal(second.household.offsetOpeningBalance, 0);
+  assert.equal(second.household.accessibleInvestmentEarnings, 1000);
+});
+
+test("Stage E Linked Property UI is a stable-ID management layer over authoritative asset income and loan records", () => {
+  const appSource = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+  const stylesSource = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+  assert.match(appSource, /function linkedPropertyRecords\(\)/);
+  assert.match(appSource, /propertyAssetCategories\.includes\(asset\.category\)/);
+  assert.match(appSource, /String\(loan\.linkedAssetId \|\| ""\) === String\(asset\.id\)/);
+  assert.match(appSource, /linkedLoanIdsFromIncome\.has\(loanId\)/);
+  assert.match(appSource, /data-linked-property-id/);
+  assert.match(appSource, /dynamicInput\("assetItems", asset, "value"/);
+  assert.match(appSource, /dynamicInput\("incomeItems", income, "rentalCashIncomeAnnual"/);
+  assert.match(appSource, /dynamicInput\("liabilityItems", loan, "openingOffsetBalance"/);
+  assert.match(appSource, /loans\.length \? loans\.map\(linkedPropertyLoanCard\)/);
+  assert.match(stylesSource, /\.linked-property-card/);
+  assert.match(stylesSource, /@media \(max-width: 640px\)[\s\S]*\.linked-property-summary-grid/);
 });

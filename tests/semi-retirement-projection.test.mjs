@@ -458,7 +458,7 @@ test("projection end age is applied to the youngest person in a couple", () => {
 
 test("accessible exhaustion milestone reports calendar year and both ages", () => {
   const result = runProjection({
-    projectionEndAge: 50,
+    projectionEndAge: 60,
     people: [
       person1({ currentAge: 50, currentGrossEmploymentIncome: 0, semiRetirementAge: 50, fullRetirementAge: 50, superAccessAge: 60, openingSuperBalance: 0, employerSuperRate: 0 }),
       person2({ currentAge: 45, currentGrossEmploymentIncome: 0, semiRetirementAge: 45, fullRetirementAge: 45, superAccessAge: 60, openingSuperBalance: 0, employerSuperRate: 0 }),
@@ -480,7 +480,7 @@ test("accessible exhaustion milestone reports calendar year and both ages", () =
 
 test("first unfunded spending milestone reports calendar year and both ages", () => {
   const result = runProjection({
-    projectionEndAge: 50,
+    projectionEndAge: 60,
     people: [
       person1({ currentAge: 50, currentGrossEmploymentIncome: 0, semiRetirementAge: 50, fullRetirementAge: 50, superAccessAge: 60, openingSuperBalance: 0, employerSuperRate: 0 }),
       person2({ currentAge: 45, currentGrossEmploymentIncome: 0, semiRetirementAge: 45, fullRetirementAge: 45, superAccessAge: 60, openingSuperBalance: 0, employerSuperRate: 0 }),
@@ -501,8 +501,11 @@ test("first unfunded spending milestone reports calendar year and both ages", ()
 
 test("external accessible contribution is added once on top of household surplus", () => {
   const result = runProjection({
-    projectionEndAge: 50,
-    people: zeroIncomePeople(),
+    projectionEndAge: 60,
+    people: zeroIncomePeople({
+      person1: { semiRetirementAge: 55, fullRetirementAge: 60 },
+      person2: { semiRetirementAge: 55, fullRetirementAge: 60 },
+    }),
     household: {
       currentLifestyleSpending: 40000,
       semiRetirementLifestyleSpending: 40000,
@@ -529,8 +532,11 @@ test("external accessible contribution is added once on top of household surplus
 
 test("household cash surplus flows into accessible investments once when no external contribution is set", () => {
   const result = runProjection({
-    projectionEndAge: 50,
-    people: zeroIncomePeople(),
+    projectionEndAge: 60,
+    people: zeroIncomePeople({
+      person1: { semiRetirementAge: 55, fullRetirementAge: 60 },
+      person2: { semiRetirementAge: 55, fullRetirementAge: 60 },
+    }),
     household: {
       currentLifestyleSpending: 40000,
       semiRetirementLifestyleSpending: 40000,
@@ -882,7 +888,7 @@ test("super earnings can switch from pre-retirement to post-retirement return ra
     projectionEndAge: 51,
     people: [
       person1({
-        currentGrossEmploymentIncome: 0,
+        currentGrossEmploymentIncome: 100000,
         semiRetirementAge: 51,
         fullRetirementAge: 51,
         superAccessAge: 60,
@@ -927,8 +933,8 @@ test("additional concessional contributions stop at the configured age and enter
     projectionEndAge: 60,
     people: [
       person1({
-        currentGrossEmploymentIncome: 0,
-        semiRetirementAge: 50,
+        currentGrossEmploymentIncome: 100000,
+        semiRetirementAge: 56,
         fullRetirementAge: 60,
         openingSuperBalance: 0,
         employerSuperRate: 0,
