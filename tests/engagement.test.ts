@@ -151,3 +151,64 @@ test("workspace navigation includes the prominent dashboard destinations", () =>
   assert.match(indexSource, /data-view="goals">Goals/);
   assert.match(indexSource, /data-engagement-action="ai">AI Coach/);
 });
+
+test("F2 dashboard stage card updates the visible Dashboard card, not a hidden setup card", () => {
+  assert.match(appSource, /const dashboardPanel = document\.querySelector\('\[data-view-panel="dashboard"\]'\)/);
+  assert.match(appSource, /const dashboardStageCard = dashboardPanel\?\.querySelector\("\.freedom-stage-card"\)/);
+  assert.match(appSource, /if \(dashboardStageCard\) dashboardStageCard\.innerHTML = `/);
+  assert.doesNotMatch(appSource, /document\.querySelector\("\.freedom-stage-card"\)\.innerHTML/);
+});
+
+test("F2 opening balance input uses the same actual amount interaction path as other weekly fields", () => {
+  assert.match(appSource, /weeklyActualField\(week, "openingBalance", "Actual opening bank balance"/);
+  assert.match(appSource, /data-weekly-actual="\$\{escapeHtml\(key\)\}"/);
+  assert.match(appSource, /data-weekly-opening-balance="\$\{week\.weekNumber\}"/);
+  assert.match(appSource, /function updateWeeklyActualDraftFromInput/);
+  assert.match(appSource, /refreshWeeklyActualClosingDisplay\(weekNumber\)/);
+});
+
+test("F2 opening balance editor is not hidden behind a native details disclosure", () => {
+  assert.doesNotMatch(appSource, /<summary>Update opening balance<\/summary>/);
+  assert.match(appSource, /weekly-opening-adjustment mt-4/);
+  assert.match(appSource, /Save opening balance/);
+});
+
+test("F2 Home and workspace views are mutually exclusive in the primary layout", () => {
+  assert.match(appSource, /function setHomeWorkspaceVisibility\(workspaceVisible\)/);
+  assert.match(appSource, /home\.classList\.toggle\("hidden", workspaceVisible\)/);
+  assert.match(appSource, /workspace\.classList\.toggle\("hidden", !workspaceVisible\)/);
+  assert.match(appSource, /home\.setAttribute\("aria-hidden", workspaceVisible \? "true" : "false"\)/);
+  assert.match(appSource, /workspace\.setAttribute\("aria-hidden", workspaceVisible \? "false" : "true"\)/);
+});
+
+test("F2 render output restores Home or workspace visibility after rerenders", () => {
+  assert.match(appSource, /setHomeWorkspaceVisibility\(Boolean\(hasOpenedWorkspace\)\)/);
+  assert.match(appSource, /function showHomeView\(options = \{\}\)/);
+  assert.match(appSource, /if \(target === "home"\)/);
+});
+
+test("F2 dashboard readiness recognises structured income records", () => {
+  assert.match(appSource, /function hasIncomeCollectionValue\(items\)/);
+  assert.match(appSource, /\["amount", "annualAmount"\]/);
+  assert.match(appSource, /const hasIncome = hasIncomeCollectionValue\(planCandidate\.incomeItems\)/);
+});
+
+test("F2 dashboard readiness does not force debt on valid no-debt plans", () => {
+  assert.match(appSource, /hasDebtData \|\| positiveNumber\(result\.annualDebtRepayments\) \|\| result\.totalLiabilities === 0/);
+  assert.match(appSource, /hasDebtData \|\| result\.totalLiabilities === 0/);
+});
+
+test("F2 mobile weekly stepper exposes all five steps without document-level horizontal scrolling", () => {
+  assert.match(appSource, /const weeklyStepOrder = \["opening", "income", "bills", "transfers", "complete"\]/);
+  assert.match(indexSource + appSource, /Savings & Transfers/);
+  assert.match(indexSource + appSource, /Complete Week/);
+  assert.match(readFileSync(new URL("../styles.css", import.meta.url), "utf8"), /@media \(max-width: 560px\)[\s\S]*\.weekly-step-nav \{[\s\S]*display: grid;[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);[\s\S]*overflow-x: visible;/);
+  assert.match(readFileSync(new URL("../styles.css", import.meta.url), "utf8"), /\.weekly-step-button:nth-child\(5\) \{[\s\S]*grid-column: 1 \/ -1;/);
+});
+
+test("F2 normal production console output does not include weekly render debug logs", () => {
+  assert.match(appSource, /const DEBUG_WEEKLY_PLAN = window\.FFS_DEBUG_WEEKLY_PLAN === true/);
+  assert.match(appSource, /if \(DEBUG_WEEKLY_PLAN\) console\.info\(`Weekly Plan editor build:/);
+  assert.match(appSource, /if \(DEBUG_WEEKLY_PLAN\) console\.info\(`Weekly Plan render count:/);
+  assert.doesNotMatch(appSource, /const APP_VERSION = "3\.0-test-weekly-planner"/);
+});

@@ -6485,18 +6485,22 @@ textarea.field-input {
   }
 
   .weekly-step-nav {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
-    overflow-x: auto;
+    overflow-x: visible;
     padding-bottom: 3px;
-    scrollbar-width: thin;
   }
 
   .weekly-step-button {
-    flex: 0 0 auto;
-    grid-template-columns: 24px minmax(72px, 96px);
-    max-width: 138px;
+    grid-template-columns: 24px minmax(0, 1fr);
+    max-width: none;
+    width: 100%;
     padding: 8px;
+  }
+
+  .weekly-step-button:nth-child(5) {
+    grid-column: 1 / -1;
   }
 
   .weekly-step-button span {

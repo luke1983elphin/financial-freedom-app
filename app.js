@@ -14,8 +14,8 @@
   const PERSONAL_PLAN_PREFIX = "ffs-personal-plan-v1:";
   const PERSONAL_WEEKLY_PLAN_PREFIX = "ffs-weekly-plan-v1:";
   const SNAPSHOT_PREFIX = "ffs-financial-snapshots-v1:";
-  const APP_VERSION = "3.0-test-weekly-planner";
-  const WEEKLY_EDITOR_BUILD_ID = "2026-07-17-02";
+  const APP_VERSION = "3.0-stage-f2-live-qa-repair";
+  const WEEKLY_EDITOR_BUILD_ID = "2026-08-15-f2";
   const EXPORT_SCHEMA_VERSION = 1;
   const AI_INSIGHTS_ENDPOINT = "/api/ai-insights";
   const AI_INSIGHTS_DEFAULT_MAX_GENERATIONS = 5;
@@ -24,7 +24,8 @@
   const AUTOMATIC_SNAPSHOT_MIN_DAYS = 30;
   const SNAPSHOT_MATERIAL_CHANGE_AMOUNT = 1000;
   const ENGAGEMENT_JOURNEY_ENABLED = window.FFS_ENGAGEMENT_JOURNEY_ENABLED !== false;
-  console.info(`Weekly Plan editor build: ${WEEKLY_EDITOR_BUILD_ID}`);
+  const DEBUG_WEEKLY_PLAN = window.FFS_DEBUG_WEEKLY_PLAN === true;
+  if (DEBUG_WEEKLY_PLAN) console.info(`Weekly Plan editor build: ${WEEKLY_EDITOR_BUILD_ID}`);
   const frequencies = [
     ["weekly", "Weekly"],
     ["fortnightly", "Fortnightly"],
@@ -2192,6 +2193,10 @@
     return Array.isArray(items) && items.some((item) => keys.some((key) => positiveNumber(item?.[key])));
   }
 
+  function hasIncomeCollectionValue(items) {
+    return hasCollectionValue(items, ["amount", "annualAmount"]);
+  }
+
   function firstProjectedAgeAtProgress(result, threshold) {
     const row = (result.financialFreedomProgressProjection || []).find((item) => numberValue(item.progress) >= threshold);
     return row?.age ? `Age ${row.age}` : "Not yet projected by the app";
@@ -2206,7 +2211,7 @@
     const liabilities = planCandidate.liabilities || {};
     const hasAnyAge = positiveNumber(personal.person1Age) || positiveNumber(personal.person2Age);
     const hasTargetAge = positiveNumber(personal.fullRetirementAge) || positiveNumber(personal.semiRetirementAge) || positiveNumber(personal.workOptionalAge);
-    const hasIncome = hasCollectionValue(planCandidate.incomeItems, ["amount"]) || positiveNumber(result.annualGrossIncome);
+    const hasIncome = hasIncomeCollectionValue(planCandidate.incomeItems) || positiveNumber(result.annualGrossIncome);
     const hasExpenses = hasCollectionValue(planCandidate.expenseItems, ["amount"]) || positiveNumber(result.annualLivingExpenses);
     const hasDebtData = hasCollectionValue(planCandidate.liabilityItems, ["balance", "repaymentAmount", "repayment"])
       || positiveNumber(liabilities.homeLoanBalance)
@@ -2242,9 +2247,9 @@
       { label: "Annual lifestyle spending", complete: positiveNumber(personal.targetAnnualSpending), message: "Add the annual lifestyle spending needed for Financial Freedom." },
       { label: "Income", complete: hasIncome, message: "Add household income." },
       { label: "Lifestyle expenses", complete: hasExpenses, message: "Add lifestyle expenses." },
-      { label: "Mortgage and debt repayments", complete: hasDebtData, message: "Add mortgage, debt or repayment details." },
+      { label: "Mortgage and debt repayments", complete: hasDebtData || positiveNumber(result.annualDebtRepayments) || result.totalLiabilities === 0, message: "Add mortgage, debt or repayment details, or confirm there are no debts." },
       { label: "Assets", complete: hasAssets, message: "Add current assets." },
-      { label: "Liabilities", complete: hasDebtData, message: "Confirm liabilities and debts, even if they are low." },
+      { label: "Liabilities", complete: hasDebtData || result.totalLiabilities === 0, message: "Confirm liabilities and debts, even if they are low." },
       { label: "Cash or offset balances", complete: hasCashOrOffset, message: "Add cash or offset balances." },
       { label: "Investments outside super", complete: hasInvestmentsOutsideSuper, message: "Add investments outside super." },
       { label: "Superannuation", complete: hasSuper, message: "Add superannuation balances." },
@@ -2270,7 +2275,7 @@
     const assets = planCandidate.assets || {};
     const hasAnyAge = positiveNumber(personal.person1Age) || positiveNumber(personal.person2Age);
     const hasTargetAge = positiveNumber(personal.fullRetirementAge) || positiveNumber(personal.semiRetirementAge) || positiveNumber(personal.workOptionalAge);
-    const hasIncome = hasCollectionValue(planCandidate.incomeItems, ["amount"]) || positiveNumber(result.annualGrossIncome);
+    const hasIncome = hasIncomeCollectionValue(planCandidate.incomeItems) || positiveNumber(result.annualGrossIncome);
     const hasLifestyleNeed = positiveNumber(personal.targetAnnualSpending)
       || hasCollectionValue(planCandidate.expenseItems, ["amount"])
       || positiveNumber(result.annualLivingExpenses);
@@ -4018,6 +4023,10 @@
 
   function navigateToSection(sectionId, options = {}) {
     const target = normaliseNavigationTarget(sectionId);
+    if (target === "home") {
+      showHomeView(options);
+      return true;
+    }
     if (target === "semiretirement" && !semiRetirementUiEnabled()) {
       updateSaveStatus("Semi-Retirement is available only when the private projection beta is enabled.");
       return false;
@@ -4040,10 +4049,30 @@
   function showWorkspace(view = "dashboard", options = {}) {
     hasOpenedWorkspace = true;
     const workspace = document.getElementById("appWorkspace");
-    workspace.classList.remove("hidden");
+    setHomeWorkspaceVisibility(true);
     if (!setView(view)) return;
     if (options?.scroll === false) return;
     workspace.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function showHomeView(options = {}) {
+    hasOpenedWorkspace = false;
+    setHomeWorkspaceVisibility(false);
+    if (options?.scroll === false) return;
+    document.getElementById("homeView")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function setHomeWorkspaceVisibility(workspaceVisible) {
+    const home = document.getElementById("homeView");
+    const workspace = document.getElementById("appWorkspace");
+    if (home) {
+      home.classList.toggle("hidden", workspaceVisible);
+      home.setAttribute("aria-hidden", workspaceVisible ? "true" : "false");
+    }
+    if (workspace) {
+      workspace.classList.toggle("hidden", !workspaceVisible);
+      workspace.setAttribute("aria-hidden", workspaceVisible ? "false" : "true");
+    }
   }
 
   function setView(view) {
@@ -5509,8 +5538,10 @@
     const heroScore = document.getElementById("heroScore");
     const scoreRing = document.querySelector(".score-ring");
     const scoreRingLabel = document.querySelector(".score-ring span");
-    const progressSection = document.querySelector(".freedom-progress-section");
-    const nextMilestoneCard = document.querySelector(".next-milestone-card");
+    const dashboardPanel = document.querySelector('[data-view-panel="dashboard"]');
+    const progressSection = dashboardPanel?.querySelector(".freedom-progress-section");
+    const dashboardStageCard = dashboardPanel?.querySelector(".freedom-stage-card");
+    const nextMilestoneCard = dashboardPanel?.querySelector(".next-milestone-card");
 
     progressSection?.classList.toggle("dashboard-journey-simple", true);
     nextMilestoneCard?.classList.add("hidden");
@@ -5520,7 +5551,7 @@
       heroScore.textContent = plainPercent(percent);
       if (scoreRingLabel) scoreRingLabel.textContent = "Financial Freedom";
       if (scoreRing) scoreRing.style.borderColor = percent >= 100 ? "#bdebd7" : percent >= 75 ? "#f3d08c" : "#dbe4ee";
-      document.querySelector(".freedom-stage-card").innerHTML = `
+      if (dashboardStageCard) dashboardStageCard.innerHTML = `
         <div class="stage-heading-row">
           <span class="metric-label">Financial Freedom Journey</span>
           ${infoButtonHtml("financialStage", "financial stages")}
@@ -5550,7 +5581,7 @@
       heroScore.textContent = "--";
       if (scoreRingLabel) scoreRingLabel.textContent = "Setup needed";
       if (scoreRing) scoreRing.style.borderColor = "#dbe4ee";
-      document.querySelector(".freedom-stage-card").innerHTML = `
+      if (dashboardStageCard) dashboardStageCard.innerHTML = `
         <div class="stage-heading-row">
           <span class="metric-label">Financial Freedom Journey</span>
           ${infoButtonHtml("financialStage", "financial stages")}
@@ -9426,17 +9457,17 @@
           <div><span>Reconciliation Adjustment</span><strong class="${differenceClass}">${money(difference)}</strong></div>
         </div>
         ${canAdjust ? `
-          <details class="weekly-setup-details mt-4">
-            <summary>Update opening balance</summary>
-            <div class="weekly-opening-adjustment mt-3">
-              <label>
-                <span class="field-label">Actual opening bank balance</span>
-                <input class="field-input weekly-actual-input" type="number" inputmode="decimal" step="0.01" data-weekly-opening-balance="${week.weekNumber}" value="${weeklyInputValue(actualOpening)}">
-                <small class="field-help">This is a reconciliation adjustment only. It does not change last week or your long-term Financial Freedom plan.</small>
-              </label>
-              <button class="btn btn-primary" type="button" data-weekly-action="save-opening-balance" data-weekly-week="${week.weekNumber}">Save opening balance</button>
-            </div>
-          </details>
+          <div class="weekly-actual-grid weekly-opening-adjustment mt-4">
+            ${weeklyActualField(week, "openingBalance", "Actual opening bank balance", actualOpening, {
+              step: "0.01",
+              valueFallback: actualOpening,
+              extraAttributes: `data-weekly-opening-balance="${week.weekNumber}"`,
+              help: "This is a reconciliation adjustment only. It does not change last week or your long-term Financial Freedom plan.",
+            })}
+          </div>
+          <div class="weekly-action-row mt-3">
+            <button class="btn btn-primary" type="button" data-weekly-action="save-opening-balance" data-weekly-week="${week.weekNumber}">Save opening balance</button>
+          </div>
         ` : ""}
       </article>
     `;
@@ -9495,15 +9526,18 @@
   function weeklyActualField(week, key, label, defaultValue, options = {}) {
     const actual = week.actual || {};
     const hasValue = weeklyHasActualAmount(actual, key);
-    const value = hasValue ? actual[key] : "";
+    const value = hasValue ? actual[key] : options.valueFallback ?? "";
     const placeholder = options.type === "text" || defaultValue === "" || defaultValue === undefined
       ? ""
       : ` placeholder="${weeklyInputValue(defaultValue || 0)}"`;
     const inputMode = options.type === "text" ? "" : ' inputmode="decimal"';
+    const help = options.help ? `<small class="field-help">${escapeHtml(options.help)}</small>` : "";
+    const extraAttributes = options.extraAttributes ? ` ${options.extraAttributes}` : "";
     return `
       <label>
         <span class="field-label">${escapeHtml(label)}</span>
-        <input class="field-input weekly-actual-input" type="${options.type || "number"}"${inputMode} step="${options.step || "1"}" data-weekly-actual="${escapeHtml(key)}" data-weekly-week="${week.weekNumber}" value="${options.type === "text" ? escapeHtml(value || "") : hasValue ? weeklyInputValue(value) : ""}"${placeholder}>
+        <input class="field-input weekly-actual-input" type="${options.type || "number"}"${inputMode} step="${options.step || "1"}" data-weekly-actual="${escapeHtml(key)}" data-weekly-week="${week.weekNumber}"${extraAttributes} value="${options.type === "text" ? escapeHtml(value || "") : (hasValue || options.valueFallback !== undefined) ? weeklyInputValue(value) : ""}"${placeholder}>
+        ${help}
       </label>
     `;
   }
@@ -9947,7 +9981,7 @@
 
   function renderWeeklyPlan(result) {
     weeklyPlanRenderCount += 1;
-    console.info(`Weekly Plan render count: ${weeklyPlanRenderCount}`);
+    if (DEBUG_WEEKLY_PLAN) console.info(`Weekly Plan render count: ${weeklyPlanRenderCount}`);
     const root = document.getElementById("weeklyPlanRoot");
     const exportPanel = document.getElementById("weeklyPlanExportPrint");
     if (!root) return;
@@ -11722,7 +11756,7 @@
     safeRenderModule("Disclaimer", () => {
       document.getElementById("disclaimer").textContent = DATA.disclaimer;
     });
-    if (hasOpenedWorkspace) document.getElementById("appWorkspace").classList.remove("hidden");
+    setHomeWorkspaceVisibility(Boolean(hasOpenedWorkspace));
   }
 
   function renderAll() {
