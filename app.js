@@ -14,8 +14,8 @@
   const PERSONAL_PLAN_PREFIX = "ffs-personal-plan-v1:";
   const PERSONAL_WEEKLY_PLAN_PREFIX = "ffs-weekly-plan-v1:";
   const SNAPSHOT_PREFIX = "ffs-financial-snapshots-v1:";
-  const APP_VERSION = "3.0-stage-f2-live-qa-repair";
-  const WEEKLY_EDITOR_BUILD_ID = "2026-08-15-f2";
+  const APP_VERSION = "3.0-test-weekly-planner";
+  const WEEKLY_EDITOR_BUILD_ID = "2026-07-17-02";
   const EXPORT_SCHEMA_VERSION = 1;
   const AI_INSIGHTS_ENDPOINT = "/api/ai-insights";
   const AI_INSIGHTS_DEFAULT_MAX_GENERATIONS = 5;
@@ -24,8 +24,7 @@
   const AUTOMATIC_SNAPSHOT_MIN_DAYS = 30;
   const SNAPSHOT_MATERIAL_CHANGE_AMOUNT = 1000;
   const ENGAGEMENT_JOURNEY_ENABLED = window.FFS_ENGAGEMENT_JOURNEY_ENABLED !== false;
-  const DEBUG_WEEKLY_PLAN = window.FFS_DEBUG_WEEKLY_PLAN === true;
-  if (DEBUG_WEEKLY_PLAN) console.info(`Weekly Plan editor build: ${WEEKLY_EDITOR_BUILD_ID}`);
+  console.info(`Weekly Plan editor build: ${WEEKLY_EDITOR_BUILD_ID}`);
   const frequencies = [
     ["weekly", "Weekly"],
     ["fortnightly", "Fortnightly"],
@@ -2193,10 +2192,6 @@
     return Array.isArray(items) && items.some((item) => keys.some((key) => positiveNumber(item?.[key])));
   }
 
-  function hasIncomeCollectionValue(items) {
-    return hasCollectionValue(items, ["amount", "annualAmount"]);
-  }
-
   function firstProjectedAgeAtProgress(result, threshold) {
     const row = (result.financialFreedomProgressProjection || []).find((item) => numberValue(item.progress) >= threshold);
     return row?.age ? `Age ${row.age}` : "Not yet projected by the app";
@@ -2211,7 +2206,7 @@
     const liabilities = planCandidate.liabilities || {};
     const hasAnyAge = positiveNumber(personal.person1Age) || positiveNumber(personal.person2Age);
     const hasTargetAge = positiveNumber(personal.fullRetirementAge) || positiveNumber(personal.semiRetirementAge) || positiveNumber(personal.workOptionalAge);
-    const hasIncome = hasIncomeCollectionValue(planCandidate.incomeItems) || positiveNumber(result.annualGrossIncome);
+    const hasIncome = hasCollectionValue(planCandidate.incomeItems, ["amount"]) || positiveNumber(result.annualGrossIncome);
     const hasExpenses = hasCollectionValue(planCandidate.expenseItems, ["amount"]) || positiveNumber(result.annualLivingExpenses);
     const hasDebtData = hasCollectionValue(planCandidate.liabilityItems, ["balance", "repaymentAmount", "repayment"])
       || positiveNumber(liabilities.homeLoanBalance)
@@ -2247,9 +2242,9 @@
       { label: "Annual lifestyle spending", complete: positiveNumber(personal.targetAnnualSpending), message: "Add the annual lifestyle spending needed for Financial Freedom." },
       { label: "Income", complete: hasIncome, message: "Add household income." },
       { label: "Lifestyle expenses", complete: hasExpenses, message: "Add lifestyle expenses." },
-      { label: "Mortgage and debt repayments", complete: hasDebtData || positiveNumber(result.annualDebtRepayments) || result.totalLiabilities === 0, message: "Add mortgage, debt or repayment details, or confirm there are no debts." },
+      { label: "Mortgage and debt repayments", complete: hasDebtData, message: "Add mortgage, debt or repayment details." },
       { label: "Assets", complete: hasAssets, message: "Add current assets." },
-      { label: "Liabilities", complete: hasDebtData || result.totalLiabilities === 0, message: "Confirm liabilities and debts, even if they are low." },
+      { label: "Liabilities", complete: hasDebtData, message: "Confirm liabilities and debts, even if they are low." },
       { label: "Cash or offset balances", complete: hasCashOrOffset, message: "Add cash or offset balances." },
       { label: "Investments outside super", complete: hasInvestmentsOutsideSuper, message: "Add investments outside super." },
       { label: "Superannuation", complete: hasSuper, message: "Add superannuation balances." },
@@ -2275,7 +2270,7 @@
     const assets = planCandidate.assets || {};
     const hasAnyAge = positiveNumber(personal.person1Age) || positiveNumber(personal.person2Age);
     const hasTargetAge = positiveNumber(personal.fullRetirementAge) || positiveNumber(personal.semiRetirementAge) || positiveNumber(personal.workOptionalAge);
-    const hasIncome = hasIncomeCollectionValue(planCandidate.incomeItems) || positiveNumber(result.annualGrossIncome);
+    const hasIncome = hasCollectionValue(planCandidate.incomeItems, ["amount"]) || positiveNumber(result.annualGrossIncome);
     const hasLifestyleNeed = positiveNumber(personal.targetAnnualSpending)
       || hasCollectionValue(planCandidate.expenseItems, ["amount"])
       || positiveNumber(result.annualLivingExpenses);
@@ -4023,10 +4018,6 @@
 
   function navigateToSection(sectionId, options = {}) {
     const target = normaliseNavigationTarget(sectionId);
-    if (target === "home") {
-      showHomeView(options);
-      return true;
-    }
     if (target === "semiretirement" && !semiRetirementUiEnabled()) {
       updateSaveStatus("Semi-Retirement is available only when the private projection beta is enabled.");
       return false;
@@ -4049,30 +4040,10 @@
   function showWorkspace(view = "dashboard", options = {}) {
     hasOpenedWorkspace = true;
     const workspace = document.getElementById("appWorkspace");
-    setHomeWorkspaceVisibility(true);
+    workspace.classList.remove("hidden");
     if (!setView(view)) return;
     if (options?.scroll === false) return;
     workspace.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
-
-  function showHomeView(options = {}) {
-    hasOpenedWorkspace = false;
-    setHomeWorkspaceVisibility(false);
-    if (options?.scroll === false) return;
-    document.getElementById("homeView")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
-
-  function setHomeWorkspaceVisibility(workspaceVisible) {
-    const home = document.getElementById("homeView");
-    const workspace = document.getElementById("appWorkspace");
-    if (home) {
-      home.classList.toggle("hidden", workspaceVisible);
-      home.setAttribute("aria-hidden", workspaceVisible ? "true" : "false");
-    }
-    if (workspace) {
-      workspace.classList.toggle("hidden", !workspaceVisible);
-      workspace.setAttribute("aria-hidden", workspaceVisible ? "false" : "true");
-    }
   }
 
   function setView(view) {
@@ -4455,6 +4426,66 @@
     return [["", "No specific linked asset"], ...filtered.map((asset) => [asset.id, asset.name || "Investment asset"])];
   }
 
+  function rentalCashIncomeEntered(item = {}) {
+    return [
+      item.rentalCashIncomeAnnual,
+      item.annualRentalCashIncome,
+      item.annualCashIncome,
+      item.cashIncome,
+      item.annualNetRentalCashIncome,
+    ].some((value) => value !== undefined && value !== null && value !== "");
+  }
+
+  function rentalCashHelpText(item = {}) {
+    return item.rentalCashflowTreatment === "beforeInterest"
+      ? "Enter annual property cash income before loan interest and principal repayments."
+      : "Enter annual property cash income after loan interest and before principal repayments.";
+  }
+
+  function compactRentalCashWarningHtml(item = {}) {
+    if (rentalCashIncomeEntered(item)) return "";
+    return `
+      <p class="linked-property-inline-warning mt-3" role="status">
+        <strong>Rental cash income required.</strong>
+        ${escapeHtml(rentalCashHelpText(item))}
+      </p>
+    `;
+  }
+
+  function hasEnteredFinancialValue(value) {
+    return value !== undefined && value !== null && value !== "" && Number.isFinite(Number(value));
+  }
+
+  function displayFinancialValue(value, fallback = "Not entered") {
+    return hasEnteredFinancialValue(value) ? money(value) : fallback;
+  }
+
+  function displayPercentValue(value, fallback = "Not entered") {
+    return hasEnteredFinancialValue(value) ? `${Number(value).toFixed(1)}%` : fallback;
+  }
+
+  function linkedPropertySummaryRow(label, value, options = {}) {
+    const tone = options.tone ? ` ${options.tone}` : "";
+    const note = options.note ? `<small>${escapeHtml(options.note)}</small>` : "";
+    return `
+      <div class="linked-property-summary-row${tone}" data-headline-metric="true">
+        <span>${escapeHtml(label)}</span>
+        <strong>${escapeHtml(value)}</strong>
+        ${note}
+      </div>
+    `;
+  }
+
+  function linkedPropertyDetailRow(label, value, note = "") {
+    return `
+      <div class="linked-property-detail-row">
+        <span>${escapeHtml(label)}</span>
+        <strong>${escapeHtml(value)}</strong>
+        ${note ? `<small>${escapeHtml(note)}</small>` : ""}
+      </div>
+    `;
+  }
+
   function incomeCard(item, index) {
     const type = normaliseIncomeType(item.type, index);
     const owner = normaliseIncomeOwner(item.owner, type, index);
@@ -4462,18 +4493,8 @@
     item.owner = owner;
     const typeLabel = incomeTypeLabels[type] || "Income";
     const ownerLabel = owner === "joint" ? "Joint" : personDisplayName(owner === "person2" ? 2 : 1);
-    const hasRentalCashInput = [
-      item.rentalCashIncomeAnnual,
-      item.annualRentalCashIncome,
-      item.annualCashIncome,
-      item.cashIncome,
-      item.annualNetRentalCashIncome,
-    ].some((value) => value !== undefined && value !== null && value !== "");
-    const rentalCashHelpText = item.rentalCashflowTreatment === "beforeInterest"
-      ? "Enter the expected annual property cash income before loan interest and principal repayments."
-      : "Enter the expected annual property cash income after loan interest and before principal repayments.";
     const rentalCashInputNote = type === "rentalNetCashIncome"
-      ? `<p class="${hasRentalCashInput ? "field-help" : "tax-note"} mt-3">${hasRentalCashInput ? "" : "<strong>Rental cash income required for semi-retirement cashflow:</strong> "}${escapeHtml(rentalCashHelpText)} This is separate from taxable rental profit.</p>`
+      ? compactRentalCashWarningHtml(item)
       : "";
     const incomeFields = type === "rentalNetCashIncome" ? `
           ${dynamicInput("incomeItems", item, "name", "Income description", { kind: "text", placeholder: "e.g. Rental property cashflow" })}
@@ -4516,7 +4537,7 @@
         <div class="input-grid mt-4">
           ${incomeFields}
         </div>
-        ${type === "rentalNetCashIncome" ? `${rentalLoanLinkControls(item)}<p class="field-help mt-3">${escapeHtml(goalInfoCopy.rentalNetCashIncome.body)}</p>` : ""}
+        ${type === "rentalNetCashIncome" ? `${rentalLoanLinkControls(item)}<details class="linked-property-learn-more mt-3"><summary>Learn more</summary><p>${escapeHtml(goalInfoCopy.rentalNetCashIncome.body)}</p></details>` : ""}
       </article>
     `;
   }
@@ -4565,6 +4586,8 @@
 
   function linkedPropertyCashflowSummary(record) {
     const linkedLoans = record.loans || [];
+    const hasRentalCashIncome = (record.incomes || []).some((income) => rentalCashIncomeEntered(income));
+    const hasMissingRentalCashIncome = (record.incomes || []).some((income) => !rentalCashIncomeEntered(income));
     const rentalCashIncome = (record.incomes || []).reduce((total, income) => total + Number(
       income.rentalCashIncomeAnnual
       ?? income.annualRentalCashIncome
@@ -4588,23 +4611,35 @@
       loanPrincipal,
       netPropertyCashflow,
       treatment: hasBeforeInterest ? "beforeInterest" : "afterInterest",
+      hasRentalCashIncome,
+      hasMissingRentalCashIncome,
     };
+  }
+
+  function linkedPropertyFrequencyLabel(value) {
+    return frequencies.find(([key]) => key === value)?.[1] || "annually";
   }
 
   function linkedPropertyLoanCard(loan, index) {
     const offset = Number(loan.openingOffsetBalance ?? loan.offsetBalance ?? loan.linkedOffsetBalance ?? 0) || 0;
     const balance = Number(loan.balance ?? loan.currentBalance ?? 0) || 0;
     const interestBearingBalance = Math.max(0, balance - Math.min(balance, offset));
+    const repayment = hasEnteredFinancialValue(loan.repayment)
+      ? `${money(loan.repayment)} ${linkedPropertyFrequencyLabel(loan.repaymentFrequency).toLowerCase()}`
+      : "Not entered";
     return `
       <article class="linked-property-loan">
         <div class="linked-property-loan-heading">
           <strong>${escapeHtml(loan.name || `Linked loan ${index + 1}`)}</strong>
           <span>${money(interestBearingBalance)} interest-bearing</span>
         </div>
-        <div class="summary-grid linked-property-mini-grid">
-          ${summaryTile("Loan principal", money(balance))}
-          ${summaryTile("Offset balance", money(offset))}
-          ${summaryTile("Interest-bearing balance", money(interestBearingBalance))}
+        <div class="linked-property-detail-rows">
+          ${linkedPropertyDetailRow("Loan balance", displayFinancialValue(loan.balance ?? loan.currentBalance))}
+          ${linkedPropertyDetailRow("Interest rate", displayPercentValue(loan.interestRatePct ?? loan.annualInterestRatePct))}
+          ${linkedPropertyDetailRow("Repayment", repayment)}
+          ${linkedPropertyDetailRow("Remaining term", hasEnteredFinancialValue(loan.termYears ?? loan.remainingTermYears) ? `${Number(loan.termYears ?? loan.remainingTermYears)} years` : "Not entered")}
+          ${hasEnteredFinancialValue(offset) && offset > 0 ? linkedPropertyDetailRow("Offset balance", money(offset), "Reduces interest while remaining accessible.") : ""}
+          ${linkedPropertyDetailRow("Interest-bearing balance", money(interestBearingBalance))}
         </div>
         <div class="input-grid mt-4">
           ${dynamicInput("liabilityItems", loan, "name", "Loan name", { kind: "text", placeholder: "e.g. Smith St loan" })}
@@ -4637,6 +4672,7 @@
           ${incomeAllocationFields(income, normaliseIncomeOwner(income.owner, "rentalNetCashIncome"))}
           ${dynamicInput("incomeItems", income, "amount", "Taxable rental income", { step: "100", infoKey: "rentalNetCashIncome" })}
           ${dynamicInput("incomeItems", income, "rentalCashIncomeAnnual", "Rental cash income", { step: "100" })}
+          ${compactRentalCashWarningHtml(income)}
           ${dynamicInput("incomeItems", income, "rentalCashflowTreatment", "Cashflow treatment", { type: "select", options: rentalCashflowTreatmentOptions })}
           ${dynamicInput("incomeItems", income, "isPassiveIncome", "Passive income status", { type: "checkbox", infoKey: "passiveIncome" })}
         </div>
@@ -4649,26 +4685,38 @@
     const { asset, incomes, loans } = record;
     const cashflow = linkedPropertyCashflowSummary(record);
     const title = asset.name || `Rental / Investment Property ${index + 1}`;
+    const safeTitle = escapeHtml(title);
+    const propertyDetailId = `linked-property-${escapeHtml(asset.id)}-property`;
+    const rentalDetailId = `linked-property-${escapeHtml(asset.id)}-rental`;
+    const loansDetailId = `linked-property-${escapeHtml(asset.id)}-loans`;
+    const totalLoanBalance = loans.reduce((total, loan) => total + Number(loan.balance ?? loan.currentBalance ?? 0), 0);
+    const loanSummary = loans.length ? `${money(totalLoanBalance)} (${loans.length} linked loan${loans.length === 1 ? "" : "s"})` : "No linked loans";
+    const cashflowDisplay = cashflow.hasMissingRentalCashIncome || !cashflow.hasRentalCashIncome
+      ? "Review required"
+      : money(cashflow.netPropertyCashflow);
+    const rentalCashDisplay = cashflow.hasMissingRentalCashIncome || !cashflow.hasRentalCashIncome
+      ? "Required"
+      : money(cashflow.rentalCashIncome);
+    const linkedRecordParts = ["Property", incomes.length ? "Rental income" : "No rental income", loans.length ? `${loans.length} loan${loans.length === 1 ? "" : "s"}` : "No linked loan"];
     return `
       <article class="linked-property-card" data-linked-property-id="${escapeHtml(asset.id)}">
         <div class="linked-property-card-header">
           <div>
-            <span class="metric-label">Linked Property</span>
-            <h4>${escapeHtml(title)} - Rental / Investment Property</h4>
-            <p>Manage the property, rental income and linked loans in one place. These fields update the same records used elsewhere in the app.</p>
+            <span class="metric-label">Rental / Investment Property</span>
+            <h4>${safeTitle}</h4>
+            <p>Linked records: ${linkedRecordParts.map(escapeHtml).join(" - ")}</p>
           </div>
-          <span class="linked-property-badge">${loans.length} linked loan${loans.length === 1 ? "" : "s"}</span>
+          <button class="btn btn-secondary linked-property-manage-button" type="button" data-linked-property-manage>Manage property</button>
         </div>
-        <div class="summary-grid linked-property-summary-grid">
-          ${summaryTile("Current value", money(asset.value || 0))}
-          ${summaryTile("Rental cash income", money(cashflow.rentalCashIncome))}
-          ${summaryTile("Loan interest", money(cashflow.loanInterest))}
-          ${summaryTile("Loan principal", money(cashflow.loanPrincipal))}
-          ${summaryTile("Net property cashflow", money(cashflow.netPropertyCashflow))}
-          ${summaryTile("Taxable rental income", money(cashflow.taxableRentalIncome))}
+        <div class="linked-property-summary-rows" data-headline-metric-count="4">
+          ${linkedPropertySummaryRow("Current value", displayFinancialValue(asset.value))}
+          ${linkedPropertySummaryRow("Net property cashflow", cashflowDisplay, { tone: cashflow.hasMissingRentalCashIncome || !cashflow.hasRentalCashIncome ? "is-warning" : "" })}
+          ${linkedPropertySummaryRow("Taxable rental income", displayFinancialValue(cashflow.taxableRentalIncome))}
+          ${linkedPropertySummaryRow("Linked loans", loanSummary)}
         </div>
-        <details class="linked-property-detail">
-          <summary>Property details</summary>
+        <details class="linked-property-detail" id="${propertyDetailId}">
+          <summary>Property & ownership</summary>
+          <h5>User inputs</h5>
           <div class="input-grid mt-4">
             ${dynamicInput("assetItems", asset, "name", "Property name", { kind: "text", placeholder: "e.g. Smith St" })}
             ${dynamicInput("assetItems", asset, "category", "Property type", { type: "select", options: assetCategoryOptions })}
@@ -4677,24 +4725,24 @@
             ${dynamicInput("assetItems", asset, "capitalGrowthRatePct", "Capital growth assumption (%)", { step: "0.1" })}
           </div>
         </details>
-        <details class="linked-property-detail">
-          <summary>Rental income</summary>
+        <details class="linked-property-detail" id="${rentalDetailId}">
+          <summary>Rental income & cashflow</summary>
+          <p class="field-help">Taxable rental income is used for tax calculations. Rental cashflow shows the cash the property contributes to or takes from your household after the selected loan treatment.</p>
+          <h5>User inputs</h5>
           ${incomes.length ? incomes.map(linkedPropertyIncomeCard).join("") : `<p class="empty-collection-note">No rental income record is linked to this property yet.</p>`}
-        </details>
-        <details class="linked-property-detail">
-          <summary>Loans and offset</summary>
-          ${loans.length ? loans.map(linkedPropertyLoanCard).join("") : `<p class="empty-collection-note">No rental property loan is linked to this property yet.</p>`}
-        </details>
-        <details class="linked-property-detail">
-          <summary>Cashflow and taxable-income reconciliation</summary>
-          <div class="linked-property-reconciliation">
-            <p><strong>Rental cash income:</strong> ${money(cashflow.rentalCashIncome)}</p>
-            <p><strong>Loan interest:</strong> ${money(cashflow.loanInterest)}</p>
-            <p><strong>Loan principal:</strong> ${money(cashflow.loanPrincipal)}</p>
-            <p><strong>Net property cashflow:</strong> ${money(cashflow.netPropertyCashflow)}</p>
-            <p><strong>Taxable rental income:</strong> ${money(cashflow.taxableRentalIncome)}</p>
-            <p class="field-help">Cashflow and taxable rental income are intentionally separate. Principal repayments affect household cashflow but are not treated as deductible interest.</p>
+          <h5>Calculated results</h5>
+          <div class="linked-property-detail-rows">
+            ${linkedPropertyDetailRow("Taxable rental income", displayFinancialValue(cashflow.taxableRentalIncome), "Used to calculate income tax. This can differ from the property's cashflow.")}
+            ${linkedPropertyDetailRow("Rental cash income", rentalCashDisplay, cashflow.treatment === "beforeInterest" ? "Before loan interest and principal repayments." : "After loan interest and before principal repayments.")}
+            ${linkedPropertyDetailRow("Cashflow treatment", cashflow.treatment === "beforeInterest" ? "Before interest" : "After interest")}
+            ${linkedPropertyDetailRow("Loan interest used in cashflow", loans.length ? money(cashflow.loanInterest) : "No linked loans")}
+            ${linkedPropertyDetailRow("Loan principal repayment", loans.length ? money(cashflow.loanPrincipal) : "No linked loans")}
+            ${linkedPropertyDetailRow("Net property cashflow", cashflowDisplay, "The amount the property adds to or takes from your household cashflow.")}
           </div>
+        </details>
+        <details class="linked-property-detail" id="${loansDetailId}">
+          <summary>Loans & offset</summary>
+          ${loans.length ? loans.map(linkedPropertyLoanCard).join("") : `<p class="empty-collection-note">No linked property loans.</p>`}
         </details>
       </article>
     `;
@@ -5538,10 +5586,8 @@
     const heroScore = document.getElementById("heroScore");
     const scoreRing = document.querySelector(".score-ring");
     const scoreRingLabel = document.querySelector(".score-ring span");
-    const dashboardPanel = document.querySelector('[data-view-panel="dashboard"]');
-    const progressSection = dashboardPanel?.querySelector(".freedom-progress-section");
-    const dashboardStageCard = dashboardPanel?.querySelector(".freedom-stage-card");
-    const nextMilestoneCard = dashboardPanel?.querySelector(".next-milestone-card");
+    const progressSection = document.querySelector(".freedom-progress-section");
+    const nextMilestoneCard = document.querySelector(".next-milestone-card");
 
     progressSection?.classList.toggle("dashboard-journey-simple", true);
     nextMilestoneCard?.classList.add("hidden");
@@ -5551,7 +5597,7 @@
       heroScore.textContent = plainPercent(percent);
       if (scoreRingLabel) scoreRingLabel.textContent = "Financial Freedom";
       if (scoreRing) scoreRing.style.borderColor = percent >= 100 ? "#bdebd7" : percent >= 75 ? "#f3d08c" : "#dbe4ee";
-      if (dashboardStageCard) dashboardStageCard.innerHTML = `
+      document.querySelector(".freedom-stage-card").innerHTML = `
         <div class="stage-heading-row">
           <span class="metric-label">Financial Freedom Journey</span>
           ${infoButtonHtml("financialStage", "financial stages")}
@@ -5581,7 +5627,7 @@
       heroScore.textContent = "--";
       if (scoreRingLabel) scoreRingLabel.textContent = "Setup needed";
       if (scoreRing) scoreRing.style.borderColor = "#dbe4ee";
-      if (dashboardStageCard) dashboardStageCard.innerHTML = `
+      document.querySelector(".freedom-stage-card").innerHTML = `
         <div class="stage-heading-row">
           <span class="metric-label">Financial Freedom Journey</span>
           ${infoButtonHtml("financialStage", "financial stages")}
@@ -9457,17 +9503,17 @@
           <div><span>Reconciliation Adjustment</span><strong class="${differenceClass}">${money(difference)}</strong></div>
         </div>
         ${canAdjust ? `
-          <div class="weekly-actual-grid weekly-opening-adjustment mt-4">
-            ${weeklyActualField(week, "openingBalance", "Actual opening bank balance", actualOpening, {
-              step: "0.01",
-              valueFallback: actualOpening,
-              extraAttributes: `data-weekly-opening-balance="${week.weekNumber}"`,
-              help: "This is a reconciliation adjustment only. It does not change last week or your long-term Financial Freedom plan.",
-            })}
-          </div>
-          <div class="weekly-action-row mt-3">
-            <button class="btn btn-primary" type="button" data-weekly-action="save-opening-balance" data-weekly-week="${week.weekNumber}">Save opening balance</button>
-          </div>
+          <details class="weekly-setup-details mt-4">
+            <summary>Update opening balance</summary>
+            <div class="weekly-opening-adjustment mt-3">
+              <label>
+                <span class="field-label">Actual opening bank balance</span>
+                <input class="field-input weekly-actual-input" type="number" inputmode="decimal" step="0.01" data-weekly-opening-balance="${week.weekNumber}" value="${weeklyInputValue(actualOpening)}">
+                <small class="field-help">This is a reconciliation adjustment only. It does not change last week or your long-term Financial Freedom plan.</small>
+              </label>
+              <button class="btn btn-primary" type="button" data-weekly-action="save-opening-balance" data-weekly-week="${week.weekNumber}">Save opening balance</button>
+            </div>
+          </details>
         ` : ""}
       </article>
     `;
@@ -9526,18 +9572,15 @@
   function weeklyActualField(week, key, label, defaultValue, options = {}) {
     const actual = week.actual || {};
     const hasValue = weeklyHasActualAmount(actual, key);
-    const value = hasValue ? actual[key] : options.valueFallback ?? "";
+    const value = hasValue ? actual[key] : "";
     const placeholder = options.type === "text" || defaultValue === "" || defaultValue === undefined
       ? ""
       : ` placeholder="${weeklyInputValue(defaultValue || 0)}"`;
     const inputMode = options.type === "text" ? "" : ' inputmode="decimal"';
-    const help = options.help ? `<small class="field-help">${escapeHtml(options.help)}</small>` : "";
-    const extraAttributes = options.extraAttributes ? ` ${options.extraAttributes}` : "";
     return `
       <label>
         <span class="field-label">${escapeHtml(label)}</span>
-        <input class="field-input weekly-actual-input" type="${options.type || "number"}"${inputMode} step="${options.step || "1"}" data-weekly-actual="${escapeHtml(key)}" data-weekly-week="${week.weekNumber}"${extraAttributes} value="${options.type === "text" ? escapeHtml(value || "") : (hasValue || options.valueFallback !== undefined) ? weeklyInputValue(value) : ""}"${placeholder}>
-        ${help}
+        <input class="field-input weekly-actual-input" type="${options.type || "number"}"${inputMode} step="${options.step || "1"}" data-weekly-actual="${escapeHtml(key)}" data-weekly-week="${week.weekNumber}" value="${options.type === "text" ? escapeHtml(value || "") : hasValue ? weeklyInputValue(value) : ""}"${placeholder}>
       </label>
     `;
   }
@@ -9981,7 +10024,7 @@
 
   function renderWeeklyPlan(result) {
     weeklyPlanRenderCount += 1;
-    if (DEBUG_WEEKLY_PLAN) console.info(`Weekly Plan render count: ${weeklyPlanRenderCount}`);
+    console.info(`Weekly Plan render count: ${weeklyPlanRenderCount}`);
     const root = document.getElementById("weeklyPlanRoot");
     const exportPanel = document.getElementById("weeklyPlanExportPrint");
     if (!root) return;
@@ -11756,7 +11799,7 @@
     safeRenderModule("Disclaimer", () => {
       document.getElementById("disclaimer").textContent = DATA.disclaimer;
     });
-    setHomeWorkspaceVisibility(Boolean(hasOpenedWorkspace));
+    if (hasOpenedWorkspace) document.getElementById("appWorkspace").classList.remove("hidden");
   }
 
   function renderAll() {
@@ -12351,6 +12394,18 @@
       if (semiAdjustmentStep) {
         event.preventDefault();
         nudgeSemiRetirementAdjustment(semiAdjustmentStep);
+        return;
+      }
+
+      const linkedPropertyManage = event.target.closest("[data-linked-property-manage]");
+      if (linkedPropertyManage) {
+        event.preventDefault();
+        const card = linkedPropertyManage.closest("[data-linked-property-id]");
+        card?.querySelectorAll(".linked-property-detail").forEach((detail) => {
+          detail.open = true;
+        });
+        card?.scrollIntoView({ behavior: "smooth", block: "start" });
+        card?.querySelector(".linked-property-detail input, .linked-property-detail select, .linked-property-detail textarea")?.focus({ preventScroll: true });
         return;
       }
 

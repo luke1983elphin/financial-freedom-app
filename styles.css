@@ -1679,12 +1679,12 @@ main {
 
 .linked-property-card {
   display: grid;
-  gap: 16px;
+  gap: 14px;
   min-width: 0;
   border: 1px solid #cfe7dc;
   border-radius: 18px;
   background: #f8fcfa;
-  padding: 18px;
+  padding: 16px;
 }
 
 .linked-property-card-header,
@@ -1699,7 +1699,7 @@ main {
 .linked-property-card-header h4 {
   margin: 2px 0 4px;
   color: #0f2742;
-  font-size: 20px;
+  font-size: 19px;
   font-weight: 950;
   line-height: 1.2;
 }
@@ -1713,20 +1713,66 @@ main {
   line-height: 1.45;
 }
 
-.linked-property-badge {
+.linked-property-manage-button {
   flex: 0 0 auto;
-  border-radius: 999px;
-  background: #e7f7ef;
-  padding: 6px 10px;
-  color: #166534;
-  font-size: 12px;
-  font-weight: 900;
   white-space: nowrap;
 }
 
-.linked-property-summary-grid,
-.linked-property-mini-grid {
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+.linked-property-summary-rows,
+.linked-property-detail-rows {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.linked-property-summary-rows {
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+}
+
+.linked-property-summary-row,
+.linked-property-detail-row {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 8px 14px;
+  border: 1px solid #dbeafe;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 10px 12px;
+}
+
+.linked-property-summary-row.is-warning {
+  border-color: #f5d58b;
+  background: #fffbeb;
+}
+
+.linked-property-summary-row span,
+.linked-property-detail-row span {
+  min-width: 0;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 850;
+  overflow-wrap: anywhere;
+}
+
+.linked-property-summary-row strong,
+.linked-property-detail-row strong {
+  min-width: 0;
+  color: #0f2742;
+  font-size: 15px;
+  font-weight: 950;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.linked-property-summary-row small,
+.linked-property-detail-row small {
+  grid-column: 1 / -1;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.4;
 }
 
 .linked-property-detail {
@@ -1743,6 +1789,13 @@ main {
   font-size: 14px;
   font-weight: 900;
   list-style-position: outside;
+}
+
+.linked-property-detail h5 {
+  margin: 14px 0 0;
+  color: #0f2742;
+  font-size: 13px;
+  font-weight: 950;
 }
 
 .linked-property-income,
@@ -1769,9 +1822,46 @@ main {
   text-align: right;
 }
 
+.linked-property-inline-warning {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  border-left: 4px solid #f59e0b;
+  border-radius: 10px;
+  background: #fffbeb;
+  padding: 8px 10px;
+  color: #78350f;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.linked-property-learn-more {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 10px 12px;
+}
+
+.linked-property-learn-more summary {
+  cursor: pointer;
+  color: #0f2742;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.linked-property-learn-more p {
+  margin: 8px 0 0;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
 @media (max-width: 640px) {
   .linked-property-card {
     border-radius: 14px;
+    gap: 12px;
     padding: 14px;
   }
 
@@ -1779,11 +1869,12 @@ main {
   .linked-property-loan-heading {
     align-items: stretch;
     flex-direction: column;
+    gap: 10px;
   }
 
-  .linked-property-badge {
-    justify-self: start;
-    width: fit-content;
+  .linked-property-manage-button {
+    justify-self: stretch;
+    width: 100%;
     white-space: normal;
   }
 
@@ -1791,9 +1882,20 @@ main {
     text-align: left;
   }
 
-  .linked-property-summary-grid,
-  .linked-property-mini-grid {
+  .linked-property-summary-rows {
     grid-template-columns: 1fr;
+  }
+
+  .linked-property-summary-row,
+  .linked-property-detail-row {
+    grid-template-columns: 1fr;
+    gap: 3px;
+    padding: 9px 10px;
+  }
+
+  .linked-property-summary-row strong,
+  .linked-property-detail-row strong {
+    text-align: left;
   }
 }
 
@@ -6485,22 +6587,18 @@ textarea.field-input {
   }
 
   .weekly-step-nav {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: flex;
     gap: 8px;
-    overflow-x: visible;
+    overflow-x: auto;
     padding-bottom: 3px;
+    scrollbar-width: thin;
   }
 
   .weekly-step-button {
-    grid-template-columns: 24px minmax(0, 1fr);
-    max-width: none;
-    width: 100%;
+    flex: 0 0 auto;
+    grid-template-columns: 24px minmax(72px, 96px);
+    max-width: 138px;
     padding: 8px;
-  }
-
-  .weekly-step-button:nth-child(5) {
-    grid-column: 1 / -1;
   }
 
   .weekly-step-button span {
