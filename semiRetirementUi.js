@@ -498,6 +498,9 @@
         semiRetirementAge: number(plan.personal?.semiRetirementAge),
         targetAnnualSpending: number(plan.personal?.targetAnnualSpending),
       },
+      household: {
+        annualLivingExpenses: nonNegative(result.annualLivingExpenses),
+      },
       income: {
         person1SalaryWages: salaryForPerson(result, 1),
         person2SalaryWages: salaryForPerson(result, 2),
@@ -532,6 +535,12 @@
     });
   }
 
+  function defaultScenarioLifestyleSpending(plan = {}, result = {}) {
+    const annualLivingExpenses = finiteNumberOrNull(result.annualLivingExpenses);
+    if (annualLivingExpenses !== null) return Math.max(0, annualLivingExpenses);
+    return nonNegative(plan.personal?.targetAnnualSpending);
+  }
+
   function personDefaults(plan = {}, result = {}, index = 1) {
     const currentAge = nonNegative(plan.personal?.[`person${index}Age`]);
     const fullRetirementAge = defaultFullRetirementAge(plan, index);
@@ -561,7 +570,7 @@
   }
 
   function buildSemiRetirementScenarioDefaults(plan = {}, result = {}) {
-    const lifestyleSpending = nonNegative(plan.personal?.targetAnnualSpending) || nonNegative(result.annualLivingExpenses);
+    const lifestyleSpending = defaultScenarioLifestyleSpending(plan, result);
     const people = [personDefaults(plan, result, 1)];
     if (hasSecondPerson(plan, result)) people.push(personDefaults(plan, result, 2));
     const assets = projectionAssetsFromPlan(plan);

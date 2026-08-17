@@ -41,6 +41,9 @@ function integrationPlan() {
     { id: "income-lisa", name: "Lisa salary", type: "salaryWages", owner: "person2", amount: 85000, frequency: "annually" },
     { id: "income-interest", name: "Interest", type: "interest", owner: "joint", amount: 3000, frequency: "annually" },
   ];
+  plan.expenseItems = [
+    { id: "expense-living", name: "Living expenses", category: "living", amount: 90000, frequency: "annually" },
+  ];
   plan.liabilityItems = [
     { id: "stsl-luke", type: "stsl", owner: "person1", balance: 20000 },
     { id: "stsl-lisa", type: "stsl", owner: "person2", balance: 12000 },
@@ -80,6 +83,7 @@ test("Integration V1B current app values map into the scenario defaults", () => 
   assert.equal(draft.people[0].stslOpeningBalance, 20000);
   assert.equal(draft.people[1].stslOpeningBalance, 12000);
   assert.equal(draft.accessibleInvestments.openingBalance, result.accessibleInvestmentAssets);
+  assert.equal(result.annualLivingExpenses, 90000);
   assert.equal(draft.household.fullRetirementLifestyleSpending, 90000);
   assert.equal(draft.accessibleInvestments.annualReturnRatePct, 7);
   assert.equal(draft.assumptions.inflationRatePct, 2.5);
@@ -195,4 +199,3 @@ test("Integration V1J mobile semi-retirement styles avoid page-level overflow", 
   assert.match(stylesSource, /\.semi-retirement-adjustment-controls\s*\{\s*grid-template-columns: 1fr;/s);
   assert.match(stylesSource, /\.semi-retirement-table-wrap\s*\{[^}]*overflow-x: auto;/s);
 });
-

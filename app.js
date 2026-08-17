@@ -6950,6 +6950,26 @@
     return (semiRetirementScenarioErrors || []).find((error) => error.path === path)?.message || "";
   }
 
+  function financialPlanLivingExpensesAmount(result = CALC.calculatePlan(plan)) {
+    const value = Number(result?.annualLivingExpenses);
+    return Number.isFinite(value) ? Math.max(0, value) : 0;
+  }
+
+  function semiRetirementLivingExpenseSourceHtml(result) {
+    const sourceAmount = financialPlanLivingExpensesAmount(result);
+    const scenarioAmount = Number(semiRetirementValue("household.currentLifestyleSpending"));
+    const differsFromScenario = Number.isFinite(scenarioAmount) && Math.abs(scenarioAmount - sourceAmount) > 0.005;
+    return `
+      <small class="semi-retirement-source-note">
+        <span>Financial Plan living expenses: <strong>${money(sourceAmount)} p.a.</strong></span>
+        <button class="link-button" type="button" data-semi-action="view-living-expenses">View living expenses</button>
+      </small>
+      ${differsFromScenario ? `
+        <button class="btn btn-small semi-retirement-reset-source" type="button" data-semi-action="use-plan-living-expenses" aria-label="Use current Financial Plan annual living expenses for current annual lifestyle spending">Use current Financial Plan amount</button>
+      ` : ""}
+    `;
+  }
+
   function semiRetirementInput(config) {
     const path = config.path;
     const value = semiRetirementValue(path);
@@ -6986,6 +7006,7 @@
         ${input}
         ${config.help ? `<small id="${id}-help" class="field-help">${escapeHtml(config.help)}</small>` : ""}
         ${error ? `<small id="${id}-error" class="field-error">${escapeHtml(error)}</small>` : ""}
+        ${config.afterHtml || ""}
       </label>
     `;
   }
@@ -8151,9 +8172,9 @@
             <p>Spending amounts are entered in today's dollars. The projection engine applies inflation each year.</p>
           </div>
           <div class="input-grid mt-4">
-            ${semiRetirementInput({ label: "Current annual lifestyle spending", path: "household.currentLifestyleSpending", step: "1000" })}
-            ${semiRetirementInput({ label: "Semi-retirement lifestyle spending", path: "household.semiRetirementLifestyleSpending", step: "1000", infoKey: "semiRetirementLifestyleSpending", help: "Normal household spending while work is reduced." })}
-            ${semiRetirementInput({ label: "Full-retirement lifestyle spending", path: "household.fullRetirementLifestyleSpending", step: "1000", infoKey: "fullRetirementLifestyleSpending", help: "Normal annual household spending after everyone is fully retired." })}
+            ${semiRetirementInput({ label: "Current annual lifestyle spending", path: "household.currentLifestyleSpending", step: "1000", help: "Your current household living expenses, used as the starting point for this retirement scenario.", afterHtml: semiRetirementLivingExpenseSourceHtml(result) })}
+            ${semiRetirementInput({ label: "Semi-retirement lifestyle spending", path: "household.semiRetirementLifestyleSpending", step: "1000", infoKey: "semiRetirementLifestyleSpending", help: "Expected normal household spending while work is reduced." })}
+            ${semiRetirementInput({ label: "Full-retirement lifestyle spending", path: "household.fullRetirementLifestyleSpending", step: "1000", infoKey: "fullRetirementLifestyleSpending", help: "Expected normal household spending once everyone is fully retired." })}
             ${semiRetirementInput({ label: "Optional additional lifestyle draw", path: "scenario.semiRetirementAccessibleWithdrawal", step: "1000", infoKey: "semiOptionalLifestyleDraw", help: "Extra discretionary spending above normal lifestyle needs." })}
           </div>
         </section>
@@ -8312,6 +8333,35 @@
     clearSemiRetirementComparisonState();
     renderSemiRetirementScenario(CALC.calculatePlan(plan));
     updateSaveStatus("Comparison removed. Current scenario and Financial Plan unchanged.");
+  }
+
+  function useFinancialPlanLivingExpensesForSemiRetirementScenario() {
+    if (!window.FFSSemiRetirementUi) return;
+    const result = CALC.calculatePlan(plan);
+    ensureSemiRetirementScenarioDraft(result);
+    window.FFSSemiRetirementUi.setDraftPath(semiRetirementScenarioDraft, "household.currentLifestyleSpending", financialPlanLivingExpensesAmount(result));
+    clearSemiRetirementAdjustmentState();
+    clearSemiRetirementComparisonState();
+    semiRetirementScenarioResult = null;
+    semiRetirementScenarioInputs = null;
+    semiRetirementScenarioResultDraft = null;
+    semiRetirementScenarioDirty = true;
+    semiRetirementScenarioErrors = semiRetirementScenarioErrors.filter((error) => error.path !== "household.currentLifestyleSpending");
+    renderSemiRetirementScenario(result);
+    document.querySelector('[data-semi-input="household.currentLifestyleSpending"]')?.focus({ preventScroll: true });
+    updateSaveStatus("Current lifestyle spending reset from the Financial Plan. Financial Plan unchanged.");
+  }
+
+  function viewFinancialPlanLivingExpenses() {
+    activeWizardStep = wizardSteps.findIndex((step) => step.title === "Expenses");
+    if (activeWizardStep < 0) activeWizardStep = 4;
+    showWorkspace("setup");
+    window.setTimeout(() => {
+      const target = document.getElementById("wizardExpensesForm") || document.querySelector('[data-view-panel="setup"]');
+      target?.scrollIntoView({ behavior: "smooth", block: "start" });
+      target?.querySelector("input, select, textarea, button")?.focus({ preventScroll: true });
+    }, 80);
+    updateSaveStatus("Review living expenses in the Financial Plan. Retirement scenario values remain separate.");
   }
 
   function semiRetirementAdjustmentPath(field) {
@@ -12118,6 +12168,11 @@
     return modal;
   }
 
+  function setScenarioSaveScrollLock(isLocked) {
+    document.documentElement.classList.toggle("scenario-save-modal-open", Boolean(isLocked));
+    document.body.classList.toggle("scenario-save-modal-open", Boolean(isLocked));
+  }
+
   function openScenarioSaveDialog(context) {
     if (!context) {
       updateSaveStatus("Calculate or select a scenario before saving.");
@@ -12128,28 +12183,35 @@
     modal.innerHTML = `
       <div class="goal-info-backdrop" data-scenario-save-action="cancel"></div>
       <article class="goal-info-card scenario-save-card">
-        <button class="goal-info-close" type="button" data-scenario-save-action="cancel" aria-label="Close save scenario dialog">X</button>
-        <h3 id="scenarioSaveTitle">Save scenario</h3>
-        <p>Saved scenarios stay separate from your Financial Plan. They can be reopened or compared later without changing your plan.</p>
-        <label class="field-label" for="stageGScenarioName">Scenario name</label>
-        <input class="field-input" id="stageGScenarioName" type="text" value="${escapeHtml(context.defaultName || "")}" required>
-        <label class="field-label mt-4" for="stageGScenarioNote">Optional note</label>
-        <textarea class="field-input min-h-28" id="stageGScenarioNote" placeholder="Optional note"></textarea>
-        <div class="scenario-dialog-summary mt-4">
-          <span class="metric-label">Scenario type</span>
-          <strong>${escapeHtml(savedScenarioTypeLabel(context.scenarioType))}</strong>
+        <header class="scenario-save-header">
+          <div>
+            <h3 id="scenarioSaveTitle">Save scenario</h3>
+            <p>Saved scenarios stay separate from your Financial Plan. They can be reopened or compared later without changing your plan.</p>
+          </div>
+          <button class="goal-info-close" type="button" data-scenario-save-action="cancel" aria-label="Close save scenario dialog">X</button>
+        </header>
+        <div class="scenario-save-body">
+          <label class="field-label" for="stageGScenarioName">Scenario name</label>
+          <input class="field-input" id="stageGScenarioName" type="text" value="${escapeHtml(context.defaultName || "")}" required>
+          <label class="field-label mt-4" for="stageGScenarioNote">Optional note</label>
+          <textarea class="field-input min-h-28" id="stageGScenarioNote" placeholder="Optional note"></textarea>
+          <div class="scenario-dialog-summary mt-4">
+            <span class="metric-label">Scenario type</span>
+            <strong>${escapeHtml(savedScenarioTypeLabel(context.scenarioType))}</strong>
+          </div>
+          <div class="scenario-dialog-summary mt-4">
+            <span class="metric-label">Summary of changes</span>
+            ${changedInputsListHtml(context.changedInputs, 6)}
+          </div>
         </div>
-        <div class="scenario-dialog-summary mt-4">
-          <span class="metric-label">Summary of changes</span>
-          ${changedInputsListHtml(context.changedInputs, 6)}
-        </div>
-        <div class="scenario-dialog-actions">
+        <div class="scenario-dialog-actions scenario-save-footer">
           <button class="btn" type="button" data-scenario-save-action="cancel">Cancel</button>
           <button class="btn btn-primary" type="button" data-scenario-save-action="save">Save scenario</button>
         </div>
       </article>
     `;
     modal.classList.remove("hidden");
+    setScenarioSaveScrollLock(true);
     modal.querySelector("#stageGScenarioName")?.focus();
   }
 
@@ -12157,6 +12219,7 @@
     pendingScenarioSave = null;
     const modal = document.getElementById("scenarioSaveDialog");
     if (modal) modal.classList.add("hidden");
+    setScenarioSaveScrollLock(false);
   }
 
   function savePendingScenarioFromDialog() {
@@ -13578,6 +13641,8 @@
         if (semiAction.dataset.semiAction === "reset-adjustments") resetSemiRetirementAdjustments();
         if (semiAction.dataset.semiAction === "compare") createSemiRetirementComparisonScenario();
         if (semiAction.dataset.semiAction === "reset-comparison") resetSemiRetirementComparison();
+        if (semiAction.dataset.semiAction === "view-living-expenses") viewFinancialPlanLivingExpenses();
+        if (semiAction.dataset.semiAction === "use-plan-living-expenses") useFinancialPlanLivingExpensesForSemiRetirementScenario();
         if (semiAction.dataset.semiAction === "edit-inputs") {
           const target = document.querySelector("[data-semi-retirement-inputs]");
           target?.scrollIntoView({ behavior: "smooth", block: "start" });

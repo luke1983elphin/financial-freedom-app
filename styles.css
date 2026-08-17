@@ -7620,9 +7620,71 @@ textarea.field-input {
   display: none;
 }
 
+html.scenario-save-modal-open,
+body.scenario-save-modal-open {
+  overflow: hidden;
+}
+
+.scenario-save-modal {
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+}
+
 .scenario-save-card {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
+  overflow: hidden;
+  padding: 0;
+  width: min(100%, 560px);
+}
+
+.scenario-save-header {
+  align-items: start;
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 20px 24px 14px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.scenario-save-header h3 {
+  padding-right: 0;
+}
+
+.scenario-save-header p {
+  color: #475569;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.45;
+  margin-top: 6px;
+}
+
+.scenario-save-header .goal-info-close {
+  position: static;
+}
+
+.scenario-save-body {
   display: grid;
   gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px 24px 20px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.scenario-save-footer {
+  background: #ffffff;
+  border-top: 1px solid #e2e8f0;
+  bottom: 0;
+  position: sticky;
+  padding: 12px 24px calc(12px + env(safe-area-inset-bottom));
+  z-index: 2;
 }
 
 .scenario-dialog-summary {
@@ -7632,6 +7694,46 @@ textarea.field-input {
   display: grid;
   gap: 8px;
   padding: 12px;
+}
+
+.semi-retirement-source-note {
+  align-items: center;
+  color: #64748b;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.4;
+  margin-top: 8px;
+}
+
+.semi-retirement-source-note strong {
+  color: #0f2742;
+}
+
+.link-button {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: #0369a1;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 900;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.link-button:focus-visible {
+  border-radius: 4px;
+  outline: 3px solid rgba(14, 165, 233, 0.35);
+  outline-offset: 3px;
+}
+
+.semi-retirement-reset-source {
+  justify-self: start;
+  margin-top: 8px;
 }
 
 @media (max-width: 760px) {
@@ -7657,6 +7759,40 @@ textarea.field-input {
   .scenario-filter-bar .btn {
     flex: 1 1 calc(50% - 8px);
     justify-content: center;
+  }
+
+  .scenario-save-modal {
+    place-items: stretch center;
+  }
+
+  .scenario-save-card {
+    max-height: calc(100vh - 1rem);
+    max-height: calc(100dvh - 1rem);
+  }
+
+  .scenario-save-header {
+    padding: 14px 16px 10px;
+  }
+
+  .scenario-save-body {
+    padding: 12px 16px 16px;
+  }
+
+  .scenario-save-body textarea {
+    min-height: 84px;
+  }
+
+  .scenario-save-footer {
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  }
+
+  .semi-retirement-source-note {
+    align-items: start;
+    flex-direction: column;
+  }
+
+  .semi-retirement-reset-source {
+    width: 100%;
   }
 }
 

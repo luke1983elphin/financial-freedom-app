@@ -40,6 +40,9 @@ function basePlan() {
     { id: "income-lisa", name: "Lisa salary", type: "salaryWages", owner: "person2", amount: 85000, frequency: "annually" },
     { id: "income-interest", name: "Interest", type: "interest", owner: "joint", amount: 3000, frequency: "annually" },
   ];
+  plan.expenseItems = [
+    { id: "expense-living", name: "Living expenses", category: "living", amount: 90000, frequency: "annually" },
+  ];
   plan.liabilityItems = [
     { id: "stsl-luke", type: "stsl", owner: "person1", balance: 20000 },
   ];
@@ -1457,7 +1460,7 @@ test("Stage FC9 comparison state survives ordinary workspace switching during th
 });
 
 test("Stage FC10 reset comparison removes only comparison state", () => {
-  const snippet = sourceBetween(appSource, "function resetSemiRetirementComparison", "function semiRetirementAdjustmentPath");
+  const snippet = sourceBetween(appSource, "function resetSemiRetirementComparison", "function useFinancialPlanLivingExpensesForSemiRetirementScenario");
   assert.match(snippet, /clearSemiRetirementComparisonState\(\)/);
   assert.doesNotMatch(snippet, /semiRetirementScenarioResult = null|semiRetirementScenarioDraft = null|plan =/);
 });
@@ -1650,4 +1653,132 @@ test("Stage G12 Retirement Planning scenarios reuse the existing projection and 
   const loadSnippet = sourceBetween(appSource, "function loadRetirementScenarioSnapshot", "function openSavedScenario");
   assert.match(loadSnippet, /runSemiRetirementProjection/);
   assert.match(appSource, /function runSemiRetirementComparison/);
+});
+
+test("Stage G2-A Save Scenario modal is viewport constrained with internal scrolling and reachable actions", () => {
+  const styles = stageFStyles();
+  const modalSnippet = sourceBetween(appSource, "function openScenarioSaveDialog", "function closeScenarioSaveDialog");
+  assert.match(modalSnippet, /<header class="scenario-save-header">/);
+  assert.match(modalSnippet, /<div class="scenario-save-body">/);
+  assert.match(modalSnippet, /scenario-dialog-actions scenario-save-footer/);
+  assert.match(modalSnippet, /aria-label="Close save scenario dialog"/);
+  assert.match(styles, /\.scenario-save-card\s*\{[^}]*max-height: calc\(100vh - 2rem\);[^}]*max-height: calc\(100dvh - 2rem\);[^}]*overflow: hidden;/s);
+  assert.match(styles, /\.scenario-save-body\s*\{[^}]*overflow-y: auto;[^}]*-webkit-overflow-scrolling: touch;/s);
+  assert.match(styles, /\.scenario-save-footer\s*\{[^}]*position: sticky;[^}]*env\(safe-area-inset-bottom\)/s);
+  assert.match(styles, /@media \(max-width: 760px\)[\s\S]*\.scenario-save-card\s*\{[^}]*max-height: calc\(100dvh - 1rem\);/);
+});
+
+test("Stage G2-B Save Scenario modal locks underlying page scroll while open and restores it on close", () => {
+  const lockSnippet = sourceBetween(appSource, "function setScenarioSaveScrollLock", "function openScenarioSaveDialog");
+  const openSnippet = sourceBetween(appSource, "function openScenarioSaveDialog", "function closeScenarioSaveDialog");
+  const closeSnippet = sourceBetween(appSource, "function closeScenarioSaveDialog", "function savePendingScenarioFromDialog");
+  const styles = stageFStyles();
+  assert.match(lockSnippet, /document\.documentElement\.classList\.toggle\("scenario-save-modal-open"/);
+  assert.match(lockSnippet, /document\.body\.classList\.toggle\("scenario-save-modal-open"/);
+  assert.match(openSnippet, /setScenarioSaveScrollLock\(true\)/);
+  assert.match(closeSnippet, /setScenarioSaveScrollLock\(false\)/);
+  assert.match(styles, /html\.scenario-save-modal-open,\s*body\.scenario-save-modal-open\s*\{[^}]*overflow: hidden;/s);
+});
+
+test("Stage G2-C Save Scenario workflow still saves without changing the Financial Plan", () => {
+  const saveSnippet = sourceBetween(appSource, "function savePendingScenarioFromDialog", "function scenarioDisplayDate");
+  assert.match(saveSnippet, /scenarios\.unshift\(scenario\)/);
+  assert.match(saveSnippet, /saveScenarios\(scenarios\)/);
+  assert.match(saveSnippet, /closeScenarioSaveDialog\(\)/);
+  assert.doesNotMatch(saveSnippet, /\bplan\s*=/);
+  assert.doesNotMatch(saveSnippet, /autosavePlan\(|saveDraft\(/);
+});
+
+test("Stage G2-LS1 new Retirement Planning scenarios default spending from Financial Plan Annual Living Expenses", () => {
+  const plan = basePlan();
+  plan.personal.targetAnnualSpending = 90000;
+  plan.expenseItems = [
+    { id: "expense-living", name: "Living expenses", category: "living", amount: 45000, frequency: "annually" },
+  ];
+  const result = CALC.calculatePlan(plan);
+  assert.equal(result.annualLivingExpenses, 45000);
+  const defaults = UI.buildSemiRetirementScenarioDefaults(plan, result);
+  assert.equal(defaults.draft.household.currentLifestyleSpending, 45000);
+  assert.equal(defaults.draft.household.semiRetirementLifestyleSpending, 45000);
+  assert.equal(defaults.draft.household.fullRetirementLifestyleSpending, 45000);
+});
+
+test("Stage G2-LS2 lifestyle spending source and controls are visible and accessible", () => {
+  const renderSnippet = sourceBetween(appSource, "function renderSemiRetirementScenario", "function renderDecision");
+  assert.match(renderSnippet, /Your current household living expenses, used as the starting point for this retirement scenario\./);
+  assert.match(appSource, /Financial Plan living expenses:/);
+  assert.match(appSource, /data-semi-action="view-living-expenses"/);
+  assert.match(appSource, /data-semi-action="use-plan-living-expenses"/);
+  assert.match(appSource, /aria-label="Use current Financial Plan annual living expenses for current annual lifestyle spending"/);
+  assert.match(stageFStyles(), /\.semi-retirement-source-note\s*\{[^}]*flex-wrap: wrap;/s);
+});
+
+test("Stage G2-LS3 View living expenses opens the existing Financial Plan expenses step", () => {
+  const snippet = sourceBetween(appSource, "function viewFinancialPlanLivingExpenses", "function semiRetirementAdjustmentPath");
+  assert.match(snippet, /step\.title === "Expenses"/);
+  assert.match(snippet, /showWorkspace\("setup"\)/);
+  assert.match(snippet, /wizardExpensesForm/);
+  assert.doesNotMatch(snippet, /data-view="expenses"|new expense editor|create.*expense/i);
+});
+
+test("Stage G2-LS4 scenario spending overrides remain editable and do not mutate the Financial Plan", () => {
+  const { plan, defaults } = defaultsFor();
+  const before = JSON.stringify(plan);
+  UI.setDraftPath(defaults.draft, "household.currentLifestyleSpending", 60000);
+  assert.equal(defaults.draft.household.currentLifestyleSpending, 60000);
+  assert.equal(defaults.draft.household.semiRetirementLifestyleSpending, 90000);
+  assert.equal(defaults.draft.household.fullRetirementLifestyleSpending, 90000);
+  assert.equal(JSON.stringify(plan), before);
+});
+
+test("Stage G2-LS5 explicit scenario spending values and zero values are preserved", () => {
+  const { defaults } = defaultsFor();
+  UI.setDraftPath(defaults.draft, "household.currentLifestyleSpending", 0);
+  UI.setDraftPath(defaults.draft, "household.semiRetirementLifestyleSpending", 60000);
+  UI.setDraftPath(defaults.draft, "household.fullRetirementLifestyleSpending", 70000);
+  const inputs = UI.scenarioDraftToProjectionInputs(defaults.draft);
+  assert.equal(inputs.household.currentLifestyleSpending, 0);
+  assert.equal(inputs.household.semiRetirementLifestyleSpending, 60000);
+  assert.equal(inputs.household.fullRetirementLifestyleSpending, 70000);
+});
+
+test("Stage G2-LS6 reset to Financial Plan amount changes only current scenario lifestyle spending", () => {
+  const snippet = sourceBetween(appSource, "function useFinancialPlanLivingExpensesForSemiRetirementScenario", "function viewFinancialPlanLivingExpenses");
+  assert.match(snippet, /setDraftPath\(semiRetirementScenarioDraft, "household\.currentLifestyleSpending", financialPlanLivingExpensesAmount\(result\)\)/);
+  assert.doesNotMatch(snippet, /semiRetirementLifestyleSpending|fullRetirementLifestyleSpending|setPath\(plan|autosavePlan\(|saveDraft\(/);
+});
+
+test("Stage G2-LS7 Financial Plan expense changes are tracked for untouched defaults without binding dirty scenarios", () => {
+  const plan = basePlan();
+  plan.expenseItems = [{ id: "expense-a", name: "Living expenses", category: "living", amount: 45000, frequency: "annually" }];
+  const first = UI.buildSemiRetirementScenarioDefaults(plan, CALC.calculatePlan(plan));
+  plan.expenseItems = [{ id: "expense-a", name: "Living expenses", category: "living", amount: 50000, frequency: "annually" }];
+  const second = UI.buildSemiRetirementScenarioDefaults(plan, CALC.calculatePlan(plan));
+  assert.notEqual(first.sourceKey, second.sourceKey);
+  assert.equal(first.draft.household.currentLifestyleSpending, 45000);
+  assert.equal(second.draft.household.currentLifestyleSpending, 50000);
+});
+
+test("Stage G2-LS8 optional additional lifestyle draw remains separate and numerically unchanged", () => {
+  const { defaults } = defaultsFor();
+  defaults.draft.scenario.semiRetirementAccessibleWithdrawal = 12345;
+  defaults.draft.scenario.optionalAdditionalLifestyleWithdrawal = 12345;
+  defaults.draft.household.currentLifestyleSpending = 60000;
+  const inputs = UI.scenarioDraftToProjectionInputs(defaults.draft);
+  assert.equal(inputs.scenario.semiRetirementAccessibleWithdrawal, 12345);
+  assert.equal(inputs.scenario.optionalAdditionalLifestyleWithdrawal, 12345);
+  assert.equal(inputs.household.currentLifestyleSpending, 60000);
+});
+
+test("Stage G2-LS9 identical explicit scenario inputs produce identical projections", () => {
+  const { defaults } = defaultsFor();
+  defaults.draft.household.currentLifestyleSpending = 60000;
+  defaults.draft.household.semiRetirementLifestyleSpending = 65000;
+  defaults.draft.household.fullRetirementLifestyleSpending = 70000;
+  defaults.draft.scenario.semiRetirementAccessibleWithdrawal = 5000;
+  const inputs = UI.scenarioDraftToProjectionInputs(defaults.draft);
+  const first = ENGINE.projectRetirementScenario(inputs);
+  const second = ENGINE.projectRetirementScenario(deepClone(inputs));
+  assert.equal(JSON.stringify(second.summary), JSON.stringify(first.summary));
+  assert.equal(JSON.stringify(second.years), JSON.stringify(first.years));
 });
