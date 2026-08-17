@@ -149,5 +149,7 @@ test("workspace navigation includes the prominent dashboard destinations", () =>
   assert.match(indexSource, /data-view="weeklyplan">Weekly Plan/);
   assert.match(indexSource, /data-view="investments">Investments/);
   assert.match(indexSource, /data-view="goals">Goals/);
-  assert.match(indexSource, /data-engagement-action="ai">AI Coach/);
+  assert.doesNotMatch(indexSource, /data-view="ai"|>AI Coach<\/button>/);
+  assert.match(appSource, /data-engagement-action="ai">Ask a Question/);
+  assert.match(appSource, /data-engagement-action="ai">See Full Insight/);
 });

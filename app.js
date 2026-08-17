@@ -314,6 +314,22 @@
       title: "Surplus in first full-retirement year",
       body: "Cash remaining after normal projected lifestyle spending in the first year the household is fully retired.",
     },
+    decisionTaxBenefit: {
+      title: "Potential tax benefit",
+      body: "An estimate of the tax effect modelled for this option under the assumptions entered.",
+    },
+    decisionWealthBenefit: {
+      title: "Potential wealth benefit",
+      body: "The estimated long-term change in wealth from the modelled option. Actual outcomes may differ.",
+    },
+    decisionCashflowImpact: {
+      title: "Cashflow impact",
+      body: "The approximate effect on available household cash while the option is being funded.",
+    },
+    decisionFreedomProgress: {
+      title: "Financial freedom progress",
+      body: "A planning indicator showing progress toward the app's modelled financial-freedom target.",
+    },
   };
   const coreExpenseCategories = new Set(["living", "food", "utilities", "insurance", "schoolChildren", "ratesPropertyCosts"]);
   const incomeHelperText = "Enter your gross income before tax. The app estimates tax and STSL compulsory repayments separately.";
@@ -404,6 +420,11 @@
   let semiRetirementComparisonResult = null;
   let semiRetirementComparisonInputs = null;
   let semiRetirementComparisonErrors = [];
+  let decisionScenarioDraft = null;
+  let savedScenarioFilter = "";
+  let savedScenarioComparisonAnchorId = "";
+  let savedScenarioComparisonTargetId = "";
+  let pendingScenarioSave = null;
   let aiInsightsConfig = {
     enabled: Boolean(window.FFS_ENABLE_AI_INSIGHTS),
     configLoaded: Boolean(window.FFS_ENABLE_AI_INSIGHTS),
@@ -1233,8 +1254,12 @@
     return adjusted;
   }
 
+  function activeDecisionComparison() {
+    return { ...comparisonDefaults, ...(decisionScenarioDraft || plan.comparison || {}) };
+  }
+
   function buildComparisonPlan(baseResult = CALC.calculatePlan(plan)) {
-    return applyScenarioAdjustments(plan, comparisonAdjustmentsWithSurplus(baseResult, plan.comparison || {}));
+    return applyScenarioAdjustments(plan, comparisonAdjustmentsWithSurplus(baseResult, activeDecisionComparison()));
   }
 
   function estimatedCashflow(result) {
@@ -1764,7 +1789,7 @@
 
   function updateSetupNavigationLabel() {
     const button = document.getElementById("setupNavButton");
-    if (button) button.textContent = hasFinancialPlanData() ? "Financial Plan" : "Setup Wizard";
+    if (button) button.textContent = "Financial Plan";
   }
 
   function updateFieldLabel(path, label) {
@@ -2078,14 +2103,25 @@
       ? DEMO_PLAN_ID
       : normalisePlanId(scenario.planId || scenario.plan?.meta?.planId || activePlanId || DEFAULT_PERSONAL_PLAN_ID);
     const scenarioPlan = migratePlanData(scenario.plan || scenario);
+    const scenarioType = normaliseSavedScenarioType(scenario.scenarioType || scenario.type || (scenario.scenarioInputSnapshot?.mode ? scenario.scenarioInputSnapshot.mode : ""));
+    const scenarioId = scenario.id || scenario.scenarioId || makeId("scenario");
     return {
       ...scenario,
+      id: scenarioId,
+      scenarioId,
       source,
       planId,
+      scenarioType,
+      scenarioTypeLabel: savedScenarioTypeLabel(scenarioType),
       savedAt: scenario.savedAt || new Date().toISOString(),
+      updatedAt: scenario.updatedAt || scenario.savedAt || new Date().toISOString(),
       calculationVersion: scenario.calculationVersion || scenario.plan?.calculationVersion || CALCULATION_VERSION,
       financialYear: scenario.financialYear || FINANCIAL_YEAR,
       plan: ensurePlanIdentity(scenarioPlan, { source: source === "sample" ? "sample" : "personal", planId }),
+      changedInputs: Array.isArray(scenario.changedInputs) ? scenario.changedInputs : [],
+      keyResultSnapshot: scenario.keyResultSnapshot || null,
+      scenarioInputSnapshot: scenario.scenarioInputSnapshot || null,
+      basePlanReference: scenario.basePlanReference || null,
     };
   }
 
@@ -3684,13 +3720,30 @@
     const demoBase = CALC.clonePlan(basePlan || selectedSamplePlan()?.plan || DATA.demoPlan || {});
     return DATA.demoScenarioAdjustments.map((item, index) => {
       const scenarioPlan = applyScenarioAdjustments(demoBase, item.adjustments || {});
+      const baseResult = CALC.calculatePlan(demoBase);
+      const scenarioResult = CALC.calculatePlan(scenarioPlan);
+      const savedAt = new Date().toISOString();
       return {
         id: `sample-scenario-${index + 1}`,
+        scenarioId: `sample-scenario-${index + 1}`,
         source: "sample",
         planId: DEMO_PLAN_ID,
+        scenarioType: "decision",
+        scenarioTypeLabel: "Decision Engine",
         name: item.name,
         notes: item.notes,
-        savedAt: new Date().toISOString(),
+        savedAt,
+        updatedAt: savedAt,
+        calculationVersion: CALCULATION_VERSION,
+        financialYear: FINANCIAL_YEAR,
+        basePlanReference: { planId: DEMO_PLAN_ID, savedAt, calculationVersion: CALCULATION_VERSION, financialYear: FINANCIAL_YEAR, planHash: simpleHash(demoBase) },
+        basePlanSnapshot: ensurePlanIdentity(CALC.clonePlan(demoBase), { source: "sample", samplePlanId: selectedSamplePlanId }),
+        scenarioInputSnapshot: {
+          mode: "decision-sample",
+          adjustments: { ...comparisonDefaults, ...(item.adjustments || {}) },
+        },
+        changedInputs: decisionChangeRowsFromAdjustments(item.adjustments || {}),
+        keyResultSnapshot: decisionKeyResultSnapshot(baseResult, scenarioResult),
         plan: ensurePlanIdentity(scenarioPlan, { source: "sample", samplePlanId: selectedSamplePlanId }),
         summary: scenarioSummary(scenarioPlan),
       };
@@ -4137,6 +4190,7 @@
     document.querySelectorAll("[data-semi-retirement-nav]").forEach((button) => {
       button.classList.toggle("hidden", !enabled);
       button.disabled = !enabled;
+      button.textContent = "Retirement Planning";
       button.setAttribute("aria-hidden", enabled ? "false" : "true");
     });
     if (!enabled && activeView === "semiretirement") setView("decision");
@@ -6681,6 +6735,42 @@
     `;
   }
 
+  function passiveIncomeConciseSummaryHtml(result, options = {}) {
+    const summary = result?.passiveIncomeBreakdown || {};
+    const rentalCashflow = result?.rentalPropertyCashflow || {};
+    const total = Number(summary.total) || 0;
+    const linkedPrincipal = Number(rentalCashflow.annualHouseholdDebtDeduction ?? rentalCashflow.annualLoanPrincipal) || 0;
+    const netHouseholdPassive = total;
+    const heading = options.heading || "Passive income summary";
+    const intro = options.intro || "A compact view of passive cash income. Open the breakdown for owner allocation and linked-property detail.";
+    return `
+      <div class="card-subheading">
+        <h3 class="field-label-with-info">${escapeHtml(heading)} ${infoButtonHtml("passiveIncome", heading)}</h3>
+        <p>${escapeHtml(intro)}</p>
+      </div>
+      <div class="summary-grid mt-3">
+        ${summaryTile("Total passive cash income", money(total), total > 0 ? "status-green" : "", "passiveIncome")}
+        ${summaryTile("Net property cashflow", money(rentalCashflow.annualHouseholdCashflowContribution || 0))}
+        ${summaryTile("Net after linked loan principal", linkedPrincipal ? `-${money(linkedPrincipal)} p.a.` : "No linked principal deducted")}
+      </div>
+      <details class="passive-income-breakdown-details mt-4">
+        <summary>${escapeHtml(options.detailsLabel || "View passive income details")}</summary>
+        <div class="mt-3">
+          ${passiveIncomeBreakdownHtml(result, { compact: true, showOwners: true })}
+        </div>
+      </details>
+      ${options.note ? `<p class="field-help mt-3">${escapeHtml(options.note)}</p>` : ""}
+    `;
+  }
+
+  function decisionPassiveIncomeSummaryHtml(result) {
+    return passiveIncomeConciseSummaryHtml(result, {
+      heading: "Passive income summary",
+      intro: "Keep the headline passive-income figures visible while detailed owner allocation and linked-property principal repayments stay available on request.",
+      detailsLabel: "View passive income details",
+    });
+  }
+
   function renderCashflow(result) {
     document.getElementById("cashflowTable").innerHTML = cashflowRows(result).map(([label, value]) => `
       ${cashflowRowHtml(label, value)}
@@ -6783,7 +6873,11 @@
       summaryTile("Annual Lifestyle Spending Needed for Financial Freedom", money(plan.personal.targetAnnualSpending), "", "annualLifestyleSpending"),
     ].join("");
     const passiveContainer = document.getElementById("goalsPassiveIncomeBreakdown");
-    if (passiveContainer) passiveContainer.innerHTML = passiveIncomeBreakdownHtml(result, { compact: true, showOwners: true });
+    if (passiveContainer) passiveContainer.innerHTML = passiveIncomeConciseSummaryHtml(result, {
+      heading: "Passive income available toward goals",
+      intro: "A brief view of passive cash income so goals stay focused on outcomes and progress.",
+      detailsLabel: "View breakdown",
+    });
     renderEngagementFullJourney(result);
   }
 
@@ -8000,6 +8094,7 @@
             <h4>Your Scenario Projection</h4>
             <p>Based on the ages, income, spending, investment and return assumptions entered above.</p>
           </div>
+          <button class="btn btn-primary" type="button" data-save-stage-g-scenario="retirement">Save Scenario</button>
         </div>
         ${renderSemiRetirementDisclosureHtml()}
         ${renderSemiRetirementSnapshotHtml(viewModel)}
@@ -8101,24 +8196,35 @@
       <article class="card decision-coach-card">
         <div class="flex items-start justify-between gap-4">
           <div>
-            <span class="text-sm font-bold text-success">${index === 0 ? "Highest Recommendation" : `Priority ${index + 1}`}</span>
+            <span class="text-sm font-bold text-success">${index === 0 ? "Strongest opportunity" : index === 1 ? "Worth considering" : "Compare"}</span>
             <h3 class="mt-1 text-xl font-black text-navy">${escapeHtml(option.label)}</h3>
           </div>
-          <strong class="rounded-full bg-blue-50 px-3 py-1 text-sm text-blue-700">${index === 0 ? "High" : index === 1 ? "Medium" : "Watch"}</strong>
+          <strong class="rounded-full bg-blue-50 px-3 py-1 text-sm text-blue-700">Option ${index + 1}</strong>
         </div>
-        <p class="mt-3 text-sm font-bold text-navy">${index === 0 ? "This appears to be your highest-value opportunity." : "This may still help, depending on your priorities."}</p>
+        <div class="decision-benefit-grid">
+          ${summaryTile("Potential tax benefit", option.taxSaving > 0 ? `~${percentFromRatio(option.taxSaving)}` : "No direct tax effect modelled", "", "decisionTaxBenefit")}
+          ${summaryTile("Potential wealth benefit", `~${percentFromRatio(option.afterTaxBenefit)}`, "", "decisionWealthBenefit")}
+        </div>
         <div class="coach-section">
           <span>Why it matters</span>
           <p>${escapeHtml(option.explanation)}</p>
         </div>
-        <div class="summary-grid mt-4">
-          ${summaryTile("Estimated tax impact", option.label === "Extra super" ? `May save about ${percentFromRatio(option.taxSaving)} of each extra dollar` : "No direct tax saving estimated")}
-          ${summaryTile("Estimated cashflow impact", `${dollarsPerDollar(option.cashflowImpact)} cost per $1 modelled`)}
-          ${summaryTile("Estimated wealth impact", `${percentFromRatio(option.afterTaxBenefit)} modelled benefit`)}
-          ${summaryTile("Priority level", index === 0 ? "Highest" : index === 1 ? "Medium" : "Lower")}
+        <div class="decision-card-actions">
+          <button class="btn" type="button" data-decision-explore="${escapeHtml(option.label)}">Explore</button>
         </div>
+        <details class="decision-details mt-3">
+          <summary>View details</summary>
+          <div class="summary-grid mt-3">
+            ${summaryTile("Cashflow impact", `${dollarsPerDollar(option.cashflowImpact)} cost per $1 modelled`, "", "decisionCashflowImpact")}
+            ${summaryTile("Priority score", percentFromRatio(option.score))}
+            ${summaryTile("Raw model ranking input", `Option ${index + 1} in current ranking`)}
+            ${summaryTile("Financial freedom progress", "Model this below to see the plan result", "", "decisionFreedomProgress")}
+          </div>
+        </details>
       </article>
     `).join("");
+    const passiveSummary = document.getElementById("decisionPassiveIncomeSummary");
+    if (passiveSummary) passiveSummary.innerHTML = decisionPassiveIncomeSummaryHtml(result);
   }
 
   function updateSemiRetirementDraftFromInput(target) {
@@ -11068,7 +11174,7 @@
         priority: "Medium",
         title: "Decide how to use the remaining cash buffer",
         why: `The current model shows an estimated monthly final surplus of ${money(monthlySurplus)} after planned spending and wealth-building contributions.`,
-        impact: "The Quick Scenario Test can model directing this surplus toward investments or debt repayment.",
+        impact: "Build a custom scenario can model directing this surplus toward investments or debt repayment.",
       });
     }
 
@@ -11719,7 +11825,7 @@
   function renderComparison(result) {
     const summary = document.getElementById("comparisonSummary");
     if (!summary) return;
-    const comparison = { ...comparisonDefaults, ...(plan.comparison || {}) };
+    const comparison = activeDecisionComparison();
     document.querySelectorAll("[data-comparison]").forEach((input) => {
       const value = comparison[input.dataset.comparison] ?? 0;
       if (input.type === "checkbox") {
@@ -11735,9 +11841,14 @@
     const revised = estimatedCashflow(revisedResult);
     const currentPercent = freedomPercent(result);
     const revisedPercent = freedomPercent(revisedResult);
-    const tiles = [
-      summaryTile("Current monthly final surplus", money(current / 12), current >= 0 ? "status-green" : "status-amber"),
-      summaryTile("Revised monthly final surplus", money(revised / 12), revised >= 0 ? "status-green" : "status-amber"),
+    const primaryTiles = [
+      summaryTile("Monthly cash surplus", `${money(current / 12)} -> ${money(revised / 12)}`, revised >= current ? "status-green" : "status-amber"),
+      summaryTile("1-year net worth", `${money(netWorthAtYear(result, 1))} -> ${money(netWorthAtYear(revisedResult, 1))}`),
+      summaryTile("2-year net worth", `${money(netWorthAtYear(result, 2))} -> ${money(netWorthAtYear(revisedResult, 2))}`),
+      summaryTile("Long-term net worth", `${money(longTermNetWorth(result))} -> ${money(longTermNetWorth(revisedResult))}`),
+      summaryTile("Financial Freedom progress", `${plainPercent(currentPercent)} -> ${plainPercent(revisedPercent)}`, revisedPercent >= currentPercent ? "status-green" : "status-amber", "decisionFreedomProgress"),
+    ];
+    const technicalTiles = [
       summaryTile("Current annual final surplus", money(current), current >= 0 ? "status-green" : "status-amber"),
       summaryTile("Revised annual final surplus", money(revised), revised >= 0 ? "status-green" : "status-amber"),
       summaryTile("Taxable income estimate", `${money(result.taxEstimate.taxableIncomeAfterExtraSuper)} -> ${money(revisedResult.taxEstimate.taxableIncomeAfterExtraSuper)}`),
@@ -11748,12 +11859,15 @@
       summaryTile("Super balance in 2 years", `${money(superAtYear(result, 2))} -> ${money(superAtYear(revisedResult, 2))}`),
       summaryTile("Investment balance in 2 years", `${money(investmentAtYear(result, 2))} -> ${money(investmentAtYear(revisedResult, 2))}`),
       summaryTile("Debt balance now", `${money(result.totalLiabilities)} -> ${money(revisedResult.totalLiabilities)}`),
-      summaryTile("1-year net worth", `${money(netWorthAtYear(result, 1))} -> ${money(netWorthAtYear(revisedResult, 1))}`),
-      summaryTile("2-year net worth", `${money(netWorthAtYear(result, 2))} -> ${money(netWorthAtYear(revisedResult, 2))}`),
-      summaryTile("Long-term freedom progress", `${plainPercent(currentPercent)} -> ${plainPercent(revisedPercent)}`, revisedPercent >= currentPercent ? "status-green" : "status-amber"),
       ...comparisonSurplusImpactTiles(result, revisedResult, comparison, annualAllocation),
     ];
-    summary.innerHTML = tiles.join("");
+    summary.innerHTML = `
+      ${primaryTiles.join("")}
+      <details class="decision-details decision-result-details">
+        <summary>View details</summary>
+        <div class="summary-grid mt-3">${technicalTiles.join("")}</div>
+      </details>
+    `;
   }
 
   function renderWhatIf(result) {
@@ -11776,6 +11890,318 @@
       summaryTile("Long-term net worth", `${money(longTermNetWorth(result))} -> ${money(longTermNetWorth(adjustedResult))}`),
       summaryTile("Financial Freedom progress", `${plainPercent(freedomPercent(result))} -> ${plainPercent(freedomPercent(adjustedResult))}`),
     ].join("");
+  }
+
+  function normaliseSavedScenarioType(type = "") {
+    const value = String(type || "").toLowerCase();
+    if (value.includes("retirement") || value.includes("semi")) return "retirement";
+    if (value.includes("decision") || value.includes("what-if") || value.includes("comparison") || value.includes("custom")) return "decision";
+    if (value.includes("financial")) return "financial-plan";
+    return "legacy";
+  }
+
+  function savedScenarioTypeLabel(type = "") {
+    const normalised = normaliseSavedScenarioType(type);
+    if (normalised === "retirement") return "Retirement Planning";
+    if (normalised === "decision") return "Decision Engine";
+    if (normalised === "financial-plan") return "Financial Plan";
+    return "Legacy scenario";
+  }
+
+  function savedScenarioFilterMatches(scenario) {
+    const type = normaliseSavedScenarioType(scenario.scenarioType);
+    if (!savedScenarioFilter || savedScenarioFilter === "all") return true;
+    return type === savedScenarioFilter;
+  }
+
+  function currentBasePlanReference() {
+    return {
+      planId: normalisePlanId(activePlanId),
+      savedAt: localStorage.getItem(LAST_SAVED_KEY) || "",
+      calculationVersion: CALCULATION_VERSION,
+      financialYear: FINANCIAL_YEAR,
+      planHash: simpleHash(plan),
+    };
+  }
+
+  function scenarioChange(label, before, after) {
+    return { label, before: String(before ?? "Not set"), after: String(after ?? "Not set") };
+  }
+
+  function scenarioChangeText(change) {
+    if (!change) return "";
+    if (change.before === "" || change.before === "Not set") return `${change.label}: ${change.after}`;
+    return `${change.label}: ${change.before} -> ${change.after}`;
+  }
+
+  function changedInputsListHtml(changes = [], limit = 4) {
+    const visible = (changes || []).slice(0, limit);
+    if (!visible.length) return `<p class="scenario-muted">No material changes recorded.</p>`;
+    return `<ul>${visible.map((item) => `<li>${escapeHtml(scenarioChangeText(item))}</li>`).join("")}</ul>`;
+  }
+
+  function keyResultRows(snapshot) {
+    if (!snapshot) return [];
+    if (Array.isArray(snapshot.rows)) return snapshot.rows;
+    if (Array.isArray(snapshot)) return snapshot;
+    return Object.entries(snapshot).map(([label, value]) => ({ label, value }));
+  }
+
+  function keyResultsListHtml(snapshot, limit = 3) {
+    const rows = keyResultRows(snapshot).slice(0, limit);
+    if (!rows.length) return `<p class="scenario-muted">No key outcome snapshot available.</p>`;
+    return `<ul>${rows.map((row) => `<li>${escapeHtml(row.label)}: ${escapeHtml(row.value)}</li>`).join("")}</ul>`;
+  }
+
+  function decisionChangeRowsFromAdjustments(adjustments = {}) {
+    const labels = [
+      ["incomeChange", "Income", "per year"],
+      ["expenseChange", "Expenses", "per year"],
+      ["loanRepaymentChangeMonthly", "Mortgage repayment", "per month"],
+      ["loanInterestRateChangePct", "Loan interest rate", "%"],
+      ["investmentContributionChange", "Investment contribution", "per year"],
+      ["investmentReturnChangePct", "Investment return", "%"],
+      ["superContributionChange", "Employer super", "per year"],
+      ["extraConcessionalSuperChange", "Additional concessional super", "per year"],
+      ["helpBalanceChange", "STSL balance", ""],
+      ["oneOffCosts", "One-off costs", ""],
+      ["oneOffSavings", "One-off savings", ""],
+    ];
+    const rows = labels
+      .map(([key, label, suffix]) => {
+        const value = Number(adjustments[key]) || 0;
+        if (!value) return null;
+        const formatted = key.includes("Pct") ? `${value > 0 ? "+" : ""}${value}${suffix}` : `${value > 0 ? "+" : ""}${money(value)}${suffix ? ` ${suffix}` : ""}`;
+        return scenarioChange(label, "No change", formatted);
+      })
+      .filter(Boolean);
+    if (adjustments.surplusAllocationTarget && adjustments.surplusAllocationTarget !== "none") {
+      rows.push(scenarioChange("Direct available surplus", "Not allocated", `${money(comparisonSurplusAllocationAmount(CALC.calculatePlan(plan), adjustments))} per year to ${adjustments.surplusAllocationTarget === "debt" ? "debt repayment" : "investments"}`));
+    }
+    return rows;
+  }
+
+  function decisionKeyResultSnapshot(baseResult, scenarioResult) {
+    const baseMonthly = estimatedCashflow(baseResult) / 12;
+    const scenarioMonthly = estimatedCashflow(scenarioResult) / 12;
+    return {
+      rows: [
+        { label: "Monthly cash surplus", value: `${money(baseMonthly)} -> ${money(scenarioMonthly)}`, currentValue: baseMonthly, scenarioValue: scenarioMonthly },
+        { label: "1-year net worth", value: `${money(netWorthAtYear(baseResult, 1))} -> ${money(netWorthAtYear(scenarioResult, 1))}`, currentValue: netWorthAtYear(baseResult, 1), scenarioValue: netWorthAtYear(scenarioResult, 1) },
+        { label: "2-year net worth", value: `${money(netWorthAtYear(baseResult, 2))} -> ${money(netWorthAtYear(scenarioResult, 2))}`, currentValue: netWorthAtYear(baseResult, 2), scenarioValue: netWorthAtYear(scenarioResult, 2) },
+        { label: "Long-term net worth", value: `${money(longTermNetWorth(baseResult))} -> ${money(longTermNetWorth(scenarioResult))}`, currentValue: longTermNetWorth(baseResult), scenarioValue: longTermNetWorth(scenarioResult) },
+        { label: "Financial Freedom progress", value: `${plainPercent(freedomPercent(baseResult))} -> ${plainPercent(freedomPercent(scenarioResult))}`, currentValue: freedomPercent(baseResult), scenarioValue: freedomPercent(scenarioResult) },
+      ],
+    };
+  }
+
+  function suggestedDecisionScenarioName(mode, action, changes) {
+    if (action?.label) return action.label;
+    const first = changes?.[0];
+    if (!first) return "Custom decision scenario";
+    return first.label === "Mortgage repayment"
+      ? `${first.after.replace("+", "")} to mortgage`
+      : first.label === "Investment contribution"
+        ? `${first.after.replace("+", "")} to investments`
+        : `${first.label} scenario`;
+  }
+
+  function buildDecisionScenarioSaveContext(mode = "custom") {
+    const baseResult = CALC.calculatePlan(plan);
+    const action = mode === "what-if" ? (whatIfActions.find((item) => item.id === activeWhatIfId) || whatIfActions[0]) : null;
+    const adjustments = action ? action.adjustments(baseResult) : activeDecisionComparison();
+    const adjustedPlan = action
+      ? applyScenarioAdjustments(plan, adjustments)
+      : buildComparisonPlan(baseResult);
+    const scenarioResult = CALC.calculatePlan(adjustedPlan);
+    const changes = decisionChangeRowsFromAdjustments(adjustments);
+    return {
+      scenarioType: "decision",
+      defaultName: suggestedDecisionScenarioName(mode, action, changes),
+      summaryTitle: mode === "what-if" ? "Quick What-If" : "Build a custom scenario",
+      scenarioInputSnapshot: {
+        mode: mode === "what-if" ? "decision-what-if" : "decision-custom",
+        actionId: action?.id || "",
+        adjustments: { ...comparisonDefaults, ...adjustments },
+      },
+      changedInputs: changes,
+      keyResultSnapshot: decisionKeyResultSnapshot(baseResult, scenarioResult),
+      planSnapshot: adjustedPlan,
+      basePlanSnapshot: CALC.clonePlan(plan),
+    };
+  }
+
+  function scenarioPathValue(source, path) {
+    return window.FFSSemiRetirementUi?.getDraftPath?.(source, path);
+  }
+
+  function retirementChangeRows(baseDraft, scenarioDraft) {
+    const rows = [];
+    (scenarioDraft?.people || []).forEach((person, index) => {
+      const prefix = `people.${index}`;
+      const name = person.name || `Person ${index + 1}`;
+      [
+        ["semiRetirementAge", `${name} semi-retirement age`, (value) => `Age ${value}`],
+        ["semiRetirementGrossIncome", `${name} semi-retirement income`, money],
+        ["fullRetirementAge", `${name} full retirement age`, (value) => `Age ${value}`],
+        ["superAccessAge", `${name} super access age`, (value) => `Age ${value}`],
+      ].forEach(([field, label, formatter]) => {
+        const before = scenarioPathValue(baseDraft, `${prefix}.${field}`);
+        const after = scenarioPathValue(scenarioDraft, `${prefix}.${field}`);
+        if (String(before ?? "") !== String(after ?? "")) rows.push(scenarioChange(label, formatter(before || 0), formatter(after || 0)));
+      });
+    });
+    [
+      ["household.semiRetirementLifestyleSpending", "Semi-retirement spending", money],
+      ["household.fullRetirementLifestyleSpending", "Full-retirement spending", money],
+      ["scenario.semiRetirementAccessibleWithdrawal", "Optional additional lifestyle draw", money],
+      ["scenario.surplusDestination", "Surplus destination", semiRetirementSurplusDestinationLabel],
+    ].forEach(([path, label, formatter]) => {
+      const before = scenarioPathValue(baseDraft, path);
+      const after = scenarioPathValue(scenarioDraft, path);
+      if (String(before ?? "") !== String(after ?? "")) rows.push(scenarioChange(label, formatter(before || 0), formatter(after || 0)));
+    });
+    return rows;
+  }
+
+  function retirementKeyResultSnapshot(viewModel) {
+    const summary = semiRetirementComparisonSummary(viewModel);
+    return {
+      rows: [
+        { label: "Household fully retired", value: summary.fullRetirementLabel },
+        { label: "Assets at retirement", value: semiRetirementMoney(summary.assetsAtRetirement), rawValue: summary.assetsAtRetirement },
+        { label: "Accessible assets last", value: summary.accessibleLastLabel },
+        { label: "Semi-retirement withdrawals", value: semiRetirementMoney(summary.requiredWithdrawals), rawValue: summary.requiredWithdrawals },
+        { label: "Surplus in first full-retirement year", value: semiRetirementMoney(summary.lifestyleSurplus), rawValue: summary.lifestyleSurplus },
+        { label: "Debt at retirement", value: semiRetirementMoney(summary.debtAtRetirement), rawValue: summary.debtAtRetirement },
+        { label: "Projection-end net worth", value: semiRetirementMoney(summary.projectedEndNetWorth), rawValue: summary.projectedEndNetWorth },
+      ],
+    };
+  }
+
+  function suggestedRetirementScenarioName(changes = [], draft = {}) {
+    const retirementChange = changes.find((item) => /full retirement age/i.test(item.label));
+    if (retirementChange) return `${retirementChange.label.replace(" full retirement age", "")} retire at ${retirementChange.after.replace("Age ", "")}`;
+    const semiChange = changes.find((item) => /semi-retirement age/i.test(item.label));
+    if (semiChange) return `${semiChange.label.replace(" semi-retirement age", "")} semi-retire at ${semiChange.after.replace("Age ", "")}`;
+    const firstPerson = draft.people?.[0]?.name || "Household";
+    return `${firstPerson} retirement scenario`;
+  }
+
+  function buildRetirementScenarioSaveContext() {
+    if (!semiRetirementScenarioResult || !semiRetirementScenarioResultDraft) return null;
+    const viewModel = window.FFSSemiRetirementUi?.buildSemiRetirementResultsViewModel?.(semiRetirementScenarioResult, semiRetirementScenarioInputs, semiRetirementScenarioResultDraft);
+    if (!viewModel?.isAvailable) return null;
+    const changes = retirementChangeRows(semiRetirementScenarioInitialDraft || {}, semiRetirementScenarioResultDraft);
+    return {
+      scenarioType: "retirement",
+      defaultName: suggestedRetirementScenarioName(changes, semiRetirementScenarioResultDraft),
+      summaryTitle: "Retirement Planning",
+      scenarioInputSnapshot: cloneScenarioDraft(semiRetirementScenarioResultDraft),
+      changedInputs: changes,
+      keyResultSnapshot: retirementKeyResultSnapshot(viewModel),
+      planSnapshot: CALC.clonePlan(plan),
+      basePlanSnapshot: CALC.clonePlan(plan),
+    };
+  }
+
+  function ensureScenarioSaveDialog() {
+    let modal = document.getElementById("scenarioSaveDialog");
+    if (modal) return modal;
+    modal = document.createElement("div");
+    modal.id = "scenarioSaveDialog";
+    modal.className = "goal-info-modal hidden scenario-save-modal";
+    modal.setAttribute("role", "dialog");
+    modal.setAttribute("aria-modal", "true");
+    modal.setAttribute("aria-labelledby", "scenarioSaveTitle");
+    document.body.appendChild(modal);
+    return modal;
+  }
+
+  function openScenarioSaveDialog(context) {
+    if (!context) {
+      updateSaveStatus("Calculate or select a scenario before saving.");
+      return;
+    }
+    pendingScenarioSave = context;
+    const modal = ensureScenarioSaveDialog();
+    modal.innerHTML = `
+      <div class="goal-info-backdrop" data-scenario-save-action="cancel"></div>
+      <article class="goal-info-card scenario-save-card">
+        <button class="goal-info-close" type="button" data-scenario-save-action="cancel" aria-label="Close save scenario dialog">X</button>
+        <h3 id="scenarioSaveTitle">Save scenario</h3>
+        <p>Saved scenarios stay separate from your Financial Plan. They can be reopened or compared later without changing your plan.</p>
+        <label class="field-label" for="stageGScenarioName">Scenario name</label>
+        <input class="field-input" id="stageGScenarioName" type="text" value="${escapeHtml(context.defaultName || "")}" required>
+        <label class="field-label mt-4" for="stageGScenarioNote">Optional note</label>
+        <textarea class="field-input min-h-28" id="stageGScenarioNote" placeholder="Optional note"></textarea>
+        <div class="scenario-dialog-summary mt-4">
+          <span class="metric-label">Scenario type</span>
+          <strong>${escapeHtml(savedScenarioTypeLabel(context.scenarioType))}</strong>
+        </div>
+        <div class="scenario-dialog-summary mt-4">
+          <span class="metric-label">Summary of changes</span>
+          ${changedInputsListHtml(context.changedInputs, 6)}
+        </div>
+        <div class="scenario-dialog-actions">
+          <button class="btn" type="button" data-scenario-save-action="cancel">Cancel</button>
+          <button class="btn btn-primary" type="button" data-scenario-save-action="save">Save scenario</button>
+        </div>
+      </article>
+    `;
+    modal.classList.remove("hidden");
+    modal.querySelector("#stageGScenarioName")?.focus();
+  }
+
+  function closeScenarioSaveDialog() {
+    pendingScenarioSave = null;
+    const modal = document.getElementById("scenarioSaveDialog");
+    if (modal) modal.classList.add("hidden");
+  }
+
+  function savePendingScenarioFromDialog() {
+    if (!pendingScenarioSave) return;
+    const modal = ensureScenarioSaveDialog();
+    const nameInput = modal.querySelector("#stageGScenarioName");
+    const noteInput = modal.querySelector("#stageGScenarioNote");
+    const name = String(nameInput?.value || "").trim();
+    if (!name) {
+      updateSaveStatus("Enter a scenario name before saving.");
+      nameInput?.focus();
+      return;
+    }
+    const context = pendingScenarioSave;
+    const scenarios = loadScenarios();
+    const now = new Date().toISOString();
+    const scenario = {
+      id: makeId("scenario"),
+      scenarioId: "",
+      source: "user",
+      planId: normalisePlanId(activePlanId),
+      scenarioType: normaliseSavedScenarioType(context.scenarioType),
+      scenarioTypeLabel: savedScenarioTypeLabel(context.scenarioType),
+      name,
+      notes: String(noteInput?.value || "").trim(),
+      savedAt: now,
+      updatedAt: now,
+      calculationVersion: CALCULATION_VERSION,
+      financialYear: FINANCIAL_YEAR,
+      basePlanReference: currentBasePlanReference(),
+      basePlanSnapshot: context.basePlanSnapshot || CALC.clonePlan(plan),
+      scenarioInputSnapshot: context.scenarioInputSnapshot,
+      changedInputs: context.changedInputs || [],
+      keyResultSnapshot: context.keyResultSnapshot,
+      plan: ensurePlanIdentity(context.planSnapshot || CALC.clonePlan(plan), { source: "personal", planId: activePlanId }),
+      summary: scenarioSummary(context.planSnapshot || plan),
+    };
+    scenario.scenarioId = scenario.id;
+    scenarios.unshift(scenario);
+    saveScenarios(scenarios);
+    closeScenarioSaveDialog();
+    savedScenarioFilter = scenario.scenarioType;
+    renderScenarios();
+    showWorkspace("scenarios");
+    updateSaveStatus("Scenario saved. Financial Plan unchanged.");
   }
 
   function scenarioComparisonMetrics(scenario) {
@@ -11845,72 +12271,143 @@
     `;
   }
 
+  function scenarioDisplayDate(scenario) {
+    const date = new Date(scenario.updatedAt || scenario.savedAt || Date.now());
+    return Number.isNaN(date.getTime()) ? "Date unavailable" : date.toLocaleString();
+  }
+
+  function financialPlanKeyResultSnapshot(result) {
+    return {
+      rows: [
+        { label: "Monthly cash surplus", value: money(estimatedCashflow(result) / 12), rawValue: estimatedCashflow(result) / 12 },
+        { label: "1-year net worth", value: money(netWorthAtYear(result, 1)), rawValue: netWorthAtYear(result, 1) },
+        { label: "2-year net worth", value: money(netWorthAtYear(result, 2)), rawValue: netWorthAtYear(result, 2) },
+        { label: "Long-term net worth", value: money(longTermNetWorth(result)), rawValue: longTermNetWorth(result) },
+        { label: "Financial Freedom progress", value: plainPercent(freedomPercent(result)), rawValue: freedomPercent(result) },
+        { label: "Target age outcome", value: targetAgeOutcome(result) },
+      ],
+    };
+  }
+
+  function scenarioSnapshotRows(scenario) {
+    const snapshotRows = keyResultRows(scenario.keyResultSnapshot);
+    if (snapshotRows.length) return snapshotRows;
+    if (!scenario.plan) return [];
+    return keyResultRows(financialPlanKeyResultSnapshot(CALC.calculatePlan(scenario.plan)));
+  }
+
+  function scenarioRowDisplayValue(row) {
+    if (!row) return "";
+    if (row.value !== undefined && row.value !== null) return String(row.value);
+    if (row.scenarioValue !== undefined && row.scenarioValue !== null) return typeof row.scenarioValue === "number" ? money(row.scenarioValue) : String(row.scenarioValue);
+    if (row.rawValue !== undefined && row.rawValue !== null) return typeof row.rawValue === "number" ? money(row.rawValue) : String(row.rawValue);
+    return "";
+  }
+
+  function scenarioComparisonRows(left, right) {
+    const rightRows = new Map(scenarioSnapshotRows(right).map((row) => [row.label, row]));
+    return scenarioSnapshotRows(left)
+      .filter((row) => rightRows.has(row.label))
+      .slice(0, 8)
+      .map((row) => {
+        const matching = rightRows.get(row.label);
+        return `
+          <tr>
+            <th>${escapeHtml(row.label)}</th>
+            <td>${escapeHtml(scenarioRowDisplayValue(row))}</td>
+            <td>${escapeHtml(scenarioRowDisplayValue(matching))}</td>
+          </tr>
+        `;
+      }).join("");
+  }
+
   function renderScenarioComparison(scenarios, containerId = "scenarioComparisonReport") {
     const container = document.getElementById(containerId);
     if (!container) return;
+    const anchor = scenarios.find((scenario) => scenario.id === savedScenarioComparisonAnchorId);
+    const target = scenarios.find((scenario) => scenario.id === savedScenarioComparisonTargetId);
+    if (savedScenarioComparisonAnchorId && !anchor) savedScenarioComparisonAnchorId = "";
+    if (savedScenarioComparisonTargetId && !target) savedScenarioComparisonTargetId = "";
     if (!scenarios.length) {
       container.innerHTML = `
         <div class="card-heading">
           <div>
-            <h3>Scenario Comparison Report</h3>
-            <span>Save two or more plans to compare them side-by-side.</span>
+            <h3>Scenario Comparison</h3>
+            <span>Save a Decision Engine or Retirement Planning scenario to compare alternatives here.</span>
           </div>
         </div>
       `;
       return;
     }
-    const metrics = scenarios.map(scenarioComparisonMetrics).sort((a, b) => b.score - a.score);
-    const best = metrics[0];
-    const currentMetrics = scenarioComparisonMetrics({ name: "Current Plan", notes: "", plan: CALC.clonePlan(plan) });
+    if (anchor && target) {
+      const anchorType = normaliseSavedScenarioType(anchor.scenarioType);
+      const targetType = normaliseSavedScenarioType(target.scenarioType);
+      if (anchorType !== targetType) {
+        container.innerHTML = `
+          <div class="card-heading">
+            <div>
+              <h3>Scenario Comparison</h3>
+              <span>Different scenario types cannot be compared directly.</span>
+            </div>
+          </div>
+          <p class="tax-note mt-4">Choose two Decision Engine scenarios or two Retirement Planning scenarios for a like-for-like comparison. Opening or comparing a scenario does not change your Financial Plan.</p>
+        `;
+        return;
+      }
+      container.innerHTML = `
+        <div class="card-heading">
+          <div>
+            <h3>Scenario Comparison</h3>
+            <span>${escapeHtml(savedScenarioTypeLabel(anchorType))} side-by-side comparison. Your Financial Plan is unchanged.</span>
+          </div>
+          <button class="btn" type="button" data-clear-scenario-comparison>Clear comparison</button>
+        </div>
+        <div class="comparison-table-wrap mt-4">
+          <table class="comparison-table">
+            <thead>
+              <tr>
+                <th>Outcome</th>
+                <th>${escapeHtml(anchor.name || "Scenario 1")}</th>
+                <th>${escapeHtml(target.name || "Scenario 2")}</th>
+              </tr>
+            </thead>
+            <tbody>${scenarioComparisonRows(anchor, target)}</tbody>
+          </table>
+        </div>
+      `;
+      return;
+    }
+    if (anchor) {
+      container.innerHTML = `
+        <div class="card-heading">
+          <div>
+            <h3>Scenario Comparison</h3>
+            <span>${escapeHtml(anchor.name || "Saved scenario")} selected.</span>
+          </div>
+          <button class="btn" type="button" data-clear-scenario-comparison>Clear comparison</button>
+        </div>
+        <p class="tax-note mt-4">Select Compare on another ${escapeHtml(savedScenarioTypeLabel(anchor.scenarioType))} scenario to view a side-by-side comparison. Different scenario types are kept separate so the comparison remains meaningful.</p>
+      `;
+      return;
+    }
+    const counts = scenarios.reduce((acc, scenario) => {
+      const type = normaliseSavedScenarioType(scenario.scenarioType);
+      acc[type] = (acc[type] || 0) + 1;
+      return acc;
+    }, {});
     container.innerHTML = `
       <div class="card-heading">
         <div>
-          <h3>Scenario Comparison Report</h3>
-          <span>Simple side-by-side estimate across saved scenarios.</span>
+          <h3>Scenario Comparison</h3>
+          <span>Select Compare on two scenarios of the same type.</span>
         </div>
       </div>
-      <p class="tax-note mt-4"><strong>Recommended Scenario:</strong> ${escapeHtml(best.scenario.name)}. This is preferred because it has the strongest estimated mix of final surplus, projected net worth, debt level, investment balance, super balance and progress toward the long-term financial freedom target.</p>
-      <div class="comparison-table-wrap mt-4">
-        <table class="comparison-table">
-          <thead>
-            <tr>
-              <th>Metric</th>
-              <th>Current Plan</th>
-              <th>Scenario</th>
-              <th>Difference</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${comparisonTableRow("Monthly final surplus", currentMetrics.monthlyCashflow, best.monthlyCashflow)}
-            ${comparisonTableRow("Financial Freedom Age", currentMetrics.targetAge, best.targetAge, { textOnly: true })}
-            ${comparisonTableRow("Investment Balance", currentMetrics.investmentBalance, best.investmentBalance)}
-            ${comparisonTableRow("Super Balance", currentMetrics.superBalance, best.superBalance)}
-            ${comparisonTableRow("Net Worth", currentMetrics.projectedNetWorth, best.projectedNetWorth)}
-            ${comparisonTableRow("Passive Cash Income", currentMetrics.annualPassiveIncome, best.annualPassiveIncome)}
-            ${comparisonTableRow("Lifetime Wealth", currentMetrics.longTermNetWorth, best.longTermNetWorth)}
-            ${comparisonTableRow("Debt Balance", currentMetrics.debtBalance, best.debtBalance, { lowerIsBetter: true })}
-          </tbody>
-        </table>
+      <div class="summary-grid mt-4">
+        ${summaryTile("Decision Engine scenarios", String(counts.decision || 0))}
+        ${summaryTile("Retirement Planning scenarios", String(counts.retirement || 0))}
+        ${summaryTile("Financial Plan snapshots", String((counts["financial-plan"] || 0) + (counts.legacy || 0)))}
       </div>
-      <div class="scenario-comparison-grid mt-4">
-        ${metrics.map((item, index) => `
-          <article class="scenario-compare-card ${index === 0 ? "best" : ""}">
-            <span>${index === 0 ? "Best estimated outcome" : "Saved scenario"}</span>
-            <h4>${escapeHtml(item.scenario.name)}</h4>
-            <div class="table-list mt-3">
-              <div class="table-row"><span>Monthly final surplus</span><strong>${money(item.monthlyCashflow)}</strong></div>
-              <div class="table-row"><span>1-year net worth</span><strong>${money(item.oneYearNetWorth)}</strong></div>
-              <div class="table-row"><span>2-year net worth</span><strong>${money(item.twoYearNetWorth)}</strong></div>
-              <div class="table-row"><span>Long-term net worth</span><strong>${money(item.longTermNetWorth)}</strong></div>
-              <div class="table-row"><span>Debt balance</span><strong>${money(item.debtBalance)}</strong></div>
-              <div class="table-row"><span>Investment balance</span><strong>${money(item.investmentBalance)}</strong></div>
-              <div class="table-row"><span>Super balance</span><strong>${money(item.superBalance)}</strong></div>
-              <div class="table-row"><span>Financial Freedom progress</span><strong>${plainPercent(item.freedomProgress)}</strong></div>
-              <div class="table-row"><span>Target age outcome</span><strong>${escapeHtml(item.targetAge)}</strong></div>
-            </div>
-          </article>
-        `).join("")}
-      </div>
+      <p class="tax-note mt-4">Saved scenarios are a modelling library. They can be opened or compared without changing your underlying Financial Plan.</p>
     `;
   }
 
@@ -11957,18 +12454,29 @@
     const planSnapshot = CALC.clonePlan(plan);
     if (!isBundledSamplePlan(planSnapshot)) markPersonalPlanCreated();
     const resultSnapshot = CALC.calculatePlan(planSnapshot);
+    const savedAt = new Date().toISOString();
     const scenario = {
       id: `scenario-${Date.now()}`,
+      scenarioId: "",
       source: "user",
       planId: normalisePlanId(activePlanId),
+      scenarioType: "financial-plan",
+      scenarioTypeLabel: "Financial Plan",
       name,
       notes,
-      savedAt: new Date().toISOString(),
+      savedAt,
+      updatedAt: savedAt,
       calculationVersion: CALCULATION_VERSION,
       financialYear: FINANCIAL_YEAR,
+      basePlanReference: currentBasePlanReference(),
+      basePlanSnapshot: CALC.clonePlan(planSnapshot),
+      scenarioInputSnapshot: { mode: "financial-plan-snapshot" },
+      changedInputs: [scenarioChange("Saved plan snapshot", "Current working plan", name)],
+      keyResultSnapshot: financialPlanKeyResultSnapshot(resultSnapshot),
       plan: planSnapshot,
       summary: scenarioSummary(planSnapshot, resultSnapshot),
     };
+    scenario.scenarioId = scenario.id;
 
     const existingIndex = scenarios.findIndex((item) => (item.name || "").trim().toLowerCase() === name.toLowerCase());
     if (existingIndex >= 0) {
@@ -11993,10 +12501,10 @@
   function openSavedScenarios() {
     renderScenarios();
     showWorkspace("scenarios");
-    updateSaveStatus("Choose a saved scenario to load.");
+    updateSaveStatus("Choose a saved scenario to open or compare. Your Financial Plan remains unchanged.");
   }
 
-  function renderScenarios() {
+  function renderScenariosLegacy() {
     const scenarios = loadScenarios();
     document.getElementById("scenarioCount").textContent = `${scenarios.length} saved`;
     renderScenarioComparison(scenarios);
@@ -12027,7 +12535,7 @@
               ${summaryTile("Financial Freedom progress", plainPercent(summary.freedomProgress))}
             </div>
             <div class="flex flex-wrap gap-2">
-              <button class="btn" type="button" data-load-scenario="${scenario.id}">Load</button>
+              <button class="btn" type="button" data-open-scenario="${scenario.id}">Open</button>
               <button class="btn" type="button" data-rename-scenario="${scenario.id}">Rename</button>
               <button class="btn" type="button" data-delete-scenario="${scenario.id}">Delete</button>
             </div>
@@ -12035,6 +12543,65 @@
         </article>
       `;
     }).join("");
+  }
+
+  function scenarioCardHtml(scenario) {
+    const type = normaliseSavedScenarioType(scenario.scenarioType);
+    const selected = savedScenarioComparisonAnchorId === scenario.id || savedScenarioComparisonTargetId === scenario.id;
+    const keySnapshot = scenario.keyResultSnapshot || (scenario.plan ? financialPlanKeyResultSnapshot(CALC.calculatePlan(scenario.plan)) : null);
+    return `
+      <article class="scenario-library-card${selected ? " is-selected" : ""}">
+        <div class="scenario-card-heading">
+          <div>
+            <span class="metric-label">${escapeHtml(savedScenarioTypeLabel(type))}</span>
+            <h3>${escapeHtml(scenario.name || "Saved scenario")}</h3>
+          </div>
+          <span class="scenario-card-date">${escapeHtml(scenarioDisplayDate(scenario))}</span>
+        </div>
+        ${scenario.notes ? `<p class="scenario-note">${escapeHtml(scenario.notes)}</p>` : ""}
+        <div class="scenario-card-grid">
+          <section class="scenario-card-section">
+            <h4>What changed</h4>
+            ${changedInputsListHtml(scenario.changedInputs || [], 4)}
+          </section>
+          <section class="scenario-card-section">
+            <h4>Key outcome</h4>
+            ${keyResultsListHtml(keySnapshot, 3)}
+          </section>
+        </div>
+        <div class="scenario-actions">
+          <button class="btn btn-primary" type="button" data-open-scenario="${scenario.id}">Open</button>
+          <button class="btn" type="button" data-compare-scenario="${scenario.id}"${selected ? ' aria-pressed="true"' : ""}>Compare</button>
+          <button class="btn" type="button" data-duplicate-scenario="${scenario.id}">Duplicate</button>
+          <button class="btn" type="button" data-rename-scenario="${scenario.id}">Rename</button>
+          <button class="btn" type="button" data-delete-scenario="${scenario.id}">Delete</button>
+        </div>
+      </article>
+    `;
+  }
+
+  function renderScenarios() {
+    const scenarios = loadScenarios();
+    const filteredScenarios = scenarios.filter(savedScenarioFilterMatches);
+    const scenarioCount = document.getElementById("scenarioCount");
+    if (scenarioCount) scenarioCount.textContent = `${scenarios.length} saved`;
+    document.querySelectorAll("[data-scenario-filter]").forEach((button) => {
+      const isActive = (savedScenarioFilter || "all") === button.dataset.scenarioFilter;
+      button.classList.toggle("btn-primary", isActive);
+      button.setAttribute("aria-pressed", isActive ? "true" : "false");
+    });
+    renderScenarioComparison(scenarios);
+    const list = document.getElementById("scenarioList");
+    if (!list) return;
+    if (!scenarios.length) {
+      list.innerHTML = `<p class="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">No saved scenarios yet. Save a Decision Engine scenario, Retirement Planning scenario or Financial Plan snapshot to build your scenario library.</p>`;
+      return;
+    }
+    if (!filteredScenarios.length) {
+      list.innerHTML = `<p class="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">No ${escapeHtml(savedScenarioTypeLabel(savedScenarioFilter))} scenarios match this filter.</p>`;
+      return;
+    }
+    list.innerHTML = filteredScenarios.map(scenarioCardHtml).join("");
   }
 
   function syncInputs(path, value) {
@@ -12436,6 +13003,163 @@
     saveCurrentPlanAsScenario({ useScenarioFields: true });
   }
 
+  function findSavedScenario(id) {
+    return loadScenarios().find((scenario) => scenario.id === id);
+  }
+
+  function loadDecisionScenarioSnapshot(scenario) {
+    const snapshot = scenario?.scenarioInputSnapshot || {};
+    const adjustments = { ...comparisonDefaults, ...(snapshot.adjustments || {}) };
+    decisionScenarioDraft = adjustments;
+    if (snapshot.actionId && whatIfActions.some((action) => action.id === snapshot.actionId)) {
+      activeWhatIfId = snapshot.actionId;
+    }
+    showWorkspace("decision");
+    renderOutputs();
+    if (snapshot.mode !== "decision-what-if") {
+      window.setTimeout(() => {
+        const details = document.getElementById("customScenarioDetails");
+        if (details) {
+          details.open = true;
+          details.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }, 50);
+    }
+    updateSaveStatus("Decision scenario opened for review. Financial Plan unchanged.");
+  }
+
+  function loadRetirementScenarioSnapshot(scenario) {
+    if (!window.FFSSemiRetirementUi || !window.FFSSemiRetirementProjection) {
+      updateSaveStatus("Retirement Planning is not available in this browser.");
+      return;
+    }
+    const snapshot = scenario?.scenarioInputSnapshot;
+    if (!snapshot?.people) {
+      updateSaveStatus("This saved scenario does not contain Retirement Planning inputs.");
+      return;
+    }
+    semiRetirementScenarioDraft = cloneScenarioDraft(snapshot);
+    semiRetirementScenarioInitialDraft = cloneScenarioDraft(snapshot);
+    semiRetirementScenarioSourceKey = `saved-scenario:${scenario.id}`;
+    semiRetirementScenarioDirty = true;
+    clearSemiRetirementAdjustmentState();
+    clearSemiRetirementComparisonState();
+    const outcome = window.FFSSemiRetirementUi.runSemiRetirementProjection(window.FFSSemiRetirementProjection, semiRetirementScenarioDraft);
+    semiRetirementScenarioInputs = outcome.inputs;
+    semiRetirementScenarioErrors = outcome.validation?.isValid ? [] : (outcome.validation?.errors || []);
+    semiRetirementScenarioResult = outcome.validation?.isValid ? outcome.result : null;
+    if (semiRetirementScenarioResult?.validation && !semiRetirementScenarioResult.validation.isValid) {
+      semiRetirementScenarioErrors = semiRetirementScenarioResult.validation.errors || [];
+      semiRetirementScenarioResult = null;
+    }
+    semiRetirementScenarioResultDraft = semiRetirementScenarioResult ? cloneScenarioDraft(semiRetirementScenarioDraft) : null;
+    showWorkspace("semiretirement");
+    renderOutputs();
+    updateSaveStatus("Retirement Planning scenario opened for review. Financial Plan unchanged.");
+  }
+
+  function openSavedScenario(id) {
+    const scenario = findSavedScenario(id);
+    if (!scenario) return;
+    const type = normaliseSavedScenarioType(scenario.scenarioType);
+    if (type === "decision") {
+      loadDecisionScenarioSnapshot(scenario);
+      return;
+    }
+    if (type === "retirement") {
+      loadRetirementScenarioSnapshot(scenario);
+      return;
+    }
+    savedScenarioComparisonAnchorId = scenario.id;
+    savedScenarioComparisonTargetId = "";
+    renderScenarios();
+    updateSaveStatus("Financial Plan snapshots can be reviewed or compared here without replacing your active plan.");
+  }
+
+  function exploreDecisionOpportunity(label = "") {
+    const text = String(label).toLowerCase();
+    if (text.includes("super")) activeWhatIfId = "super-10000";
+    else if (text.includes("debt") || text.includes("mortgage") || text.includes("loan")) activeWhatIfId = "debt-500";
+    else if (text.includes("income") || text.includes("earn")) activeWhatIfId = "income-5";
+    else if (text.includes("expense") || text.includes("spend")) activeWhatIfId = "expenses-500";
+    else if (text.includes("invest")) activeWhatIfId = "invest-250";
+    const action = whatIfActions.find((item) => item.id === activeWhatIfId);
+    if (action) decisionScenarioDraft = { ...comparisonDefaults, ...action.adjustments(CALC.calculatePlan(plan)) };
+    renderOutputs();
+    document.getElementById("whatIfResult")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    updateSaveStatus("Quick What-If selected. Financial Plan unchanged.");
+  }
+
+  function compareSavedScenario(id) {
+    const scenarios = loadScenarios();
+    const selected = scenarios.find((scenario) => scenario.id === id);
+    if (!selected) return;
+    if (!savedScenarioComparisonAnchorId || savedScenarioComparisonAnchorId === id) {
+      savedScenarioComparisonAnchorId = id;
+      savedScenarioComparisonTargetId = "";
+      renderScenarios();
+      updateSaveStatus("Select Compare on another scenario of the same type.");
+      return;
+    }
+    const anchor = scenarios.find((scenario) => scenario.id === savedScenarioComparisonAnchorId);
+    if (!anchor || normaliseSavedScenarioType(anchor.scenarioType) !== normaliseSavedScenarioType(selected.scenarioType)) {
+      savedScenarioComparisonAnchorId = id;
+      savedScenarioComparisonTargetId = "";
+      renderScenarios();
+      updateSaveStatus("Different scenario types cannot be compared directly. Select another scenario of this type.");
+      return;
+    }
+    savedScenarioComparisonTargetId = id;
+    renderScenarios();
+    updateSaveStatus("Scenario comparison updated. Financial Plan unchanged.");
+  }
+
+  function clearSavedScenarioComparison() {
+    savedScenarioComparisonAnchorId = "";
+    savedScenarioComparisonTargetId = "";
+    renderScenarios();
+    updateSaveStatus("Scenario comparison cleared.");
+  }
+
+  function duplicateSavedScenario(id) {
+    if (isDemoActive()) {
+      updateSaveStatus("Sample scenarios are temporary. Return to My Plan before duplicating a personal scenario.");
+      return;
+    }
+    const scenarios = loadScenarios();
+    const source = scenarios.find((scenario) => scenario.id === id);
+    if (!source) return;
+    const now = new Date().toISOString();
+    const copy = {
+      ...JSON.parse(JSON.stringify(source)),
+      id: makeId("scenario"),
+      scenarioId: "",
+      source: "user",
+      planId: normalisePlanId(activePlanId),
+      name: `Copy of ${source.name || "Saved scenario"}`,
+      savedAt: now,
+      updatedAt: now,
+    };
+    copy.scenarioId = copy.id;
+    scenarios.unshift(copy);
+    saveScenarios(scenarios);
+    renderScenarios();
+    updateSaveStatus("Scenario duplicated. Financial Plan unchanged.");
+  }
+
+  function deleteSavedScenario(id) {
+    if (isDemoActive()) {
+      updateSaveStatus("Sample scenarios are temporary and cannot be deleted.");
+      return;
+    }
+    if (!window.confirm("Delete this saved scenario? Your Financial Plan will not be changed.")) return;
+    saveScenarios(loadScenarios().filter((item) => item.id !== id));
+    if (savedScenarioComparisonAnchorId === id) savedScenarioComparisonAnchorId = "";
+    if (savedScenarioComparisonTargetId === id) savedScenarioComparisonTargetId = "";
+    renderScenarios();
+    updateSaveStatus("Scenario deleted. Financial Plan unchanged.");
+  }
+
   function duplicateScenario() {
     if (isDemoActive()) {
       updateSaveStatus("Sample Plan is temporary. Return to My Plan before duplicating a personal scenario.");
@@ -12445,18 +13169,30 @@
     const scenarios = loadScenarios();
     const planSnapshot = CALC.clonePlan(plan);
     if (!isBundledSamplePlan(planSnapshot)) markPersonalPlanCreated();
+    const resultSnapshot = CALC.calculatePlan(planSnapshot);
+    const savedAt = new Date().toISOString();
     const scenario = {
       id: `scenario-${Date.now()}`,
+      scenarioId: "",
       source: "user",
       planId: normalisePlanId(activePlanId),
+      scenarioType: "financial-plan",
+      scenarioTypeLabel: "Financial Plan",
       name: `Copy ${scenarios.length + 1}`,
       notes: "Duplicated from the current plan.",
-      savedAt: new Date().toISOString(),
+      savedAt,
+      updatedAt: savedAt,
       calculationVersion: CALCULATION_VERSION,
       financialYear: FINANCIAL_YEAR,
+      basePlanReference: currentBasePlanReference(),
+      basePlanSnapshot: CALC.clonePlan(planSnapshot),
+      scenarioInputSnapshot: { mode: "financial-plan-snapshot" },
+      changedInputs: [scenarioChange("Saved plan snapshot", "Current working plan", `Copy ${scenarios.length + 1}`)],
+      keyResultSnapshot: financialPlanKeyResultSnapshot(resultSnapshot),
       plan: planSnapshot,
-      summary: scenarioSummary(planSnapshot),
+      summary: scenarioSummary(planSnapshot, resultSnapshot),
     };
+    scenario.scenarioId = scenario.id;
     scenarios.unshift(scenario);
     saveScenarios(scenarios);
     renderScenarios();
@@ -12651,9 +13387,9 @@
       if (target.dataset.comparison) {
         ensureCollectionData();
         const value = target.dataset.type === "boolean" ? target.checked : target.dataset.type === "text" ? target.value : Number(target.value) || 0;
-        plan.comparison[target.dataset.comparison] = value;
+        decisionScenarioDraft = { ...comparisonDefaults, ...(decisionScenarioDraft || plan.comparison || {}) };
+        decisionScenarioDraft[target.dataset.comparison] = value;
         generatedWeeklyPlanner = null;
-        autosavePlan();
         renderOutputs();
         return;
       }
@@ -13041,6 +13777,12 @@
         return;
       }
 
+      const decisionExplore = event.target.closest("[data-decision-explore]");
+      if (decisionExplore) {
+        exploreDecisionOpportunity(decisionExplore.dataset.decisionExplore);
+        return;
+      }
+
       const wizardStep = event.target.closest("[data-wizard-step]");
       if (wizardStep) {
         activeWizardStep = Number(wizardStep.dataset.wizardStep) || 0;
@@ -13057,33 +13799,55 @@
         return;
       }
 
+      const scenarioSaveButton = event.target.closest("[data-save-stage-g-scenario]");
+      if (scenarioSaveButton) {
+        const mode = scenarioSaveButton.dataset.saveStageGScenario;
+        if (mode === "retirement") openScenarioSaveDialog(buildRetirementScenarioSaveContext());
+        else openScenarioSaveDialog(buildDecisionScenarioSaveContext(mode === "decision-what-if" ? "what-if" : "custom"));
+        return;
+      }
+
+      const scenarioSaveAction = event.target.closest("[data-scenario-save-action]");
+      if (scenarioSaveAction) {
+        if (scenarioSaveAction.dataset.scenarioSaveAction === "save") savePendingScenarioFromDialog();
+        else closeScenarioSaveDialog();
+        return;
+      }
+
+      const scenarioFilter = event.target.closest("[data-scenario-filter]");
+      if (scenarioFilter) {
+        savedScenarioFilter = scenarioFilter.dataset.scenarioFilter || "all";
+        renderScenarios();
+        return;
+      }
+
+      if (event.target.closest("[data-clear-scenario-comparison]")) {
+        clearSavedScenarioComparison();
+        return;
+      }
+
+      const openScenarioId = event.target.closest("[data-open-scenario]")?.dataset.openScenario;
+      if (openScenarioId) {
+        openSavedScenario(openScenarioId);
+        return;
+      }
+
+      const compareScenarioId = event.target.closest("[data-compare-scenario]")?.dataset.compareScenario;
+      if (compareScenarioId) {
+        compareSavedScenario(compareScenarioId);
+        return;
+      }
+
+      const duplicateScenarioId = event.target.closest("[data-duplicate-scenario]")?.dataset.duplicateScenario;
+      if (duplicateScenarioId) {
+        duplicateSavedScenario(duplicateScenarioId);
+        return;
+      }
+
       const loadId = event.target.closest("[data-load-scenario]")?.dataset.loadScenario;
       if (loadId) {
-        const scenario = loadScenarios().find((item) => item.id === loadId);
-        if (scenario) {
-          if (scenario.source === "sample") {
-            isDemoMode = true;
-            activePlanId = DEMO_PLAN_ID;
-            plan = ensurePlanIdentity(CALC.clonePlan(scenario.plan), { source: "sample", samplePlanId: selectedSamplePlanId });
-            generatedWeeklyPlanner = null;
-            weeklyPlan = null;
-            renderAll();
-            showWorkspace("dashboard");
-            updateSaveStatus("Sample scenario loaded temporarily. Your personal plan has not been changed.");
-            return;
-          }
-          isSwitchingPlans = true;
-          isDemoMode = false;
-          activePlanId = normalisePlanId(scenario.planId || scenario.plan?.meta?.planId || activePlanId || DEFAULT_PERSONAL_PLAN_ID);
-          plan = ensurePlanIdentity(CALC.clonePlan(scenario.plan), { source: "personal", planId: activePlanId });
-          generatedWeeklyPlanner = null;
-          resetWeeklyPlanStorage("");
-          isSwitchingPlans = false;
-          saveDraft();
-          renderAll();
-          showWorkspace("dashboard");
-          updateSaveStatus("Scenario loaded successfully.");
-        }
+        openSavedScenario(loadId);
+        return;
       }
 
       const renameId = event.target.closest("[data-rename-scenario]")?.dataset.renameScenario;
@@ -13093,9 +13857,7 @@
 
       const deleteId = event.target.closest("[data-delete-scenario]")?.dataset.deleteScenario;
       if (deleteId) {
-        if (!window.confirm("Delete this saved scenario?")) return;
-        saveScenarios(loadScenarios().filter((item) => item.id !== deleteId));
-        renderScenarios();
+        deleteSavedScenario(deleteId);
       }
     });
 
@@ -13105,6 +13867,7 @@
         closeSamplePlanMenus();
         closeGoalInfo();
         closeAiInsightsModal();
+        closeScenarioSaveDialog();
       }
 
       const aiCard = event.target.closest?.("[data-ai-insights-card]");

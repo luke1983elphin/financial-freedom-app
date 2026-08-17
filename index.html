@@ -188,15 +188,14 @@
               <p class="nav-title">Plan workspace</p>
               <div class="grid gap-1" id="sideNav">
                 <button class="nav-button active" type="button" data-view="dashboard">Dashboard</button>
-                <button class="nav-button" type="button" data-view="setup" id="setupNavButton">Setup Wizard</button>
+                <button class="nav-button" type="button" data-view="setup" id="setupNavButton">Financial Plan</button>
                 <button class="nav-button" type="button" data-view="investments">Investments</button>
-                <button class="nav-button" type="button" data-view="goals">Goals</button>
                 <button class="nav-button" type="button" data-view="super">Super</button>
+                <button class="nav-button" type="button" data-view="goals">Goals</button>
                 <button class="nav-button" type="button" data-view="decision">Decision Engine</button>
-                <button class="nav-button" type="button" data-view="semiretirement" data-semi-retirement-nav>Semi-Retirement</button>
+                <button class="nav-button" type="button" data-view="semiretirement" data-semi-retirement-nav>Retirement Planning</button>
                 <button class="nav-button" type="button" data-view="reports">Reports</button>
                 <button class="nav-button" type="button" data-view="scenarios">Saved Scenarios</button>
-                <button class="nav-button" type="button" data-engagement-action="ai">AI Coach</button>
                 <button class="nav-button nav-button-optional" type="button" data-view="weeklyplan">Weekly Plan</button>
               </div>
             </nav>
@@ -480,26 +479,39 @@
               <section class="view-section hidden" data-view-panel="decision">
                 <div class="section-heading">
                   <h2>Decision Engine</h2>
-                  <p>Compare where the next dollar may have the strongest modelled impact.</p>
+                  <p>Explore the options that appear worth modelling, test quick changes and save useful scenarios without changing your Financial Plan.</p>
                 </div>
-                <div id="decisionList" class="grid gap-4 lg:grid-cols-2"></div>
-                <article class="card mt-6">
+                <article class="card">
                   <div class="card-heading">
                     <div>
-                      <h3>What If?</h3>
-                      <span>One-click scenario simulations. These do not overwrite your saved plan.</span>
+                      <h3>Your strongest opportunities</h3>
+                      <span>Review modelled opportunities first, then open the details only where useful.</span>
                     </div>
                   </div>
-                  <div class="what-if-actions mt-4" id="whatIfActions"></div>
-                  <div id="whatIfResult" class="summary-grid mt-4"></div>
+                  <div id="decisionList" class="grid gap-4 lg:grid-cols-2 mt-4"></div>
                 </article>
                 <article class="card mt-6">
                   <div class="card-heading">
                     <div>
-                      <h3>Quick Scenario Test</h3>
-                      <span>Temporary estimates only. These changes do not overwrite your saved plan unless you save or duplicate the plan.</span>
+                      <h3>Quick What-Ifs</h3>
+                      <span>See how a simple change may affect your short- and long-term position. Nothing here changes your Financial Plan. Saving stores a separate scenario.</span>
                     </div>
                   </div>
+                  <div class="what-if-actions mt-4" id="whatIfActions"></div>
+                  <div id="whatIfResult" class="summary-grid mt-4"></div>
+                  <div class="decision-save-actions mt-4">
+                    <button class="btn btn-primary" type="button" data-save-stage-g-scenario="decision-what-if">Save Scenario</button>
+                  </div>
+                </article>
+                <details class="card mt-6 decision-accordion" id="customScenarioDetails">
+                  <summary>
+                    <div>
+                      <h3>Build a custom scenario</h3>
+                      <span>Adjust several assumptions together to test a more detailed scenario. Saving stores a separate scenario without changing your Financial Plan.</span>
+                    </div>
+                    <strong>Open</strong>
+                  </summary>
+                  <div class="decision-accordion-body mt-4">
                   <div class="comparison-grid">
                     <label>
                       <span class="field-label">Income change per year</span>
@@ -586,7 +598,12 @@
                     </div>
                   </div>
                   <div id="comparisonSummary" class="summary-grid mt-4"></div>
-                </article>
+                  <div class="decision-save-actions mt-4">
+                    <button class="btn btn-primary" type="button" data-save-stage-g-scenario="decision-custom">Save Scenario</button>
+                  </div>
+                  </div>
+                </details>
+                <article class="card mt-6" id="decisionPassiveIncomeSummary"></article>
               </section>
 
               <section class="view-section hidden" data-view-panel="semiretirement">
@@ -600,10 +617,10 @@
               <section class="view-section hidden" data-view-panel="scenarios">
                 <div class="section-heading">
                   <h2>Saved Scenarios</h2>
-                  <p>Save plans here, then choose exactly which saved scenario to load later.</p>
+                  <p>Saved scenarios are separate from your Financial Plan. Opening, comparing or deleting a scenario does not change your underlying plan.</p>
                 </div>
-                <div class="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-                  <div class="card">
+                <div class="grid gap-6">
+                  <div class="card scenario-legacy-save-card">
                     <label class="field-label" for="scenarioName">Scenario name</label>
                     <input class="field-input" id="scenarioName" type="text" placeholder="e.g. Base case">
                     <label class="field-label mt-4" for="scenarioNotes">Notes</label>
@@ -615,10 +632,16 @@
                       <h3 class="text-lg font-bold text-navy">Saved Scenarios</h3>
                       <span id="scenarioCount" class="text-sm text-slate-500">0 saved</span>
                     </div>
+                    <div class="scenario-filter-bar" role="group" aria-label="Filter saved scenarios">
+                      <button class="btn btn-primary" type="button" data-scenario-filter="all">All</button>
+                      <button class="btn" type="button" data-scenario-filter="retirement">Retirement Planning</button>
+                      <button class="btn" type="button" data-scenario-filter="decision">Decision Engine</button>
+                    </div>
                     <div id="scenarioList" class="grid gap-3"></div>
                   </div>
                 </div>
                 <div id="scenarioComparisonReport" class="card mt-6"></div>
+                <div id="scenarioSaveDialogMount"></div>
               </section>
 
               <section class="view-section hidden" data-view-panel="weeklyplan">

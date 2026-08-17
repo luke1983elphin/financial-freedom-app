@@ -7509,6 +7509,157 @@ textarea.field-input {
   }
 }
 
+.decision-benefit-grid,
+.scenario-card-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 14px;
+}
+
+.decision-card-actions,
+.decision-save-actions,
+.scenario-actions,
+.scenario-dialog-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.decision-card-actions,
+.decision-save-actions {
+  margin-top: 14px;
+}
+
+.decision-details,
+.decision-accordion,
+.scenario-card-section {
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #f8fafc;
+  padding: 12px 14px;
+}
+
+.decision-details > summary,
+.decision-accordion > summary {
+  color: #0f2742;
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.decision-details > summary:focus-visible,
+.decision-accordion > summary:focus-visible {
+  outline: 3px solid rgba(14, 165, 233, 0.35);
+  outline-offset: 4px;
+}
+
+.scenario-filter-bar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.scenario-library-card {
+  border: 1px solid #dbeafe;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 14px 35px rgba(15, 39, 66, 0.08);
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 18px;
+}
+
+.scenario-library-card.is-selected {
+  border-color: #0f9f6e;
+  box-shadow: 0 0 0 3px rgba(15, 159, 110, 0.14), 0 14px 35px rgba(15, 39, 66, 0.08);
+}
+
+.scenario-card-heading {
+  align-items: start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.scenario-card-heading h3 {
+  color: #0f2742;
+  font-size: 20px;
+  font-weight: 950;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.scenario-card-date,
+.scenario-muted,
+.scenario-note {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.scenario-card-section h4 {
+  color: #0f2742;
+  font-size: 14px;
+  font-weight: 950;
+  margin-bottom: 8px;
+}
+
+.scenario-card-section ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.scenario-save-modal.hidden {
+  display: none;
+}
+
+.scenario-save-card {
+  display: grid;
+  gap: 10px;
+}
+
+.scenario-dialog-summary {
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #f8fafc;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+@media (max-width: 760px) {
+  .decision-benefit-grid,
+  .scenario-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .scenario-card-heading,
+  .scenario-actions,
+  .scenario-dialog-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .scenario-actions .btn,
+  .scenario-dialog-actions .btn,
+  .decision-save-actions .btn {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .scenario-filter-bar .btn {
+    flex: 1 1 calc(50% - 8px);
+    justify-content: center;
+  }
+}
+
 @media print {
   @page {
     margin: 14mm 12mm 18mm;

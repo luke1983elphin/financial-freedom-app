@@ -1524,3 +1524,130 @@ test("Stage F1-H current and comparison projections remain identical for identic
     current.viewModel.keyResults.accessibleWhenBothFullyRetired.row.household.annualLifestyleSurplusOrShortfall,
   );
 });
+
+test("Stage G1 Plan Workspace navigation uses the simplified order", () => {
+  const navSnippet = sourceBetween(indexSource, '<div class="grid gap-1" id="sideNav">', "</nav>");
+  const items = [...navSnippet.matchAll(/data-view="([^"]+)"[^>]*>([^<]+)</g)].map((match) => `${match[1]}:${match[2].trim()}`);
+  assert.deepEqual(items, [
+    "dashboard:Dashboard",
+    "setup:Financial Plan",
+    "investments:Investments",
+    "super:Super",
+    "goals:Goals",
+    "decision:Decision Engine",
+    "semiretirement:Retirement Planning",
+    "reports:Reports",
+    "scenarios:Saved Scenarios",
+    "weeklyplan:Weekly Plan",
+  ]);
+  assert.match(navSnippet, /data-view="setup"[^>]*id="setupNavButton"[^>]*>Financial Plan<\/button>/);
+  assert.doesNotMatch(navSnippet, /Setup Wizard/);
+  assert.match(indexSource, /data-view-panel="setup"/);
+  assert.match(appSource, /button\.textContent = "Financial Plan"/);
+});
+
+test("Stage G2 AI Coach is removed from Plan Workspace navigation but AI feature remains available", () => {
+  const navSnippet = sourceBetween(indexSource, '<div class="grid gap-1" id="sideNav">', "</nav>");
+  assert.doesNotMatch(navSnippet, /AI Coach|data-view="ai/i);
+  assert.match(appSource, /function openAiInsights/);
+  assert.match(appSource, /data-ai-insights-card/);
+});
+
+test("Stage G3 Retirement Planning nav label keeps the existing page heading", () => {
+  assert.match(indexSource, /data-view="semiretirement"[^>]*>Retirement Planning<\/button>/);
+  assert.match(indexSource, /<h2>Semi-Retirement & Retirement Scenario<\/h2>/);
+  assert.match(appSource, /button\.textContent = "Retirement Planning"/);
+});
+
+test("Stage G4 Decision Engine presents opportunities with details collapsed", () => {
+  assert.match(indexSource, /Your strongest opportunities/);
+  const snippet = sourceBetween(appSource, "function renderDecision", "function updateSemiRetirementDraftFromInput");
+  assert.match(snippet, /result\.decisionOptions\.map/);
+  assert.match(snippet, /Potential tax benefit/);
+  assert.match(snippet, /Potential wealth benefit/);
+  assert.match(snippet, /<details class="decision-details mt-3">/);
+  assert.match(snippet, /<summary>View details<\/summary>/);
+  assert.match(snippet, /Cashflow impact/);
+  assert.match(snippet, /Priority score/);
+});
+
+test("Stage G5 Quick What-Ifs and custom scenario controls are progressively disclosed", () => {
+  assert.match(indexSource, /<h3>Quick What-Ifs<\/h3>/);
+  assert.match(indexSource, /Saving stores a separate scenario without changing your Financial Plan/);
+  assert.match(indexSource, /<details class="card mt-6 decision-accordion" id="customScenarioDetails">/);
+  assert.doesNotMatch(indexSource, /<details class="card mt-6 decision-accordion" id="customScenarioDetails" open>/);
+  ["incomeChange", "expenseChange", "loanRepaymentChangeMonthly", "loanInterestRateChangePct", "investmentContributionChange", "investmentReturnChangePct", "superContributionChange", "extraConcessionalSuperChange", "helpBalanceChange", "oneOffCosts", "oneOffSavings", "surplusAllocationTarget", "surplusAllocationAmount", "surplusAllocationFrequency", "surplusAllocationUseFull"].forEach((field) => {
+    assert.match(indexSource, new RegExp(`data-comparison="${field}"`));
+  });
+});
+
+test("Stage G6 Passive Cash Income detail is collapsed in Decision Engine and Goals", () => {
+  const helperSnippet = sourceBetween(appSource, "function passiveIncomeConciseSummaryHtml", "function decisionPassiveIncomeSummaryHtml");
+  const decisionSnippet = sourceBetween(appSource, "function decisionPassiveIncomeSummaryHtml", "function renderCashflow");
+  const goalsSnippet = sourceBetween(appSource, "function renderGoalsSummary", "function renderEngagementFullJourney");
+  assert.match(helperSnippet, /<details class="passive-income-breakdown-details/);
+  assert.match(decisionSnippet, /View passive income details/);
+  assert.match(goalsSnippet, /passiveIncomeConciseSummaryHtml/);
+  assert.match(goalsSnippet, /View breakdown/);
+});
+
+test("Stage G7 Saved Scenarios store reusable inputs, changed inputs and key outcomes", () => {
+  assert.match(appSource, /scenarioId/);
+  assert.match(appSource, /scenarioInputSnapshot/);
+  assert.match(appSource, /changedInputs/);
+  assert.match(appSource, /keyResultSnapshot/);
+  assert.match(appSource, /basePlanReference/);
+  assert.match(appSource, /basePlanSnapshot/);
+  assert.match(appSource, /scenarioTypeLabel/);
+  assert.match(indexSource, /data-save-stage-g-scenario="decision-what-if"/);
+  assert.match(indexSource, /data-save-stage-g-scenario="decision-custom"/);
+  assert.match(appSource, /data-save-stage-g-scenario="retirement"/);
+});
+
+test("Stage G8 Scenario save dialog requires a name and explains plan separation", () => {
+  const snippet = sourceBetween(appSource, "function openScenarioSaveDialog", "function closeScenarioSaveDialog");
+  assert.match(snippet, /Saved scenarios stay separate from your Financial Plan/);
+  assert.match(snippet, /id="stageGScenarioName" type="text"[^>]*required/);
+  assert.match(appSource, /Enter a scenario name before saving/);
+});
+
+test("Stage G9 Scenario library filters and card actions are present", () => {
+  assert.match(indexSource, /data-scenario-filter="all"/);
+  assert.match(indexSource, /data-scenario-filter="retirement"/);
+  assert.match(indexSource, /data-scenario-filter="decision"/);
+  const snippet = sourceBetween(appSource, "function scenarioCardHtml", "function renderScenarios");
+  ["data-open-scenario", "data-compare-scenario", "data-duplicate-scenario", "data-rename-scenario", "data-delete-scenario"].forEach((attribute) => {
+    assert.match(snippet, new RegExp(attribute));
+  });
+  assert.match(snippet, /What changed/);
+  assert.match(snippet, /Key outcome/);
+});
+
+test("Stage G10 Opening and comparing saved scenarios do not mutate the Financial Plan", () => {
+  const openSnippet = sourceBetween(appSource, "function openSavedScenario(id)", "function exploreDecisionOpportunity");
+  const decisionSnippet = sourceBetween(appSource, "function loadDecisionScenarioSnapshot", "function loadRetirementScenarioSnapshot");
+  const retirementSnippet = sourceBetween(appSource, "function loadRetirementScenarioSnapshot", "function openSavedScenario");
+  const compareSnippet = sourceBetween(appSource, "function compareSavedScenario", "function clearSavedScenarioComparison");
+  [openSnippet, decisionSnippet, retirementSnippet, compareSnippet].forEach((snippet) => {
+    assert.doesNotMatch(snippet, /\bplan\s*=/);
+    assert.doesNotMatch(snippet, /saveDraft\(|autosavePlan\(|resetWeeklyPlanStorage/);
+  });
+  const staleLoadSnippet = sourceBetween(appSource, "const loadId = event.target.closest", "const renameId = event.target.closest");
+  assert.match(staleLoadSnippet, /openSavedScenario\(loadId\)/);
+  assert.doesNotMatch(staleLoadSnippet, /\bplan\s*=/);
+});
+
+test("Stage G11 Different scenario types cannot be compared directly", () => {
+  assert.match(appSource, /Different scenario types cannot be compared directly/);
+  assert.match(appSource, /Choose two Decision Engine scenarios or two Retirement Planning scenarios/);
+});
+
+test("Stage G12 Retirement Planning scenarios reuse the existing projection and comparison state", () => {
+  const saveSnippet = sourceBetween(appSource, "function buildRetirementScenarioSaveContext", "function ensureScenarioSaveDialog");
+  assert.match(saveSnippet, /semiRetirementScenarioResult/);
+  assert.match(saveSnippet, /buildSemiRetirementResultsViewModel/);
+  assert.match(saveSnippet, /retirementKeyResultSnapshot/);
+  const loadSnippet = sourceBetween(appSource, "function loadRetirementScenarioSnapshot", "function openSavedScenario");
+  assert.match(loadSnippet, /runSemiRetirementProjection/);
+  assert.match(appSource, /function runSemiRetirementComparison/);
+});
