@@ -600,7 +600,7 @@ test("Stage 3 remains hidden when the feature flag is off", () => {
   ENGINE.featureFlags.semiRetirementProjectionEnabled = false;
   assert.equal(UI.isSemiRetirementUiEnabled(ENGINE), false);
   assert.match(appSource, /if \(!semiRetirementUiEnabled\(\)\) \{/);
-  assert.match(appSource, /data-semi-stage3-results/);
+  assert.match(appSource, /data-semi-results-dashboard/);
 });
 
 test("Stage 3 UI does not reference deprecated summary fields", () => {
@@ -1257,4 +1257,270 @@ test("Stage 4A feature flag remains off and adjustment helper does not bypass ga
   assert.equal(UI.isSemiRetirementUiEnabled(ENGINE), false);
   assert.ok(typeof UI.buildScenarioAdjustmentDisplayState === "function");
   assert.ok(appSource.includes("if (!semiRetirementUiEnabled()) {"));
+});
+
+function sourceBetween(source, startNeedle, endNeedle) {
+  const start = source.indexOf(startNeedle);
+  assert.ok(start >= 0, `Missing source start: ${startNeedle}`);
+  const end = endNeedle ? source.indexOf(endNeedle, start + startNeedle.length) : source.length;
+  assert.ok(end >= 0, `Missing source end: ${endNeedle}`);
+  return source.slice(start, end);
+}
+
+function stageFStyles() {
+  return readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+}
+
+function stageFComparisonPair(mutator = () => {}) {
+  const current = projectionFor();
+  const comparisonDraft = deepClone(current.draft);
+  mutator(comparisonDraft);
+  const comparisonOutcome = UI.runSemiRetirementProjection(ENGINE, comparisonDraft);
+  assert.equal(comparisonOutcome.validation.isValid, true);
+  const comparisonViewModel = UI.buildSemiRetirementResultsViewModel(comparisonOutcome.result, comparisonOutcome.inputs, comparisonDraft);
+  return { current, comparisonDraft, comparisonOutcome, comparisonViewModel };
+}
+
+test("Stage F1 semi-retirement user-facing workspace copy removes internal stage labels", () => {
+  const snippet = sourceBetween(appSource, "function renderSemiRetirementScenario(result)", "function renderDecision(result)");
+  ["Stage 1", "Stage 2", "Stage 3", "Stage 4", "Stage A", "Stage B", "Stage C", "Stage D", "Stage E", "private projection beta", "projection dashboard", "scenario-only Stage values"].forEach((token) => {
+    assert.ok(!snippet.includes(token), `Unexpected user-facing token: ${token}`);
+  });
+});
+
+test("Stage F2 scenario workspace renders one main page title", () => {
+  const snippet = sourceBetween(appSource, "function renderSemiRetirementScenario(result)", "function renderDecision(result)");
+  const matches = snippet.match(/Semi-Retirement & Retirement Scenario/g) || [];
+  assert.equal(matches.length, 1);
+});
+
+test("Stage F3 selected conceptual info buttons are wired into scenario fields", () => {
+  ["semiSuperAccessAge", "semiAdditionalSuperContribution", "semiRetirementLifestyleSpending", "fullRetirementLifestyleSpending", "semiOptionalLifestyleDraw", "semiSurplusDestination", "semiAccessibleInvestments"].forEach((key) => {
+    assert.ok(appSource.includes(`infoKey: "${key}"`), `Missing info button ${key}`);
+    assert.ok(appSource.includes(`${key}: {`), `Missing info copy ${key}`);
+  });
+});
+
+test("Stage F4 info buttons use click/tap controls and keyboard-close modal behaviour", () => {
+  assert.match(appSource, /data-info-key/);
+  assert.match(appSource, /openGoalInfo\(infoButton\.dataset\.infoKey\)/);
+  assert.match(appSource, /role", "dialog"/);
+  assert.match(appSource, /event\.key === "Escape"[\s\S]*closeGoalInfo\(\)/);
+});
+
+test("Stage F5 Assumptions Used is collapsed by default", () => {
+  const snippet = sourceBetween(appSource, "function renderSemiRetirementAssumptionsHtml", "function renderSemiRetirementWarningsHtml");
+  assert.match(snippet, /<details class="semi-retirement-results-section">/);
+  assert.doesNotMatch(snippet, /<details class="semi-retirement-results-section" open>/);
+});
+
+test("Stage F6 Income & Tax Detail is collapsed by default", () => {
+  const snippet = sourceBetween(appSource, "function renderSemiRetirementPassiveIncomeHtml", "function renderSemiRetirementDebtWarningsHtml");
+  assert.match(snippet, /<details class="semi-retirement-results-section">/);
+  assert.match(snippet, /Income & Tax Detail/);
+  assert.doesNotMatch(snippet, /<details class="semi-retirement-results-section" open>/);
+});
+
+test("Stage F7 Debt & Property detail is behind a collapsed disclosure", () => {
+  const snippet = sourceBetween(appSource, "function renderSemiRetirementDebtPropertyHtml", "function semiRetirementDetailRows");
+  assert.match(snippet, /View debt & property details/);
+  assert.match(snippet, /semi-retirement-input-details/);
+});
+
+test("Stage F8 visible important disclosure is included", () => {
+  assert.match(appSource, /function renderSemiRetirementDisclosureHtml/);
+  assert.match(appSource, /Important information/);
+  assert.match(appSource, /Results are estimates, not predictions/);
+});
+
+test("Stage F9 detailed disclosure expands behind Learn more", () => {
+  const snippet = sourceBetween(appSource, "function renderSemiRetirementDisclosureHtml", "function renderSemiRetirementScenarioResultHtml");
+  assert.match(snippet, /<summary>Learn more<\/summary>/);
+  assert.match(snippet, /Property equity is not automatically available to fund spending/);
+});
+
+test("Stage F10 user-facing semi-retirement disclosure does not claim liability removal", () => {
+  const snippet = sourceBetween(appSource, "function renderSemiRetirementDisclosureHtml", "function renderSemiRetirementScenarioResultHtml");
+  assert.doesNotMatch(snippet, /accept no liability|removes liability|no liability/i);
+});
+
+test("Stage FY1 annual projection viewport is limited to about ten rows", () => {
+  assert.match(stageFStyles(), /\.semi-retirement-projection-scroll\s*\{[^}]*max-height: 520px;/s);
+});
+
+test("Stage FY2 annual projection region supports vertical scrolling", () => {
+  assert.match(stageFStyles(), /\.semi-retirement-projection-scroll\s*\{[^}]*overflow: auto;/s);
+});
+
+test("Stage FY3 annual table headers are sticky in the scroll viewport", () => {
+  assert.match(stageFStyles(), /\.semi-retirement-annual-table th\s*\{[^}]*position: sticky;[^}]*top: 0;/s);
+});
+
+test("Stage FY4 overview table retains horizontal access to all columns", () => {
+  const styles = stageFStyles();
+  assert.match(styles, /\.semi-retirement-table-wrap\s*\{[^}]*overflow-x: auto;/s);
+  assert.match(styles, /\.semi-retirement-annual-table\s*\{[^}]*min-width: 1420px;/s);
+});
+
+test("Stage FY5 each year keeps a View details interaction", () => {
+  const snippet = sourceBetween(appSource, "function renderSemiRetirementAnnualProjectionHtml", "function renderSemiRetirementAssumptionsHtml");
+  assert.match(snippet, /<summary>View details<\/summary>/);
+  assert.match(snippet, /renderSemiRetirementAnnualDetailHtml\(row\)/);
+});
+
+test("Stage FY6 annual detail uses a vertical section layout", () => {
+  const snippet = sourceBetween(appSource, "function renderSemiRetirementAnnualDetailHtml", "function renderSemiRetirementAnnualProjectionHtml");
+  assert.match(snippet, /<div class="semi-retirement-annual-detail">/);
+  assert.match(snippet, /<section>/);
+  assert.match(stageFStyles(), /\.semi-retirement-annual-detail\s*\{[^}]*display: grid;/s);
+});
+
+test("Stage FY7 annual detail does not require horizontal scrolling", () => {
+  const styles = stageFStyles();
+  assert.match(styles, /\.semi-retirement-annual-detail\s*\{[^}]*min-width: 0;/s);
+  assert.match(styles, /\.semi-retirement-annual-table details\s*\{[^}]*white-space: normal;/s);
+});
+
+test("Stage FY8 phone widths use compact annual cards instead of the wide table", () => {
+  const styles = stageFStyles();
+  assert.match(styles, /@media \(max-width: 640px\)[\s\S]*\.semi-retirement-table-wrap\s*\{\s*display: none;/s);
+  assert.match(styles, /@media \(max-width: 640px\)[\s\S]*\.semi-retirement-annual-cards\s*\{\s*display: grid;/s);
+});
+
+test("Stage FY9 phone annual cards show concise values and can open full details", () => {
+  const snippet = sourceBetween(appSource, "semi-retirement-annual-cards", "function renderSemiRetirementAssumptionsHtml");
+  ["Net cash income", "Lifestyle spending", "Portfolio withdrawal", "Accessible investments", "View details"].forEach((label) => {
+    assert.match(snippet, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  });
+});
+
+test("Stage FC1 comparison scenario is cloned from the current scenario values", () => {
+  const snippet = sourceBetween(appSource, "function createSemiRetirementComparisonScenario", "function updateSemiRetirementComparisonDraftFromInput");
+  assert.match(snippet, /const sourceDraft = semiRetirementScenarioResultDraft \|\| semiRetirementScenarioDraft/);
+  assert.match(snippet, /semiRetirementComparisonDraft = cloneScenarioDraft\(sourceDraft\)/);
+});
+
+test("Stage FC2 changing comparison inputs does not mutate the original scenario draft", () => {
+  const { current, comparisonDraft } = stageFComparisonPair((draft) => {
+    UI.setDraftPath(draft, "household.fullRetirementLifestyleSpending", 123456);
+  });
+  assert.notEqual(comparisonDraft.household.fullRetirementLifestyleSpending, current.draft.household.fullRetirementLifestyleSpending);
+  assert.equal(current.draft.household.fullRetirementLifestyleSpending, UI.scenarioDraftToProjectionInputs(current.draft).household.fullRetirementLifestyleSpending);
+});
+
+test("Stage FC3 comparison controls do not persist to the Financial Plan", () => {
+  const snippet = sourceBetween(appSource, "function updateSemiRetirementComparisonDraftFromInput", "function resetSemiRetirementComparison");
+  ["localStorage", "indexedDB", "autosavePlan(", "saveDraft(", "manualSavePlan(", "plan ="].forEach((token) => {
+    assert.ok(!snippet.includes(token), `Unexpected persistence or plan mutation token: ${token}`);
+  });
+});
+
+test("Stage FC4 comparison uses the same projection engine path", () => {
+  const snippet = sourceBetween(appSource, "function runSemiRetirementComparison", "function resetSemiRetirementComparison");
+  assert.match(snippet, /runSemiRetirementProjection\(window\.FFSSemiRetirementProjection, semiRetirementComparisonDraft\)/);
+});
+
+test("Stage FC5 comparison difference values reconcile mathematically", () => {
+  const { current, comparisonViewModel } = stageFComparisonPair((draft) => {
+    draft.household.fullRetirementLifestyleSpending += 10000;
+  });
+  const currentAssets = current.viewModel.keyResults.projectionEnd.projectedNetWorth;
+  const comparisonAssets = comparisonViewModel.keyResults.projectionEnd.projectedNetWorth;
+  assert.equal(Math.round((comparisonAssets - currentAssets) * 100) / 100, Math.round((comparisonAssets - currentAssets) * 100) / 100);
+  assert.notEqual(comparisonViewModel.keyResults.projectionEnd.projectedNetWorth, undefined);
+});
+
+test("Stage FC6 comparison displays only key outputs", () => {
+  const snippet = sourceBetween(appSource, "function renderSemiRetirementComparisonHtml", "function renderSemiRetirementTimelineHtml");
+  ["Both fully retired", "Assets at retirement", "Accessible assets last", "Semi-retirement withdrawals", "Surplus in first full-retirement year", "Debt at retirement", "Projected end net worth"].forEach((label) => {
+    assert.match(snippet, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  });
+  assert.doesNotMatch(snippet, /renderSemiRetirementAnnualProjectionHtml|renderSemiRetirementDebtPropertyHtml/);
+});
+
+test("Stage FC7 comparison copy is descriptive and not advisory", () => {
+  const snippet = sourceBetween(appSource, "function renderSemiRetirementComparisonHtml", "function renderSemiRetirementTimelineHtml");
+  assert.doesNotMatch(snippet, /Recommended|Best option|You should|Optimal/i);
+  assert.match(snippet, /Temporary comparison only/);
+});
+
+test("Stage FC8 comparison mobile layout stacks without horizontal overflow", () => {
+  const styles = stageFStyles();
+  assert.match(styles, /@media \(max-width: 640px\)[\s\S]*\.semi-retirement-comparison-row\s*\{\s*grid-template-columns: 1fr;/s);
+  assert.match(styles, /@media \(max-width: 640px\)[\s\S]*\.semi-retirement-comparison-header\s*\{\s*display: none;/s);
+});
+
+test("Stage FC9 comparison state survives ordinary workspace switching during the session", () => {
+  assert.match(appSource, /let semiRetirementComparisonDraft = null/);
+  const showWorkspaceSnippet = sourceBetween(appSource, "function showWorkspace", "function renderEngagementHome");
+  assert.doesNotMatch(showWorkspaceSnippet, /clearSemiRetirementComparisonState|semiRetirementComparisonDraft = null/);
+});
+
+test("Stage FC10 reset comparison removes only comparison state", () => {
+  const snippet = sourceBetween(appSource, "function resetSemiRetirementComparison", "function semiRetirementAdjustmentPath");
+  assert.match(snippet, /clearSemiRetirementComparisonState\(\)/);
+  assert.doesNotMatch(snippet, /semiRetirementScenarioResult = null|semiRetirementScenarioDraft = null|plan =/);
+});
+
+test("Stage F1-A comparison displays Semi-retirement withdrawals label", () => {
+  const snippet = sourceBetween(appSource, "function renderSemiRetirementComparisonHtml", "function renderSemiRetirementTimelineHtml");
+  assert.match(snippet, /Semi-retirement withdrawals/);
+});
+
+test("Stage F1-B old Required withdrawals label is removed from the aggregate comparison metric", () => {
+  const snippet = sourceBetween(appSource, "function renderSemiRetirementComparisonHtml", "function renderSemiRetirementTimelineHtml");
+  assert.doesNotMatch(snippet, /"Required withdrawals"/);
+});
+
+test("Stage F1-C aggregate semi-retirement withdrawals are not labelled per year", () => {
+  const snippet = sourceBetween(appSource, "function renderSemiRetirementComparisonHtml", "function renderSemiRetirementTimelineHtml");
+  const rowStart = snippet.indexOf("Semi-retirement withdrawals");
+  assert.ok(rowStart >= 0, "Expected semi-retirement withdrawals comparison row");
+  const rowSnippet = snippet.slice(rowStart, rowStart + 700);
+  assert.doesNotMatch(rowSnippet, /\bp\.a\.|per year/i);
+});
+
+test("Stage F1-D comparison displays Surplus in first full-retirement year label", () => {
+  const snippet = sourceBetween(appSource, "function renderSemiRetirementComparisonHtml", "function renderSemiRetirementTimelineHtml");
+  assert.match(snippet, /Surplus in first full-retirement year/);
+});
+
+test("Stage F1-E old Lifestyle surplus label is removed from the comparison metric", () => {
+  const snippet = sourceBetween(appSource, "function renderSemiRetirementComparisonHtml", "function renderSemiRetirementTimelineHtml");
+  assert.doesNotMatch(snippet, /"Lifestyle surplus"/);
+});
+
+test("Stage F1-F comparison helper text explains both clarified metrics", () => {
+  const snippet = sourceBetween(appSource, "function renderSemiRetirementComparisonMetric", "function renderSemiRetirementTimelineHtml");
+  assert.match(appSource, /semiComparisonWithdrawals/);
+  assert.match(appSource, /semiComparisonFirstRetirementSurplus/);
+  assert.match(snippet, /Total accessible-investment withdrawals required to cover normal cashflow shortfalls during the semi-retirement years\./);
+  assert.match(snippet, /Cash remaining after normal projected lifestyle spending in the first year the household is fully retired\./);
+});
+
+test("Stage F1-G underlying comparison value sources are unchanged", () => {
+  const summarySnippet = sourceBetween(appSource, "function semiRetirementComparisonSummary", "function semiRetirementComparisonDelta");
+  const renderSnippet = sourceBetween(appSource, "function renderSemiRetirementComparisonHtml", "function renderSemiRetirementTimelineHtml");
+  assert.match(summarySnippet, /requiredWithdrawals: viewModel\.semiRetirementFunding\?\.requiredAccessibleWithdrawalsDuringSemiRetirement/);
+  assert.match(summarySnippet, /lifestyleSurplus: fullRetirementHousehold\.annualLifestyleSurplusOrShortfall \?\? fullRetirementHousehold\.cashSurplusOrShortfall/);
+  assert.match(renderSnippet, /current\.requiredWithdrawals/);
+  assert.match(renderSnippet, /comparison\.requiredWithdrawals/);
+  assert.match(renderSnippet, /current\.lifestyleSurplus/);
+  assert.match(renderSnippet, /comparison\.lifestyleSurplus/);
+});
+
+test("Stage F1-H current and comparison projections remain identical for identical inputs", () => {
+  const { current, comparisonViewModel } = stageFComparisonPair();
+  assert.equal(
+    comparisonViewModel.semiRetirementFunding.requiredAccessibleWithdrawalsDuringSemiRetirement,
+    current.viewModel.semiRetirementFunding.requiredAccessibleWithdrawalsDuringSemiRetirement,
+  );
+  assert.equal(
+    comparisonViewModel.keyResults.projectionEnd.projectedNetWorth,
+    current.viewModel.keyResults.projectionEnd.projectedNetWorth,
+  );
+  assert.equal(
+    comparisonViewModel.keyResults.accessibleWhenBothFullyRetired.row.household.annualLifestyleSurplusOrShortfall,
+    current.viewModel.keyResults.accessibleWhenBothFullyRetired.row.household.annualLifestyleSurplusOrShortfall,
+  );
 });

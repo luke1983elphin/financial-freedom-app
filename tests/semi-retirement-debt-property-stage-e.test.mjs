@@ -398,5 +398,90 @@ test("Stage E Linked Property UI is a stable-ID management layer over authoritat
   assert.match(appSource, /dynamicInput\("liabilityItems", loan, "openingOffsetBalance"/);
   assert.match(appSource, /loans\.length \? loans\.map\(linkedPropertyLoanCard\)/);
   assert.match(stylesSource, /\.linked-property-card/);
-  assert.match(stylesSource, /@media \(max-width: 640px\)[\s\S]*\.linked-property-summary-grid/);
+  assert.match(stylesSource, /@media \(max-width: 640px\)[\s\S]*\.linked-property-summary-rows/);
+});
+
+test("Stage E1 Linked Property summary is capped at four headline metrics", () => {
+  const appSource = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+  assert.match(appSource, /data-headline-metric-count="4"/);
+  assert.match(appSource, /linkedPropertySummaryRow\("Current value"/);
+  assert.match(appSource, /linkedPropertySummaryRow\("Net property cashflow"/);
+  assert.match(appSource, /linkedPropertySummaryRow\("Taxable rental income"/);
+  assert.match(appSource, /linkedPropertySummaryRow\("Linked loans"/);
+});
+
+test("Stage E1 secondary rental and loan metrics are not default summary tiles", () => {
+  const appSource = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+  assert.doesNotMatch(appSource, /summaryTile\("Rental cash income"/);
+  assert.doesNotMatch(appSource, /summaryTile\("Loan interest"/);
+  assert.doesNotMatch(appSource, /summaryTile\("Loan principal"/);
+  assert.match(appSource, /linkedPropertyDetailRow\("Rental cash income"/);
+  assert.match(appSource, /linkedPropertyDetailRow\("Loan interest used in cashflow"/);
+  assert.match(appSource, /linkedPropertyDetailRow\("Loan principal repayment"/);
+});
+
+test("Stage E1 Linked Property uses three primary accordions", () => {
+  const appSource = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+  assert.match(appSource, /<summary>Property & ownership<\/summary>/);
+  assert.match(appSource, /<summary>Rental income & cashflow<\/summary>/);
+  assert.match(appSource, /<summary>Loans & offset<\/summary>/);
+  assert.doesNotMatch(appSource, /<summary>Property details<\/summary>/);
+  assert.doesNotMatch(appSource, /<summary>Rental income<\/summary>/);
+  assert.doesNotMatch(appSource, /<summary>Loans and offset<\/summary>/);
+});
+
+test("Stage E1 cashflow and taxable-income reconciliation lives inside Rental income and cashflow", () => {
+  const appSource = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+  assert.doesNotMatch(appSource, /<summary>Cashflow and taxable-income reconciliation<\/summary>/);
+  assert.match(appSource, /Taxable rental income is used for tax calculations/);
+  assert.match(appSource, /linkedPropertyDetailRow\("Taxable rental income"/);
+  assert.match(appSource, /linkedPropertyDetailRow\("Net property cashflow"/);
+});
+
+test("Stage E1 missing rental cash income displays as required rather than a false zero", () => {
+  const appSource = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+  assert.match(appSource, /const rentalCashDisplay = cashflow\.hasMissingRentalCashIncome \|\| !cashflow\.hasRentalCashIncome[\s\S]*\? "Required"/);
+  assert.match(appSource, /compactRentalCashWarningHtml/);
+  assert.doesNotMatch(appSource, /Rental cash income required for semi-retirement cashflow/);
+});
+
+test("Stage E1 no linked loan state avoids prominent zero-value loan cards", () => {
+  const appSource = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+  assert.match(appSource, /No linked loans/);
+  assert.match(appSource, /No linked property loans\./);
+  assert.doesNotMatch(appSource, /summaryTile\("Loan principal", money\(balance\)\)/);
+  assert.doesNotMatch(appSource, /summaryTile\("Offset balance", money\(offset\)\)/);
+});
+
+test("Stage E1 compact rental cash warning appears through one reusable inline helper", () => {
+  const appSource = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+  const warningHelperMatches = appSource.match(/compactRentalCashWarningHtml/g) || [];
+  assert.ok(warningHelperMatches.length >= 3);
+  assert.match(appSource, /linked-property-inline-warning/);
+  assert.match(appSource, /Rental cash income required\./);
+  assert.match(appSource, /rentalCashHelpText\(item\)/);
+});
+
+test("Stage E1 mobile Linked Property summary uses compact rows", () => {
+  const stylesSource = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+  assert.match(stylesSource, /\.linked-property-summary-rows/);
+  assert.match(stylesSource, /@media \(max-width: 640px\)[\s\S]*\.linked-property-summary-row,[\s\S]*\.linked-property-detail-row[\s\S]*grid-template-columns: 1fr/);
+  assert.match(stylesSource, /@media \(max-width: 640px\)[\s\S]*\.linked-property-summary-row strong,[\s\S]*\.linked-property-detail-row strong[\s\S]*text-align: left/);
+});
+
+test("Stage E1 Linked Property edit capabilities remain available through Manage property", () => {
+  const appSource = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+  assert.match(appSource, /data-linked-property-manage/);
+  assert.match(appSource, /querySelectorAll\("\.linked-property-detail"\)/);
+  assert.match(appSource, /dynamicInput\("assetItems", asset, "name"/);
+  assert.match(appSource, /dynamicInput\("incomeItems", income, "rentalCashflowTreatment"/);
+  assert.match(appSource, /dynamicInput\("liabilityItems", loan, "linkedAssetId"/);
+});
+
+test("Stage E1 stable-ID linkage remains unchanged", () => {
+  const appSource = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+  assert.match(appSource, /String\(income\.linkedAssetId \|\| ""\) === String\(asset\.id\)/);
+  assert.match(appSource, /String\(loan\.linkedAssetId \|\| ""\) === String\(asset\.id\)/);
+  assert.match(appSource, /linkedLoanIdsFromIncome\.has\(loanId\)/);
+  assert.match(appSource, /data-linked-property-id="\$\{escapeHtml\(asset\.id\)\}"/);
 });

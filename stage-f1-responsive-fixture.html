@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stage F1 Comparison Responsive Fixture</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    body { margin: 0; padding: 16px; background: #f1f5f9; }
+    main { max-width: 1120px; margin: 0 auto; }
+    #responsiveProbe { font-family: monospace; margin-top: 12px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="semi-retirement-results-section semi-retirement-comparison" data-semi-comparison>
+      <div class="card-subheading">
+        <div>
+          <h4>Current vs Comparison</h4>
+          <p>Temporary comparison only. The same projection engine is used for both scenarios.</p>
+        </div>
+      </div>
+      <div class="semi-retirement-comparison-table mt-4">
+        <div class="semi-retirement-comparison-row semi-retirement-comparison-header">
+          <span>Metric</span><strong>Current</strong><strong>Comparison</strong><strong>Difference</strong>
+        </div>
+        <div class="semi-retirement-comparison-row">
+          <span class="semi-retirement-comparison-label">
+            <span>Semi-retirement withdrawals<button class="field-info-button" type="button" aria-label="More information about Semi-retirement withdrawals">&#9432;</button></span>
+            <small>Total accessible-investment withdrawals required to cover normal cashflow shortfalls during the semi-retirement years.</small>
+          </span>
+          <strong>$120,000</strong><strong>$108,000</strong><strong>-$12,000</strong>
+        </div>
+        <div class="semi-retirement-comparison-row">
+          <span class="semi-retirement-comparison-label">
+            <span>Surplus in first full-retirement year<button class="field-info-button" type="button" aria-label="More information about Surplus in first full-retirement year">&#9432;</button></span>
+            <small>Cash remaining after normal projected lifestyle spending in the first year the household is fully retired.</small>
+          </span>
+          <strong>$11,000</strong><strong>$8,000</strong><strong>-$3,000</strong>
+        </div>
+      </div>
+      <p class="semi-retirement-comparison-note mt-4">Total accessible withdrawals required during semi-retirement decrease by approximately $12,000. Surplus in the first full-retirement year is approximately $3,000 lower.</p>
+    </section>
+    <div id="responsiveProbe" aria-live="polite"></div>
+  </main>
+  <script>
+    window.addEventListener("load", () => {
+      const rowWidths = [...document.querySelectorAll(".semi-retirement-comparison-row")]
+        .map((row) => Math.ceil(row.getBoundingClientRect().width));
+      document.getElementById("responsiveProbe").textContent = JSON.stringify({
+        viewport: window.innerWidth,
+        documentScrollWidth: document.documentElement.scrollWidth,
+        bodyScrollWidth: document.body.scrollWidth,
+        hasHorizontalOverflow: document.documentElement.scrollWidth > window.innerWidth,
+        rowWidths,
+      }, null, 2);
+    });
+  </script>
+</body>
+</html>
