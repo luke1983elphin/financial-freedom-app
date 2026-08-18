@@ -280,7 +280,7 @@
     },
     semiOptionalLifestyleDraw: {
       title: "Optional additional lifestyle draw",
-      body: "Extra discretionary spending above your normal lifestyle budget. This is separate from withdrawals required to cover a normal cashflow shortfall.",
+      body: "This is separate from normal lifestyle spending. It lets you test additional spending for travel, hobbies, experiences or other discretionary choices from semi-retirement onward.",
     },
     semiSurplusDestination: {
       title: "Retirement surplus destination",
@@ -313,6 +313,30 @@
     semiComparisonFirstRetirementSurplus: {
       title: "Surplus in first full-retirement year",
       body: "Cash remaining after normal projected lifestyle spending in the first year the household is fully retired.",
+    },
+    downsizingStrategy: {
+      title: "Use downsizing strategy",
+      body: "Downsizing can affect your property value, accessible assets and future investment returns. This projection uses the values and costs you enter and does not estimate whether downsizing is suitable for you.",
+    },
+    downsizingResidenceValue: {
+      title: "Current principal residence value",
+      body: "Use a reasonable current estimate of what the property could sell for today. This value is used as the starting point for the downsizing projection.",
+    },
+    downsizingReplacementHomeValue: {
+      title: "Estimated replacement home value",
+      body: "Enter the expected value of the replacement home at the time of downsizing. This should be the property price before buying costs such as stamp duty and legal fees.",
+    },
+    downsizingSellingCosts: {
+      title: "Estimated selling costs",
+      body: "This may include real-estate agent fees, advertising, legal or conveyancing fees and other sale-related costs.",
+    },
+    downsizingBuyingCosts: {
+      title: "Estimated buying costs",
+      body: "This may include stamp duty, conveyancing or legal fees, inspections and other purchase-related costs.",
+    },
+    downsizingReleasedEquity: {
+      title: "Estimated equity released for investment",
+      body: "This amount becomes accessible investment money in the downsizing scenario. It does not represent a guaranteed sale outcome.",
     },
     decisionTaxBenefit: {
       title: "Potential tax benefit",
@@ -4269,6 +4293,21 @@
     container.innerHTML = fields.map(field).join("");
   }
 
+  function downsizingModelledHtml() {
+    return `
+      <details class="downsizing-model-note">
+        <summary>How downsizing is modelled</summary>
+        <p>The projection estimates the value of your current home at the assumed downsizing point, deducts the replacement-home cost and transaction costs, and treats the remaining equity as accessible investment funds. It does not automatically include tax, pension, superannuation or other legal consequences of downsizing unless those effects are specifically modelled elsewhere.</p>
+      </details>
+    `;
+  }
+
+  function renderDownsizingForm(containerId, fields) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = `${fields.map(field).join("")}${downsizingModelledHtml()}`;
+  }
+
   function renderGroupedForm(containerId, groups) {
     const container = document.getElementById(containerId);
     if (!container) return;
@@ -5183,12 +5222,48 @@
       { label: "Safe withdrawal rate (%)", path: "investing.safeWithdrawalRatePct", step: "0.1", infoKey: "withdrawalRate" },
     ];
     const downsizingFields = [
-      { label: "Use downsizing strategy", path: "downsizing.enabled", type: "checkbox", help: "Off by default. Turn on only when you want the released equity included as investable money." },
-      { label: "Current principal residence value", path: "downsizing.currentResidenceValue", step: "1000" },
-      { label: "Estimated future downsized property value", path: "downsizing.futurePropertyValue", step: "1000" },
-      { label: "Estimated selling costs", path: "downsizing.sellingCosts", step: "1000" },
-      { label: "Estimated buying costs / stamp duty", path: "downsizing.buyingCosts", step: "1000" },
-      { label: "Amount released for investment", path: "downsizing.releasedForInvestment", step: "1000" },
+      {
+        label: "Use downsizing strategy",
+        path: "downsizing.enabled",
+        type: "checkbox",
+        infoKey: "downsizingStrategy",
+        help: "Turn this on only if you want the projection to assume that your current home is sold, a replacement home is purchased and the remaining equity becomes available for investment.",
+      },
+      {
+        label: "Current principal residence value",
+        path: "downsizing.currentResidenceValue",
+        step: "1000",
+        infoKey: "downsizingResidenceValue",
+        help: "The current estimated market value of the home you plan to sell.",
+      },
+      {
+        label: "Estimated replacement home value",
+        path: "downsizing.futurePropertyValue",
+        step: "1000",
+        infoKey: "downsizingReplacementHomeValue",
+        help: "The estimated purchase price of the home you expect to move into when you downsize.",
+      },
+      {
+        label: "Estimated selling costs",
+        path: "downsizing.sellingCosts",
+        step: "1000",
+        infoKey: "downsizingSellingCosts",
+        help: "Expected costs of selling your current home.",
+      },
+      {
+        label: "Estimated buying costs",
+        path: "downsizing.buyingCosts",
+        step: "1000",
+        infoKey: "downsizingBuyingCosts",
+        help: "Expected costs of purchasing the replacement home, including stamp duty.",
+      },
+      {
+        label: "Estimated equity released for investment",
+        path: "downsizing.releasedForInvestment",
+        step: "1000",
+        infoKey: "downsizingReleasedEquity",
+        help: "The estimated amount remaining after the current home is sold, the replacement home is purchased and selling and buying costs are deducted. Leave this as zero to use the app's estimate.",
+      },
     ];
 
     renderForm("personalForm", [...aboutFields, ...goalFields]);
@@ -5219,10 +5294,10 @@
     renderForm("wizardGoalsForm", goalFields);
     appendEmployerSuperPanel("wizardGoalsForm");
     renderGoalCollection("wizardGoalExamples");
-    renderForm("wizardDownsizingForm", downsizingFields);
+    renderDownsizingForm("wizardDownsizingForm", downsizingFields);
     renderForm("wizardAssumptionsReview", assumptionFields);
     renderForm("reportAssumptionsForm", assumptionFields);
-    renderForm("downsizingForm", downsizingFields);
+    renderDownsizingForm("downsizingForm", downsizingFields);
     renderGoalCollection("goalExamples");
   }
 
@@ -7190,7 +7265,7 @@
         <article class="semi-retirement-adjustment-card is-disabled">
           <div>
             <label class="field-label" for="${id}">${escapeHtml(control.label)}</label>
-            <p class="field-help">This scenario has no semi-retirement period, so no optional additional lifestyle draw is applied.</p>
+            <p class="field-help">This scenario has no retirement period within the projection, so no optional additional lifestyle draw is applied.</p>
           </div>
           <input id="${id}" class="field-input" type="number" inputmode="decimal" value="${escapeHtml(value)}" disabled aria-disabled="true">
         </article>
@@ -7244,7 +7319,10 @@
         <p class="field-help">These controls update the temporary scenario draft only. Your Financial Plan, saved plans and base assumptions are not changed.</p>
         <div class="semi-retirement-adjustment-layout">
           <div class="semi-retirement-adjustment-controls">
-            ${renderSemiRetirementAdjustmentControl(state.controls.semiRetirementAccessibleWithdrawal)}
+            ${renderSemiRetirementAdjustmentControl(
+              state.controls.semiRetirementAccessibleWithdrawal,
+              "Extra discretionary spending above your normal lifestyle budget, starting from semi-retirement and continuing through retirement.",
+            )}
             ${renderSemiRetirementAdjustmentControl(
               state.controls.fullRetirementLifestyleSpending,
               "Enter the annual household lifestyle spending you want to model once both people are fully retired. This amount is in today's dollars.",
@@ -7298,6 +7376,78 @@
     if (row.type === "percentRate") return semiRetirementPercentRate(row.value);
     if (row.type === "age") return `Age ${row.value}`;
     return String(row.value);
+  }
+
+  function semiRetirementAssumptionDisplay(row, groupTitle = "") {
+    const value = semiRetirementAssumptionValue(row);
+    const label = row.label || "";
+    const propertyCopy = {
+      "Opening offset balance inside accessible assets": {
+        value,
+        note: "The amount currently held in your home-loan offset account. It remains accessible cash while reducing interest on the linked loan.",
+      },
+      "Principal residence capital growth": {
+        value,
+        note: "The annual growth rate assumed for your home in this scenario.",
+      },
+      "Investment property capital growth": {
+        value,
+        note: "The annual growth rate assumed for rental and investment properties unless a property-specific rate has been entered.",
+      },
+      "Other property capital growth": {
+        value,
+        note: "The fallback annual growth assumption for other properties where no specific growth rate has been entered.",
+      },
+      "Mortgage offset treatment": {
+        value: "Applied",
+        note: "Offset cash remains accessible while the linked loan is outstanding and reduces the interest charged on that loan. It does not also earn the normal accessible-investment return during the same period. If offset cash is used for retirement spending, future loan interest is calculated using the remaining offset balance. Once the linked loan is repaid, any remaining offset cash is treated as ordinary accessible cash from the next projection year.",
+      },
+      "Property sale treatment": {
+        value: "Not automatically assumed",
+        note: "The projection does not automatically assume a property is sold, refinanced, downsized or used for redraw. Property equity remains part of net worth unless you choose a specific strategy that releases it.",
+      },
+      "Rental tax model": {
+        value: "Cashflow and tax are separated",
+        note: "Rental cashflow and taxable rental income are modelled separately. Rental cashflow affects household spending capacity, while taxable rental income is used in the tax estimate. The projection does not fully model depreciation, capital gains tax or detailed future rental-property tax schedules.",
+      },
+    };
+    if (groupTitle === "Property assumptions") {
+      if (/ opening offset$/i.test(label)) {
+        return {
+          value,
+          note: "The offset amount applied against the home loan at the start of this projection.",
+        };
+      }
+      if (/ property growth$/i.test(label) && !propertyCopy[label]) {
+        return {
+          value,
+          note: row.note || "Property-specific annual growth rate entered for this property.",
+        };
+      }
+      if (propertyCopy[label]) return propertyCopy[label];
+    }
+    if (groupTitle === "Tax assumptions") {
+      if (label === "Passive taxable income") {
+        return {
+          value,
+          note: "The taxable rental-income amount entered for each owner is included in that person's projected taxable income.",
+        };
+      }
+      if (label === "Rental tax model") {
+        return {
+          value: "Simplified estimate",
+          note: "The projection does not fully model depreciation, capital gains tax, detailed negative-gearing consequences or future property-specific tax schedules. Tax results are estimates based on the assumptions included in the projection.",
+        };
+      }
+    }
+    return { value, note: row.note || "" };
+  }
+
+  function semiRetirementAssumptionGroupIntro(title) {
+    if (title === "Tax assumptions") {
+      return "The projection estimates tax using the income and assumptions entered for each person. Rental-property cashflow and taxable rental income are treated separately because the amount a property contributes to household cashflow can differ from the amount used for tax.";
+    }
+    return "";
   }
 
   function semiRetirementMilestoneAgesFromRow(row, people) {
@@ -7574,7 +7724,7 @@
                   <strong>${escapeHtml(String(group.calendarYear))}</strong>
                   <span>${escapeHtml(semiRetirementAgeList(group.ages || []))}</span>
                 </div>
-                <ul>${group.events.map((event) => `<li><strong>${escapeHtml(event.title)}</strong>${event.detail ? `<span>${escapeHtml(event.detail)}</span>` : ""}</li>`).join("")}</ul>
+                <ul>${group.events.map((event) => `<li><strong class="semi-retirement-timeline-title">${escapeHtml(event.title)}</strong>${event.detail ? `<span class="semi-retirement-timeline-detail">${escapeHtml(event.detail)}</span>` : ""}</li>`).join("")}</ul>
               </li>
             `).join("")}
           </ol>
@@ -7752,7 +7902,9 @@
     const debtNow = debtProperty.milestoneDebt?.find((item) => /now/i.test(item.label))?.value;
     const debtAtFirst = debtProperty.milestoneDebt?.find((item) => /first person/i.test(item.label))?.value;
     const debtAtBoth = debtProperty.milestoneDebt?.find((item) => /both/i.test(item.label))?.value;
-    const debtAtEnd = debtProperty.milestoneDebt?.find((item) => /projection end/i.test(item.label))?.value;
+    const debtAtEndItem = debtProperty.milestoneDebt?.find((item) => /projection end/i.test(item.label));
+    const debtAtEnd = debtAtEndItem?.value;
+    const debtAtEndAges = semiRetirementMilestoneAgesFromRow(debtAtEndItem?.row, viewModel.people || []);
     return `
       <section class="semi-retirement-results-section semi-retirement-debt-property">
         <div class="card-subheading">
@@ -7763,7 +7915,7 @@
           ${noDebtMessage}
           ${semiRetirementMetricCard("Debt now", semiRetirementMoney(debtNow))}
           ${semiRetirementMetricCard("Debt when both retire", semiRetirementMoney(debtAtBoth ?? netWorth.totalDebt), netWorth.ages?.length ? semiRetirementAgeList(netWorth.ages) : "")}
-          ${semiRetirementMetricCard("Debt at projection end", semiRetirementMoney(debtAtEnd))}
+          ${semiRetirementMetricCard("Debt at projection end", semiRetirementMoney(debtAtEnd), debtAtEndAges.length ? semiRetirementAgeList(debtAtEndAges) : "")}
           ${semiRetirementMetricCard("Property equity at retirement", semiRetirementMoney(netWorth.totalPropertyEquity), "Property equity is not treated as accessible retirement cash in this scenario.")}
           ${semiRetirementMetricCard("Projected net worth", semiRetirementMoney(netWorth.projectedNetWorth), "Net worth can include property equity that is not available to fund spending.")}
         </div>
@@ -7804,7 +7956,7 @@
         ` : ""}
         ${debtProperty.offsetDisclosure?.length ? `
           <div class="semi-retirement-disclaimer mt-4">
-            ${debtProperty.offsetDisclosure.map((item) => `<p><strong>Mortgage offset used for ${escapeHtml(item.name)}:</strong> ${semiRetirementMoney(item.offsetBalanceUsed)}. The current offset balance reduces projected loan interest. This version does not yet model future retirement withdrawals reducing the offset balance.</p>`).join("")}
+            ${debtProperty.offsetDisclosure.map((item) => `<p><strong>Mortgage offset used for ${escapeHtml(item.name)}:</strong> ${semiRetirementMoney(item.offsetBalanceUsed)}. Offset cash remains accessible while reducing the interest charged on the linked loan. If offset cash is used for retirement spending, future loan interest is calculated using the remaining offset balance.</p>`).join("")}
           </div>
         ` : ""}
       </section>
@@ -8009,7 +8161,10 @@
   function renderSemiRetirementAssumptionsHtml(viewModel) {
     const rows = viewModel.assumptions?.rows || [];
     const summaryRows = rows.filter((row) => ["Inflation", "Accessible investment return"].includes(row.label) || /super return before retirement/i.test(row.label)).slice(0, 3);
-    const rowHtml = (items) => items.map((row) => `<div><span>${escapeHtml(row.label)}</span><strong>${escapeHtml(semiRetirementAssumptionValue(row))}</strong>${row.note ? `<small>${escapeHtml(row.note)}</small>` : ""}</div>`).join("");
+    const rowHtml = (items, groupTitle) => items.map((row) => {
+      const display = semiRetirementAssumptionDisplay(row, groupTitle);
+      return `<div><span>${escapeHtml(row.label)}</span><strong>${escapeHtml(display.value)}</strong>${display.note ? `<small>${escapeHtml(display.note)}</small>` : ""}</div>`;
+    }).join("");
     const groups = [
       { title: "Investment assumptions", match: (row) => /investment|accessible|withdrawal|min/i.test(row.label) },
       { title: "Super assumptions", match: (row) => /super|contribution/i.test(row.label) },
@@ -8040,7 +8195,8 @@
           ${groups.map((group) => `
             <section>
               <h5>${escapeHtml(group.title)}</h5>
-              <div class="semi-retirement-assumption-grid">${rowHtml(group.rows)}</div>
+              ${semiRetirementAssumptionGroupIntro(group.title) ? `<p class="field-help">${escapeHtml(semiRetirementAssumptionGroupIntro(group.title))}</p>` : ""}
+              <div class="semi-retirement-assumption-grid">${rowHtml(group.rows, group.title)}</div>
             </section>
           `).join("")}
         </div>
@@ -8175,7 +8331,7 @@
             ${semiRetirementInput({ label: "Current annual lifestyle spending", path: "household.currentLifestyleSpending", step: "1000", help: "Your current household living expenses, used as the starting point for this retirement scenario.", afterHtml: semiRetirementLivingExpenseSourceHtml(result) })}
             ${semiRetirementInput({ label: "Semi-retirement lifestyle spending", path: "household.semiRetirementLifestyleSpending", step: "1000", infoKey: "semiRetirementLifestyleSpending", help: "Expected normal household spending while work is reduced." })}
             ${semiRetirementInput({ label: "Full-retirement lifestyle spending", path: "household.fullRetirementLifestyleSpending", step: "1000", infoKey: "fullRetirementLifestyleSpending", help: "Expected normal household spending once everyone is fully retired." })}
-            ${semiRetirementInput({ label: "Optional additional lifestyle draw", path: "scenario.semiRetirementAccessibleWithdrawal", step: "1000", infoKey: "semiOptionalLifestyleDraw", help: "Extra discretionary spending above normal lifestyle needs." })}
+            ${semiRetirementInput({ label: "Optional additional lifestyle draw", path: "scenario.semiRetirementAccessibleWithdrawal", step: "1000", infoKey: "semiOptionalLifestyleDraw", help: "Extra discretionary spending above your normal lifestyle budget, starting from semi-retirement and continuing through retirement." })}
           </div>
         </section>
         <section class="semi-retirement-input-section">

@@ -1128,7 +1128,7 @@
       addValidation(errors, "people", "At least one person is required.");
     }
     if (Array.isArray(input.people) && input.people.length > 2) {
-      addValidation(errors, "people", "Stage 1 supports up to two people.");
+      addValidation(errors, "people", "This projection supports up to two people.");
     }
     const peopleArray = Array.isArray(input.people) ? input.people : [];
     const finiteCurrentAges = peopleArray
@@ -1141,7 +1141,7 @@
       : null;
     const withdrawalOrder = normaliseWithdrawalOrder(input.scenario?.withdrawalOrder);
     if (withdrawalOrder !== "accessible-first") {
-      addValidation(errors, "scenario.withdrawalOrder", "Stage 1A supports only the accessible-first withdrawal strategy.");
+      addValidation(errors, "scenario.withdrawalOrder", "This projection currently supports only the accessible-first withdrawal strategy.");
     }
     const ids = new Set();
     peopleArray.forEach((person, index) => {
@@ -1414,17 +1414,17 @@
       superAtAge60Treatment: "superByPersonAtAge60 records each person's own projected super balance only in the projection year where that person's age is exactly 60. If a person is older than 60 at projection start, the value remains null because the engine does not reconstruct historical age-60 balances.",
       inflation: "Household lifestyle spending and rental cash income are treated as projection-start dollars and inflated from projection year zero using the same CPI assumption.",
       investmentReturnTiming: "Total-return method. Earnings equal opening balance return plus 50% of net annual cash movement return. Fees use the same midpoint balance. Dividends, interest and rent are not added separately.",
-      superContributionTiming: "Employer and additional concessional contributions are reduced by 15% contributions tax before being added to super. Stage 1 does not optimise concessional caps or carry-forward amounts.",
+      superContributionTiming: "Employer and additional concessional contributions are reduced by 15% contributions tax before being added to super. The projection does not optimise concessional caps or carry-forward amounts.",
       superAccessTreatment: "scenario-assumed-access-age",
       superAccessNote: "Super availability is modelled using the entered scenario access age. The engine does not independently determine whether all legal conditions of release are satisfied.",
       accessibleContributionTreatment: "accessibleInvestments.externalAnnualAccessibleContribution/currentAnnualContributions is treated as a working-phase discretionary contribution. It ceases once the household enters semi-retirement unless surplusDestination is accessible-investments.",
       additionalSuperContributionTreatment: "Person-specific voluntary/additional super contributions cease at the person's own semi-retirement age by default. Employer super continues while that person still has employment income.",
       semiRetirementSurplusTreatment: `Retirement-phase annual surplus uses the selected one-destination rule: ${normalised.scenario.surplusDestination}. The default is extra lifestyle/enjoyment.`,
-      optionalAdditionalLifestyleWithdrawalTreatment: "The legacy scenario.semiRetirementAccessibleWithdrawal value is preserved as optionalAdditionalLifestyleWithdrawal. It is extra discretionary spending above the normal lifestyle requirement and is not used to calculate the required portfolio withdrawal.",
-      debtAndPropertyTreatment: "Stage A1 projects supplied non-STSL liabilities annually, separating interest charged, total repayment, principal repaid, capitalised interest, final balloon repayments and repayment cashflow. STSL remains person-level and outside the generic debt schedule.",
+      optionalAdditionalLifestyleWithdrawalTreatment: "The legacy scenario.semiRetirementAccessibleWithdrawal value is preserved as optionalAdditionalLifestyleWithdrawal. It is extra discretionary spending above the normal lifestyle requirement, applies from the first post-working year, and is not used to calculate the required portfolio withdrawal.",
+      debtAndPropertyTreatment: "Supplied non-STSL liabilities are projected annually, separating interest charged, total repayment, principal repaid, capitalised interest, final repayments and repayment cashflow. STSL remains person-level and outside the generic debt schedule.",
       rentalIncomeTreatment: "Rental/property income uses rentalCashflowTreatment. Entered rental cash income is the projection-start annual amount, CPI-escalated each projection year before loan cashflows are applied. afterInterest means loan interest is already included in the entered rental cash income, so only linked principal is deducted from property cashflow. beforeInterest deducts linked loan interest and principal exactly once.",
       passiveIncomeTreatment: "Interest, dividends, distributions and taxable rental income are allocated to each person using stored ownership percentages and included in person-level taxable income. Cash income is modelled separately from taxable income where supplied.",
-      rentalTaxModel: "Rental property projection models cashflow, not full future taxable rental profit/loss. Stage C also carries the entered taxable rental-income amount separately for owner-level tax estimates. Negative gearing, depreciation, CGT and future rental tax schedules are not modelled in Stage C.",
+      rentalTaxModel: "Rental cashflow and taxable rental income are modelled separately. Rental cashflow affects household spending capacity, while taxable rental income is used in each owner's tax estimate. The projection does not fully model depreciation, capital gains tax or detailed future rental-property tax schedules.",
       propertyEquityTreatment: "Property equity is reported in projected net worth but is not treated as accessible retirement cash or used to fund lifestyle spending.",
       propertyGrowthAssumptions: {
         principalResidenceCapitalGrowthRate: normalised.assumptions.principalResidenceCapitalGrowthRate,
@@ -1433,13 +1433,13 @@
         rentalCashIncomeGrowthSource: "cpi",
         hierarchy: "Property-specific rate, then scenario-level rate for the matching property type, then a documented 0% fallback only where no applicable rate exists.",
       },
-      propertySaleTreatment: "No automatic property sale, refinance, downsizing or redraw event is assumed in Stage A.",
+      propertySaleTreatment: "No automatic property sale, refinance, downsizing or redraw event is assumed.",
       offsetTreatment: "Offset cash remains an accessible asset and reduces linked home-loan interest while the loan exists. Offset cash earns no normal accessible-investment return during the same period. If retirement spending draws from offset cash, later loan-interest calculations use the remaining offset balance. If the linked loan is repaid, remaining offset cash is treated as ordinary accessible cash from the next projection year.",
       withdrawalOrder: normalised.scenario.withdrawalOrder,
       superWithdrawalOrder: normalised.scenario.superWithdrawalOrder || "oldest available person first",
       limitations: [
         "No Age Pension, Monte Carlo modelling, contribution optimisation, account-based pension minimums or transfer balance cap treatment.",
-        "Additional concessional contributions are paid from household cash and receive contributions-tax treatment only in Stage 1.",
+        "Additional concessional contributions are paid from household cash and receive the simplified contributions-tax treatment described in this projection.",
         "Investment assumptions use a total-return model to avoid double counting cash yield.",
         "Property sale, downsizing, refinance, redraw, dynamic offset depletion, CGT, depreciation and negative-gearing optimisation are intentionally deferred.",
       ],
@@ -1720,7 +1720,7 @@
       const requiredUnallocatedWithdrawal = requiredWithdrawal.fromUnallocated;
       requiredShortfall = roundCurrency(requiredShortfall - requiredAccessibleWithdrawal);
 
-      const optionalAdditionalLifestyleWithdrawalRequested = phase === "semi-retirement"
+      const optionalAdditionalLifestyleWithdrawalRequested = phase !== "working"
         ? roundCurrency(normalised.scenario.optionalAdditionalLifestyleWithdrawal)
         : 0;
       const optionalWithdrawal = withdrawAccessibleBalance(optionalAdditionalLifestyleWithdrawalRequested);
@@ -1913,9 +1913,9 @@
           optionalAdditionalLifestyleWithdrawalRequested,
           unfundedOptionalAdditionalLifestyleWithdrawal,
           // Deprecated aliases retained for older UI/test consumers.
-          plannedSemiRetirementWithdrawal: optionalAdditionalLifestyleWithdrawal,
-          plannedSemiRetirementWithdrawalRequested: optionalAdditionalLifestyleWithdrawalRequested,
-          unfundedPlannedSemiRetirementWithdrawal: unfundedOptionalAdditionalLifestyleWithdrawal,
+          plannedSemiRetirementWithdrawal: phase === "semi-retirement" ? optionalAdditionalLifestyleWithdrawal : 0,
+          plannedSemiRetirementWithdrawalRequested: phase === "semi-retirement" ? optionalAdditionalLifestyleWithdrawalRequested : 0,
+          unfundedPlannedSemiRetirementWithdrawal: phase === "semi-retirement" ? unfundedOptionalAdditionalLifestyleWithdrawal : 0,
           requiredAccessibleWithdrawal,
           requiredAccessibleInvestmentWithdrawal,
           requiredUnallocatedWithdrawal,
@@ -1989,7 +1989,9 @@
         }
       });
       summary.totalUnfundedSpending = roundCurrency(summary.totalUnfundedSpending + unmetSpending);
-      summary.totalPlannedSemiRetirementWithdrawals = roundCurrency(summary.totalPlannedSemiRetirementWithdrawals + optionalAdditionalLifestyleWithdrawal);
+      if (phase === "semi-retirement") {
+        summary.totalPlannedSemiRetirementWithdrawals = roundCurrency(summary.totalPlannedSemiRetirementWithdrawals + optionalAdditionalLifestyleWithdrawal);
+      }
       summary.totalOptionalAdditionalLifestyleWithdrawals = roundCurrency(summary.totalOptionalAdditionalLifestyleWithdrawals + optionalAdditionalLifestyleWithdrawal);
       summary.totalSurplusToSuper = roundCurrency(summary.totalSurplusToSuper + surplusToSuper);
       summary.totalSurplusToAccessibleInvestments = roundCurrency(summary.totalSurplusToAccessibleInvestments + surplusToAccessibleInvestments);

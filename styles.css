@@ -608,6 +608,20 @@
   padding: 0;
 }
 
+.semi-retirement-timeline li li {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.semi-retirement-timeline-title {
+  line-height: 1.25;
+}
+
+.semi-retirement-timeline-detail {
+  display: block;
+}
+
 .semi-retirement-timeline span,
 .semi-retirement-timeline li li span {
   color: #64748b;
@@ -621,6 +635,27 @@
   overscroll-behavior-x: contain;
   max-width: 100%;
   width: 100%;
+}
+
+.downsizing-model-note {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  color: #334155;
+  font-size: 13px;
+  grid-column: 1 / -1;
+  line-height: 1.5;
+  padding: 12px 14px;
+}
+
+.downsizing-model-note summary {
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.downsizing-model-note p {
+  color: #475569;
+  margin-top: 8px;
 }
 
 .semi-retirement-projection-scroll {

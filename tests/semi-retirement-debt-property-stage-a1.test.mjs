@@ -306,7 +306,7 @@ test("Stage A1 assumptions document debt, offset and rental limitations", () => 
   const result = project();
   assert.match(result.assumptions.debtAndPropertyTreatment, /capitalised interest/i);
   assert.match(result.assumptions.offsetTreatment, /remaining offset balance/i);
-  assert.match(result.assumptions.rentalTaxModel, /cashflow, not full future taxable rental profit\/loss/i);
+  assert.match(result.assumptions.rentalTaxModel, /Rental cashflow and taxable rental income are modelled separately/i);
   assert.match(result.assumptions.offsetTreatment, /next projection year/i);
   assert.ok(result.assumptions.limitations.some((item) => /negative-gearing/i.test(item)));
 });

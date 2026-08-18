@@ -1275,7 +1275,7 @@
             calendarYear: row.calendarYear,
             ages: rowAges(row, people),
             title: `${person.name || person.id} fully retires`,
-            detail: "Employment income for this person is no longer modelled.",
+            detail: `Employment income for ${person.name || person.id} is no longer included from this point.`,
           });
         }
         const displayPerson = people.find((candidate) => candidate.id === person.id);
@@ -1288,8 +1288,8 @@
             ages: rowAges(row, people),
             title: alreadyReachedAtStart
               ? `${person.name || person.id} is already at or above the assumed super access age`
-              : `${person.name || person.id} reaches the scenario super-access age`,
-            detail: "Super access is based on the scenario assumption entered.",
+              : `${person.name || person.id} reaches the assumed super access age`,
+            detail: "Super access is based on the age entered for this scenario.",
           });
         }
         lastPhaseByPerson[person.id] = person.employmentPhase;
@@ -1304,7 +1304,9 @@
         calendarYear: summary.firstPersonFullRetirement.calendarYear,
         ages: milestoneAges(summary.firstPersonFullRetirement, people),
         title: "First person fully retires",
-        detail: retiredNames ? `Retired: ${retiredNames}` : "",
+        detail: retiredNames
+          ? `${retiredNames} ${retiredNames.includes(",") ? "are the first people" : "is the first person"} in the household to fully retire.`
+          : "",
       });
     }
     if (milestoneHasYear(summary.householdFullRetirement)) {
@@ -1312,7 +1314,7 @@
         calendarYear: summary.householdFullRetirement.calendarYear,
         ages: milestoneAges(summary.householdFullRetirement, people),
         title: "Household fully retired",
-        detail: "All people in the scenario are fully retired.",
+        detail: people.length > 1 ? "Both people are fully retired from this point." : "The household is fully retired from this point.",
       });
     }
     if (milestoneHasYear(summary.accessibleFundsExhausted)) {
@@ -1351,7 +1353,7 @@
           : `${milestone.name || debt?.name || "Debt"} repaid`,
         detail: isBalloon
           ? `Final repayment projected at ${roundDisplayAmount(debt.balloonRepayment).toLocaleString(undefined, { style: "currency", currency: "AUD", maximumFractionDigits: 0 })}.`
-          : "Debt payoff based on the annual debt schedule.",
+          : "Projected repayment date based on the loan assumptions entered.",
         tone: isBalloon ? "warning" : "positive",
       });
     });
@@ -1521,9 +1523,13 @@
       const household = row.household || {};
       return roundDisplayAmount(total + number(household.totalSuperWithdrawal));
     }, 0);
-    const plannedSemiRetirementWithdrawals = summary.totalPlannedSemiRetirementWithdrawals ?? semiRetirementRows.reduce((total, row) => {
+    const plannedSemiRetirementWithdrawals = semiRetirementRows.reduce((total, row) => {
       const household = row.household || {};
       return roundDisplayAmount(total + number(household.plannedSemiRetirementWithdrawal));
+    }, 0);
+    const totalOptionalAdditionalLifestyleWithdrawals = summary.totalOptionalAdditionalLifestyleWithdrawals ?? years.reduce((total, row) => {
+      const household = row.household || {};
+      return roundDisplayAmount(total + number(household.optionalAdditionalLifestyleWithdrawal));
     }, 0);
     const totalAssetWithdrawalsDuringSemiRetirement = roundDisplayAmount(
       plannedSemiRetirementWithdrawals
@@ -1593,6 +1599,7 @@
     semiRetirementFunding: {
         plannedAnnualAccessibleWithdrawal: inputs.scenario?.optionalAdditionalLifestyleWithdrawal ?? inputs.scenario?.semiRetirementAccessibleWithdrawal ?? draft.scenario?.optionalAdditionalLifestyleWithdrawal ?? draft.scenario?.semiRetirementAccessibleWithdrawal ?? 0,
         totalPlannedSemiRetirementWithdrawals: plannedSemiRetirementWithdrawals,
+        totalOptionalAdditionalLifestyleWithdrawals,
         requiredAccessibleWithdrawalsDuringSemiRetirement,
         superWithdrawalsDuringSemiRetirement,
         totalAssetWithdrawalsDuringSemiRetirement,
@@ -1620,9 +1627,10 @@
   };
 
   function hasSemiRetirementPhase(projection = {}, inputs = {}, draft = {}) {
-    if (asArray(projection.years).some((row) => row.householdPhase === "semi-retirement")) return true;
+    if (asArray(projection.years).some((row) => row.householdPhase !== "working")) return true;
     const people = asArray(inputs.people).length ? inputs.people : asArray(draft.people);
-    return people.some((person) => Boolean(person.hasSemiRetirement) && number(person.semiRetirementAge) < number(person.fullRetirementAge));
+    return people.some((person) => number(person.fullRetirementAge) <= number(person.currentAge))
+      || people.some((person) => Boolean(person.hasSemiRetirement) && number(person.semiRetirementAge) < number(person.fullRetirementAge));
   }
 
   function scenarioAdjustmentSliderMax(value) {

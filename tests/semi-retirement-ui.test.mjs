@@ -13,6 +13,7 @@ const CALC = context.FFSCalculator;
 const ENGINE = context.FFSSemiRetirementProjection;
 const UI = context.FFSSemiRetirementUi;
 const appSource = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+const projectionSource = readFileSync(new URL("../semiRetirementProjection.js", import.meta.url), "utf8");
 const uiSource = readFileSync(new URL("../semiRetirementUi.js", import.meta.url), "utf8");
 const indexSource = readFileSync(new URL("../index.html", import.meta.url), "utf8");
 
@@ -639,10 +640,10 @@ test("Stage 3A configured scenario super access age is used in the retirement ti
     draft.projectionEndAge = 75;
   });
   const expectedRow = result.years.find((row) => person(row, "person1").age === 62);
-  const events = timelineEvents(viewModel, /Luke reaches the scenario super-access age/);
+  const events = timelineEvents(viewModel, /Luke reaches the assumed super access age/);
   assert.equal(events.length, 1);
   assert.equal(events[0].calendarYear, expectedRow.calendarYear);
-  assert.ok(!viewModel.timeline[0].events.some((event) => /Luke reaches the scenario super-access age/.test(event.title)));
+  assert.ok(!viewModel.timeline[0].events.some((event) => /Luke reaches the assumed super access age/.test(event.title)));
 });
 
 test("Stage 3A different person super access ages create independent timeline events", () => {
@@ -659,8 +660,8 @@ test("Stage 3A different person super access ages create independent timeline ev
   });
   const person1Expected = result.years.find((row) => person(row, "person1").age === 60);
   const person2Expected = result.years.find((row) => person(row, "person2").age === 65);
-  assert.equal(timelineEvents(viewModel, /Luke reaches the scenario super-access age/)[0].calendarYear, person1Expected.calendarYear);
-  assert.equal(timelineEvents(viewModel, /Lisa reaches the scenario super-access age/)[0].calendarYear, person2Expected.calendarYear);
+  assert.equal(timelineEvents(viewModel, /Luke reaches the assumed super access age/)[0].calendarYear, person1Expected.calendarYear);
+  assert.equal(timelineEvents(viewModel, /Lisa reaches the assumed super access age/)[0].calendarYear, person2Expected.calendarYear);
 });
 
 test("Stage 3A timeline still works when projected annual people omit superAccessAge", () => {
@@ -682,7 +683,7 @@ test("Stage 3A timeline still works when projected annual people omit superAcces
   });
   const viewModel = UI.buildSemiRetirementResultsViewModel(projectionWithoutAnnualAccessAge, inputs, draft);
   const expectedRow = result.years.find((row) => person(row, "person1").age === 62);
-  assert.equal(timelineEvents(viewModel, /Luke reaches the scenario super-access age/)[0].calendarYear, expectedRow.calendarYear);
+  assert.equal(timelineEvents(viewModel, /Luke reaches the assumed super access age/)[0].calendarYear, expectedRow.calendarYear);
 });
 
 test("Stage 3A missing or invalid super access age does not become a false age-zero timeline event", () => {
@@ -950,12 +951,12 @@ test("Stage 4I Reset Scenario clears adjustment comparison state", () => {
   assert.ok(snippet.includes("semiRetirementScenarioResult = null"));
 });
 
-test("Stage 4J no semi-retirement phase disables the withdrawal control", () => {
+test("Stage 4J no valid post-working projection leaves the optional draw control unavailable", () => {
   const { result, inputs, draft } = projectionFor((scenarioDraft) => {
     scenarioDraft.people.forEach((person) => {
       person.currentAge = 50;
-      person.fullRetirementAge = 60;
-      person.semiRetirementAge = 60;
+      person.fullRetirementAge = 90;
+      person.semiRetirementAge = 90;
       person.hasSemiRetirement = false;
       person.superAccessAge = 60;
     });
@@ -963,8 +964,8 @@ test("Stage 4J no semi-retirement phase disables the withdrawal control", () => 
     scenarioDraft.projectionEndAge = 70;
   });
   const state = UI.buildScenarioAdjustmentState(result, inputs, draft, null);
-  assert.equal(state.controls.semiRetirementAccessibleWithdrawal.enabled, false);
-  assert.equal(state.controls.fullRetirementLifestyleSpending.enabled, true);
+  assert.equal(result.validation.isValid, false);
+  assert.equal(state.isAvailable, false);
 });
 
 test("Stage 4K high manual withdrawals remain valid projection outcomes when funds run out", () => {
@@ -1781,4 +1782,142 @@ test("Stage G2-LS9 identical explicit scenario inputs produce identical projecti
   const second = ENGINE.projectRetirementScenario(deepClone(inputs));
   assert.equal(JSON.stringify(second.summary), JSON.stringify(first.summary));
   assert.equal(JSON.stringify(second.years), JSON.stringify(first.years));
+});
+
+test("Stage G2B-R affected assumptions use plain-English copy without user-facing internal stage labels", () => {
+  const assumptionDisplaySnippet = sourceBetween(appSource, "function semiRetirementAssumptionDisplay", "function semiRetirementMilestoneAgesFromRow");
+  const assumptionRenderSnippet = sourceBetween(appSource, "function renderSemiRetirementAssumptionsHtml", "function renderSemiRetirementWarningsHtml");
+  const engineAssumptionSnippet = sourceBetween(projectionSource, "const assumptions = {", "if (validationErrors.length)");
+  const combined = `${assumptionDisplaySnippet}\n${assumptionRenderSnippet}\n${engineAssumptionSnippet}`;
+  assert.match(combined, /Opening offset balance inside accessible assets/);
+  assert.match(combined, /It remains accessible cash while reducing interest on the linked loan/);
+  assert.match(combined, /Offset cash remains accessible while the linked loan is outstanding/);
+  assert.match(combined, /The projection estimates tax using the income and assumptions entered for each person/);
+  assert.match(combined, /Rental-property cashflow and taxable rental income are treated separately/);
+  assert.match(combined, /The taxable rental-income amount entered for each owner is included in that person's projected taxable income/);
+  assert.match(combined, /The projection does not fully model depreciation, capital gains tax, detailed negative-gearing consequences or future property-specific tax schedules/);
+  assert.doesNotMatch(combined, /Stage [A-G]|Stage 1|Stage 2|Stage 3|Stage 4|modelled in Stage|entered in Stage/);
+});
+
+test("Stage G2B-R Debt at projection end displays dynamic ages from the projection row", () => {
+  const snippet = sourceBetween(appSource, "function renderSemiRetirementDebtPropertyHtml", "function semiRetirementDetailRows");
+  assert.match(snippet, /const debtAtEndItem = debtProperty\.milestoneDebt\?\.find/);
+  assert.match(snippet, /semiRetirementMilestoneAgesFromRow\(debtAtEndItem\?\.row, viewModel\.people \|\| \[\]\)/);
+  assert.match(snippet, /semiRetirementMetricCard\("Debt at projection end", semiRetirementMoney\(debtAtEnd\), debtAtEndAges\.length \? semiRetirementAgeList\(debtAtEndAges\) : ""\)/);
+  assert.doesNotMatch(snippet, /Luke age 91|Lisa age 90/);
+});
+
+test("Stage G2B-R retirement timeline renders title and supporting detail separately", () => {
+  const renderSnippet = sourceBetween(appSource, "function renderSemiRetirementTimelineHtml", "function renderSemiRetirementAnnualProjectionHtml");
+  const styles = stageFStyles();
+  assert.match(renderSnippet, /semi-retirement-timeline-title/);
+  assert.match(renderSnippet, /semi-retirement-timeline-detail/);
+  assert.match(uiSource, /reaches the assumed super access age/);
+  assert.match(uiSource, /Super access is based on the age entered for this scenario/);
+  assert.match(styles, /\.semi-retirement-timeline li li\s*\{[^}]*display: grid;[^}]*gap: 3px;/s);
+  assert.match(styles, /\.semi-retirement-timeline-detail\s*\{[^}]*display: block;/s);
+});
+
+test("Stage G2B-R Adjust Your Scenario optional draw wording matches post-working treatment", () => {
+  const adjustmentSnippet = sourceBetween(appSource, "function renderSemiRetirementAdjustmentsHtml", "function renderSemiRetirementComparisonControls");
+  assert.match(adjustmentSnippet, /Extra discretionary spending above your normal lifestyle budget, starting from semi-retirement and continuing through retirement\./);
+  assert.match(appSource, /This is separate from normal lifestyle spending\. It lets you test additional spending for travel, hobbies, experiences or other discretionary choices from semi-retirement onward\./);
+  assert.doesNotMatch(adjustmentSnippet, /no semi-retirement period/);
+});
+
+test("Stage G2B-R downsizing copy, labels and info controls are wired", () => {
+  assert.match(indexSource, /Explore what could happen if you sell your current home later, buy a lower-value replacement home and invest the equity released after transaction costs\./);
+  assert.match(indexSource, /This strategy is optional and is not included in the projection unless you turn it on\./);
+  const fieldsSnippet = sourceBetween(appSource, "const downsizingFields = [", "renderDownsizingForm(\"wizardDownsizingForm\"");
+  assert.match(fieldsSnippet, /label: "Use downsizing strategy"/);
+  assert.match(fieldsSnippet, /Turn this on only if you want the projection to assume that your current home is sold/);
+  assert.match(fieldsSnippet, /label: "Current principal residence value"/);
+  assert.match(fieldsSnippet, /The current estimated market value of the home you plan to sell/);
+  assert.match(fieldsSnippet, /label: "Estimated replacement home value"/);
+  assert.match(fieldsSnippet, /The estimated purchase price of the home you expect to move into when you downsize/);
+  assert.match(fieldsSnippet, /label: "Estimated buying costs"/);
+  assert.match(fieldsSnippet, /label: "Estimated equity released for investment"/);
+  assert.match(fieldsSnippet, /Leave this as zero to use the app's estimate/);
+  assert.match(appSource, /How downsizing is modelled/);
+  assert.match(appSource, /does not automatically include tax, pension, superannuation or other legal consequences of downsizing/);
+  ["downsizingStrategy", "downsizingResidenceValue", "downsizingReplacementHomeValue", "downsizingSellingCosts", "downsizingBuyingCosts", "downsizingReleasedEquity"].forEach((infoKey) => {
+    assert.match(appSource, new RegExp(infoKey));
+  });
+});
+
+test("Stage G2B-R responsive and accessible polish is present for timeline and downsizing details", () => {
+  const styles = stageFStyles();
+  assert.match(styles, /@media \(max-width: 640px\)[\s\S]*\.semi-retirement-timeline > li\s*\{[^}]*grid-template-columns: 1fr;/);
+  assert.match(styles, /\.downsizing-model-note\s*\{[^}]*grid-column: 1 \/ -1;[^}]*line-height: 1\.5;/s);
+  assert.match(styles, /\.downsizing-model-note summary\s*\{[^}]*cursor: pointer;[^}]*font-weight: 800;/s);
+  assert.match(appSource, /<details class="downsizing-model-note">/);
+  assert.match(appSource, /aria-label="More information about \$\{escapeHtml\(label\)\}"/);
+});
+
+test("Stage G2B-R saved Retirement Planning scenario inputs preserve optional draw and use corrected phase logic", () => {
+  const { defaults } = defaultsFor();
+  const draft = defaults.draft;
+  draft.scenario.semiRetirementAccessibleWithdrawal = 12000;
+  draft.scenario.optionalAdditionalLifestyleWithdrawal = 12000;
+  draft.accessibleInvestments.openingBalance = 500000;
+  draft.accessibleInvestments.annualReturnRatePct = 0;
+  draft.people.forEach((person) => {
+    person.currentAge = 50;
+    person.currentGrossEmploymentIncome = 0;
+    person.openingSuperBalance = 0;
+    person.employerSuperRatePct = 0;
+    person.hasSemiRetirement = false;
+    person.semiRetirementAge = 55;
+    person.fullRetirementAge = 55;
+    person.superReturnBeforeRetirementPct = 0;
+    person.superReturnAfterRetirementPct = 0;
+  });
+  draft.household.currentLifestyleSpending = 0;
+  draft.household.semiRetirementLifestyleSpending = 0;
+  draft.household.fullRetirementLifestyleSpending = 0;
+  draft.projectionEndAge = 58;
+  const scenarioSnapshot = deepClone(draft);
+  const inputs = UI.scenarioDraftToProjectionInputs(scenarioSnapshot);
+  const result = ENGINE.projectRetirementScenario(inputs);
+  const firstFull = result.years.find((row) => row.householdPhase === "full-retirement");
+  assert.equal(inputs.scenario.semiRetirementAccessibleWithdrawal, 12000);
+  assert.equal(inputs.scenario.optionalAdditionalLifestyleWithdrawal, 12000);
+  assert.equal(firstFull.household.optionalAdditionalLifestyleWithdrawalRequested, 12000);
+});
+
+test("Stage G2B-R retirement comparison uses corrected optional draw engine behaviour on both sides", () => {
+  const current = projectionFor((draft) => {
+    draft.scenario.semiRetirementAccessibleWithdrawal = 10000;
+    draft.accessibleInvestments.openingBalance = 500000;
+    draft.accessibleInvestments.annualReturnRatePct = 0;
+    draft.people.forEach((person) => {
+      person.currentAge = 50;
+      person.currentGrossEmploymentIncome = 0;
+      person.openingSuperBalance = 0;
+      person.employerSuperRatePct = 0;
+      person.hasSemiRetirement = false;
+      person.semiRetirementAge = 55;
+      person.fullRetirementAge = 55;
+      person.superReturnBeforeRetirementPct = 0;
+      person.superReturnAfterRetirementPct = 0;
+    });
+    draft.household.currentLifestyleSpending = 0;
+    draft.household.semiRetirementLifestyleSpending = 0;
+    draft.household.fullRetirementLifestyleSpending = 0;
+    draft.projectionEndAge = 80;
+  });
+  const comparisonDraft = deepClone(current.draft);
+  comparisonDraft.scenario.semiRetirementAccessibleWithdrawal = 20000;
+  comparisonDraft.scenario.optionalAdditionalLifestyleWithdrawal = 20000;
+  const comparisonOutcome = UI.runSemiRetirementProjection(ENGINE, comparisonDraft);
+  const comparisonViewModel = UI.buildSemiRetirementResultsViewModel(comparisonOutcome.result, comparisonOutcome.inputs, comparisonDraft);
+  const currentFirstFull = current.result.years.find((row) => row.householdPhase === "full-retirement");
+  const comparisonFirstFull = comparisonOutcome.result.years.find((row) => row.householdPhase === "full-retirement");
+  assert.equal(currentFirstFull.household.optionalAdditionalLifestyleWithdrawalRequested, 10000);
+  assert.equal(comparisonFirstFull.household.optionalAdditionalLifestyleWithdrawalRequested, 20000);
+  const comparisonOptionalTotal = comparisonOutcome.result.years.reduce((total, row) => (
+    total + (row.household.optionalAdditionalLifestyleWithdrawal || 0)
+  ), 0);
+  assert.equal(comparisonViewModel.semiRetirementFunding.totalOptionalAdditionalLifestyleWithdrawals, comparisonOptionalTotal);
+  assert.ok(comparisonViewModel.semiRetirementFunding.totalOptionalAdditionalLifestyleWithdrawals > comparisonViewModel.semiRetirementFunding.totalPlannedSemiRetirementWithdrawals);
 });
