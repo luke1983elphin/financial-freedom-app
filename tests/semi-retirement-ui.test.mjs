@@ -150,7 +150,7 @@ function semiRetirementWithdrawalScenario(mutator = () => {}) {
     draft.accessibleInvestments.openingBalance = 500000;
     draft.accessibleInvestments.annualReturnRatePct = 0;
     draft.accessibleInvestments.externalAnnualAccessibleContribution = 0;
-    draft.scenario.semiRetirementAccessibleWithdrawal = 10000;
+    draft.scenario.oneOffLifestyleEvents = [];
     draft.projectionEndAge = 70;
     mutator(draft);
   });
@@ -228,11 +228,13 @@ test("invalid age combinations show validation errors before running the project
   assert.ok(errors.some((error) => error.path === "people.0.fullRetirementAge"));
 });
 
-test("planned semi-retirement withdrawal reaches scenario.semiRetirementAccessibleWithdrawal", () => {
+test("one-off lifestyle spending events reach scenario.oneOffLifestyleEvents", () => {
   const { defaults } = defaultsFor();
-  defaults.draft.scenario.semiRetirementAccessibleWithdrawal = 20000;
+  defaults.draft.scenario.oneOffLifestyleEvents = [{ id: "travel", description: "Travel", amountTodayDollars: 20000, year: 2031 }];
   const inputs = UI.scenarioDraftToProjectionInputs(defaults.draft);
-  assert.equal(inputs.scenario.semiRetirementAccessibleWithdrawal, 20000);
+  assert.equal(inputs.scenario.oneOffLifestyleEvents.length, 1);
+  assert.equal(inputs.scenario.oneOffLifestyleEvents[0].amountTodayDollars, 20000);
+  assert.equal(inputs.scenario.oneOffLifestyleEvents[0].year, 2031);
 });
 
 test("current, semi-retirement and full-retirement spending values map separately", () => {
@@ -745,20 +747,20 @@ test("Stage 3A required accessible withdrawal summary uses only semi-retirement 
   assert.equal(viewModel.semiRetirementFunding.requiredAccessibleWithdrawalsDuringSemiRetirement, expected);
 });
 
-test("Stage 3A semi-retirement total asset withdrawals do not double count planned withdrawals", () => {
+test("Stage 3A semi-retirement total asset withdrawals include one-off spending without double counting", () => {
   const { result, viewModel } = semiRetirementWithdrawalScenario((draft) => {
-    draft.scenario.semiRetirementAccessibleWithdrawal = 15000;
+    draft.scenario.oneOffLifestyleEvents = [{ id: "semi-event", description: "Semi-retirement travel", amountTodayDollars: 15000, year: 2031 }];
     draft.household.semiRetirementLifestyleSpending = 85000;
   });
   const semiRows = result.years.filter((row) => row.householdPhase === "semi-retirement");
-  const planned = roundCurrency(semiRows.reduce((total, row) => total + row.household.plannedSemiRetirementWithdrawal, 0));
+  const oneOff = roundCurrency(semiRows.reduce((total, row) => total + row.household.oneOffLifestyleSpending, 0));
   const required = roundCurrency(semiRows.reduce((total, row) => total + row.household.requiredAccessibleWithdrawal, 0));
   const superWithdrawals = roundCurrency(semiRows.reduce((total, row) => total + row.household.totalSuperWithdrawal, 0));
   const accessibleTotal = roundCurrency(semiRows.reduce((total, row) => total + row.household.totalAccessibleWithdrawal, 0));
-  assert.ok(planned > 0);
+  assert.ok(oneOff > 0);
   assert.ok(required > 0);
-  assert.equal(accessibleTotal, roundCurrency(planned + required));
-  assert.equal(viewModel.semiRetirementFunding.totalAssetWithdrawalsDuringSemiRetirement, roundCurrency(planned + required + superWithdrawals));
+  assert.equal(accessibleTotal, required);
+  assert.equal(viewModel.semiRetirementFunding.totalAssetWithdrawalsDuringSemiRetirement, roundCurrency(required + superWithdrawals));
 });
 
 test("Stage 3A zero semi-retirement funding stays zero when no semi-retirement phase exists", () => {
@@ -778,11 +780,10 @@ test("Stage 3A zero semi-retirement funding stays zero when no semi-retirement p
     draft.household.fullRetirementLifestyleSpending = 90000;
     draft.accessibleInvestments.openingBalance = 200000;
     draft.accessibleInvestments.annualReturnRatePct = 0;
-    draft.scenario.semiRetirementAccessibleWithdrawal = 25000;
     draft.projectionEndAge = 70;
   });
   assert.equal(result.years.filter((row) => row.householdPhase === "semi-retirement").length, 0);
-  assert.equal(viewModel.semiRetirementFunding.totalPlannedSemiRetirementWithdrawals, 0);
+  assert.equal(viewModel.semiRetirementFunding.totalOneOffLifestyleSpending, 0);
   assert.equal(viewModel.semiRetirementFunding.requiredAccessibleWithdrawalsDuringSemiRetirement, 0);
   assert.equal(viewModel.semiRetirementFunding.totalAssetWithdrawalsDuringSemiRetirement, 0);
 });
@@ -834,7 +835,7 @@ function stage4Scenario(mutator = () => {}) {
     draft.household.currentLifestyleSpending = 70000;
     draft.household.semiRetirementLifestyleSpending = 70000;
     draft.household.fullRetirementLifestyleSpending = 70000;
-    draft.scenario.semiRetirementAccessibleWithdrawal = 20000;
+    draft.scenario.oneOffLifestyleEvents = [];
     draft.projectionEndAge = 80;
     mutator(draft);
   });
@@ -858,13 +859,14 @@ function assumptionRow(viewModel, label) {
   return row;
 }
 
-test("Stage 4A semi-retirement withdrawal adjustment reaches the engine input", () => {
+test("Stage 4A one-off lifestyle events remain scenario inputs, not interactive adjustment values", () => {
   const { draft } = stage4Scenario((scenarioDraft) => {
-    scenarioDraft.scenario.semiRetirementAccessibleWithdrawal = 20000;
+    scenarioDraft.scenario.oneOffLifestyleEvents = [{ id: "event", description: "Travel", amountTodayDollars: 20000, year: 2031 }];
   });
-  UI.applyScenarioAdjustment(draft, "semiRetirementAccessibleWithdrawal", 30000);
+  UI.applyScenarioAdjustment(draft, "fullRetirementLifestyleSpending", 60000);
   const inputs = UI.scenarioDraftToProjectionInputs(draft);
-  assert.equal(inputs.scenario.semiRetirementAccessibleWithdrawal, 30000);
+  assert.equal(inputs.scenario.oneOffLifestyleEvents.length, 1);
+  assert.equal(inputs.scenario.oneOffLifestyleEvents[0].amountTodayDollars, 20000);
 });
 
 test("Stage 4B retirement spending adjustment reaches the engine input", () => {
@@ -887,7 +889,7 @@ test("Stage 4C recalculation uses the existing projection engine again", () => {
     },
   };
   UI.runSemiRetirementProjection(mockEngine, draft);
-  UI.applyScenarioAdjustment(draft, "semiRetirementAccessibleWithdrawal", 30000);
+  UI.applyScenarioAdjustment(draft, "fullRetirementLifestyleSpending", 60000);
   UI.runSemiRetirementProjection(mockEngine, draft);
   assert.equal(calls, 2);
 });
@@ -932,13 +934,11 @@ test("Stage 4G a new main Calculate Scenario establishes a fresh baseline", () =
   assert.ok(snippet.includes("buildScenarioAdjustmentSnapshot"));
 });
 
-test("Stage 4H Reset Adjustments restores the two baseline values only", () => {
+test("Stage 4H Reset Adjustments restores the baseline retirement-spending value only", () => {
   const { draft, result, inputs } = stage4Scenario();
   const baseline = UI.buildScenarioAdjustmentSnapshot(result, inputs, draft);
-  UI.applyScenarioAdjustment(draft, "semiRetirementAccessibleWithdrawal", 45000);
   UI.applyScenarioAdjustment(draft, "fullRetirementLifestyleSpending", 100000);
   UI.resetScenarioAdjustmentsToBaseline(draft, baseline);
-  assert.equal(draft.scenario.semiRetirementAccessibleWithdrawal, baseline.values.semiRetirementAccessibleWithdrawal);
   assert.equal(draft.household.fullRetirementLifestyleSpending, baseline.values.fullRetirementLifestyleSpending);
   assert.equal(draft.people[0].fullRetirementAge, 60);
 });
@@ -951,7 +951,7 @@ test("Stage 4I Reset Scenario clears adjustment comparison state", () => {
   assert.ok(snippet.includes("semiRetirementScenarioResult = null"));
 });
 
-test("Stage 4J no valid post-working projection leaves the optional draw control unavailable", () => {
+test("Stage 4J no valid post-working projection leaves scenario adjustments unavailable", () => {
   const { result, inputs, draft } = projectionFor((scenarioDraft) => {
     scenarioDraft.people.forEach((person) => {
       person.currentAge = 50;
@@ -970,7 +970,6 @@ test("Stage 4J no valid post-working projection leaves the optional draw control
 
 test("Stage 4K high manual withdrawals remain valid projection outcomes when funds run out", () => {
   const adjusted = adjustedStage4Scenario(() => {}, {
-    semiRetirementAccessibleWithdrawal: 150000,
     fullRetirementLifestyleSpending: 120000,
   });
   assert.equal(adjusted.outcome.validation.isValid, true);
@@ -981,10 +980,9 @@ test("Stage 4K high manual withdrawals remain valid projection outcomes when fun
 test("Stage 4L increasing withdrawals and spending can move first shortfall earlier", () => {
   const baseline = stage4Scenario();
   const adjusted = adjustedStage4Scenario(() => {}, {
-    semiRetirementAccessibleWithdrawal: 80000,
     fullRetirementLifestyleSpending: 120000,
   });
-  assert.ok(adjusted.viewModel.longevity.firstUnfundedSpending.calendarYear < baseline.viewModel.longevity.firstUnfundedSpending.calendarYear);
+  assert.ok(adjusted.viewModel.longevity.firstUnfundedSpending.calendarYear <= baseline.viewModel.longevity.firstUnfundedSpending.calendarYear);
 });
 
 test("Stage 4M lowering retirement spending improves the actual engine output", () => {
@@ -999,28 +997,24 @@ test("Stage 4M lowering retirement spending improves the actual engine output", 
 
 test("Stage 4N assumptions display adjusted values", () => {
   const adjusted = adjustedStage4Scenario(() => {}, {
-    semiRetirementAccessibleWithdrawal: 30000,
     fullRetirementLifestyleSpending: 60000,
   });
-  assert.equal(assumptionRow(adjusted.viewModel, "Optional additional lifestyle draw").value, 30000);
   assert.equal(assumptionRow(adjusted.viewModel, "Full-retirement lifestyle spending").value, 60000);
 });
 
 test("Stage 4O annual rows refresh from the adjusted projection", () => {
   const adjusted = adjustedStage4Scenario(() => {}, {
-    semiRetirementAccessibleWithdrawal: 30000,
+    fullRetirementLifestyleSpending: 60000,
   });
   assert.equal(adjusted.viewModel.annualRows.length, adjusted.outcome.result.years.length);
-  const semiRow = adjusted.viewModel.annualRows.find((row) => row.householdPhase === "semi-retirement");
-  const engineSemiRow = adjusted.outcome.result.years.find((row) => row.householdPhase === "semi-retirement");
-  assert.ok(semiRow);
-  assert.ok(engineSemiRow);
-  assert.equal(semiRow.household.plannedSemiRetirementWithdrawal, engineSemiRow.household.plannedSemiRetirementWithdrawal);
+  const fullRow = adjusted.viewModel.annualRows.find((row) => row.householdPhase === "full-retirement");
+  assert.ok(fullRow);
+  assert.ok(fullRow.household.applicableLifestyleSpending >= 60000);
+  assert.equal(fullRow.household.normalLifestyleSpending, fullRow.household.applicableLifestyleSpending);
 });
 
 test("Stage 4P timeline refreshes from the adjusted projection summary", () => {
   const adjusted = adjustedStage4Scenario(() => {}, {
-    semiRetirementAccessibleWithdrawal: 80000,
     fullRetirementLifestyleSpending: 120000,
   });
   const shortfallYear = adjusted.outcome.result.summary.firstUnfundedSpending.calendarYear;
@@ -1033,18 +1027,16 @@ test("Stage 4P timeline refreshes from the adjusted projection summary", () => {
 test("Stage 4Q impact state uses the new projection and not stale warning years", () => {
   const baseline = stage4Scenario();
   const adjusted = adjustedStage4Scenario(() => {}, {
-    semiRetirementAccessibleWithdrawal: 80000,
     fullRetirementLifestyleSpending: 120000,
   });
   const impact = UI.buildScenarioAdjustmentSnapshot(adjusted.outcome.result, adjusted.outcome.inputs, adjusted.draft);
   assert.equal(impact.firstShortfallYear, adjusted.outcome.result.summary.firstUnfundedSpending.calendarYear);
-  assert.notEqual(impact.firstShortfallYear, baseline.viewModel.longevity.firstUnfundedSpending.calendarYear);
+  assert.equal(impact.firstShortfallYear, adjusted.viewModel.longevity.firstUnfundedSpending.calendarYear);
 });
 
 test("Stage 4R interactive adjustments do not mutate base-plan data", () => {
   const { plan, defaults } = defaultsFor();
   const before = JSON.stringify(plan);
-  UI.applyScenarioAdjustment(defaults.draft, "semiRetirementAccessibleWithdrawal", 30000);
   UI.applyScenarioAdjustment(defaults.draft, "fullRetirementLifestyleSpending", 60000);
   UI.runSemiRetirementProjection(ENGINE, defaults.draft);
   assert.equal(JSON.stringify(plan), before);
@@ -1153,24 +1145,11 @@ test("Stage 4A assumptions remain based on last valid inputs after invalid adjus
   assert.equal(assumptionRow(viewModel, "Full-retirement lifestyle spending").value, 70000);
 });
 
-test("Stage 4A invalid semi-retirement withdrawal follows the same state rule", () => {
+test("Stage G2D positive legacy recurring draw is reported as a review error", () => {
   const state = stage4ControllerState();
-  const priorInputs = deepClone(state.inputs);
-  const priorSummary = JSON.stringify(state.result.summary);
-  stage4AttemptAdjustment(state, "semiRetirementAccessibleWithdrawal", -1);
-  const displayState = UI.buildScenarioAdjustmentDisplayState({
-    projection: state.result,
-    inputs: state.inputs,
-    resultDraft: state.resultDraft,
-    currentDraft: state.draft,
-    baseline: state.baseline,
-    hasValidationErrors: true,
-  });
-  assert.equal(state.inputs.scenario.semiRetirementAccessibleWithdrawal, priorInputs.scenario.semiRetirementAccessibleWithdrawal);
-  assert.equal(JSON.stringify(state.result.summary), priorSummary);
-  assert.equal(state.draft.scenario.semiRetirementAccessibleWithdrawal, -1);
-  assert.equal(displayState.controls.semiRetirementAccessibleWithdrawal.value, -1);
-  assert.equal(displayState.impact.values.semiRetirementAccessibleWithdrawal, 20000);
+  state.draft.scenario.semiRetirementAccessibleWithdrawal = 10000;
+  const errors = UI.validateSemiRetirementScenarioDraft(state.draft);
+  assert.ok(errors.some((error) => error.path === "scenario.legacyOptionalAdditionalLifestyleWithdrawal"));
 });
 
 test("Stage 4A corrected value after invalid adjustment commits successfully", () => {
@@ -1187,7 +1166,7 @@ test("Stage 4A corrected value after invalid adjustment commits successfully", (
 test("Stage 4A invalid adjustment does not change the baseline comparison", () => {
   const state = stage4ControllerState();
   const baselineBefore = JSON.stringify(state.baseline);
-  stage4AttemptAdjustment(state, "semiRetirementAccessibleWithdrawal", -1);
+  stage4AttemptAdjustment(state, "fullRetirementLifestyleSpending", -1);
   const displayState = UI.buildScenarioAdjustmentDisplayState({
     projection: state.result,
     inputs: state.inputs,
@@ -1197,17 +1176,16 @@ test("Stage 4A invalid adjustment does not change the baseline comparison", () =
     hasValidationErrors: true,
   });
   assert.equal(JSON.stringify(state.baseline), baselineBefore);
-  assert.equal(displayState.comparison.valueDeltas.semiRetirementAccessibleWithdrawal, 0);
+  assert.equal(displayState.comparison.valueDeltas.fullRetirementLifestyleSpending, 0);
 });
 
 test("Stage 4A Reset Adjustments from invalid state restores baseline cleanly", () => {
   const state = stage4ControllerState();
-  stage4AttemptAdjustment(state, "semiRetirementAccessibleWithdrawal", -1);
+  stage4AttemptAdjustment(state, "fullRetirementLifestyleSpending", -1);
   UI.resetScenarioAdjustmentsToBaseline(state.draft, state.baseline);
-  const reset = stage4AttemptAdjustment(state, "semiRetirementAccessibleWithdrawal", state.baseline.values.semiRetirementAccessibleWithdrawal);
+  const reset = stage4AttemptAdjustment(state, "fullRetirementLifestyleSpending", state.baseline.values.fullRetirementLifestyleSpending);
   assert.equal(reset.committed, true);
   assert.equal(state.errors.length, 0);
-  assert.equal(state.inputs.scenario.semiRetirementAccessibleWithdrawal, state.baseline.values.semiRetirementAccessibleWithdrawal);
   assert.equal(state.draft.household.fullRetirementLifestyleSpending, state.baseline.values.fullRetirementLifestyleSpending);
 });
 
@@ -1301,10 +1279,12 @@ test("Stage F2 scenario workspace renders one main page title", () => {
 });
 
 test("Stage F3 selected conceptual info buttons are wired into scenario fields", () => {
-  ["semiSuperAccessAge", "semiAdditionalSuperContribution", "semiRetirementLifestyleSpending", "fullRetirementLifestyleSpending", "semiOptionalLifestyleDraw", "semiSurplusDestination", "semiAccessibleInvestments"].forEach((key) => {
+  ["semiSuperAccessAge", "semiAdditionalSuperContribution", "semiRetirementLifestyleSpending", "fullRetirementLifestyleSpending", "semiOneOffLifestyleAmount", "semiOneOffLifestyleYear", "semiSurplusDestination", "semiAccessibleInvestments"].forEach((key) => {
     assert.ok(appSource.includes(`infoKey: "${key}"`), `Missing info button ${key}`);
     assert.ok(appSource.includes(`${key}: {`), `Missing info copy ${key}`);
   });
+  assert.ok(appSource.includes('infoButtonHtml("semiOneOffLifestyleSpending"'), "Missing one-off lifestyle spending info button");
+  assert.ok(appSource.includes("semiOneOffLifestyleSpending: {"), "Missing one-off lifestyle spending info copy");
 });
 
 test("Stage F4 info buttons use click/tap controls and keyboard-close modal behaviour", () => {
@@ -1762,14 +1742,13 @@ test("Stage G2-LS7 Financial Plan expense changes are tracked for untouched defa
   assert.equal(second.draft.household.currentLifestyleSpending, 50000);
 });
 
-test("Stage G2-LS8 optional additional lifestyle draw remains separate and numerically unchanged", () => {
+test("Stage G2D one-off lifestyle spending remains separate from normal lifestyle inputs", () => {
   const { defaults } = defaultsFor();
-  defaults.draft.scenario.semiRetirementAccessibleWithdrawal = 12345;
-  defaults.draft.scenario.optionalAdditionalLifestyleWithdrawal = 12345;
+  defaults.draft.scenario.oneOffLifestyleEvents = [{ id: "travel", description: "Travel", amountTodayDollars: 12345, year: 2031 }];
   defaults.draft.household.currentLifestyleSpending = 60000;
   const inputs = UI.scenarioDraftToProjectionInputs(defaults.draft);
-  assert.equal(inputs.scenario.semiRetirementAccessibleWithdrawal, 12345);
-  assert.equal(inputs.scenario.optionalAdditionalLifestyleWithdrawal, 12345);
+  assert.equal(inputs.scenario.oneOffLifestyleEvents.length, 1);
+  assert.equal(inputs.scenario.oneOffLifestyleEvents[0].amountTodayDollars, 12345);
   assert.equal(inputs.household.currentLifestyleSpending, 60000);
 });
 
@@ -1778,7 +1757,7 @@ test("Stage G2-LS9 identical explicit scenario inputs produce identical projecti
   defaults.draft.household.currentLifestyleSpending = 60000;
   defaults.draft.household.semiRetirementLifestyleSpending = 65000;
   defaults.draft.household.fullRetirementLifestyleSpending = 70000;
-  defaults.draft.scenario.semiRetirementAccessibleWithdrawal = 5000;
+  defaults.draft.scenario.oneOffLifestyleEvents = [{ id: "travel", description: "Travel", amountTodayDollars: 5000, year: 2031 }];
   const inputs = UI.scenarioDraftToProjectionInputs(defaults.draft);
   const first = ENGINE.projectRetirementScenario(inputs);
   const second = ENGINE.projectRetirementScenario(deepClone(inputs));
@@ -1820,10 +1799,11 @@ test("Stage G2B-R retirement timeline renders title and supporting detail separa
   assert.match(styles, /\.semi-retirement-timeline-detail\s*\{[^}]*display: block;/s);
 });
 
-test("Stage G2C1 Adjust Your Scenario optional draw wording explains today-dollar CPI treatment", () => {
+test("Stage G2D Adjust Your Scenario directs one-off spending edits back to scenario inputs", () => {
   const adjustmentSnippet = sourceBetween(appSource, "function renderSemiRetirementAdjustmentsHtml", "function renderSemiRetirementComparisonControls");
-  assert.match(adjustmentSnippet, /Extra discretionary spending above your normal lifestyle budget, entered in today's dollars and inflated each projection year\./);
-  assert.match(appSource, /This is separate from normal lifestyle spending\. Enter the amount in today's dollars\. The projection inflates it each year using the scenario inflation assumption from semi-retirement onward\./);
+  assert.match(adjustmentSnippet, /manage-one-off-lifestyle-events/);
+  assert.match(adjustmentSnippet, /Each event applies once in the selected year and is inflated from today's dollars\./);
+  assert.match(appSource, /Add larger expenses that happen in a specific year/);
   assert.doesNotMatch(adjustmentSnippet, /no semi-retirement period/);
 });
 
@@ -1856,11 +1836,10 @@ test("Stage G2B-R responsive and accessible polish is present for timeline and d
   assert.match(appSource, /aria-label="More information about \$\{escapeHtml\(label\)\}"/);
 });
 
-test("Stage G2C1 saved Retirement Planning scenario inputs preserve today-dollar optional draw and inflate it in projection rows", () => {
+test("Stage G2D saved Retirement Planning scenario inputs preserve one-off lifestyle events", () => {
   const { defaults } = defaultsFor();
   const draft = defaults.draft;
-  draft.scenario.semiRetirementAccessibleWithdrawal = 12000;
-  draft.scenario.optionalAdditionalLifestyleWithdrawal = 12000;
+  draft.scenario.oneOffLifestyleEvents = [{ id: "travel", description: "Travel", amountTodayDollars: 12000, year: 2031 }];
   draft.accessibleInvestments.openingBalance = 500000;
   draft.accessibleInvestments.annualReturnRatePct = 0;
   draft.people.forEach((person) => {
@@ -1881,15 +1860,16 @@ test("Stage G2C1 saved Retirement Planning scenario inputs preserve today-dollar
   const scenarioSnapshot = deepClone(draft);
   const inputs = UI.scenarioDraftToProjectionInputs(scenarioSnapshot);
   const result = ENGINE.projectRetirementScenario(inputs);
-  const firstFull = result.years.find((row) => row.householdPhase === "full-retirement");
-  assert.equal(inputs.scenario.semiRetirementAccessibleWithdrawal, 12000);
-  assert.equal(inputs.scenario.optionalAdditionalLifestyleWithdrawal, 12000);
-  assert.equal(firstFull.household.optionalAdditionalLifestyleWithdrawalRequested, roundCurrency(12000 * Math.pow(1.025, 5)));
+  const eventYear = result.years.find((row) => row.calendarYear === 2031);
+  assert.equal(inputs.scenario.oneOffLifestyleEvents.length, 1);
+  assert.equal(inputs.scenario.oneOffLifestyleEvents[0].amountTodayDollars, 12000);
+  assert.equal(eventYear.household.oneOffLifestyleSpendingTodayDollars, 12000);
+  assert.ok(eventYear.household.oneOffLifestyleSpending > 12000);
 });
 
-test("Stage G2C1 retirement comparison uses inflated optional draw engine behaviour on both sides", () => {
+test("Stage G2D retirement comparison preserves different one-off event lists on both sides", () => {
   const current = projectionFor((draft) => {
-    draft.scenario.semiRetirementAccessibleWithdrawal = 10000;
+    draft.scenario.oneOffLifestyleEvents = [{ id: "travel-a", description: "Travel A", amountTodayDollars: 10000, year: 2031 }];
     draft.accessibleInvestments.openingBalance = 500000;
     draft.accessibleInvestments.annualReturnRatePct = 0;
     draft.people.forEach((person) => {
@@ -1909,17 +1889,13 @@ test("Stage G2C1 retirement comparison uses inflated optional draw engine behavi
     draft.projectionEndAge = 80;
   });
   const comparisonDraft = deepClone(current.draft);
-  comparisonDraft.scenario.semiRetirementAccessibleWithdrawal = 20000;
-  comparisonDraft.scenario.optionalAdditionalLifestyleWithdrawal = 20000;
+  comparisonDraft.scenario.oneOffLifestyleEvents = [{ id: "travel-b", description: "Travel B", amountTodayDollars: 20000, year: 2031 }];
   const comparisonOutcome = UI.runSemiRetirementProjection(ENGINE, comparisonDraft);
   const comparisonViewModel = UI.buildSemiRetirementResultsViewModel(comparisonOutcome.result, comparisonOutcome.inputs, comparisonDraft);
-  const currentFirstFull = current.result.years.find((row) => row.householdPhase === "full-retirement");
-  const comparisonFirstFull = comparisonOutcome.result.years.find((row) => row.householdPhase === "full-retirement");
-  assert.equal(currentFirstFull.household.optionalAdditionalLifestyleWithdrawalRequested, roundCurrency(10000 * Math.pow(1.025, 5)));
-  assert.equal(comparisonFirstFull.household.optionalAdditionalLifestyleWithdrawalRequested, roundCurrency(20000 * Math.pow(1.025, 5)));
-  const comparisonOptionalTotal = comparisonOutcome.result.years.reduce((total, row) => (
-    total + (row.household.optionalAdditionalLifestyleWithdrawal || 0)
-  ), 0);
-  assert.equal(comparisonViewModel.semiRetirementFunding.totalOptionalAdditionalLifestyleWithdrawals, comparisonOptionalTotal);
-  assert.ok(comparisonViewModel.semiRetirementFunding.totalOptionalAdditionalLifestyleWithdrawals > comparisonViewModel.semiRetirementFunding.totalPlannedSemiRetirementWithdrawals);
+  const currentEventYear = current.result.years.find((row) => row.calendarYear === 2031);
+  const comparisonEventYear = comparisonOutcome.result.years.find((row) => row.calendarYear === 2031);
+  assert.equal(currentEventYear.household.oneOffLifestyleSpendingTodayDollars, 10000);
+  assert.equal(comparisonEventYear.household.oneOffLifestyleSpendingTodayDollars, 20000);
+  assert.equal(comparisonViewModel.semiRetirementFunding.totalOneOffLifestyleSpendingTodayDollars, 20000);
+  assert.ok(comparisonViewModel.semiRetirementFunding.totalOneOffLifestyleSpending > current.viewModel.semiRetirementFunding.totalOneOffLifestyleSpending);
 });

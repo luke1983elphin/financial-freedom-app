@@ -171,6 +171,8 @@
       meetsMinimumEstateBalanceAtEndAge: true,
       totalPlannedSemiRetirementWithdrawals: 0,
       totalOptionalAdditionalLifestyleWithdrawals: 0,
+      totalOneOffLifestyleSpending: 0,
+      totalOneOffLifestyleSpendingTodayDollars: 0,
       totalSurplusToSuper: 0,
       totalSurplusToAccessibleInvestments: 0,
       totalSurplusAvailableForEnjoyment: 0,
@@ -577,6 +579,30 @@
       linkedAssetId: String(item.linkedAssetId || item.linkedPropertyAssetId || item.assetId || ""),
       sourceIncomeId: String(item.sourceIncomeId || item.id || ""),
     };
+  }
+
+  function normaliseOneOffLifestyleEvent(item = {}, index = 0) {
+    return {
+      id: normaliseRecordId(item, "one-off-lifestyle", index),
+      description: String(item.description || item.name || "").trim(),
+      amountTodayDollars: roundCurrency(Math.max(0, number(item.amountTodayDollars ?? item.amount ?? item.todayDollarAmount))),
+      year: Math.round(number(item.year ?? item.calendarYear)),
+    };
+  }
+
+  function oneOffLifestyleEventsForYear(events = [], calendarYear, inflationRate, yearIndex) {
+    const matchingEvents = events
+      .filter((event) => event.year === calendarYear)
+      .map((event) => ({
+        id: event.id,
+        description: event.description,
+        amountTodayDollars: event.amountTodayDollars,
+        year: event.year,
+        projectedAmount: todayDollarAmount(event.amountTodayDollars, inflationRate, yearIndex),
+      }));
+    const total = roundCurrency(matchingEvents.reduce((sum, event) => sum + event.projectedAmount, 0));
+    const totalTodayDollars = roundCurrency(matchingEvents.reduce((sum, event) => sum + event.amountTodayDollars, 0));
+    return { events: matchingEvents, total, totalTodayDollars };
   }
 
   function projectDebtYear(liability, openingBalance, yearIndex = 0, calendarYear = null, offsetBalanceOverride = null) {
@@ -986,7 +1012,7 @@
       Math.max(0, openingAccessibleBalance),
       hasFiniteNumber(explicitOpeningOffsetBalance) ? number(explicitOpeningOffsetBalance) : liabilityOffsetBalance,
     ));
-    const optionalAdditionalLifestyleWithdrawal = hasFiniteNumber(input?.scenario?.semiRetirementAccessibleWithdrawal)
+    const legacyOptionalAdditionalLifestyleWithdrawal = hasFiniteNumber(input?.scenario?.semiRetirementAccessibleWithdrawal)
       ? number(input.scenario.semiRetirementAccessibleWithdrawal)
       : number(input?.scenario?.optionalAdditionalLifestyleWithdrawal);
     return {
@@ -1020,9 +1046,13 @@
       },
       people,
       scenario: {
-        optionalAdditionalLifestyleWithdrawal,
-        // Deprecated alias retained for existing saved scenarios and earlier UI tests.
-        semiRetirementAccessibleWithdrawal: optionalAdditionalLifestyleWithdrawal,
+        oneOffLifestyleEvents: Array.isArray(input?.scenario?.oneOffLifestyleEvents)
+          ? input.scenario.oneOffLifestyleEvents.map(normaliseOneOffLifestyleEvent)
+          : [],
+        legacyOptionalAdditionalLifestyleWithdrawal: roundCurrency(Math.max(0, legacyOptionalAdditionalLifestyleWithdrawal)),
+        optionalAdditionalLifestyleWithdrawal: 0,
+        // Deprecated alias retained for older consumers; new G2D scenarios do not use it.
+        semiRetirementAccessibleWithdrawal: 0,
         surplusDestination: normaliseSurplusDestination(input?.scenario?.surplusDestination ?? input?.scenario?.semiRetirementSurplusDestination),
         fullRetirementAnnualSpending: number(input?.scenario?.fullRetirementAnnualSpending),
         minimumAccessibleBalance: number(input?.scenario?.minimumAccessibleBalance),
@@ -1067,11 +1097,42 @@
       ["accessibleInvestments.openingOffsetBalance", input.accessibleInvestments?.openingOffsetBalance],
       ["accessibleInvestments.currentAnnualContributions", input.accessibleInvestments?.currentAnnualContributions],
       ["accessibleInvestments.externalAnnualAccessibleContribution", input.accessibleInvestments?.externalAnnualAccessibleContribution],
-      ["scenario.optionalAdditionalLifestyleWithdrawal", input.scenario?.optionalAdditionalLifestyleWithdrawal],
-      ["scenario.semiRetirementAccessibleWithdrawal", input.scenario?.semiRetirementAccessibleWithdrawal],
       ["scenario.minimumAccessibleBalance", input.scenario?.minimumAccessibleBalance],
     ].forEach(([path, value]) => {
       if (hasFiniteNumber(value) && number(value) < 0) addValidation(errors, path, "Negative amounts are not valid for this projection input.");
+    });
+    const legacyOptionalDraw = hasFiniteNumber(input.scenario?.semiRetirementAccessibleWithdrawal)
+      ? number(input.scenario.semiRetirementAccessibleWithdrawal)
+      : number(input.scenario?.optionalAdditionalLifestyleWithdrawal);
+    if (legacyOptionalDraw > 0) {
+      addValidation(errors, "scenario.legacyOptionalAdditionalLifestyleWithdrawal", `This scenario uses an earlier recurring additional-lifestyle assumption of ${roundCurrency(legacyOptionalDraw)} per year. Review it and replace it with one-off lifestyle spending events before recalculating.`);
+    }
+    const projectionRangePeople = Array.isArray(input.people) ? input.people : [];
+    const projectionRangeAges = projectionRangePeople
+      .map((person) => person?.currentAge)
+      .filter(hasFiniteNumber)
+      .map(number);
+    const projectionRangeYoungestAge = projectionRangeAges.length ? Math.min(...projectionRangeAges) : null;
+    const projectionRangeYears = projectionRangeYoungestAge !== null && hasFiniteNumber(input.projectionEndAge)
+      ? Math.max(0, Math.ceil(number(input.projectionEndAge) - projectionRangeYoungestAge))
+      : null;
+    const projectionStartYear = Math.round(number(input.projectionStartYear));
+    const projectionEndYear = projectionRangeYears === null || !Number.isFinite(projectionStartYear)
+      ? null
+      : projectionStartYear + projectionRangeYears;
+    const oneOffEvents = Array.isArray(input.scenario?.oneOffLifestyleEvents)
+      ? input.scenario.oneOffLifestyleEvents.map(normaliseOneOffLifestyleEvent)
+      : [];
+    const eventIds = new Set();
+    oneOffEvents.forEach((event, index) => {
+      const prefix = `scenario.oneOffLifestyleEvents.${index}`;
+      if (eventIds.has(event.id)) addValidation(errors, `${prefix}.id`, "One-off lifestyle events need unique IDs.");
+      eventIds.add(event.id);
+      if (!event.description) addValidation(errors, `${prefix}.description`, "Add a short description, such as Holiday, New car or Renovation.");
+      if (!hasFiniteNumber(event.amountTodayDollars) || event.amountTodayDollars <= 0) addValidation(errors, `${prefix}.amountTodayDollars`, "Enter an amount greater than $0.");
+      if (!Number.isFinite(event.year) || event.year < projectionStartYear || (projectionEndYear !== null && event.year > projectionEndYear)) {
+        addValidation(errors, `${prefix}.year`, "Choose a year within this projection.");
+      }
     });
     if (input.scenario?.surplusDestination && !["enjoyment", "super", "accessible-investments", "unallocated"].includes(normaliseSurplusDestination(input.scenario.surplusDestination))) {
       addValidation(errors, "scenario.surplusDestination", "Surplus destination is not supported.");
@@ -1402,10 +1463,9 @@
         "Calculate gross and net employer/additional concessional super contributions.",
         "Project annual debt schedules and property values from explicit asset/liability inputs.",
         "Escalate rental/property cash income by CPI, then calculate cashflow using the selected after-interest or before-interest treatment.",
-        "Calculate household lifestyle requirement in nominal dollars using today's-dollar inflation.",
+        "Calculate household lifestyle requirement in nominal dollars using today's-dollar inflation, including one-off lifestyle events only in their selected calendar year.",
         "Calculate annual operating surplus or shortfall before portfolio withdrawals.",
         "Fund required lifestyle shortfalls from accessible assets first, then available super where permitted.",
-        "Apply optional additional lifestyle withdrawals only after ordinary lifestyle cashflow is funded, using the same accessible-then-super funding waterfall.",
         "Apply surplus destination rules to retirement-phase surplus cash.",
         "Apply midpoint total-return earnings to earning accessible investments and super balances.",
       ],
@@ -1427,7 +1487,8 @@
       accessibleContributionTreatment: "accessibleInvestments.externalAnnualAccessibleContribution/currentAnnualContributions is treated as a working-phase discretionary contribution. It ceases once the household enters semi-retirement unless surplusDestination is accessible-investments.",
       additionalSuperContributionTreatment: "Person-specific voluntary/additional super contributions cease at the person's own semi-retirement age by default. Employer super continues while that person still has employment income.",
       semiRetirementSurplusTreatment: `Retirement-phase annual surplus uses the selected one-destination rule: ${normalised.scenario.surplusDestination}. The default is extra lifestyle/enjoyment.`,
-      optionalAdditionalLifestyleWithdrawalTreatment: "The legacy scenario.semiRetirementAccessibleWithdrawal value is preserved as optionalAdditionalLifestyleWithdrawal. It is extra discretionary spending above the normal lifestyle requirement, is entered in today's dollars, inflates each projection year using the scenario inflation rate, applies from the first post-working year, uses accessible investments first and then available super under the scenario super-access ages, and is not used to calculate the required portfolio withdrawal.",
+      oneOffLifestyleSpendingTreatment: "scenario.oneOffLifestyleEvents stores larger expenses that occur in selected projection years. Amounts are entered in today's dollars, inflated to the event year using the scenario inflation rate, added to that year's lifestyle requirement only, and funded through the same household cash, accessible-investment and eligible-super waterfall as other spending.",
+      legacyOptionalAdditionalLifestyleWithdrawalTreatment: "Positive legacy optionalAdditionalLifestyleWithdrawal/semiRetirementAccessibleWithdrawal values are not silently converted into one-off events because the old field represented a recurring annual draw.",
       debtAndPropertyTreatment: "Supplied non-STSL liabilities are projected annually, separating interest charged, total repayment, principal repaid, capitalised interest, final repayments and repayment cashflow. STSL remains person-level and outside the generic debt schedule.",
       rentalIncomeTreatment: "Rental/property income uses rentalCashflowTreatment. Entered rental cash income is the projection-start annual amount, CPI-escalated each projection year before loan cashflows are applied. afterInterest means loan interest is already included in the entered rental cash income, so only linked principal is deducted from property cashflow. beforeInterest deducts linked loan interest and principal exactly once.",
       passiveIncomeTreatment: "Interest, dividends, distributions and taxable rental income are allocated to each person using stored ownership percentages and included in person-level taxable income. Cash income is modelled separately from taxable income where supplied.",
@@ -1633,6 +1694,15 @@
           ? normalised.household.semiRetirementLifestyleSpending
           : normalised.household.currentLifestyleSpending;
       const applicableLifestyleSpending = todayDollarAmount(lifestyleBase, normalised.inflationRate, yearIndex);
+      const oneOffLifestyle = oneOffLifestyleEventsForYear(
+        normalised.scenario.oneOffLifestyleEvents,
+        calendarYear,
+        normalised.inflationRate,
+        yearIndex,
+      );
+      const oneOffLifestyleSpending = oneOffLifestyle.total;
+      const oneOffLifestyleSpendingTodayDollars = oneOffLifestyle.totalTodayDollars;
+      const totalProjectedLifestyleSpending = roundCurrency(applicableLifestyleSpending + oneOffLifestyleSpending);
       const totalNetEmploymentIncome = roundCurrency(peopleYear.reduce((total, person) => total + person.netEmploymentIncome, 0));
       const totalPassiveCashIncome = roundCurrency(passiveIncomeRows.reduce((total, income) => total + income.cashIncome, 0));
       const totalPassiveTaxableIncome = roundCurrency(passiveIncomeRows.reduce((total, income) => total + income.taxableIncome, 0));
@@ -1642,7 +1712,7 @@
       const totalRentalTaxableIncome = roundCurrency(passiveIncomeRows.filter((income) => income.type === "rentalTaxableIncome").reduce((total, income) => total + income.taxableIncome, 0));
       const otherIncome = roundCurrency(normalised.household.otherAnnualIncome);
       const plannedAdditionalSuperContribution = roundCurrency(peopleYear.reduce((total, person) => total + person.additionalSuperContribution, 0));
-      const householdCashRequirement = roundCurrency(applicableLifestyleSpending + annualDebtCashRequirement + plannedAdditionalSuperContribution);
+      const householdCashRequirement = roundCurrency(totalProjectedLifestyleSpending + annualDebtCashRequirement + plannedAdditionalSuperContribution);
       const netHouseholdCashIncome = roundCurrency(totalNetEmploymentIncome + otherIncome + netRentalCashflow);
       const cashSurplusOrShortfall = roundCurrency(netHouseholdCashIncome - householdCashRequirement);
       const annualLifestyleSurplusOrShortfall = cashSurplusOrShortfall;
@@ -1727,14 +1797,11 @@
       const requiredUnallocatedWithdrawal = requiredWithdrawal.fromUnallocated;
       requiredShortfall = roundCurrency(requiredShortfall - requiredAccessibleWithdrawal);
 
-      const optionalAdditionalLifestyleWithdrawalRequested = phase !== "working"
-        ? todayDollarAmount(normalised.scenario.optionalAdditionalLifestyleWithdrawal, normalised.inflationRate, yearIndex)
-        : 0;
-      const optionalWithdrawal = withdrawAccessibleBalance(optionalAdditionalLifestyleWithdrawalRequested);
-      const optionalAdditionalLifestyleAccessibleWithdrawal = optionalWithdrawal.total;
-      const optionalAdditionalLifestyleInvestmentWithdrawal = roundCurrency(optionalWithdrawal.total - optionalWithdrawal.fromUnallocated);
-      const optionalAdditionalLifestyleUnallocatedWithdrawal = optionalWithdrawal.fromUnallocated;
-      const optionalShortfallAfterAccessible = optionalWithdrawal.unfunded;
+      const optionalAdditionalLifestyleWithdrawalRequested = 0;
+      const optionalAdditionalLifestyleAccessibleWithdrawal = 0;
+      const optionalAdditionalLifestyleInvestmentWithdrawal = 0;
+      const optionalAdditionalLifestyleUnallocatedWithdrawal = 0;
+      const optionalShortfallAfterAccessible = 0;
 
       const requiredSuperFunding = requiredShortfall > 0
         ? withdrawFromSuper(requiredShortfall, peopleYear, peopleStates, normalised)
@@ -1827,7 +1894,6 @@
         .map(warningCodeMessage)
         .filter(Boolean);
       const yearWarnings = yearIndex === 0 ? propertyIncomeWarningMessages : [];
-      if (unfundedOptionalAdditionalLifestyleWithdrawal > 0) yearWarnings.push("Optional additional lifestyle draw could not be fully funded from accessible assets or available super.");
       if (requiredSuperFunding.unmet > 0) yearWarnings.push("Household spending shortfall could not be fully funded.");
       if (closingAccessibleInvestmentBalance === 0 && totalAccessibleWithdrawal > 0 && milestoneIsUnset(summary.accessibleFundsExhausted)) {
         summary.accessibleFundsExhausted = milestoneForYear(calendarYear, peopleYear);
@@ -1935,6 +2001,11 @@
           additionalConcessionalContributionsPaidFromCash: totalAdditionalSuperContribution,
           householdCashRequirement,
           householdCashRequirementBeforeSurplusDestination: householdCashRequirement,
+          normalLifestyleSpending: applicableLifestyleSpending,
+          oneOffLifestyleSpending,
+          oneOffLifestyleSpendingTodayDollars,
+          oneOffLifestyleEvents: oneOffLifestyle.events,
+          totalProjectedLifestyleSpending,
           annualLifestyleSurplusOrShortfall,
           cashSurplusOrShortfall,
           requiredTotalPortfolioWithdrawal,
@@ -2027,6 +2098,8 @@
         summary.totalPlannedSemiRetirementWithdrawals = roundCurrency(summary.totalPlannedSemiRetirementWithdrawals + optionalAdditionalLifestyleWithdrawal);
       }
       summary.totalOptionalAdditionalLifestyleWithdrawals = roundCurrency(summary.totalOptionalAdditionalLifestyleWithdrawals + optionalAdditionalLifestyleWithdrawal);
+      summary.totalOneOffLifestyleSpending = roundCurrency(summary.totalOneOffLifestyleSpending + oneOffLifestyleSpending);
+      summary.totalOneOffLifestyleSpendingTodayDollars = roundCurrency(summary.totalOneOffLifestyleSpendingTodayDollars + oneOffLifestyleSpendingTodayDollars);
       summary.totalSurplusToSuper = roundCurrency(summary.totalSurplusToSuper + surplusToSuper);
       summary.totalSurplusToAccessibleInvestments = roundCurrency(summary.totalSurplusToAccessibleInvestments + surplusToAccessibleInvestments);
       summary.totalSurplusAvailableForEnjoyment = roundCurrency(summary.totalSurplusAvailableForEnjoyment + surplusAvailableForEnjoyment);

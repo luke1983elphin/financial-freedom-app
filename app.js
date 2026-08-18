@@ -278,9 +278,17 @@
       title: "Full-retirement lifestyle spending",
       body: "Your expected normal annual household spending after both people are fully retired.",
     },
-    semiOptionalLifestyleDraw: {
-      title: "Optional additional lifestyle draw",
-      body: "This is separate from normal lifestyle spending. Enter the amount in today's dollars. The projection inflates it each year using the scenario inflation assumption from semi-retirement onward.",
+    semiOneOffLifestyleSpending: {
+      title: "One-off lifestyle spending",
+      body: "Use this for larger expenses that happen in a particular year rather than every year, such as travel, a vehicle, renovations or helping family. Amounts are entered in today's dollars and inflated to the selected year.",
+    },
+    semiOneOffLifestyleAmount: {
+      title: "Amount in today's dollars",
+      body: "Enter the cost in today's dollars. The projection increases it using your inflation assumption before applying it in the selected year.",
+    },
+    semiOneOffLifestyleYear: {
+      title: "Event year",
+      body: "Choose when the expense is expected to occur. Ages are shown to make the timing easier to understand.",
     },
     semiSurplusDestination: {
       title: "Retirement surplus destination",
@@ -7109,6 +7117,75 @@
     `;
   }
 
+  function semiRetirementOneOffYearOptions(draft = semiRetirementScenarioDraft) {
+    const range = window.FFSSemiRetirementUi?.projectionYearRange?.(draft) || {};
+    const startYear = Number.isFinite(Number(range.startYear)) ? Number(range.startYear) : currentYear();
+    const endYear = Number.isFinite(Number(range.endYear)) ? Number(range.endYear) : startYear + 40;
+    const cappedEndYear = Math.max(startYear, Math.min(endYear, startYear + 80));
+    return Array.from({ length: cappedEndYear - startYear + 1 }, (_, offset) => {
+      const year = startYear + offset;
+      const ageLabel = window.FFSSemiRetirementUi?.eventAgeLabel?.(draft, year) || "";
+      return [year, ageLabel ? `${year} - ${ageLabel}` : String(year)];
+    });
+  }
+
+  function semiRetirementOneOffEventSummary(event, draft = semiRetirementScenarioDraft) {
+    const description = event.description || "One-off expense";
+    const ageLabel = window.FFSSemiRetirementUi?.eventAgeLabel?.(draft, event.year) || "";
+    return `${description} - ${money(event.amountTodayDollars)} today - ${event.year}${ageLabel ? ` (${ageLabel})` : ""}`;
+  }
+
+  function semiRetirementLegacyOptionalDrawNoticeHtml(draft = semiRetirementScenarioDraft) {
+    const amount = window.FFSSemiRetirementUi?.legacyOptionalLifestyleDrawAmount?.(draft) || 0;
+    if (amount <= 0) return "";
+    return `
+      <div class="semi-retirement-warning is-review-needed" role="alert">
+        <strong>Review earlier lifestyle-draw assumption</strong>
+        <p>This scenario was saved with an earlier recurring additional-lifestyle draw of ${money(amount)} per year. That feature has been replaced by one-off lifestyle spending events, so please review the timing and amount before recalculating.</p>
+      </div>
+    `;
+  }
+
+  function semiRetirementOneOffLifestyleEventsHtml(draft = semiRetirementScenarioDraft) {
+    const events = window.FFSSemiRetirementUi?.normaliseOneOffLifestyleEvents?.(draft?.scenario?.oneOffLifestyleEvents) || [];
+    const yearOptions = semiRetirementOneOffYearOptions(draft);
+    return `
+      <section class="semi-retirement-one-off-section" data-one-off-lifestyle-spending>
+        <div class="semi-retirement-one-off-heading">
+          <div>
+            <span class="field-label field-label-with-info"><span>One-off lifestyle spending</span>${infoButtonHtml("semiOneOffLifestyleSpending", "One-off lifestyle spending")}</span>
+            <p class="field-help">Add larger expenses that happen in a specific year. Amounts are entered in today's dollars and inflated in the projection.</p>
+          </div>
+          <button class="btn btn-small" type="button" data-semi-action="add-one-off-lifestyle-event">+ Add one-off expense</button>
+        </div>
+        ${semiRetirementLegacyOptionalDrawNoticeHtml(draft)}
+        ${events.length ? `
+          <div class="semi-retirement-one-off-list">
+            ${events.map((event, index) => {
+              const prefix = `scenario.oneOffLifestyleEvents.${index}`;
+              return `
+                <article class="semi-retirement-one-off-row" data-one-off-event-id="${escapeHtml(event.id)}">
+                  <div class="semi-retirement-one-off-summary">
+                    <strong>${escapeHtml(event.description || `One-off expense ${index + 1}`)}</strong>
+                    <span>${escapeHtml(event.year ? `${event.year}${window.FFSSemiRetirementUi?.eventAgeLabel?.(draft, event.year) ? ` - ${window.FFSSemiRetirementUi.eventAgeLabel(draft, event.year)}` : ""}` : "Choose a year")}</span>
+                  </div>
+                  <div class="semi-retirement-one-off-fields">
+                    ${semiRetirementInput({ label: "Description", path: `${prefix}.description`, type: "text", help: "Example: travel, vehicle, renovation or family support." })}
+                    ${semiRetirementInput({ label: "Amount in today's dollars", path: `${prefix}.amountTodayDollars`, step: "1000", infoKey: "semiOneOffLifestyleAmount" })}
+                    ${semiRetirementInput({ label: "Year", path: `${prefix}.year`, type: "select", options: yearOptions, infoKey: "semiOneOffLifestyleYear" })}
+                    <button class="btn btn-small" type="button" data-semi-action="remove-one-off-lifestyle-event" data-event-id="${escapeHtml(event.id)}">Remove</button>
+                  </div>
+                </article>
+              `;
+            }).join("")}
+          </div>
+        ` : `
+          <p class="semi-retirement-one-off-empty">No one-off lifestyle expenses added. Your normal lifestyle spending still inflates each year.</p>
+        `}
+      </section>
+    `;
+  }
+
   function semiRetirementPersonPanel(person, index) {
     const prefix = `people.${index}`;
     const hasSemi = Boolean(person.hasSemiRetirement);
@@ -7257,15 +7334,13 @@
     const rangeValue = Math.min(Number(control.max || 100000), Math.max(Number(control.min || 0), value));
     const error = semiRetirementAdjustmentError(control.path);
     const id = `semi-adjust-${control.path.replace(/[^a-z0-9]+/gi, "-")}`;
-    const field = control.path === "scenario.semiRetirementAccessibleWithdrawal"
-      ? "semiRetirementAccessibleWithdrawal"
-      : "fullRetirementLifestyleSpending";
+    const field = "fullRetirementLifestyleSpending";
     if (!control.enabled) {
       return `
         <article class="semi-retirement-adjustment-card is-disabled">
           <div>
             <label class="field-label" for="${id}">${escapeHtml(control.label)}</label>
-            <p class="field-help">This scenario has no retirement period within the projection, so no optional additional lifestyle draw is applied.</p>
+            <p class="field-help">This scenario has no full-retirement period within the projection, so this adjustment is not applied.</p>
           </div>
           <input id="${id}" class="field-input" type="number" inputmode="decimal" value="${escapeHtml(value)}" disabled aria-disabled="true">
         </article>
@@ -7275,7 +7350,7 @@
       <article class="semi-retirement-adjustment-card">
         <div class="semi-retirement-adjustment-heading">
           <label class="field-label" for="${id}">${escapeHtml(control.label)}</label>
-          <span>${control.path === "household.fullRetirementLifestyleSpending" ? "Today's dollars" : "Scenario only"}</span>
+          <span>Today's dollars</span>
         </div>
         <input id="${id}" class="field-input" type="number" inputmode="decimal" min="${escapeHtml(control.min)}" step="${escapeHtml(control.step)}" value="${escapeHtml(value)}" data-semi-adjustment="${escapeHtml(field)}">
         <input class="semi-retirement-adjustment-range" type="range" min="${escapeHtml(control.min)}" max="${escapeHtml(control.max)}" step="${escapeHtml(control.step)}" value="${escapeHtml(rangeValue)}" aria-label="${escapeHtml(control.label)} slider" data-semi-adjustment-range="${escapeHtml(field)}">
@@ -7312,7 +7387,7 @@
           <div>
             <span class="metric-label">Interactive scenario adjustment</span>
             <h4>Adjust Your Scenario</h4>
-            <p>Test different spending and optional lifestyle draw amounts to see how they affect your projected retirement funding.</p>
+            <p>Test different normal retirement spending assumptions and manage one-off expenses in the scenario inputs.</p>
           </div>
           <button class="btn" type="button" data-semi-action="reset-adjustments">Reset Adjustments</button>
         </div>
@@ -7320,13 +7395,16 @@
         <div class="semi-retirement-adjustment-layout">
           <div class="semi-retirement-adjustment-controls">
             ${renderSemiRetirementAdjustmentControl(
-              state.controls.semiRetirementAccessibleWithdrawal,
-              "Extra discretionary spending above your normal lifestyle budget, entered in today's dollars and inflated each projection year.",
-            )}
-            ${renderSemiRetirementAdjustmentControl(
               state.controls.fullRetirementLifestyleSpending,
               "Enter the annual household lifestyle spending you want to model once both people are fully retired. This amount is in today's dollars.",
             )}
+            <article class="semi-retirement-adjustment-card">
+              <div>
+                <span class="field-label">One-off lifestyle spending</span>
+                <p class="field-help">Add or edit larger expenses in the Lifestyle Spending inputs. Each event applies once in the selected year and is inflated from today's dollars.</p>
+              </div>
+              <button class="btn btn-small" type="button" data-semi-action="manage-one-off-lifestyle-events">Manage one-off spending</button>
+            </article>
           </div>
           <aside class="semi-retirement-impact-panel" data-semi-adjustment-impact>
             <span class="metric-label">Immediate outcome</span>
@@ -7628,9 +7706,9 @@
           <div class="input-grid">
             ${semiRetirementComparisonInput({ label: "Semi-retirement lifestyle spending", path: "household.semiRetirementLifestyleSpending", step: "1000" })}
             ${semiRetirementComparisonInput({ label: "Full-retirement lifestyle spending", path: "household.fullRetirementLifestyleSpending", step: "1000" })}
-            ${semiRetirementComparisonInput({ label: "Optional additional lifestyle draw", path: "scenario.semiRetirementAccessibleWithdrawal", step: "1000" })}
             ${semiRetirementComparisonInput({ label: "Retirement surplus destination", path: "scenario.surplusDestination", type: "select", options: [["enjoyment", "Extra lifestyle / enjoyment"], ["super", "Contribute to super"], ["accessible-investments", "Contribute to accessible investments"], ["unallocated", "Leave as unallocated surplus"]] })}
           </div>
+          <p class="semi-retirement-comparison-note">${escapeHtml((window.FFSSemiRetirementUi?.normaliseOneOffLifestyleEvents?.(semiRetirementComparisonDraft?.scenario?.oneOffLifestyleEvents) || []).length ? "One-off lifestyle spending events are included in this comparison. Edit them in the main scenario inputs before creating a comparison." : "No one-off lifestyle spending events are included in this comparison.")}</p>
         </article>
       </div>
     `;
@@ -8019,8 +8097,15 @@
         ].filter(Boolean))}
       </section>
     `).join("");
+    const oneOffLifestyleRows = (household.oneOffLifestyleEvents || []).map((event) => ({
+      label: event.description || "One-off expense",
+      value: `${semiRetirementMoney(event.projectedAmount)} (${semiRetirementMoney(event.amountTodayDollars)} today)`,
+    }));
+    const hasOneOffLifestyle = Number(household.oneOffLifestyleSpending || 0) > 0 || oneOffLifestyleRows.length > 0;
     const householdRows = [
-      ["Projected spending", semiRetirementMoney(household.applicableLifestyleSpending)],
+      ["Normal lifestyle spending", semiRetirementMoney(household.normalLifestyleSpending ?? household.applicableLifestyleSpending)],
+      ["One-off lifestyle spending", semiRetirementMoney(household.oneOffLifestyleSpending)],
+      ["Total lifestyle spending", semiRetirementMoney(household.totalProjectedLifestyleSpending ?? household.applicableLifestyleSpending)],
       ["Other income", semiRetirementMoney(household.otherIncome)],
       ["Passive taxable income", semiRetirementMoney(household.totalPassiveTaxableIncome)],
       ["Passive cash income", semiRetirementMoney(household.totalPassiveCashIncome)],
@@ -8038,9 +8123,6 @@
       ["Total portfolio withdrawal", semiRetirementMoney(household.totalPortfolioWithdrawal)],
       ["Required accessible withdrawal", semiRetirementMoney(household.requiredAccessibleWithdrawal)],
       ["Required super withdrawal", semiRetirementMoney(household.requiredSuperWithdrawal)],
-      ["Optional additional lifestyle draw", semiRetirementMoney(household.optionalAdditionalLifestyleWithdrawal ?? household.plannedSemiRetirementWithdrawal)],
-      ["Optional draw from accessible assets", semiRetirementMoney(household.optionalAdditionalLifestyleAccessibleWithdrawal)],
-      ["Optional draw from super", semiRetirementMoney(household.optionalAdditionalLifestyleSuperWithdrawal)],
       ["Total super withdrawal", semiRetirementMoney(household.totalSuperWithdrawal)],
       ["Surplus to super", semiRetirementMoney(household.surplusToSuper)],
       ["Surplus to accessible investments", semiRetirementMoney(household.surplusToAccessibleInvestments)],
@@ -8092,6 +8174,12 @@
           ${semiRetirementDetailRows(householdRows)}
           ${row.warnings?.length ? `<div class="semi-retirement-row-warning"><strong>Notes</strong><ul>${row.warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}</ul></div>` : ""}
         </section>
+        ${hasOneOffLifestyle ? `
+          <section>
+            <h5>One-off lifestyle spending</h5>
+            ${semiRetirementDetailRows(oneOffLifestyleRows.length ? oneOffLifestyleRows : [{ label: "One-off lifestyle spending", value: semiRetirementMoney(household.oneOffLifestyleSpending) }])}
+          </section>
+        ` : ""}
         ${annualDebtSections ? `<section class="semi-retirement-annual-subgroup"><h5>Debts</h5></section>${annualDebtSections}` : ""}
         ${annualPropertySections ? `<section class="semi-retirement-annual-subgroup"><h5>Rental / Investment Property</h5></section>${annualPropertySections}` : ""}
       </div>
@@ -8125,7 +8213,7 @@
                     <td>${escapeHtml(row.ages?.[1]?.age ?? "n/a")}</td>
                     <td>${escapeHtml(row.householdPhaseLabel)}</td>
                     <td>${escapeHtml(semiRetirementMoney(household.totalNetEmploymentIncome))}</td>
-                    <td>${escapeHtml(semiRetirementMoney(household.applicableLifestyleSpending))}</td>
+                    <td>${escapeHtml(semiRetirementMoney(household.totalProjectedLifestyleSpending ?? household.applicableLifestyleSpending))}</td>
                     <td>${escapeHtml(semiRetirementMoney(household.totalAccessibleWithdrawal))}</td>
                     <td>${escapeHtml(semiRetirementMoney(household.closingAccessibleInvestmentBalance))}</td>
                     <td>${escapeHtml(semiRetirementMoney(household.totalSuperBalance))}</td>
@@ -8335,8 +8423,8 @@
             ${semiRetirementInput({ label: "Current annual lifestyle spending", path: "household.currentLifestyleSpending", step: "1000", help: "Your current household living expenses, used as the starting point for this retirement scenario.", afterHtml: semiRetirementLivingExpenseSourceHtml(result) })}
             ${semiRetirementInput({ label: "Semi-retirement lifestyle spending", path: "household.semiRetirementLifestyleSpending", step: "1000", infoKey: "semiRetirementLifestyleSpending", help: "Expected normal household spending while work is reduced." })}
             ${semiRetirementInput({ label: "Full-retirement lifestyle spending", path: "household.fullRetirementLifestyleSpending", step: "1000", infoKey: "fullRetirementLifestyleSpending", help: "Expected normal household spending once everyone is fully retired." })}
-            ${semiRetirementInput({ label: "Optional additional lifestyle draw", path: "scenario.semiRetirementAccessibleWithdrawal", step: "1000", infoKey: "semiOptionalLifestyleDraw", help: "Extra discretionary spending above your normal lifestyle budget, entered in today's dollars and inflated each projection year." })}
           </div>
+          ${semiRetirementOneOffLifestyleEventsHtml(draft)}
         </section>
         <section class="semi-retirement-input-section">
           <div class="card-subheading">
@@ -8470,9 +8558,6 @@
       ? target.value
       : Number(target.value);
     window.FFSSemiRetirementUi.setDraftPath(semiRetirementComparisonDraft, path, Number.isFinite(value) || type !== "number" ? value : 0);
-    if (path === "scenario.semiRetirementAccessibleWithdrawal") {
-      window.FFSSemiRetirementUi.setDraftPath(semiRetirementComparisonDraft, "scenario.optionalAdditionalLifestyleWithdrawal", Number.isFinite(value) ? value : 0);
-    }
     semiRetirementComparisonErrors = semiRetirementComparisonErrors.filter((error) => error.path !== path);
   }
 
@@ -8512,6 +8597,65 @@
     updateSaveStatus("Current lifestyle spending reset from the Financial Plan. Financial Plan unchanged.");
   }
 
+  function addSemiRetirementOneOffLifestyleEvent() {
+    if (!window.FFSSemiRetirementUi) return;
+    ensureSemiRetirementScenarioDraft(CALC.calculatePlan(plan));
+    const events = window.FFSSemiRetirementUi.normaliseOneOffLifestyleEvents(semiRetirementScenarioDraft.scenario?.oneOffLifestyleEvents);
+    const range = window.FFSSemiRetirementUi.projectionYearRange(semiRetirementScenarioDraft);
+    const year = Number.isFinite(Number(range.startYear)) ? Number(range.startYear) : currentYear();
+    const nextIndex = events.length;
+    events.push({
+      id: window.FFSSemiRetirementUi.oneOffEventId(nextIndex),
+      description: "",
+      amountTodayDollars: 0,
+      year,
+    });
+    window.FFSSemiRetirementUi.setDraftPath(semiRetirementScenarioDraft, "scenario.oneOffLifestyleEvents", events);
+    clearSemiRetirementAdjustmentState();
+    clearSemiRetirementComparisonState();
+    semiRetirementScenarioResult = null;
+    semiRetirementScenarioInputs = null;
+    semiRetirementScenarioResultDraft = null;
+    semiRetirementScenarioDirty = true;
+    renderSemiRetirementScenario(CALC.calculatePlan(plan));
+    window.requestAnimationFrame(() => {
+      const target = document.querySelector(`[data-semi-input="scenario.oneOffLifestyleEvents.${nextIndex}.description"]`);
+      target?.focus({ preventScroll: true });
+      target?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    updateSaveStatus("One-off lifestyle expense added. Calculate the scenario to update results.");
+  }
+
+  function removeSemiRetirementOneOffLifestyleEvent(eventId) {
+    if (!window.FFSSemiRetirementUi || !eventId) return;
+    ensureSemiRetirementScenarioDraft(CALC.calculatePlan(plan));
+    const events = window.FFSSemiRetirementUi
+      .normaliseOneOffLifestyleEvents(semiRetirementScenarioDraft.scenario?.oneOffLifestyleEvents)
+      .filter((event) => event.id !== eventId);
+    window.FFSSemiRetirementUi.setDraftPath(semiRetirementScenarioDraft, "scenario.oneOffLifestyleEvents", events);
+    clearSemiRetirementAdjustmentState();
+    clearSemiRetirementComparisonState();
+    semiRetirementScenarioResult = null;
+    semiRetirementScenarioInputs = null;
+    semiRetirementScenarioResultDraft = null;
+    semiRetirementScenarioDirty = true;
+    semiRetirementScenarioErrors = semiRetirementScenarioErrors.filter((error) => !String(error.path || "").startsWith("scenario.oneOffLifestyleEvents"));
+    renderSemiRetirementScenario(CALC.calculatePlan(plan));
+    document.querySelector("[data-one-off-lifestyle-spending]")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    updateSaveStatus("One-off lifestyle expense removed. Calculate the scenario to update results.");
+  }
+
+  function focusSemiRetirementOneOffLifestyleEvents() {
+    const section = document.querySelector("[data-one-off-lifestyle-spending]");
+    if (!section) {
+      const inputs = document.querySelector("[data-semi-retirement-inputs]");
+      inputs?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    section.scrollIntoView({ behavior: "smooth", block: "center" });
+    (section.querySelector("[data-semi-input]") || section.querySelector("button"))?.focus({ preventScroll: true });
+  }
+
   function viewFinancialPlanLivingExpenses() {
     activeWizardStep = wizardSteps.findIndex((step) => step.title === "Expenses");
     if (activeWizardStep < 0) activeWizardStep = 4;
@@ -8525,9 +8669,7 @@
   }
 
   function semiRetirementAdjustmentPath(field) {
-    return field === "semiRetirementAccessibleWithdrawal"
-      ? "scenario.semiRetirementAccessibleWithdrawal"
-      : "household.fullRetirementLifestyleSpending";
+    return "household.fullRetirementLifestyleSpending";
   }
 
   function clearSemiRetirementAdjustmentDebounce() {
@@ -12264,13 +12406,33 @@
     [
       ["household.semiRetirementLifestyleSpending", "Semi-retirement spending", money],
       ["household.fullRetirementLifestyleSpending", "Full-retirement spending", money],
-      ["scenario.semiRetirementAccessibleWithdrawal", "Optional additional lifestyle draw", money],
       ["scenario.surplusDestination", "Surplus destination", semiRetirementSurplusDestinationLabel],
     ].forEach(([path, label, formatter]) => {
       const before = scenarioPathValue(baseDraft, path);
       const after = scenarioPathValue(scenarioDraft, path);
       if (String(before ?? "") !== String(after ?? "")) rows.push(scenarioChange(label, formatter(before || 0), formatter(after || 0)));
     });
+    const beforeEvents = window.FFSSemiRetirementUi?.normaliseOneOffLifestyleEvents?.(baseDraft?.scenario?.oneOffLifestyleEvents) || [];
+    const afterEvents = window.FFSSemiRetirementUi?.normaliseOneOffLifestyleEvents?.(scenarioDraft?.scenario?.oneOffLifestyleEvents) || [];
+    const eventSummary = (event) => semiRetirementOneOffEventSummary(event, scenarioDraft);
+    const eventKey = (event) => `${event.id || event.description}-${event.year}`;
+    const beforeByKey = new Map(beforeEvents.map((event) => [eventKey(event), event]));
+    const afterByKey = new Map(afterEvents.map((event) => [eventKey(event), event]));
+    if (JSON.stringify(beforeEvents) !== JSON.stringify(afterEvents)) {
+      rows.push(scenarioChange(
+        "One-off lifestyle spending",
+        beforeEvents.length ? `${beforeEvents.length} event${beforeEvents.length === 1 ? "" : "s"}` : "None",
+        afterEvents.length ? `${afterEvents.length} event${afterEvents.length === 1 ? "" : "s"}` : "None",
+      ));
+      afterEvents.forEach((event) => {
+        const beforeEvent = beforeByKey.get(eventKey(event));
+        if (!beforeEvent) rows.push(scenarioChange(`Added one-off expense: ${event.description || "One-off expense"}`, "Not included", eventSummary(event)));
+        else if (JSON.stringify(beforeEvent) !== JSON.stringify(event)) rows.push(scenarioChange(`Changed one-off expense: ${event.description || beforeEvent.description || "One-off expense"}`, eventSummary(beforeEvent), eventSummary(event)));
+      });
+      beforeEvents.forEach((event) => {
+        if (!afterByKey.has(eventKey(event))) rows.push(scenarioChange(`Removed one-off expense: ${event.description || "One-off expense"}`, eventSummary(event), "Not included"));
+      });
+    }
     return rows;
   }
 
@@ -13803,6 +13965,9 @@
         if (semiAction.dataset.semiAction === "reset-comparison") resetSemiRetirementComparison();
         if (semiAction.dataset.semiAction === "view-living-expenses") viewFinancialPlanLivingExpenses();
         if (semiAction.dataset.semiAction === "use-plan-living-expenses") useFinancialPlanLivingExpensesForSemiRetirementScenario();
+        if (semiAction.dataset.semiAction === "add-one-off-lifestyle-event") addSemiRetirementOneOffLifestyleEvent();
+        if (semiAction.dataset.semiAction === "remove-one-off-lifestyle-event") removeSemiRetirementOneOffLifestyleEvent(semiAction.dataset.eventId);
+        if (semiAction.dataset.semiAction === "manage-one-off-lifestyle-events") focusSemiRetirementOneOffLifestyleEvents();
         if (semiAction.dataset.semiAction === "edit-inputs") {
           const target = document.querySelector("[data-semi-retirement-inputs]");
           target?.scrollIntoView({ behavior: "smooth", block: "start" });

@@ -26,6 +26,41 @@
     return new Date().getFullYear();
   }
 
+  function oneOffEventId(index = 0) {
+    return `one-off-${Date.now().toString(36)}-${index}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  function normaliseOneOffLifestyleEvents(events = []) {
+    return (Array.isArray(events) ? events : []).map((event, index) => ({
+      id: String(event.id || oneOffEventId(index)),
+      description: String(event.description || event.name || "").trim(),
+      amountTodayDollars: roundCurrency(nonNegative(event.amountTodayDollars ?? event.amount ?? event.todayDollarAmount)),
+      year: Math.round(number(event.year ?? event.calendarYear)),
+    }));
+  }
+
+  function legacyOptionalLifestyleDrawAmount(draft = {}) {
+    return nonNegative(draft.scenario?.semiRetirementAccessibleWithdrawal ?? draft.scenario?.optionalAdditionalLifestyleWithdrawal);
+  }
+
+  function projectionYearRange(draft = {}) {
+    const people = Array.isArray(draft.people) ? draft.people : [];
+    const ages = people.map((person) => finiteNumberOrNull(person.currentAge)).filter((age) => age !== null);
+    const youngestAge = ages.length ? Math.min(...ages) : 0;
+    const startYear = Math.round(number(draft.projectionStartYear, currentYear()));
+    const endYear = startYear + Math.max(0, Math.ceil(number(draft.projectionEndAge, 90) - youngestAge));
+    return { startYear, endYear };
+  }
+
+  function eventAgeLabel(draft = {}, year) {
+    const startYear = Math.round(number(draft.projectionStartYear, currentYear()));
+    const yearIndex = Math.max(0, Math.round(number(year) - startYear));
+    return (draft.people || []).map((person, index) => {
+      const age = number(person.currentAge) + yearIndex;
+      return `${person.name || `Person ${index + 1}`} age ${age}`;
+    }).join(" / ");
+  }
+
   function planValue(plan, path, fallback = 0) {
     return path.split(".").reduce((cursor, key) => cursor?.[key], plan) ?? fallback;
   }
@@ -607,6 +642,7 @@
       scenario: {
         optionalAdditionalLifestyleWithdrawal: 0,
         semiRetirementAccessibleWithdrawal: 0,
+        oneOffLifestyleEvents: [],
         surplusDestination: "enjoyment",
         minimumAccessibleBalance: 0,
         minimumEstateBalanceAtEndAge: 0,
@@ -678,10 +714,22 @@
       ["accessibleInvestments.openingBalance", draft.accessibleInvestments?.openingBalance, "Accessible investment balance cannot be negative."],
       ["accessibleInvestments.openingOffsetBalance", draft.accessibleInvestments?.openingOffsetBalance, "Opening offset balance cannot be negative."],
       ["accessibleInvestments.externalAnnualAccessibleContribution", draft.accessibleInvestments?.externalAnnualAccessibleContribution, "Additional planned investment contribution cannot be negative."],
-      ["scenario.optionalAdditionalLifestyleWithdrawal", draft.scenario?.optionalAdditionalLifestyleWithdrawal, "Optional additional lifestyle draw cannot be negative."],
-      ["scenario.semiRetirementAccessibleWithdrawal", draft.scenario?.semiRetirementAccessibleWithdrawal, "Planned withdrawal cannot be negative."],
     ].forEach(([path, value, message]) => {
       if (number(value) < 0) add(path, message);
+    });
+    const legacyDraw = legacyOptionalLifestyleDrawAmount(draft);
+    if (legacyDraw > 0) {
+      add("scenario.legacyOptionalAdditionalLifestyleWithdrawal", `This scenario was saved using an earlier recurring additional-lifestyle assumption of ${roundCurrency(legacyDraw).toLocaleString(undefined, { style: "currency", currency: "AUD", maximumFractionDigits: 0 })} per year. Review it and replace it with one-off lifestyle spending events before recalculating.`);
+    }
+    const { startYear, endYear } = projectionYearRange(draft);
+    const eventIds = new Set();
+    normaliseOneOffLifestyleEvents(draft.scenario?.oneOffLifestyleEvents).forEach((event, index) => {
+      const prefix = `scenario.oneOffLifestyleEvents.${index}`;
+      if (eventIds.has(event.id)) add(`${prefix}.id`, "One-off lifestyle events need unique IDs.");
+      eventIds.add(event.id);
+      if (!event.description) add(`${prefix}.description`, "Add a short description, such as Holiday, New car or Renovation.");
+      if (event.amountTodayDollars <= 0) add(`${prefix}.amountTodayDollars`, "Enter an amount greater than $0.");
+      if (!Number.isFinite(event.year) || event.year < startYear || event.year > endYear) add(`${prefix}.year`, "Choose a year within this projection.");
     });
     [
       ["accessibleInvestments.annualReturnRatePct", draft.accessibleInvestments?.annualReturnRatePct],
@@ -800,8 +848,9 @@
         };
       }),
       scenario: {
-        optionalAdditionalLifestyleWithdrawal: nonNegative(draft.scenario?.semiRetirementAccessibleWithdrawal ?? draft.scenario?.optionalAdditionalLifestyleWithdrawal),
-        semiRetirementAccessibleWithdrawal: nonNegative(draft.scenario?.semiRetirementAccessibleWithdrawal ?? draft.scenario?.optionalAdditionalLifestyleWithdrawal),
+        oneOffLifestyleEvents: normaliseOneOffLifestyleEvents(draft.scenario?.oneOffLifestyleEvents),
+        optionalAdditionalLifestyleWithdrawal: legacyOptionalLifestyleDrawAmount(draft),
+        semiRetirementAccessibleWithdrawal: legacyOptionalLifestyleDrawAmount(draft),
         surplusDestination: draft.scenario?.surplusDestination || "enjoyment",
         fullRetirementAnnualSpending: nonNegative(draft.household?.fullRetirementLifestyleSpending),
         minimumAccessibleBalance: nonNegative(draft.scenario?.minimumAccessibleBalance),
@@ -1459,6 +1508,17 @@
         { label: "Rental tax model", value: assumptions.rentalTaxModel || "Rental property projection models cashflow, not full future taxable rental profit/loss.", type: "plain" },
       ]
       : [];
+    const oneOffEvents = normaliseOneOffLifestyleEvents(inputs.scenario?.oneOffLifestyleEvents);
+    const oneOffRows = oneOffEvents.length
+      ? [
+        {
+          label: "One-off lifestyle spending",
+          value: `${oneOffEvents.length} planned event${oneOffEvents.length === 1 ? "" : "s"}`,
+          type: "plain",
+          note: oneOffEvents.map((event) => `${event.description || "One-off expense"} - ${roundCurrency(event.amountTodayDollars).toLocaleString(undefined, { style: "currency", currency: "AUD", maximumFractionDigits: 0 })} today - ${event.year}`).join("; "),
+        },
+      ]
+      : [];
     return [
       { label: "Projection start year", value: inputs.projectionStartYear ?? assumptions.projectionStartYear ?? null, type: "plain" },
       { label: "Projection end age", value: inputs.projectionEndAge ?? null, type: "age" },
@@ -1472,7 +1532,7 @@
       { label: "Full-retirement lifestyle spending", value: inputs.household?.fullRetirementLifestyleSpending ?? inputs.scenario?.fullRetirementAnnualSpending, type: "currency" },
       { label: "Annual loan principal repayments", value: inputs.household?.annualLoanPrincipalRepayments, type: "currency" },
       { label: "Other annual income", value: inputs.household?.otherAnnualIncome, type: "currency" },
-      { label: "Optional additional lifestyle draw", value: inputs.scenario?.optionalAdditionalLifestyleWithdrawal ?? inputs.scenario?.semiRetirementAccessibleWithdrawal, type: "currency" },
+      ...oneOffRows,
       { label: "Retirement surplus destination", value: surplusDestinationLabel(inputs.scenario?.surplusDestination), type: "plain" },
       { label: "Minimum accessible balance", value: inputs.scenario?.minimumAccessibleBalance, type: "currency" },
       { label: "Withdrawal order", value: inputs.scenario?.withdrawalOrder || assumptions.withdrawalOrder || "accessible investments first", type: "plain" },
@@ -1531,17 +1591,13 @@
       requiredAccessibleWithdrawalsDuringSemiRetirement
       + requiredSuperWithdrawalsDuringSemiRetirement,
     );
-    const optionalSuperWithdrawalsDuringSemiRetirement = semiRetirementRows.reduce((total, row) => {
+    const totalOneOffLifestyleSpending = summary.totalOneOffLifestyleSpending ?? years.reduce((total, row) => {
       const household = row.household || {};
-      return roundDisplayAmount(total + number(household.optionalAdditionalLifestyleSuperWithdrawal));
+      return roundDisplayAmount(total + number(household.oneOffLifestyleSpending));
     }, 0);
-    const plannedSemiRetirementWithdrawals = semiRetirementRows.reduce((total, row) => {
+    const totalOneOffLifestyleSpendingTodayDollars = summary.totalOneOffLifestyleSpendingTodayDollars ?? years.reduce((total, row) => {
       const household = row.household || {};
-      return roundDisplayAmount(total + number(household.plannedSemiRetirementWithdrawal));
-    }, 0);
-    const totalOptionalAdditionalLifestyleWithdrawals = summary.totalOptionalAdditionalLifestyleWithdrawals ?? years.reduce((total, row) => {
-      const household = row.household || {};
-      return roundDisplayAmount(total + number(household.optionalAdditionalLifestyleWithdrawal));
+      return roundDisplayAmount(total + number(household.oneOffLifestyleSpendingTodayDollars));
     }, 0);
     const totalAssetWithdrawalsDuringSemiRetirement = semiRetirementRows.reduce((total, row) => {
       const household = row.household || {};
@@ -1611,15 +1667,13 @@
         firstUnfundedSpending: summary.firstUnfundedSpending,
         totalUnfundedSpending: roundDisplayAmount(summary.totalUnfundedSpending),
       },
-    semiRetirementFunding: {
-        plannedAnnualAccessibleWithdrawal: inputs.scenario?.optionalAdditionalLifestyleWithdrawal ?? inputs.scenario?.semiRetirementAccessibleWithdrawal ?? draft.scenario?.optionalAdditionalLifestyleWithdrawal ?? draft.scenario?.semiRetirementAccessibleWithdrawal ?? 0,
-        totalPlannedSemiRetirementWithdrawals: plannedSemiRetirementWithdrawals,
-        totalOptionalAdditionalLifestyleWithdrawals,
+      semiRetirementFunding: {
+        totalOneOffLifestyleSpending,
+        totalOneOffLifestyleSpendingTodayDollars,
         requiredPortfolioWithdrawalsDuringSemiRetirement,
         requiredAccessibleWithdrawalsDuringSemiRetirement,
         superWithdrawalsDuringSemiRetirement,
         requiredSuperWithdrawalsDuringSemiRetirement,
-        optionalSuperWithdrawalsDuringSemiRetirement,
         totalAssetWithdrawalsDuringSemiRetirement,
       },
       passiveIncome,
@@ -1634,10 +1688,6 @@
   }
 
   const SCENARIO_ADJUSTMENT_FIELDS = {
-    semiRetirementAccessibleWithdrawal: {
-      path: "scenario.semiRetirementAccessibleWithdrawal",
-      label: "Optional additional lifestyle draw",
-    },
     fullRetirementLifestyleSpending: {
       path: "household.fullRetirementLifestyleSpending",
       label: "Annual retirement lifestyle spending",
@@ -1658,9 +1708,6 @@
 
   function scenarioAdjustmentValue(draft = {}, field) {
     const config = SCENARIO_ADJUSTMENT_FIELDS[field];
-    if (field === "semiRetirementAccessibleWithdrawal") {
-      return number(draft.scenario?.semiRetirementAccessibleWithdrawal ?? draft.scenario?.optionalAdditionalLifestyleWithdrawal);
-    }
     return config ? number(getDraftPath(draft, config.path)) : 0;
   }
 
@@ -1670,9 +1717,6 @@
     const parsed = Number(value);
     const nextValue = Number.isFinite(parsed) ? parsed : value;
     setDraftPath(draft, config.path, nextValue);
-    if (field === "semiRetirementAccessibleWithdrawal") {
-      setDraftPath(draft, "scenario.optionalAdditionalLifestyleWithdrawal", nextValue);
-    }
     return draft;
   }
 
@@ -1682,8 +1726,8 @@
     const firstShortfall = viewModel.longevity?.firstUnfundedSpending || null;
     return {
       values: {
-        semiRetirementAccessibleWithdrawal: scenarioAdjustmentValue(draft, "semiRetirementAccessibleWithdrawal"),
         fullRetirementLifestyleSpending: scenarioAdjustmentValue(draft, "fullRetirementLifestyleSpending"),
+        oneOffLifestyleEventCount: normaliseOneOffLifestyleEvents(draft.scenario?.oneOffLifestyleEvents).length,
       },
       statusType: viewModel.status?.type || "funded",
       statusTitle: viewModel.status?.title || "",
@@ -1712,14 +1756,11 @@
           ? null
           : Number(adjusted.firstShortfallYear) - Number(baseline.firstShortfallYear),
       valueDeltas: {
-        semiRetirementAccessibleWithdrawal: roundDisplayAmount(
-          scenarioAdjustmentValue({ scenario: { semiRetirementAccessibleWithdrawal: adjusted.values?.semiRetirementAccessibleWithdrawal } }, "semiRetirementAccessibleWithdrawal")
-          - scenarioAdjustmentValue({ scenario: { semiRetirementAccessibleWithdrawal: baseline.values?.semiRetirementAccessibleWithdrawal } }, "semiRetirementAccessibleWithdrawal"),
-        ),
         fullRetirementLifestyleSpending: roundDisplayAmount(
           scenarioAdjustmentValue({ household: { fullRetirementLifestyleSpending: adjusted.values?.fullRetirementLifestyleSpending } }, "fullRetirementLifestyleSpending")
           - scenarioAdjustmentValue({ household: { fullRetirementLifestyleSpending: baseline.values?.fullRetirementLifestyleSpending } }, "fullRetirementLifestyleSpending"),
         ),
+        oneOffLifestyleEventCount: number(adjusted.values?.oneOffLifestyleEventCount) - number(baseline.values?.oneOffLifestyleEventCount),
       },
     };
   }
@@ -1727,23 +1768,14 @@
   function buildScenarioAdjustmentState(projection = {}, inputs = {}, draft = {}, baseline = null) {
     const impact = buildScenarioAdjustmentSnapshot(projection, inputs, draft);
     if (!impact) return { isAvailable: false };
-    const semiValue = scenarioAdjustmentValue(draft, "semiRetirementAccessibleWithdrawal");
     const retirementValue = scenarioAdjustmentValue(draft, "fullRetirementLifestyleSpending");
     return {
       isAvailable: true,
       values: {
-        semiRetirementAccessibleWithdrawal: semiValue,
         fullRetirementLifestyleSpending: retirementValue,
+        oneOffLifestyleEventCount: normaliseOneOffLifestyleEvents(draft.scenario?.oneOffLifestyleEvents).length,
       },
       controls: {
-        semiRetirementAccessibleWithdrawal: {
-          ...SCENARIO_ADJUSTMENT_FIELDS.semiRetirementAccessibleWithdrawal,
-          enabled: impact.hasSemiRetirementPhase,
-          value: semiValue,
-          min: 0,
-          max: scenarioAdjustmentSliderMax(semiValue),
-          step: 1000,
-        },
         fullRetirementLifestyleSpending: {
           ...SCENARIO_ADJUSTMENT_FIELDS.fullRetirementLifestyleSpending,
           enabled: true,
@@ -1774,11 +1806,6 @@
       ...resultState,
       values: controlState.values,
       controls: {
-        semiRetirementAccessibleWithdrawal: {
-          ...resultState.controls.semiRetirementAccessibleWithdrawal,
-          value: controlState.controls.semiRetirementAccessibleWithdrawal.value,
-          max: controlState.controls.semiRetirementAccessibleWithdrawal.max,
-        },
         fullRetirementLifestyleSpending: {
           ...resultState.controls.fullRetirementLifestyleSpending,
           value: controlState.controls.fullRetirementLifestyleSpending.value,
@@ -1796,7 +1823,6 @@
 
   function resetScenarioAdjustmentsToBaseline(draft = {}, baseline = null) {
     if (!baseline?.values) return draft;
-    applyScenarioAdjustment(draft, "semiRetirementAccessibleWithdrawal", baseline.values.semiRetirementAccessibleWithdrawal);
     applyScenarioAdjustment(draft, "fullRetirementLifestyleSpending", baseline.values.fullRetirementLifestyleSpending);
     return draft;
   }
@@ -1832,6 +1858,11 @@
     buildScenarioAdjustmentState,
     buildScenarioAdjustmentDisplayState,
     resetScenarioAdjustmentsToBaseline,
+    normaliseOneOffLifestyleEvents,
+    oneOffEventId,
+    projectionYearRange,
+    eventAgeLabel,
+    legacyOptionalLifestyleDrawAmount,
     isSemiRetirementUiEnabled,
     setSemiRetirementProjectionEnabledForDevelopment,
   };

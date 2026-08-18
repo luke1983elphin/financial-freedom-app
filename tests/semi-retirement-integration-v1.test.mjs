@@ -93,7 +93,6 @@ test("Integration V1C scenario edits and calculations do not mutate current app 
   const { plan, defaults } = defaultsFor();
   const before = JSON.stringify(plan);
   const draft = defaults.draft;
-  UI.applyScenarioAdjustment(draft, "semiRetirementAccessibleWithdrawal", 30000);
   UI.applyScenarioAdjustment(draft, "fullRetirementLifestyleSpending", 70000);
   UI.runSemiRetirementProjection(ENGINE, draft);
   assert.equal(JSON.stringify(plan), before);
@@ -119,13 +118,13 @@ test("Integration V1E full enabled workflow runs inputs, results and adjustments
   const baseline = UI.runSemiRetirementProjection(ENGINE, draft);
   assert.equal(baseline.validation.isValid, true);
   const baselineSnapshot = UI.buildScenarioAdjustmentSnapshot(baseline.result, baseline.inputs, draft);
-  UI.applyScenarioAdjustment(draft, "semiRetirementAccessibleWithdrawal", 25000);
   UI.applyScenarioAdjustment(draft, "fullRetirementLifestyleSpending", 75000);
   const adjusted = UI.runSemiRetirementProjection(ENGINE, draft);
   const state = UI.buildScenarioAdjustmentState(adjusted.result, adjusted.inputs, draft, baselineSnapshot);
   assert.equal(adjusted.validation.isValid, true);
   assert.equal(state.isAvailable, true);
-  assert.equal(state.controls.semiRetirementAccessibleWithdrawal.value, 25000);
+  assert.equal(state.controls.fullRetirementLifestyleSpending.value, 75000);
+  assert.equal(state.controls.semiRetirementAccessibleWithdrawal, undefined);
   ENGINE.featureFlags.semiRetirementProjectionEnabled = false;
 });
 

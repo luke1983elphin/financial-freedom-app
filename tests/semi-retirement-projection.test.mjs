@@ -260,7 +260,7 @@ test("household semi-retirement starts when one person is fully retired and the 
       semiRetirementLifestyleSpending: 20000,
       fullRetirementLifestyleSpending: 30000,
     },
-    scenario: { semiRetirementAccessibleWithdrawal: 5000, fullRetirementAnnualSpending: 30000 },
+    scenario: { fullRetirementAnnualSpending: 30000 },
   });
 
   const age52 = rowForAge(result, 52);
@@ -268,7 +268,8 @@ test("household semi-retirement starts when one person is fully retired and the 
   assert.equal(person(age52, "person2").employmentPhase, "full-time");
   assert.equal(age52.householdPhase, "semi-retirement");
   assert.equal(age52.household.applicableLifestyleSpending, 20000);
-  assert.equal(age52.household.plannedSemiRetirementWithdrawalRequested, 5000);
+  assert.equal(age52.household.oneOffLifestyleSpending, 0);
+  assert.equal(age52.household.totalProjectedLifestyleSpending, 20000);
 });
 
 test("household working phase applies only while all people are full-time", () => {
@@ -298,13 +299,14 @@ test("household full-retirement phase applies only once all people are fully ret
       semiRetirementLifestyleSpending: 20000,
       fullRetirementLifestyleSpending: 30000,
     },
-    scenario: { semiRetirementAccessibleWithdrawal: 5000, fullRetirementAnnualSpending: 30000 },
+    scenario: { fullRetirementAnnualSpending: 30000 },
   });
 
   const age60 = rowForAge(result, 60);
   assert.equal(age60.householdPhase, "full-retirement");
   assert.equal(age60.household.applicableLifestyleSpending, 30000);
-  assert.equal(age60.household.plannedSemiRetirementWithdrawalRequested, 0);
+  assert.equal(age60.household.oneOffLifestyleSpending, 0);
+  assert.equal(age60.household.totalProjectedLifestyleSpending, 30000);
   assert.equal(result.summary.firstFullRetirement.calendarYear, 2036);
   assert.equal(result.summary.firstFullRetirement.person1Age, 60);
   assert.equal(result.summary.firstFullRetirement.person2Age, 60);
@@ -695,7 +697,7 @@ test("cash shortfalls draw down accessible investments before super", () => {
   assert.equal(firstYear.household.closingAccessibleInvestmentBalance, 80000);
 });
 
-test("planned semi-retirement withdrawals are separate from lifestyle shortfall withdrawals", () => {
+test("one-off lifestyle spending is added to the selected year's lifestyle requirement", () => {
   const result = runProjection({
     projectionEndAge: 60,
     people: [
@@ -707,14 +709,19 @@ test("planned semi-retirement withdrawals are separate from lifestyle shortfall 
       semiRetirementLifestyleSpending: 0,
       fullRetirementLifestyleSpending: 0,
     },
-    scenario: { semiRetirementAccessibleWithdrawal: 20000, fullRetirementAnnualSpending: 0 },
+    scenario: {
+      fullRetirementAnnualSpending: 0,
+      oneOffLifestyleEvents: [{ id: "travel", description: "Travel", amountTodayDollars: 20000, year: 2026 }],
+    },
     accessibleInvestments: { openingBalance: 100000, annualReturnRate: 0, annualFeesRate: 0 },
   });
 
   const firstYear = result.years[0];
   assert.equal(firstYear.household.householdPhase, "semi-retirement");
-  assert.equal(firstYear.household.requiredAccessibleWithdrawal, 0);
-  assert.equal(firstYear.household.plannedSemiRetirementWithdrawal, 20000);
+  assert.equal(firstYear.household.normalLifestyleSpending, 0);
+  assert.equal(firstYear.household.oneOffLifestyleSpending, 20000);
+  assert.equal(firstYear.household.totalProjectedLifestyleSpending, 20000);
+  assert.equal(firstYear.household.requiredAccessibleWithdrawal, 20000);
   assert.equal(firstYear.household.totalAccessibleWithdrawal, 20000);
   assert.equal(firstYear.household.closingAccessibleInvestmentBalance, 80000);
 });
@@ -866,55 +873,6 @@ test("today-dollar spending is inflated year by year", () => {
   assert.equal(rowForAge(result, 52).household.applicableLifestyleSpending, 121);
 });
 
-test("optional additional lifestyle draw is entered in today's dollars and inflated each post-working year", () => {
-  const result = runProjection({
-    projectionEndAge: 60,
-    inflationRate: 0.1,
-    people: [
-      person1({
-        currentAge: 50,
-        currentGrossEmploymentIncome: 0,
-        semiRetirementAge: 52,
-        semiRetirementGrossIncome: 0,
-        fullRetirementAge: 60,
-        openingSuperBalance: 0,
-        employerSuperRate: 0,
-      }),
-      person2({
-        currentAge: 50,
-        currentGrossEmploymentIncome: 0,
-        semiRetirementAge: 52,
-        semiRetirementGrossIncome: 0,
-        fullRetirementAge: 60,
-        openingSuperBalance: 0,
-        employerSuperRate: 0,
-      }),
-    ],
-    household: {
-      currentLifestyleSpending: 0,
-      semiRetirementLifestyleSpending: 0,
-      fullRetirementLifestyleSpending: 0,
-      otherAnnualIncome: 0,
-      annualLoanPrincipalRepayments: 0,
-    },
-    scenario: {
-      semiRetirementAccessibleWithdrawal: 100,
-      optionalAdditionalLifestyleWithdrawal: 100,
-      fullRetirementAnnualSpending: 0,
-      minimumAccessibleBalance: 0,
-    },
-    accessibleInvestments: { openingBalance: 100000, annualReturnRate: 0, annualFeesRate: 0, currentAnnualContributions: 0 },
-  });
-
-  assert.equal(rowForAge(result, 50).householdPhase, "working");
-  assert.equal(rowForAge(result, 50).household.optionalAdditionalLifestyleWithdrawalRequested, 0);
-  assert.equal(rowForAge(result, 51).household.optionalAdditionalLifestyleWithdrawalRequested, 0);
-  assert.equal(rowForAge(result, 52).household.optionalAdditionalLifestyleWithdrawalRequested, 121);
-  assert.equal(rowForAge(result, 52).household.optionalAdditionalLifestyleWithdrawal, 121);
-  assert.equal(rowForAge(result, 53).household.optionalAdditionalLifestyleWithdrawalRequested, 133.1);
-  assert.equal(rowForAge(result, 54).household.optionalAdditionalLifestyleWithdrawalRequested, 146.41);
-});
-
 test("accessible investment growth is based on gross accessible assets and not double-counted as income", () => {
   const result = runProjection({
     projectionEndAge: 50,
@@ -1048,7 +1006,7 @@ test("existing core calculator output is unchanged by running the semi-retiremen
   assert.equal(after.netEmployerSuperContributions, before.netEmployerSuperContributions);
 });
 
-function optionalDrawProjection(overrides = {}) {
+function oneOffEventProjection(overrides = {}) {
   return runProjection(mergeDeep({
     projectionEndAge: 66,
     inflationRate: 0,
@@ -1084,123 +1042,77 @@ function optionalDrawProjection(overrides = {}) {
       }),
     ],
     scenario: {
-      semiRetirementAccessibleWithdrawal: 10000,
       fullRetirementAnnualSpending: 0,
       minimumAccessibleBalance: 0,
       minimumEstateBalanceAtEndAge: 0,
+      oneOffLifestyleEvents: [{ id: "travel", description: "Travel", amountTodayDollars: 10000, year: 2031 }],
     },
   }, overrides));
 }
 
-test("Stage G2B-R optional additional lifestyle draw is zero during every Working-phase year", () => {
-  const result = optionalDrawProjection();
+test("Stage G2D one-off lifestyle spending is zero outside the selected event year", () => {
+  const result = oneOffEventProjection();
   assert.equal(result.validation.isValid, true);
-  result.years
-    .filter((row) => row.householdPhase === "working")
-    .forEach((row) => {
-      assert.equal(row.household.optionalAdditionalLifestyleWithdrawalRequested, 0);
-      assert.equal(row.household.optionalAdditionalLifestyleWithdrawal, 0);
-      assert.equal(row.household.plannedSemiRetirementWithdrawalRequested, 0);
-    });
+  const beforeEvent = rowForAge(result, 54);
+  const eventYear = rowForAge(result, 55);
+  const afterEvent = rowForAge(result, 56);
+  assert.equal(beforeEvent.household.oneOffLifestyleSpending, 0);
+  assert.equal(eventYear.calendarYear, 2031);
+  assert.equal(eventYear.household.oneOffLifestyleSpending, 10000);
+  assert.equal(eventYear.household.oneOffLifestyleEvents.length, 1);
+  assert.equal(afterEvent.household.oneOffLifestyleSpending, 0);
+  assert.equal(result.summary.totalOneOffLifestyleSpending, 10000);
 });
 
-test("Stage G2B-R optional additional lifestyle draw begins in the first Semi-retirement year", () => {
-  const result = optionalDrawProjection();
-  const firstSemi = rowForAge(result, 55);
-  assert.equal(firstSemi.householdPhase, "semi-retirement");
-  assert.equal(firstSemi.household.optionalAdditionalLifestyleWithdrawalRequested, 10000);
-  assert.equal(firstSemi.household.optionalAdditionalLifestyleWithdrawal, 10000);
-  assert.equal(firstSemi.household.plannedSemiRetirementWithdrawalRequested, 10000);
-});
-
-test("Stage G2B-R optional additional lifestyle draw continues into first and later Full-retirement years", () => {
-  const result = optionalDrawProjection();
-  const firstFull = rowForAge(result, 60);
-  const laterFull = rowForAge(result, 64);
-  [firstFull, laterFull].forEach((row) => {
-    assert.equal(row.householdPhase, "full-retirement");
-    assert.equal(row.household.optionalAdditionalLifestyleWithdrawalRequested, 10000);
-    assert.equal(row.household.optionalAdditionalLifestyleWithdrawal, 10000);
-    assert.equal(row.household.plannedSemiRetirementWithdrawalRequested, 0);
+test("Stage G2D one-off lifestyle spending is inflated from today's dollars to the event year", () => {
+  const result = oneOffEventProjection({
+    inflationRate: 0.025,
+    scenario: {
+      oneOffLifestyleEvents: [{ id: "vehicle", description: "Vehicle", amountTodayDollars: 20000, year: 2031 }],
+    },
   });
-  assert.equal(result.summary.totalPlannedSemiRetirementWithdrawals, 50000);
-  assert.equal(result.summary.totalOptionalAdditionalLifestyleWithdrawals, 120000);
+  const eventYear = rowForAge(result, 55);
+  approx(eventYear.household.oneOffLifestyleSpending, 20000 * Math.pow(1.025, 5), 0.03);
+  assert.equal(eventYear.household.oneOffLifestyleSpendingTodayDollars, 20000);
+  assert.equal(result.summary.totalOneOffLifestyleSpendingTodayDollars, 20000);
 });
 
-test("Stage G2B-R direct Working to Full retirement starts optional draw at Full retirement", () => {
-  const result = optionalDrawProjection({
-    projectionEndAge: 58,
-    people: [
-      person1({
-        currentGrossEmploymentIncome: 0,
-        semiRetirementAge: 55,
-        semiRetirementGrossIncome: 0,
-        fullRetirementAge: 55,
-        openingSuperBalance: 0,
-        employerSuperRate: 0,
-      }),
-      person2({
-        currentGrossEmploymentIncome: 0,
-        semiRetirementAge: 55,
-        semiRetirementGrossIncome: 0,
-        fullRetirementAge: 55,
-        openingSuperBalance: 0,
-        employerSuperRate: 0,
-      }),
-    ],
+test("Stage G2D multiple one-off lifestyle events can apply in the same and different years", () => {
+  const result = oneOffEventProjection({
+    scenario: {
+      oneOffLifestyleEvents: [
+        { id: "trip", description: "Trip", amountTodayDollars: 10000, year: 2031 },
+        { id: "car", description: "Car", amountTodayDollars: 25000, year: 2031 },
+        { id: "reno", description: "Renovation", amountTodayDollars: 15000, year: 2033 },
+      ],
+    },
   });
-  assert.equal(rowForAge(result, 54).householdPhase, "working");
-  assert.equal(rowForAge(result, 54).household.optionalAdditionalLifestyleWithdrawalRequested, 0);
-  assert.equal(rowForAge(result, 55).householdPhase, "full-retirement");
-  assert.equal(rowForAge(result, 55).household.optionalAdditionalLifestyleWithdrawalRequested, 10000);
-  assert.equal(rowForAge(result, 58).household.optionalAdditionalLifestyleWithdrawalRequested, 10000);
-  assert.equal(result.summary.totalPlannedSemiRetirementWithdrawals, 0);
+  assert.equal(rowForAge(result, 55).household.oneOffLifestyleSpending, 35000);
+  assert.equal(rowForAge(result, 55).household.oneOffLifestyleEvents.length, 2);
+  assert.equal(rowForAge(result, 57).household.oneOffLifestyleSpending, 15000);
+  assert.equal(result.summary.totalOneOffLifestyleSpending, 50000);
 });
 
-test("Stage G2B-R one-person-retired household phase applies optional draw when household leaves Working", () => {
-  const result = optionalDrawProjection({
-    projectionEndAge: 66,
-    people: [
-      person1({
-        currentGrossEmploymentIncome: 0,
-        semiRetirementAge: 55,
-        semiRetirementGrossIncome: 0,
-        fullRetirementAge: 55,
-        openingSuperBalance: 0,
-        employerSuperRate: 0,
-      }),
-      person2({
-        currentGrossEmploymentIncome: 50000,
-        semiRetirementAge: 65,
-        semiRetirementGrossIncome: 0,
-        fullRetirementAge: 65,
-        openingSuperBalance: 0,
-        employerSuperRate: 0,
-      }),
-    ],
+test("Stage G2D one-off events can occur in Working, Semi-retirement and Full-retirement phases", () => {
+  const result = oneOffEventProjection({
+    scenario: {
+      oneOffLifestyleEvents: [
+        { id: "working", description: "Working phase expense", amountTodayDollars: 1000, year: 2026 },
+        { id: "semi", description: "Semi-retirement expense", amountTodayDollars: 2000, year: 2031 },
+        { id: "full", description: "Full-retirement expense", amountTodayDollars: 3000, year: 2036 },
+      ],
+    },
   });
-  const firstPostWorking = rowForAge(result, 55);
-  assert.equal(firstPostWorking.householdPhase, "semi-retirement");
-  assert.equal(person(firstPostWorking, "person1").employmentPhase, "fully-retired");
-  assert.equal(person(firstPostWorking, "person2").employmentPhase, "full-time");
-  assert.equal(firstPostWorking.household.optionalAdditionalLifestyleWithdrawalRequested, 10000);
+  assert.equal(rowForAge(result, 50).householdPhase, "working");
+  assert.equal(rowForAge(result, 50).household.oneOffLifestyleSpending, 1000);
+  assert.equal(rowForAge(result, 55).householdPhase, "semi-retirement");
+  assert.equal(rowForAge(result, 55).household.oneOffLifestyleSpending, 2000);
+  assert.equal(rowForAge(result, 60).householdPhase, "full-retirement");
+  assert.equal(rowForAge(result, 60).household.oneOffLifestyleSpending, 3000);
 });
 
-test("Stage G2B-R optional draw remains separate from normal lifestyle spending", () => {
-  const noDraw = optionalDrawProjection({ scenario: { semiRetirementAccessibleWithdrawal: 0 } });
-  const withDraw = optionalDrawProjection({ scenario: { semiRetirementAccessibleWithdrawal: 10000 } });
-  [55, 60].forEach((age) => {
-    const baselineRow = rowForAge(noDraw, age);
-    const adjustedRow = rowForAge(withDraw, age);
-    assert.equal(adjustedRow.household.applicableLifestyleSpending, baselineRow.household.applicableLifestyleSpending);
-    assert.equal(adjustedRow.household.requiredAccessibleWithdrawal, baselineRow.household.requiredAccessibleWithdrawal);
-    assert.equal(adjustedRow.household.optionalAdditionalLifestyleWithdrawalRequested, 10000);
-    assert.equal(adjustedRow.household.totalAccessibleWithdrawal, baselineRow.household.totalAccessibleWithdrawal + 10000);
-  });
-});
-
-test("Stage G2C optional draw uses accessible assets first and then eligible super", () => {
-  const result = optionalDrawProjection({
+test("Stage G2D one-off lifestyle spending uses accessible assets first and then eligible super", () => {
+  const result = oneOffEventProjection({
     projectionEndAge: 50,
     accessibleInvestments: { openingBalance: 5000 },
     people: [
@@ -1214,40 +1126,66 @@ test("Stage G2C optional draw uses accessible assets first and then eligible sup
         employerSuperRate: 0,
       }),
     ],
+    scenario: {
+      oneOffLifestyleEvents: [{ id: "trip", description: "Trip", amountTodayDollars: 10000, year: 2026 }],
+    },
   });
   const firstYear = rowForAge(result, 50);
   assert.equal(firstYear.householdPhase, "full-retirement");
-  assert.equal(firstYear.household.requiredAccessibleWithdrawal, 0);
-  assert.equal(firstYear.household.optionalAdditionalLifestyleWithdrawalRequested, 10000);
-  assert.equal(firstYear.household.optionalAdditionalLifestyleAccessibleWithdrawal, 5000);
-  assert.equal(firstYear.household.optionalAdditionalLifestyleSuperWithdrawal, 5000);
-  assert.equal(firstYear.household.optionalAdditionalLifestyleWithdrawal, 10000);
-  assert.equal(firstYear.household.unfundedOptionalAdditionalLifestyleWithdrawal, 0);
+  assert.equal(firstYear.household.oneOffLifestyleSpending, 10000);
+  assert.equal(firstYear.household.requiredAccessibleWithdrawal, 5000);
+  assert.equal(firstYear.household.requiredSuperWithdrawal, 5000);
   assert.equal(firstYear.household.totalSuperWithdrawal, 5000);
+  assert.equal(firstYear.household.unmetSpending, 0);
   assert.equal(person(firstYear, "person1").closingSuperBalance, 95000);
 });
 
-test("Stage G2B-R optional draw zero produces numerical parity with omitted optional draw input", () => {
-  const explicitZero = optionalDrawProjection({ scenario: { semiRetirementAccessibleWithdrawal: 0, optionalAdditionalLifestyleWithdrawal: 0 } });
-  const omitted = optionalDrawProjection({ scenario: { semiRetirementAccessibleWithdrawal: undefined, optionalAdditionalLifestyleWithdrawal: undefined } });
+test("Stage G2D one-off lifestyle spending reports true shortfall after accessible assets and eligible super are exhausted", () => {
+  const result = oneOffEventProjection({
+    projectionEndAge: 50,
+    accessibleInvestments: { openingBalance: 10000 },
+    people: [
+      person1({ currentGrossEmploymentIncome: 0, semiRetirementAge: 50, semiRetirementGrossIncome: 0, fullRetirementAge: 50, superAccessAge: 50, openingSuperBalance: 25000, employerSuperRate: 0 }),
+    ],
+    scenario: {
+      oneOffLifestyleEvents: [{ id: "repair", description: "Repair", amountTodayDollars: 50000, year: 2026 }],
+    },
+  });
+  const row = rowForAge(result, 50);
+  assert.equal(row.household.requiredAccessibleWithdrawal, 10000);
+  assert.equal(row.household.requiredSuperWithdrawal, 25000);
+  assert.equal(row.household.unmetSpending, 15000);
+});
+
+test("Stage G2D one-off lifestyle spending only draws from super that has reached access age", () => {
+  const result = oneOffEventProjection({
+    projectionEndAge: 60,
+    accessibleInvestments: { openingBalance: 0 },
+    people: [
+      person1({ currentAge: 60, currentGrossEmploymentIncome: 0, semiRetirementAge: 60, semiRetirementGrossIncome: 0, fullRetirementAge: 60, superAccessAge: 60, openingSuperBalance: 30000, employerSuperRate: 0 }),
+      person2({ currentAge: 57, currentGrossEmploymentIncome: 0, semiRetirementAge: 57, semiRetirementGrossIncome: 0, fullRetirementAge: 57, superAccessAge: 60, openingSuperBalance: 500000, employerSuperRate: 0 }),
+    ],
+    scenario: {
+      oneOffLifestyleEvents: [{ id: "support", description: "Family support", amountTodayDollars: 40000, year: 2026 }],
+    },
+  });
+  const row = rowForAge(result, 60, "person1");
+  assert.equal(person(row, "person1").superWithdrawal, 30000);
+  assert.equal(person(row, "person2").superWithdrawal, 0);
+  assert.equal(row.household.unmetSpending, 10000);
+});
+
+test("Stage G2D zero legacy optional draw and no events produces numerical parity with omitted fields", () => {
+  const explicitZero = oneOffEventProjection({ scenario: { semiRetirementAccessibleWithdrawal: 0, optionalAdditionalLifestyleWithdrawal: 0, oneOffLifestyleEvents: [] } });
+  const omitted = oneOffEventProjection({ scenario: { semiRetirementAccessibleWithdrawal: undefined, optionalAdditionalLifestyleWithdrawal: undefined, oneOffLifestyleEvents: undefined } });
   assert.equal(JSON.stringify(explicitZero.summary), JSON.stringify(omitted.summary));
   assert.equal(JSON.stringify(explicitZero.years), JSON.stringify(omitted.years));
 });
 
-test("Stage G2B-R positive optional draw changes only post-working rows in the expected fields", () => {
-  const noDraw = optionalDrawProjection({ scenario: { semiRetirementAccessibleWithdrawal: 0 } });
-  const withDraw = optionalDrawProjection({ scenario: { semiRetirementAccessibleWithdrawal: 10000 } });
-  noDraw.years.forEach((baselineRow, index) => {
-    const adjustedRow = withDraw.years[index];
-    assert.equal(adjustedRow.householdPhase, baselineRow.householdPhase);
-    if (baselineRow.householdPhase === "working") {
-      assert.equal(JSON.stringify(adjustedRow), JSON.stringify(baselineRow));
-    } else {
-      assert.equal(adjustedRow.household.applicableLifestyleSpending, baselineRow.household.applicableLifestyleSpending);
-      assert.equal(adjustedRow.household.optionalAdditionalLifestyleWithdrawalRequested, 10000);
-      assert.equal(adjustedRow.household.closingAccessibleInvestmentBalance, baselineRow.household.closingAccessibleInvestmentBalance - 10000 * (index - 4));
-    }
-  });
+test("Stage G2D positive legacy optional draw is blocked for review rather than silently converted", () => {
+  const result = oneOffEventProjection({ scenario: { semiRetirementAccessibleWithdrawal: 10000, optionalAdditionalLifestyleWithdrawal: 10000, oneOffLifestyleEvents: [] } });
+  assert.equal(result.validation.isValid, false);
+  assert.ok(result.validation.errors.some((error) => error.path === "scenario.legacyOptionalAdditionalLifestyleWithdrawal"));
 });
 
 test("Stage G2C funds a basic accessible-to-super transition before unmet spending", () => {
@@ -1340,21 +1278,26 @@ test("Stage G2C preserves the existing oldest-available-person-first rule when b
   assert.equal(person(row, "person1").closingSuperBalance, 10000);
 });
 
-test("Stage G2C optional draw uses super after ordinary accessible funding is exhausted", () => {
+test("Stage G2D one-off spending uses super after ordinary accessible funding is exhausted", () => {
   const result = runProjection({
     projectionEndAge: 60,
     people: [
       person1({ currentAge: 60, currentGrossEmploymentIncome: 0, semiRetirementAge: 60, semiRetirementGrossIncome: 0, fullRetirementAge: 60, superAccessAge: 60, openingSuperBalance: 100000, employerSuperRate: 0 }),
     ],
     household: { currentLifestyleSpending: 30000, semiRetirementLifestyleSpending: 30000, fullRetirementLifestyleSpending: 30000, otherAnnualIncome: 0, annualLoanPrincipalRepayments: 0 },
-    scenario: { semiRetirementAccessibleWithdrawal: 10000, optionalAdditionalLifestyleWithdrawal: 10000, fullRetirementAnnualSpending: 30000, minimumAccessibleBalance: 0 },
+    scenario: {
+      fullRetirementAnnualSpending: 30000,
+      minimumAccessibleBalance: 0,
+      oneOffLifestyleEvents: [{ id: "trip", description: "Trip", amountTodayDollars: 10000, year: 2026 }],
+    },
     accessibleInvestments: { openingBalance: 35000, annualReturnRate: 0, annualFeesRate: 0, currentAnnualContributions: 0 },
   });
   const row = rowForAge(result, 60);
-  assert.equal(row.household.requiredAccessibleWithdrawal, 30000);
-  assert.equal(row.household.optionalAdditionalLifestyleAccessibleWithdrawal, 5000);
-  assert.equal(row.household.optionalAdditionalLifestyleSuperWithdrawal, 5000);
-  assert.equal(row.household.optionalAdditionalLifestyleWithdrawal, 10000);
+  assert.equal(row.household.normalLifestyleSpending, 30000);
+  assert.equal(row.household.oneOffLifestyleSpending, 10000);
+  assert.equal(row.household.totalProjectedLifestyleSpending, 40000);
+  assert.equal(row.household.requiredAccessibleWithdrawal, 35000);
+  assert.equal(row.household.requiredSuperWithdrawal, 5000);
   assert.equal(row.household.totalSuperWithdrawal, 5000);
   assert.equal(row.household.unmetSpending, 0);
 });
@@ -1396,30 +1339,30 @@ test("Stage G2C reports unmet spending only after accessible assets and eligible
   assert.equal(person(row, "person1").closingSuperBalance, 0);
 });
 
-test("Stage G2C annual required and optional funding legs reconcile", () => {
+test("Stage G2D annual one-off funding leg reconciles through the normal waterfall", () => {
   const result = runProjection({
     projectionEndAge: 60,
     people: [
       person1({ currentAge: 60, currentGrossEmploymentIncome: 0, semiRetirementAge: 60, semiRetirementGrossIncome: 0, fullRetirementAge: 60, superAccessAge: 60, openingSuperBalance: 100000, employerSuperRate: 0 }),
     ],
     household: { currentLifestyleSpending: 30000, semiRetirementLifestyleSpending: 30000, fullRetirementLifestyleSpending: 30000, otherAnnualIncome: 0, annualLoanPrincipalRepayments: 0 },
-    scenario: { semiRetirementAccessibleWithdrawal: 10000, optionalAdditionalLifestyleWithdrawal: 10000, fullRetirementAnnualSpending: 30000, minimumAccessibleBalance: 0 },
+    scenario: {
+      fullRetirementAnnualSpending: 30000,
+      minimumAccessibleBalance: 0,
+      oneOffLifestyleEvents: [{ id: "trip", description: "Trip", amountTodayDollars: 10000, year: 2026 }],
+    },
     accessibleInvestments: { openingBalance: 35000, annualReturnRate: 0, annualFeesRate: 0, currentAnnualContributions: 0 },
   });
   const row = rowForAge(result, 60);
   const requiredNeed = Math.max(0, -row.household.cashSurplusOrShortfall);
+  assert.equal(row.household.normalLifestyleSpending + row.household.oneOffLifestyleSpending, row.household.totalProjectedLifestyleSpending);
+  assert.equal(requiredNeed, 40000);
   assert.equal(
     row.household.requiredAccessibleWithdrawal + row.household.requiredSuperWithdrawal + row.household.unmetRequiredLifestyleSpending,
     requiredNeed,
   );
   assert.equal(
-    row.household.optionalAdditionalLifestyleAccessibleWithdrawal
-      + row.household.optionalAdditionalLifestyleSuperWithdrawal
-      + row.household.unfundedOptionalAdditionalLifestyleWithdrawal,
-    row.household.optionalAdditionalLifestyleWithdrawalRequested,
-  );
-  assert.equal(
     row.household.totalAccessibleWithdrawal + row.household.totalSuperWithdrawal + row.household.unmetSpending,
-    requiredNeed + row.household.optionalAdditionalLifestyleWithdrawalRequested,
+    requiredNeed,
   );
 });
