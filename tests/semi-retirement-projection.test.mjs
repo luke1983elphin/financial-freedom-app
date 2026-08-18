@@ -866,6 +866,55 @@ test("today-dollar spending is inflated year by year", () => {
   assert.equal(rowForAge(result, 52).household.applicableLifestyleSpending, 121);
 });
 
+test("optional additional lifestyle draw is entered in today's dollars and inflated each post-working year", () => {
+  const result = runProjection({
+    projectionEndAge: 60,
+    inflationRate: 0.1,
+    people: [
+      person1({
+        currentAge: 50,
+        currentGrossEmploymentIncome: 0,
+        semiRetirementAge: 52,
+        semiRetirementGrossIncome: 0,
+        fullRetirementAge: 60,
+        openingSuperBalance: 0,
+        employerSuperRate: 0,
+      }),
+      person2({
+        currentAge: 50,
+        currentGrossEmploymentIncome: 0,
+        semiRetirementAge: 52,
+        semiRetirementGrossIncome: 0,
+        fullRetirementAge: 60,
+        openingSuperBalance: 0,
+        employerSuperRate: 0,
+      }),
+    ],
+    household: {
+      currentLifestyleSpending: 0,
+      semiRetirementLifestyleSpending: 0,
+      fullRetirementLifestyleSpending: 0,
+      otherAnnualIncome: 0,
+      annualLoanPrincipalRepayments: 0,
+    },
+    scenario: {
+      semiRetirementAccessibleWithdrawal: 100,
+      optionalAdditionalLifestyleWithdrawal: 100,
+      fullRetirementAnnualSpending: 0,
+      minimumAccessibleBalance: 0,
+    },
+    accessibleInvestments: { openingBalance: 100000, annualReturnRate: 0, annualFeesRate: 0, currentAnnualContributions: 0 },
+  });
+
+  assert.equal(rowForAge(result, 50).householdPhase, "working");
+  assert.equal(rowForAge(result, 50).household.optionalAdditionalLifestyleWithdrawalRequested, 0);
+  assert.equal(rowForAge(result, 51).household.optionalAdditionalLifestyleWithdrawalRequested, 0);
+  assert.equal(rowForAge(result, 52).household.optionalAdditionalLifestyleWithdrawalRequested, 121);
+  assert.equal(rowForAge(result, 52).household.optionalAdditionalLifestyleWithdrawal, 121);
+  assert.equal(rowForAge(result, 53).household.optionalAdditionalLifestyleWithdrawalRequested, 133.1);
+  assert.equal(rowForAge(result, 54).household.optionalAdditionalLifestyleWithdrawalRequested, 146.41);
+});
+
 test("accessible investment growth is based on gross accessible assets and not double-counted as income", () => {
   const result = runProjection({
     projectionEndAge: 50,

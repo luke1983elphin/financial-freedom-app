@@ -1012,8 +1012,10 @@ test("Stage 4O annual rows refresh from the adjusted projection", () => {
   });
   assert.equal(adjusted.viewModel.annualRows.length, adjusted.outcome.result.years.length);
   const semiRow = adjusted.viewModel.annualRows.find((row) => row.householdPhase === "semi-retirement");
+  const engineSemiRow = adjusted.outcome.result.years.find((row) => row.householdPhase === "semi-retirement");
   assert.ok(semiRow);
-  assert.equal(semiRow.household.plannedSemiRetirementWithdrawal, 30000);
+  assert.ok(engineSemiRow);
+  assert.equal(semiRow.household.plannedSemiRetirementWithdrawal, engineSemiRow.household.plannedSemiRetirementWithdrawal);
 });
 
 test("Stage 4P timeline refreshes from the adjusted projection summary", () => {
@@ -1818,10 +1820,10 @@ test("Stage G2B-R retirement timeline renders title and supporting detail separa
   assert.match(styles, /\.semi-retirement-timeline-detail\s*\{[^}]*display: block;/s);
 });
 
-test("Stage G2B-R Adjust Your Scenario optional draw wording matches post-working treatment", () => {
+test("Stage G2C1 Adjust Your Scenario optional draw wording explains today-dollar CPI treatment", () => {
   const adjustmentSnippet = sourceBetween(appSource, "function renderSemiRetirementAdjustmentsHtml", "function renderSemiRetirementComparisonControls");
-  assert.match(adjustmentSnippet, /Extra discretionary spending above your normal lifestyle budget, starting from semi-retirement and continuing through retirement\./);
-  assert.match(appSource, /This is separate from normal lifestyle spending\. It lets you test additional spending for travel, hobbies, experiences or other discretionary choices from semi-retirement onward\./);
+  assert.match(adjustmentSnippet, /Extra discretionary spending above your normal lifestyle budget, entered in today's dollars and inflated each projection year\./);
+  assert.match(appSource, /This is separate from normal lifestyle spending\. Enter the amount in today's dollars\. The projection inflates it each year using the scenario inflation assumption from semi-retirement onward\./);
   assert.doesNotMatch(adjustmentSnippet, /no semi-retirement period/);
 });
 
@@ -1854,7 +1856,7 @@ test("Stage G2B-R responsive and accessible polish is present for timeline and d
   assert.match(appSource, /aria-label="More information about \$\{escapeHtml\(label\)\}"/);
 });
 
-test("Stage G2B-R saved Retirement Planning scenario inputs preserve optional draw and use corrected phase logic", () => {
+test("Stage G2C1 saved Retirement Planning scenario inputs preserve today-dollar optional draw and inflate it in projection rows", () => {
   const { defaults } = defaultsFor();
   const draft = defaults.draft;
   draft.scenario.semiRetirementAccessibleWithdrawal = 12000;
@@ -1882,10 +1884,10 @@ test("Stage G2B-R saved Retirement Planning scenario inputs preserve optional dr
   const firstFull = result.years.find((row) => row.householdPhase === "full-retirement");
   assert.equal(inputs.scenario.semiRetirementAccessibleWithdrawal, 12000);
   assert.equal(inputs.scenario.optionalAdditionalLifestyleWithdrawal, 12000);
-  assert.equal(firstFull.household.optionalAdditionalLifestyleWithdrawalRequested, 12000);
+  assert.equal(firstFull.household.optionalAdditionalLifestyleWithdrawalRequested, roundCurrency(12000 * Math.pow(1.025, 5)));
 });
 
-test("Stage G2B-R retirement comparison uses corrected optional draw engine behaviour on both sides", () => {
+test("Stage G2C1 retirement comparison uses inflated optional draw engine behaviour on both sides", () => {
   const current = projectionFor((draft) => {
     draft.scenario.semiRetirementAccessibleWithdrawal = 10000;
     draft.accessibleInvestments.openingBalance = 500000;
@@ -1913,8 +1915,8 @@ test("Stage G2B-R retirement comparison uses corrected optional draw engine beha
   const comparisonViewModel = UI.buildSemiRetirementResultsViewModel(comparisonOutcome.result, comparisonOutcome.inputs, comparisonDraft);
   const currentFirstFull = current.result.years.find((row) => row.householdPhase === "full-retirement");
   const comparisonFirstFull = comparisonOutcome.result.years.find((row) => row.householdPhase === "full-retirement");
-  assert.equal(currentFirstFull.household.optionalAdditionalLifestyleWithdrawalRequested, 10000);
-  assert.equal(comparisonFirstFull.household.optionalAdditionalLifestyleWithdrawalRequested, 20000);
+  assert.equal(currentFirstFull.household.optionalAdditionalLifestyleWithdrawalRequested, roundCurrency(10000 * Math.pow(1.025, 5)));
+  assert.equal(comparisonFirstFull.household.optionalAdditionalLifestyleWithdrawalRequested, roundCurrency(20000 * Math.pow(1.025, 5)));
   const comparisonOptionalTotal = comparisonOutcome.result.years.reduce((total, row) => (
     total + (row.household.optionalAdditionalLifestyleWithdrawal || 0)
   ), 0);

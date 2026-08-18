@@ -1427,7 +1427,7 @@
       accessibleContributionTreatment: "accessibleInvestments.externalAnnualAccessibleContribution/currentAnnualContributions is treated as a working-phase discretionary contribution. It ceases once the household enters semi-retirement unless surplusDestination is accessible-investments.",
       additionalSuperContributionTreatment: "Person-specific voluntary/additional super contributions cease at the person's own semi-retirement age by default. Employer super continues while that person still has employment income.",
       semiRetirementSurplusTreatment: `Retirement-phase annual surplus uses the selected one-destination rule: ${normalised.scenario.surplusDestination}. The default is extra lifestyle/enjoyment.`,
-      optionalAdditionalLifestyleWithdrawalTreatment: "The legacy scenario.semiRetirementAccessibleWithdrawal value is preserved as optionalAdditionalLifestyleWithdrawal. It is extra discretionary spending above the normal lifestyle requirement, applies from the first post-working year, uses accessible investments first and then available super under the scenario super-access ages, and is not used to calculate the required portfolio withdrawal.",
+      optionalAdditionalLifestyleWithdrawalTreatment: "The legacy scenario.semiRetirementAccessibleWithdrawal value is preserved as optionalAdditionalLifestyleWithdrawal. It is extra discretionary spending above the normal lifestyle requirement, is entered in today's dollars, inflates each projection year using the scenario inflation rate, applies from the first post-working year, uses accessible investments first and then available super under the scenario super-access ages, and is not used to calculate the required portfolio withdrawal.",
       debtAndPropertyTreatment: "Supplied non-STSL liabilities are projected annually, separating interest charged, total repayment, principal repaid, capitalised interest, final repayments and repayment cashflow. STSL remains person-level and outside the generic debt schedule.",
       rentalIncomeTreatment: "Rental/property income uses rentalCashflowTreatment. Entered rental cash income is the projection-start annual amount, CPI-escalated each projection year before loan cashflows are applied. afterInterest means loan interest is already included in the entered rental cash income, so only linked principal is deducted from property cashflow. beforeInterest deducts linked loan interest and principal exactly once.",
       passiveIncomeTreatment: "Interest, dividends, distributions and taxable rental income are allocated to each person using stored ownership percentages and included in person-level taxable income. Cash income is modelled separately from taxable income where supplied.",
@@ -1728,7 +1728,7 @@
       requiredShortfall = roundCurrency(requiredShortfall - requiredAccessibleWithdrawal);
 
       const optionalAdditionalLifestyleWithdrawalRequested = phase !== "working"
-        ? roundCurrency(normalised.scenario.optionalAdditionalLifestyleWithdrawal)
+        ? todayDollarAmount(normalised.scenario.optionalAdditionalLifestyleWithdrawal, normalised.inflationRate, yearIndex)
         : 0;
       const optionalWithdrawal = withdrawAccessibleBalance(optionalAdditionalLifestyleWithdrawalRequested);
       const optionalAdditionalLifestyleAccessibleWithdrawal = optionalWithdrawal.total;

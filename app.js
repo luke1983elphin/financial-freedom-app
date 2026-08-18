@@ -280,7 +280,7 @@
     },
     semiOptionalLifestyleDraw: {
       title: "Optional additional lifestyle draw",
-      body: "This is separate from normal lifestyle spending. It lets you test additional spending for travel, hobbies, experiences or other discretionary choices from semi-retirement onward.",
+      body: "This is separate from normal lifestyle spending. Enter the amount in today's dollars. The projection inflates it each year using the scenario inflation assumption from semi-retirement onward.",
     },
     semiSurplusDestination: {
       title: "Retirement surplus destination",
@@ -7321,7 +7321,7 @@
           <div class="semi-retirement-adjustment-controls">
             ${renderSemiRetirementAdjustmentControl(
               state.controls.semiRetirementAccessibleWithdrawal,
-              "Extra discretionary spending above your normal lifestyle budget, starting from semi-retirement and continuing through retirement.",
+              "Extra discretionary spending above your normal lifestyle budget, entered in today's dollars and inflated each projection year.",
             )}
             ${renderSemiRetirementAdjustmentControl(
               state.controls.fullRetirementLifestyleSpending,
@@ -8335,7 +8335,7 @@
             ${semiRetirementInput({ label: "Current annual lifestyle spending", path: "household.currentLifestyleSpending", step: "1000", help: "Your current household living expenses, used as the starting point for this retirement scenario.", afterHtml: semiRetirementLivingExpenseSourceHtml(result) })}
             ${semiRetirementInput({ label: "Semi-retirement lifestyle spending", path: "household.semiRetirementLifestyleSpending", step: "1000", infoKey: "semiRetirementLifestyleSpending", help: "Expected normal household spending while work is reduced." })}
             ${semiRetirementInput({ label: "Full-retirement lifestyle spending", path: "household.fullRetirementLifestyleSpending", step: "1000", infoKey: "fullRetirementLifestyleSpending", help: "Expected normal household spending once everyone is fully retired." })}
-            ${semiRetirementInput({ label: "Optional additional lifestyle draw", path: "scenario.semiRetirementAccessibleWithdrawal", step: "1000", infoKey: "semiOptionalLifestyleDraw", help: "Extra discretionary spending above your normal lifestyle budget, starting from semi-retirement and continuing through retirement." })}
+            ${semiRetirementInput({ label: "Optional additional lifestyle draw", path: "scenario.semiRetirementAccessibleWithdrawal", step: "1000", infoKey: "semiOptionalLifestyleDraw", help: "Extra discretionary spending above your normal lifestyle budget, entered in today's dollars and inflated each projection year." })}
           </div>
         </section>
         <section class="semi-retirement-input-section">
