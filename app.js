@@ -304,11 +304,11 @@
     },
     semiRequiredAccessibleWithdrawal: {
       title: "Required accessible withdrawal",
-      body: "The amount the projection needs to draw from accessible investments to meet normal lifestyle cashflow.",
+      body: "The amount the projection needs to draw from accessible investments to meet normal lifestyle cashflow before any available super is used.",
     },
     semiComparisonWithdrawals: {
       title: "Semi-retirement withdrawals",
-      body: "Total accessible-investment withdrawals required to cover normal cashflow shortfalls during the semi-retirement years.",
+      body: "Accessible investments are used first to meet a portfolio funding shortfall. Once they are exhausted, the projection can draw from super that is available under the super access ages entered for this scenario.",
     },
     semiComparisonFirstRetirementSurplus: {
       title: "Surplus in first full-retirement year",
@@ -7762,15 +7762,15 @@
           <p>These figures include only years where the household is in the semi-retirement phase.</p>
         </div>
         <div class="semi-retirement-results-grid compact">
-          ${semiRetirementMetricCard("Required portfolio withdrawals", money(funding.requiredAccessibleWithdrawalsDuringSemiRetirement || 0), "Cashflow shortfalls during semi-retirement.")}
+          ${semiRetirementMetricCard("Required portfolio withdrawals", money(funding.requiredPortfolioWithdrawalsDuringSemiRetirement ?? funding.requiredAccessibleWithdrawalsDuringSemiRetirement ?? 0), "Cashflow shortfalls during semi-retirement, funded from accessible investments first and then available super.")}
           ${semiRetirementMetricCard("Optional extra lifestyle spending", `${money(funding.plannedAnnualAccessibleWithdrawal || 0)} per year`, "Extra discretionary spending entered for this scenario.")}
           ${semiRetirementMetricCard("Surplus destination", semiRetirementSurplusDestinationLabel(semiRetirementValue("scenario.surplusDestination")), "Where surplus is directed after normal spending.")}
         </div>
         <details class="semi-retirement-input-details semi-retirement-funding-details mt-4">
           <summary>View funding details</summary>
           <div class="semi-retirement-results-grid compact mt-4">
-            ${semiRetirementMetricCard("Accessible withdrawals", money(funding.requiredAccessibleWithdrawalsDuringSemiRetirement || 0), "Required accessible withdrawals during semi-retirement.")}
-            ${semiRetirementMetricCard("Super withdrawals", money(funding.superWithdrawalsDuringSemiRetirement || 0), "Shown where super is drawn before the household is fully retired.")}
+            ${semiRetirementMetricCard("Required accessible withdrawals", money(funding.requiredAccessibleWithdrawalsDuringSemiRetirement || 0), "Required accessible withdrawals during semi-retirement.")}
+            ${semiRetirementMetricCard("Super withdrawals", money(funding.superWithdrawalsDuringSemiRetirement || 0), "Shown where available super is drawn before the household is fully retired.")}
             ${semiRetirementMetricCard("Optional lifestyle withdrawals", money(funding.totalPlannedSemiRetirementWithdrawals || 0))}
             ${semiRetirementMetricCard("Total asset withdrawals", money(funding.totalAssetWithdrawalsDuringSemiRetirement || 0), "Optional lifestyle draws, required accessible withdrawals and semi-retirement super withdrawals counted once.")}
           </div>
@@ -8035,9 +8035,13 @@
       ["Net rental cashflow", semiRetirementSignedMoney(household.netRentalCashflow)],
       ["Projected net worth", semiRetirementMoney(household.totalNetWorth)],
       ["Required total portfolio withdrawal", semiRetirementMoney(household.requiredTotalPortfolioWithdrawal)],
+      ["Total portfolio withdrawal", semiRetirementMoney(household.totalPortfolioWithdrawal)],
       ["Required accessible withdrawal", semiRetirementMoney(household.requiredAccessibleWithdrawal)],
-      ["Required super withdrawal", semiRetirementMoney(household.totalSuperWithdrawal)],
+      ["Required super withdrawal", semiRetirementMoney(household.requiredSuperWithdrawal)],
       ["Optional additional lifestyle draw", semiRetirementMoney(household.optionalAdditionalLifestyleWithdrawal ?? household.plannedSemiRetirementWithdrawal)],
+      ["Optional draw from accessible assets", semiRetirementMoney(household.optionalAdditionalLifestyleAccessibleWithdrawal)],
+      ["Optional draw from super", semiRetirementMoney(household.optionalAdditionalLifestyleSuperWithdrawal)],
+      ["Total super withdrawal", semiRetirementMoney(household.totalSuperWithdrawal)],
       ["Surplus to super", semiRetirementMoney(household.surplusToSuper)],
       ["Surplus to accessible investments", semiRetirementMoney(household.surplusToAccessibleInvestments)],
       ["Surplus available for enjoyment", semiRetirementMoney(household.surplusAvailableForEnjoyment)],

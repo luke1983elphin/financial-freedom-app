@@ -1523,6 +1523,18 @@
       const household = row.household || {};
       return roundDisplayAmount(total + number(household.totalSuperWithdrawal));
     }, 0);
+    const requiredSuperWithdrawalsDuringSemiRetirement = semiRetirementRows.reduce((total, row) => {
+      const household = row.household || {};
+      return roundDisplayAmount(total + number(household.requiredSuperWithdrawal));
+    }, 0);
+    const requiredPortfolioWithdrawalsDuringSemiRetirement = roundDisplayAmount(
+      requiredAccessibleWithdrawalsDuringSemiRetirement
+      + requiredSuperWithdrawalsDuringSemiRetirement,
+    );
+    const optionalSuperWithdrawalsDuringSemiRetirement = semiRetirementRows.reduce((total, row) => {
+      const household = row.household || {};
+      return roundDisplayAmount(total + number(household.optionalAdditionalLifestyleSuperWithdrawal));
+    }, 0);
     const plannedSemiRetirementWithdrawals = semiRetirementRows.reduce((total, row) => {
       const household = row.household || {};
       return roundDisplayAmount(total + number(household.plannedSemiRetirementWithdrawal));
@@ -1531,11 +1543,14 @@
       const household = row.household || {};
       return roundDisplayAmount(total + number(household.optionalAdditionalLifestyleWithdrawal));
     }, 0);
-    const totalAssetWithdrawalsDuringSemiRetirement = roundDisplayAmount(
-      plannedSemiRetirementWithdrawals
-      + requiredAccessibleWithdrawalsDuringSemiRetirement
-      + superWithdrawalsDuringSemiRetirement,
-    );
+    const totalAssetWithdrawalsDuringSemiRetirement = semiRetirementRows.reduce((total, row) => {
+      const household = row.household || {};
+      return roundDisplayAmount(
+        total
+        + number(household.totalAccessibleWithdrawal)
+        + number(household.totalSuperWithdrawal),
+      );
+    }, 0);
     const missingSuperAccessAgeWarnings = people
       .filter((person) => finiteNumberOrNull(person.superAccessAge) === null)
       .map((person) => `${person.name || person.id}: assumed super access age is missing, so no super-access timeline event is shown.`);
@@ -1600,8 +1615,11 @@
         plannedAnnualAccessibleWithdrawal: inputs.scenario?.optionalAdditionalLifestyleWithdrawal ?? inputs.scenario?.semiRetirementAccessibleWithdrawal ?? draft.scenario?.optionalAdditionalLifestyleWithdrawal ?? draft.scenario?.semiRetirementAccessibleWithdrawal ?? 0,
         totalPlannedSemiRetirementWithdrawals: plannedSemiRetirementWithdrawals,
         totalOptionalAdditionalLifestyleWithdrawals,
+        requiredPortfolioWithdrawalsDuringSemiRetirement,
         requiredAccessibleWithdrawalsDuringSemiRetirement,
         superWithdrawalsDuringSemiRetirement,
+        requiredSuperWithdrawalsDuringSemiRetirement,
+        optionalSuperWithdrawalsDuringSemiRetirement,
         totalAssetWithdrawalsDuringSemiRetirement,
       },
       passiveIncome,

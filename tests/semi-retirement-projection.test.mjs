@@ -1150,7 +1150,7 @@ test("Stage G2B-R optional draw remains separate from normal lifestyle spending"
   });
 });
 
-test("Stage G2B-R existing accessible-first optional draw funding is preserved", () => {
+test("Stage G2C optional draw uses accessible assets first and then eligible super", () => {
   const result = optionalDrawProjection({
     projectionEndAge: 50,
     accessibleInvestments: { openingBalance: 5000 },
@@ -1170,10 +1170,12 @@ test("Stage G2B-R existing accessible-first optional draw funding is preserved",
   assert.equal(firstYear.householdPhase, "full-retirement");
   assert.equal(firstYear.household.requiredAccessibleWithdrawal, 0);
   assert.equal(firstYear.household.optionalAdditionalLifestyleWithdrawalRequested, 10000);
-  assert.equal(firstYear.household.optionalAdditionalLifestyleWithdrawal, 5000);
-  assert.equal(firstYear.household.unfundedOptionalAdditionalLifestyleWithdrawal, 5000);
-  assert.equal(firstYear.household.totalSuperWithdrawal, 0);
-  assert.equal(person(firstYear, "person1").closingSuperBalance, 100000);
+  assert.equal(firstYear.household.optionalAdditionalLifestyleAccessibleWithdrawal, 5000);
+  assert.equal(firstYear.household.optionalAdditionalLifestyleSuperWithdrawal, 5000);
+  assert.equal(firstYear.household.optionalAdditionalLifestyleWithdrawal, 10000);
+  assert.equal(firstYear.household.unfundedOptionalAdditionalLifestyleWithdrawal, 0);
+  assert.equal(firstYear.household.totalSuperWithdrawal, 5000);
+  assert.equal(person(firstYear, "person1").closingSuperBalance, 95000);
 });
 
 test("Stage G2B-R optional draw zero produces numerical parity with omitted optional draw input", () => {
@@ -1197,4 +1199,178 @@ test("Stage G2B-R positive optional draw changes only post-working rows in the e
       assert.equal(adjustedRow.household.closingAccessibleInvestmentBalance, baselineRow.household.closingAccessibleInvestmentBalance - 10000 * (index - 4));
     }
   });
+});
+
+test("Stage G2C funds a basic accessible-to-super transition before unmet spending", () => {
+  const result = runProjection({
+    projectionEndAge: 60,
+    people: [
+      person1({ currentAge: 60, currentGrossEmploymentIncome: 0, semiRetirementAge: 60, semiRetirementGrossIncome: 0, fullRetirementAge: 60, superAccessAge: 60, openingSuperBalance: 500000, employerSuperRate: 0 }),
+    ],
+    household: { currentLifestyleSpending: 70000, semiRetirementLifestyleSpending: 70000, fullRetirementLifestyleSpending: 70000, otherAnnualIncome: 0, annualLoanPrincipalRepayments: 0 },
+    scenario: { optionalAdditionalLifestyleWithdrawal: 0, fullRetirementAnnualSpending: 70000, minimumAccessibleBalance: 0, minimumEstateBalanceAtEndAge: 0 },
+    accessibleInvestments: { openingBalance: 20000, annualReturnRate: 0, annualFeesRate: 0, currentAnnualContributions: 0 },
+  });
+  const row = rowForAge(result, 60);
+  assert.equal(row.household.requiredAccessibleWithdrawal, 20000);
+  assert.equal(row.household.requiredSuperWithdrawal, 50000);
+  assert.equal(row.household.totalSuperWithdrawal, 50000);
+  assert.equal(row.household.closingAccessibleInvestmentBalance, 0);
+  assert.equal(row.household.unmetSpending, 0);
+});
+
+test("Stage G2C transitions from partial accessible balance to super in the same year", () => {
+  const result = runProjection({
+    projectionEndAge: 60,
+    people: [
+      person1({ currentAge: 60, currentGrossEmploymentIncome: 0, semiRetirementAge: 60, semiRetirementGrossIncome: 0, fullRetirementAge: 60, superAccessAge: 60, openingSuperBalance: 100000, employerSuperRate: 0 }),
+    ],
+    household: { currentLifestyleSpending: 40000, semiRetirementLifestyleSpending: 40000, fullRetirementLifestyleSpending: 40000, otherAnnualIncome: 0, annualLoanPrincipalRepayments: 0 },
+    scenario: { optionalAdditionalLifestyleWithdrawal: 0, fullRetirementAnnualSpending: 40000, minimumAccessibleBalance: 0 },
+    accessibleInvestments: { openingBalance: 15000, annualReturnRate: 0, annualFeesRate: 0, currentAnnualContributions: 0 },
+  });
+  const row = rowForAge(result, 60);
+  assert.equal(row.household.requiredAccessibleWithdrawal, 15000);
+  assert.equal(row.household.requiredSuperWithdrawal, 25000);
+  assert.equal(row.household.totalSuperWithdrawal, 25000);
+  assert.equal(row.household.closingAccessibleInvestmentBalance, 0);
+  assert.equal(row.household.unmetSpending, 0);
+});
+
+test("Stage G2C does not withdraw super before the scenario access age", () => {
+  const result = runProjection({
+    projectionEndAge: 58,
+    people: [
+      person1({ currentAge: 58, currentGrossEmploymentIncome: 0, semiRetirementAge: 58, semiRetirementGrossIncome: 0, fullRetirementAge: 58, superAccessAge: 60, openingSuperBalance: 500000, employerSuperRate: 0 }),
+    ],
+    household: { currentLifestyleSpending: 30000, semiRetirementLifestyleSpending: 30000, fullRetirementLifestyleSpending: 30000, otherAnnualIncome: 0, annualLoanPrincipalRepayments: 0 },
+    scenario: { optionalAdditionalLifestyleWithdrawal: 0, fullRetirementAnnualSpending: 30000, minimumAccessibleBalance: 0 },
+    accessibleInvestments: { openingBalance: 0, annualReturnRate: 0, annualFeesRate: 0, currentAnnualContributions: 0 },
+  });
+  const row = rowForAge(result, 58);
+  assert.equal(person(row, "person1").superWithdrawal, 0);
+  assert.equal(row.household.totalSuperWithdrawal, 0);
+  assert.equal(row.household.unmetSpending, 30000);
+});
+
+test("Stage G2C uses only the super balance of a person who has reached access age", () => {
+  const result = runProjection({
+    projectionEndAge: 57,
+    people: [
+      person1({ currentAge: 60, currentGrossEmploymentIncome: 0, semiRetirementAge: 60, semiRetirementGrossIncome: 0, fullRetirementAge: 60, superAccessAge: 60, openingSuperBalance: 30000, employerSuperRate: 0 }),
+      person2({ currentAge: 57, currentGrossEmploymentIncome: 0, semiRetirementAge: 57, semiRetirementGrossIncome: 0, fullRetirementAge: 57, superAccessAge: 60, openingSuperBalance: 500000, employerSuperRate: 0 }),
+    ],
+    household: { currentLifestyleSpending: 40000, semiRetirementLifestyleSpending: 40000, fullRetirementLifestyleSpending: 40000, otherAnnualIncome: 0, annualLoanPrincipalRepayments: 0 },
+    scenario: { optionalAdditionalLifestyleWithdrawal: 0, fullRetirementAnnualSpending: 40000, minimumAccessibleBalance: 0 },
+    accessibleInvestments: { openingBalance: 0, annualReturnRate: 0, annualFeesRate: 0, currentAnnualContributions: 0 },
+  });
+  const row = rowForAge(result, 60, "person1");
+  assert.equal(person(row, "person1").superWithdrawal, 30000);
+  assert.equal(person(row, "person2").superWithdrawal, 0);
+  assert.equal(row.household.totalSuperWithdrawal, 30000);
+  assert.equal(row.household.unmetSpending, 10000);
+});
+
+test("Stage G2C preserves the existing oldest-available-person-first rule when both super balances are accessible", () => {
+  const result = runProjection({
+    projectionEndAge: 60,
+    people: [
+      person1({ currentAge: 60, currentGrossEmploymentIncome: 0, semiRetirementAge: 60, semiRetirementGrossIncome: 0, fullRetirementAge: 60, superAccessAge: 60, openingSuperBalance: 30000, employerSuperRate: 0 }),
+      person2({ currentAge: 61, currentGrossEmploymentIncome: 0, semiRetirementAge: 61, semiRetirementGrossIncome: 0, fullRetirementAge: 61, superAccessAge: 60, openingSuperBalance: 50000, employerSuperRate: 0 }),
+    ],
+    household: { currentLifestyleSpending: 70000, semiRetirementLifestyleSpending: 70000, fullRetirementLifestyleSpending: 70000, otherAnnualIncome: 0, annualLoanPrincipalRepayments: 0 },
+    scenario: { optionalAdditionalLifestyleWithdrawal: 0, fullRetirementAnnualSpending: 70000, minimumAccessibleBalance: 0 },
+    accessibleInvestments: { openingBalance: 0, annualReturnRate: 0, annualFeesRate: 0, currentAnnualContributions: 0 },
+  });
+  const row = rowForAge(result, 60, "person1");
+  assert.equal(person(row, "person2").superWithdrawal, 50000);
+  assert.equal(person(row, "person1").superWithdrawal, 20000);
+  assert.equal(row.household.totalSuperWithdrawal, 70000);
+  assert.equal(row.household.unmetSpending, 0);
+  assert.equal(person(row, "person2").closingSuperBalance, 0);
+  assert.equal(person(row, "person1").closingSuperBalance, 10000);
+});
+
+test("Stage G2C optional draw uses super after ordinary accessible funding is exhausted", () => {
+  const result = runProjection({
+    projectionEndAge: 60,
+    people: [
+      person1({ currentAge: 60, currentGrossEmploymentIncome: 0, semiRetirementAge: 60, semiRetirementGrossIncome: 0, fullRetirementAge: 60, superAccessAge: 60, openingSuperBalance: 100000, employerSuperRate: 0 }),
+    ],
+    household: { currentLifestyleSpending: 30000, semiRetirementLifestyleSpending: 30000, fullRetirementLifestyleSpending: 30000, otherAnnualIncome: 0, annualLoanPrincipalRepayments: 0 },
+    scenario: { semiRetirementAccessibleWithdrawal: 10000, optionalAdditionalLifestyleWithdrawal: 10000, fullRetirementAnnualSpending: 30000, minimumAccessibleBalance: 0 },
+    accessibleInvestments: { openingBalance: 35000, annualReturnRate: 0, annualFeesRate: 0, currentAnnualContributions: 0 },
+  });
+  const row = rowForAge(result, 60);
+  assert.equal(row.household.requiredAccessibleWithdrawal, 30000);
+  assert.equal(row.household.optionalAdditionalLifestyleAccessibleWithdrawal, 5000);
+  assert.equal(row.household.optionalAdditionalLifestyleSuperWithdrawal, 5000);
+  assert.equal(row.household.optionalAdditionalLifestyleWithdrawal, 10000);
+  assert.equal(row.household.totalSuperWithdrawal, 5000);
+  assert.equal(row.household.unmetSpending, 0);
+});
+
+test("Stage G2C zero optional draw still transitions required shortfalls from accessible assets to super", () => {
+  const result = runProjection({
+    projectionEndAge: 60,
+    people: [
+      person1({ currentAge: 60, currentGrossEmploymentIncome: 0, semiRetirementAge: 60, semiRetirementGrossIncome: 0, fullRetirementAge: 60, superAccessAge: 60, openingSuperBalance: 100000, employerSuperRate: 0 }),
+    ],
+    household: { currentLifestyleSpending: 40000, semiRetirementLifestyleSpending: 40000, fullRetirementLifestyleSpending: 40000, otherAnnualIncome: 0, annualLoanPrincipalRepayments: 0 },
+    scenario: { optionalAdditionalLifestyleWithdrawal: 0, fullRetirementAnnualSpending: 40000, minimumAccessibleBalance: 0 },
+    accessibleInvestments: { openingBalance: 15000, annualReturnRate: 0, annualFeesRate: 0, currentAnnualContributions: 0 },
+  });
+  const row = rowForAge(result, 60);
+  assert.equal(row.household.optionalAdditionalLifestyleWithdrawalRequested, 0);
+  assert.equal(row.household.optionalAdditionalLifestyleSuperWithdrawal, 0);
+  assert.equal(row.household.requiredAccessibleWithdrawal, 15000);
+  assert.equal(row.household.requiredSuperWithdrawal, 25000);
+  assert.equal(row.household.unmetSpending, 0);
+});
+
+test("Stage G2C reports unmet spending only after accessible assets and eligible super are exhausted", () => {
+  const result = runProjection({
+    projectionEndAge: 60,
+    people: [
+      person1({ currentAge: 60, currentGrossEmploymentIncome: 0, semiRetirementAge: 60, semiRetirementGrossIncome: 0, fullRetirementAge: 60, superAccessAge: 60, openingSuperBalance: 25000, employerSuperRate: 0 }),
+    ],
+    household: { currentLifestyleSpending: 50000, semiRetirementLifestyleSpending: 50000, fullRetirementLifestyleSpending: 50000, otherAnnualIncome: 0, annualLoanPrincipalRepayments: 0 },
+    scenario: { optionalAdditionalLifestyleWithdrawal: 0, fullRetirementAnnualSpending: 50000, minimumAccessibleBalance: 0 },
+    accessibleInvestments: { openingBalance: 10000, annualReturnRate: 0, annualFeesRate: 0, currentAnnualContributions: 0 },
+  });
+  const row = rowForAge(result, 60);
+  assert.equal(row.household.requiredAccessibleWithdrawal, 10000);
+  assert.equal(row.household.requiredSuperWithdrawal, 25000);
+  assert.equal(row.household.unmetRequiredLifestyleSpending, 15000);
+  assert.equal(row.household.unmetSpending, 15000);
+  assert.equal(row.household.closingAccessibleInvestmentBalance, 0);
+  assert.equal(person(row, "person1").closingSuperBalance, 0);
+});
+
+test("Stage G2C annual required and optional funding legs reconcile", () => {
+  const result = runProjection({
+    projectionEndAge: 60,
+    people: [
+      person1({ currentAge: 60, currentGrossEmploymentIncome: 0, semiRetirementAge: 60, semiRetirementGrossIncome: 0, fullRetirementAge: 60, superAccessAge: 60, openingSuperBalance: 100000, employerSuperRate: 0 }),
+    ],
+    household: { currentLifestyleSpending: 30000, semiRetirementLifestyleSpending: 30000, fullRetirementLifestyleSpending: 30000, otherAnnualIncome: 0, annualLoanPrincipalRepayments: 0 },
+    scenario: { semiRetirementAccessibleWithdrawal: 10000, optionalAdditionalLifestyleWithdrawal: 10000, fullRetirementAnnualSpending: 30000, minimumAccessibleBalance: 0 },
+    accessibleInvestments: { openingBalance: 35000, annualReturnRate: 0, annualFeesRate: 0, currentAnnualContributions: 0 },
+  });
+  const row = rowForAge(result, 60);
+  const requiredNeed = Math.max(0, -row.household.cashSurplusOrShortfall);
+  assert.equal(
+    row.household.requiredAccessibleWithdrawal + row.household.requiredSuperWithdrawal + row.household.unmetRequiredLifestyleSpending,
+    requiredNeed,
+  );
+  assert.equal(
+    row.household.optionalAdditionalLifestyleAccessibleWithdrawal
+      + row.household.optionalAdditionalLifestyleSuperWithdrawal
+      + row.household.unfundedOptionalAdditionalLifestyleWithdrawal,
+    row.household.optionalAdditionalLifestyleWithdrawalRequested,
+  );
+  assert.equal(
+    row.household.totalAccessibleWithdrawal + row.household.totalSuperWithdrawal + row.household.unmetSpending,
+    requiredNeed + row.household.optionalAdditionalLifestyleWithdrawalRequested,
+  );
 });

@@ -1273,10 +1273,17 @@
         return;
       }
       const state = personStates[person.id];
-      const provisionalBalance = roundCurrency(state.openingSuperBalance + person.netEmployerSuperContribution + person.netAdditionalSuperContribution);
+      const alreadyWithdrawn = roundCurrency(person.superWithdrawal || 0);
+      const provisionalBalance = roundCurrency(Math.max(
+        0,
+        state.openingSuperBalance
+        + person.netEmployerSuperContribution
+        + person.netAdditionalSuperContribution
+        - alreadyWithdrawn,
+      ));
       const amount = roundCurrency(Math.min(provisionalBalance, remaining));
       withdrawals[person.id] = amount;
-      person.superWithdrawal = amount;
+      person.superWithdrawal = roundCurrency(alreadyWithdrawn + amount);
       remaining = roundCurrency(remaining - amount);
     });
     personOutputs.forEach((person) => {
@@ -1398,7 +1405,7 @@
         "Calculate household lifestyle requirement in nominal dollars using today's-dollar inflation.",
         "Calculate annual operating surplus or shortfall before portfolio withdrawals.",
         "Fund required lifestyle shortfalls from accessible assets first, then available super where permitted.",
-        "Apply optional additional lifestyle withdrawals only after ordinary lifestyle cashflow is funded.",
+        "Apply optional additional lifestyle withdrawals only after ordinary lifestyle cashflow is funded, using the same accessible-then-super funding waterfall.",
         "Apply surplus destination rules to retirement-phase surplus cash.",
         "Apply midpoint total-return earnings to earning accessible investments and super balances.",
       ],
@@ -1420,7 +1427,7 @@
       accessibleContributionTreatment: "accessibleInvestments.externalAnnualAccessibleContribution/currentAnnualContributions is treated as a working-phase discretionary contribution. It ceases once the household enters semi-retirement unless surplusDestination is accessible-investments.",
       additionalSuperContributionTreatment: "Person-specific voluntary/additional super contributions cease at the person's own semi-retirement age by default. Employer super continues while that person still has employment income.",
       semiRetirementSurplusTreatment: `Retirement-phase annual surplus uses the selected one-destination rule: ${normalised.scenario.surplusDestination}. The default is extra lifestyle/enjoyment.`,
-      optionalAdditionalLifestyleWithdrawalTreatment: "The legacy scenario.semiRetirementAccessibleWithdrawal value is preserved as optionalAdditionalLifestyleWithdrawal. It is extra discretionary spending above the normal lifestyle requirement, applies from the first post-working year, and is not used to calculate the required portfolio withdrawal.",
+      optionalAdditionalLifestyleWithdrawalTreatment: "The legacy scenario.semiRetirementAccessibleWithdrawal value is preserved as optionalAdditionalLifestyleWithdrawal. It is extra discretionary spending above the normal lifestyle requirement, applies from the first post-working year, uses accessible investments first and then available super under the scenario super-access ages, and is not used to calculate the required portfolio withdrawal.",
       debtAndPropertyTreatment: "Supplied non-STSL liabilities are projected annually, separating interest charged, total repayment, principal repaid, capitalised interest, final repayments and repayment cashflow. STSL remains person-level and outside the generic debt schedule.",
       rentalIncomeTreatment: "Rental/property income uses rentalCashflowTreatment. Entered rental cash income is the projection-start annual amount, CPI-escalated each projection year before loan cashflows are applied. afterInterest means loan interest is already included in the entered rental cash income, so only linked principal is deducted from property cashflow. beforeInterest deducts linked loan interest and principal exactly once.",
       passiveIncomeTreatment: "Interest, dividends, distributions and taxable rental income are allocated to each person using stored ownership percentages and included in person-level taxable income. Cash income is modelled separately from taxable income where supplied.",
@@ -1724,17 +1731,39 @@
         ? roundCurrency(normalised.scenario.optionalAdditionalLifestyleWithdrawal)
         : 0;
       const optionalWithdrawal = withdrawAccessibleBalance(optionalAdditionalLifestyleWithdrawalRequested);
-      const optionalAdditionalLifestyleWithdrawal = optionalWithdrawal.total;
+      const optionalAdditionalLifestyleAccessibleWithdrawal = optionalWithdrawal.total;
       const optionalAdditionalLifestyleInvestmentWithdrawal = roundCurrency(optionalWithdrawal.total - optionalWithdrawal.fromUnallocated);
       const optionalAdditionalLifestyleUnallocatedWithdrawal = optionalWithdrawal.fromUnallocated;
-      const unfundedOptionalAdditionalLifestyleWithdrawal = optionalWithdrawal.unfunded;
+      const optionalShortfallAfterAccessible = optionalWithdrawal.unfunded;
 
-      const superFunding = requiredShortfall > 0
+      const requiredSuperFunding = requiredShortfall > 0
         ? withdrawFromSuper(requiredShortfall, peopleYear, peopleStates, normalised)
         : { total: 0, unmet: 0, withdrawals: {} };
-      const requiredTotalPortfolioWithdrawal = roundCurrency(requiredAccessibleWithdrawal + superFunding.total);
-      const unmetSpending = roundCurrency(superFunding.unmet + unfundedOptionalAdditionalLifestyleWithdrawal);
-      const totalAccessibleWithdrawal = roundCurrency(requiredAccessibleWithdrawal + optionalAdditionalLifestyleWithdrawal);
+      const optionalSuperFunding = optionalShortfallAfterAccessible > 0
+        ? withdrawFromSuper(optionalShortfallAfterAccessible, peopleYear, peopleStates, normalised)
+        : { total: 0, unmet: 0, withdrawals: {} };
+      const requiredSuperWithdrawal = requiredSuperFunding.total;
+      const optionalAdditionalLifestyleSuperWithdrawal = optionalSuperFunding.total;
+      const optionalAdditionalLifestyleWithdrawal = roundCurrency(
+        optionalAdditionalLifestyleAccessibleWithdrawal
+        + optionalAdditionalLifestyleSuperWithdrawal,
+      );
+      const unfundedOptionalAdditionalLifestyleWithdrawal = optionalSuperFunding.unmet;
+      const superFunding = {
+        total: roundCurrency(requiredSuperFunding.total + optionalSuperFunding.total),
+        unmet: roundCurrency(requiredSuperFunding.unmet + optionalSuperFunding.unmet),
+        withdrawals: peopleYear.reduce((withdrawals, person) => {
+          withdrawals[person.id] = roundCurrency(person.superWithdrawal || 0);
+          return withdrawals;
+        }, {}),
+      };
+      const requiredTotalPortfolioWithdrawal = roundCurrency(requiredAccessibleWithdrawal + requiredSuperWithdrawal);
+      const totalPortfolioWithdrawal = roundCurrency(
+        requiredTotalPortfolioWithdrawal
+        + optionalAdditionalLifestyleWithdrawal,
+      );
+      const unmetSpending = roundCurrency(requiredSuperFunding.unmet + unfundedOptionalAdditionalLifestyleWithdrawal);
+      const totalAccessibleWithdrawal = roundCurrency(requiredAccessibleWithdrawal + optionalAdditionalLifestyleAccessibleWithdrawal);
       const totalAccessibleInvestmentWithdrawal = roundCurrency(requiredAccessibleInvestmentWithdrawal + optionalAdditionalLifestyleInvestmentWithdrawal);
       const offsetClosingBalance = activeOffsetTotal(offsetStates, liabilityOpeningBalances);
       const ordinaryOpeningBalance = roundCurrency(Math.max(0, accessibleOpening - offsetOpeningBalance));
@@ -1798,8 +1827,8 @@
         .map(warningCodeMessage)
         .filter(Boolean);
       const yearWarnings = yearIndex === 0 ? propertyIncomeWarningMessages : [];
-      if (unfundedOptionalAdditionalLifestyleWithdrawal > 0) yearWarnings.push("Optional additional lifestyle withdrawal could not be fully funded from accessible assets.");
-      if (superFunding.unmet > 0) yearWarnings.push("Household spending shortfall could not be fully funded.");
+      if (unfundedOptionalAdditionalLifestyleWithdrawal > 0) yearWarnings.push("Optional additional lifestyle draw could not be fully funded from accessible assets or available super.");
+      if (requiredSuperFunding.unmet > 0) yearWarnings.push("Household spending shortfall could not be fully funded.");
       if (closingAccessibleInvestmentBalance === 0 && totalAccessibleWithdrawal > 0 && milestoneIsUnset(summary.accessibleFundsExhausted)) {
         summary.accessibleFundsExhausted = milestoneForYear(calendarYear, peopleYear);
         summary.accessibleFundsExhaustedAge = summary.accessibleFundsExhausted.person1Age;
@@ -1909,14 +1938,19 @@
           annualLifestyleSurplusOrShortfall,
           cashSurplusOrShortfall,
           requiredTotalPortfolioWithdrawal,
+          totalPortfolioWithdrawal,
           optionalAdditionalLifestyleWithdrawal,
           optionalAdditionalLifestyleWithdrawalRequested,
+          optionalAdditionalLifestyleAccessibleWithdrawal,
+          optionalAdditionalLifestyleSuperWithdrawal,
           unfundedOptionalAdditionalLifestyleWithdrawal,
           // Deprecated aliases retained for older UI/test consumers.
           plannedSemiRetirementWithdrawal: phase === "semi-retirement" ? optionalAdditionalLifestyleWithdrawal : 0,
           plannedSemiRetirementWithdrawalRequested: phase === "semi-retirement" ? optionalAdditionalLifestyleWithdrawalRequested : 0,
           unfundedPlannedSemiRetirementWithdrawal: phase === "semi-retirement" ? unfundedOptionalAdditionalLifestyleWithdrawal : 0,
           requiredAccessibleWithdrawal,
+          requiredSuperWithdrawal,
+          unmetRequiredLifestyleSpending: requiredSuperFunding.unmet,
           requiredAccessibleInvestmentWithdrawal,
           requiredUnallocatedWithdrawal,
           totalAccessibleWithdrawal,
@@ -1998,7 +2032,7 @@
       summary.totalSurplusAvailableForEnjoyment = roundCurrency(summary.totalSurplusAvailableForEnjoyment + surplusAvailableForEnjoyment);
       summary.totalUnallocatedSurplus = roundCurrency(summary.totalUnallocatedSurplus + unallocatedSurplus);
       if (phase === "full-retirement") {
-        summary.totalRetirementWithdrawals = roundCurrency(summary.totalRetirementWithdrawals + requiredAccessibleWithdrawal + superFunding.total);
+        summary.totalRetirementWithdrawals = roundCurrency(summary.totalRetirementWithdrawals + totalPortfolioWithdrawal);
       }
       accessibleOpening = closingAccessibleInvestmentBalance;
     }
