@@ -11,6 +11,7 @@ import {
 
 const appSource = readFileSync(new URL("../app.js", import.meta.url), "utf8");
 const indexSource = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+const aiApiSource = readFileSync(new URL("../api/ai-insights.js", import.meta.url), "utf8");
 
 test("Financial Freedom progress is capped for display but preserves raw progress", () => {
   const result = calculateLifestyleFundingPercentage({
@@ -116,14 +117,39 @@ test("workspace dashboard keeps Future You prominent with a live age control", (
   assert.match(appSource, /data-dashboard-future-age/);
   assert.match(appSource, /data-dashboard-future-age-label/);
   assert.match(appSource, /data-dashboard-future-results/);
-  assert.match(appSource, /Projected FI assets/);
+  assert.match(appSource, /Financial Freedom assets/);
+  assert.doesNotMatch(appSource, /Projected FI assets/);
   assert.match(appSource, /Financial Freedom %/);
 });
 
 test("home page reuses dashboard mission and Future You components", () => {
   assert.match(appSource, /dashboardMissionHtml\(result, homeReadyState\)/);
+  assert.match(appSource, /dashboardSnapshotHtml\(result, homeReadyState, progress\.financialFreedom, annualSurplus, passiveIncome, \{ showDetailsButton: false \}\)/);
   assert.match(appSource, /dashboardFutureYouHtml\(result, homeReadyState, \{ idPrefix: "home" \}\)/);
   assert.doesNotMatch(appSource, /engagement-future-compact/);
+  assert.doesNotMatch(appSource, /engagement-journey-snapshot/);
+});
+
+test("dashboard journey summary is compact and uses Financial Freedom wording", () => {
+  assert.match(appSource, /class="dashboard-journey-score"/);
+  assert.match(appSource, /Estimated Financial Freedom:/);
+  assert.match(appSource, /data-engagement-action="weeklyplan">Continue Weekly Plan/);
+  assert.match(appSource, /data-engagement-action="goals">View Full Journey/);
+  assert.match(appSource, /Based on your current plan and assumptions\./);
+});
+
+test("AI coach cashflow wording is guarded by canonical surplus status", () => {
+  assert.match(appSource, /function aiOpeningSummaryText/);
+  assert.match(appSource, /cashflowPositionFromAnnualSurplus/);
+  assert.match(appSource, /aiSummaryImpliesCashflowShortfall/);
+  assert.match(appSource, /Positive weekly surplus of about/);
+  assert.match(aiApiSource, /Do not describe expenses as exceeding income when cashflowPosition is positive/);
+});
+
+test("Financial Freedom milestone cannot present partial progress as reached", () => {
+  assert.match(appSource, /financialFreedomRaw >= 100/);
+  assert.match(appSource, /Financial Freedom Reached/);
+  assert.doesNotMatch(appSource, /Financial Independence Reached/);
 });
 
 test("lifestyle spending field explains today's dollars and shows live inflation helper", () => {

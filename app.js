@@ -147,16 +147,16 @@
       body: "This is the investment portfolio amount you are aiming for. It is calculated based on your annual lifestyle spending and withdrawal rate.",
     },
     targetFiCapital: {
-      title: "Target FI Capital",
+      title: "Financial Freedom Target Capital",
       body: "This is the amount of income-producing assets needed to support your desired annual lifestyle spending.",
     },
     targetFiAssets: {
-      title: "Target FI Assets",
-      body: "FI assets are income-producing assets used in the Financial Independence calculation. These may include investments, savings and other assets that can help fund your lifestyle. They generally exclude personal-use assets such as your home, cars or lifestyle assets.",
+      title: "Financial Freedom Target Assets",
+      body: "Financial Freedom assets are income-producing assets used in the Financial Freedom calculation. These may include investments, savings and other assets that can help fund your lifestyle. They generally exclude personal-use assets such as your home, cars or lifestyle assets.",
     },
     currentFiAssets: {
-      title: "Current FI Assets",
-      body: "Current FI assets are the income-producing assets you already have today. These are used to measure your progress toward financial independence.",
+      title: "Current Financial Freedom Assets",
+      body: "Current Financial Freedom assets are the income-producing assets you already have today. These are used to measure your progress toward Financial Freedom.",
     },
     withdrawalRate: {
       title: "Withdrawal Rate",
@@ -167,7 +167,7 @@
       body: "Your investments are beginning to benefit from compounding and are creating long-term momentum.",
     },
     financialIndependenceTargetAge: {
-      title: "Financial Independence Target Age",
+      title: "Financial Freedom Target Age",
       body: "Your investments are projected to cover a significant portion of your future lifestyle costs.",
     },
     financialFreedomTargetAge: {
@@ -188,15 +188,15 @@
     },
     financialStage: {
       title: "Financial stages",
-      body: "The stage shows where your plan appears to sit today. Stage progress is based primarily on current net FI assets compared with target FI assets, while cashflow, emergency savings and debt control help explain what may move you forward. Passive Cash Income is shown separately.",
+      body: "The stage shows where your plan appears to sit today. Stage progress is based primarily on current net Financial Freedom assets compared with target Financial Freedom assets, while cashflow, emergency savings and debt control help explain what may move you forward. Passive Cash Income is shown separately.",
     },
     financialFreedomProgress: {
       title: "Financial Freedom Progress",
-      body: "Financial Freedom progress compares your current net Financial Independence assets with your target FI assets. It includes income-producing and investable assets, excludes personal-use assets such as your home and vehicles, and deducts linked investment debt.",
+      body: "Financial Freedom progress compares your current net Financial Freedom assets with your target Financial Freedom assets. It includes income-producing and investable assets, excludes personal-use assets such as your home and vehicles, and deducts linked investment debt.",
     },
     sustainableIncome: {
       title: "Estimated sustainable income",
-      body: "This estimates the annual income your current net FI assets may support using the selected withdrawal rate. It is separate from actual Passive Cash Income currently recorded in your plan.",
+      body: "This estimates the annual income your current net Financial Freedom assets may support using the selected withdrawal rate. It is separate from actual Passive Cash Income currently recorded in your plan.",
     },
     stslDebt: {
       title: "Study and Training Support Loan",
@@ -584,9 +584,9 @@
     } else {
       if (emergencyTarget > 0 && cash < emergencyTarget) actions.push(`Build your emergency reserve to ${money(emergencyTarget)}.`);
       if (surplus <= 0) actions.push("Maintain positive annual spare cashflow.");
-      if (investmentAssets <= 0) actions.push("Start building income-producing FI assets.");
+      if (investmentAssets <= 0) actions.push("Start building income-producing Financial Freedom assets.");
       if (debtRatio > 0.5 && totalDebt > 0) actions.push("Reduce debt to below 50% of total assets.");
-      if (lifestylePercent < 100 && investmentAssets > 0) actions.push(`Continue building FI assets toward ${money(result.targetCapital || 0)}.`);
+      if (lifestylePercent < 100 && investmentAssets > 0) actions.push(`Continue building Financial Freedom assets toward ${money(result.targetCapital || 0)}.`);
     }
     if (!actions.length) actions.push("Keep reviewing cashflow, debt and investment contributions so progress stays on track.");
     return {
@@ -727,7 +727,7 @@
     if (emergency < 3 && hasPlanData) actions.push(`Build cash or offset reserves toward ${emergency.toFixed(1)} of 3 months covered.`);
     if ((invested <= 0 && result.annualInvestmentContributions <= 0) && hasPlanData) actions.push("Start building income-producing investments.");
     if (debt > 0 && result.totalAssets > 0 && debt > result.totalAssets * 0.5) actions.push("Reduce debt pressure below 50% of total assets.");
-    if (progress.financialIndependenceRaw < 100 && invested > 0) actions.push(`Grow FI assets toward ${money(result.targetCapital || 0)}.`);
+    if (progress.financialIndependenceRaw < 100 && invested > 0) actions.push(`Grow Financial Freedom assets toward ${money(result.targetCapital || 0)}.`);
     if (!actions.length) actions.push(stage.priority);
     return {
       index,
@@ -976,7 +976,7 @@
       { id: "first-investment-contribution", active: (Number(result.annualInvestmentContributions) || 0) > 0, title: "First Investment Contribution", description: "Your plan includes regular investment contributions." },
       { id: "invested-100k", active: (Number(result.investmentBalance) || 0) >= 100000, title: "$100,000 Invested", description: "Your investment balance has passed $100,000." },
       { id: "positive-surplus", active: (Number(result.finalProjectedCashSurplus) || 0) > 0, title: "Positive Monthly Surplus", description: "Your plan keeps a cash buffer after planned spending and wealth-building contributions." },
-      { id: "financial-independence-reached", active: engagementProgress(result).financialIndependenceRaw >= 100, title: "Financial Independence Reached", description: "The app estimates your FI assets can fund the target lifestyle." },
+      { id: "financial-independence-reached", active: engagementProgress(result).financialFreedomRaw >= 100, title: "Financial Freedom Reached", description: "The app estimates your Financial Freedom assets can fund the target lifestyle." },
     ];
     definitions.forEach((definition) => {
       if (!definition.active || existing.has(definition.id)) return;
@@ -1095,7 +1095,38 @@
     return `${text.slice(0, maxLength - 1).trim()}...`;
   }
 
-  function aiOpeningInsightHtml() {
+  function cashflowPositionFromAnnualSurplus(annualSurplus) {
+    const weeklySurplus = (Number(annualSurplus) || 0) / 52;
+    if (weeklySurplus > 1) return "positive";
+    if (weeklySurplus < -1) return "negative";
+    return "near-zero";
+  }
+
+  function cashflowInterpretationText(annualSurplus) {
+    const status = cashflowPositionFromAnnualSurplus(annualSurplus);
+    const weekly = money((Number(annualSurplus) || 0) / 52);
+    if (status === "positive") return `Positive weekly surplus of about ${weekly}.`;
+    if (status === "negative") return `Weekly shortfall of about ${money(Math.abs((Number(annualSurplus) || 0) / 52))}.`;
+    return `Close to break-even at about ${weekly} per week.`;
+  }
+
+  function aiSummaryImpliesCashflowShortfall(text) {
+    return /(expenses?\s+(are\s+)?exceed(ing)?\s+(your\s+)?income|cashflow\s+shortfall|negative\s+cashflow|spending\s+more\s+than\s+(you\s+)?earn|more\s+money\s+than\s+(the\s+)?estimated\s+cash\s+available)/i.test(String(text || ""));
+  }
+
+  function aiOpeningSummaryText(report, result) {
+    const summary = String(report?.overallPosition?.summary || "").trim();
+    const annualSurplus = estimatedCashflow(result || CALC.calculatePlan(plan));
+    const status = cashflowPositionFromAnnualSurplus(annualSurplus);
+    if ((status === "positive" || status === "near-zero") && aiSummaryImpliesCashflowShortfall(summary)) {
+      return status === "positive"
+        ? `Your current plan shows a positive weekly surplus of ${money(annualSurplus / 52)} after tax, spending, repayments and planned wealth-building amounts. Regenerate AI insights for commentary on the latest plan.`
+        : `Your current plan is close to break-even, at about ${money(annualSurplus / 52)} per week after tax, spending, repayments and planned wealth-building amounts. Regenerate AI insights before treating cashflow as a shortfall.`;
+    }
+    return shortenText(summary, 230);
+  }
+
+  function aiOpeningInsightHtml(result = CALC.calculatePlan(plan)) {
     const settings = currentAiInsightsSettings();
     const report = validateAiInsightsReport(settings.report);
     if (!aiInsightsConfig.enabled) {
@@ -1124,7 +1155,7 @@
       <article class="engagement-card engagement-ai-card">
         <span class="metric-label">Your AI Coach</span>
         <h3>One suggestion based on your current plan</h3>
-        <p>${escapeHtml(shortenText(report.overallPosition.summary, 230))}</p>
+        <p>${escapeHtml(aiOpeningSummaryText(report, result))}</p>
         <small>Uses the anonymous financial summary from your current saved plan.</small>
         <div class="engagement-button-row">
           <button class="btn btn-primary" type="button" data-engagement-action="ai">Ask a Question</button>
@@ -2490,6 +2521,7 @@
       + numberValue(assets.superPerson2)
       + categoryTotal(assetItems, ["super"]);
     const estimatedFreedomAge = targetAgeOutcome(result);
+    const finalAnnualSurplus = estimatedCashflow(result);
     return {
       version: 1,
       appVersion: APP_VERSION,
@@ -2519,7 +2551,10 @@
         mortgageRepayments: numberValue(result.annualMortgageRepayments),
         otherDebtRepayments: numberValue(result.annualDebtRepayments - result.annualMortgageRepayments),
         calculatedAnnualSurplusBeforeInvesting: numberValue(result.cashSurplusBeforeInvesting),
-        calculatedFinalAnnualSurplus: numberValue(result.finalProjectedCashSurplus),
+        calculatedFinalAnnualSurplus: numberValue(finalAnnualSurplus),
+        calculatedWeeklySurplus: numberValue(finalAnnualSurplus / 52),
+        cashflowPosition: cashflowPositionFromAnnualSurplus(finalAnnualSurplus),
+        cashflowInterpretation: cashflowInterpretationText(finalAnnualSurplus),
       },
       assets: {
         source: "user-entered",
@@ -3053,8 +3088,8 @@
       compareValue("Liquid assets", historical.calculated.liquidAssets, current.calculated.liquidAssets, { category: "Overall Position", betterWhen: "context", explanation: "Cash may fall because it has been invested or used to reduce debt." }),
       compareValue("Home equity", historical.calculated.homeEquity, current.calculated.homeEquity, { category: "Overall Position", betterWhen: "increase" }),
       compareValue("Investment assets", historical.calculated.investmentAssets, current.calculated.investmentAssets, { category: "Assets", betterWhen: "increase" }),
-      compareValue("Net FI assets", historical.calculated.netFiAssets, current.calculated.netFiAssets, { category: "Financial Independence", betterWhen: "increase", explanation: "Current net FI assets exclude personal-use assets and deduct linked investment debt." }),
-      compareValue("FI target assets", historical.goals.financialIndependenceTarget, current.goals.financialIndependenceTarget, { category: "Financial Independence", betterWhen: "context" }),
+      compareValue("Net Financial Freedom assets", historical.calculated.netFiAssets, current.calculated.netFiAssets, { category: "Financial Freedom", betterWhen: "increase", explanation: "Current net Financial Freedom assets exclude personal-use assets and deduct linked investment debt." }),
+      compareValue("Financial Freedom target assets", historical.goals.financialIndependenceTarget, current.goals.financialIndependenceTarget, { category: "Financial Freedom", betterWhen: "context" }),
       compareValue("Superannuation", historical.calculated.totalSuper, current.calculated.totalSuper, { category: "Superannuation", betterWhen: "increase" }),
       compareValue("Cash and offset balances", historical.calculated.liquidAssets, current.calculated.liquidAssets, { category: "Assets", betterWhen: "context" }),
       compareValue("Home loan balance", historical.liabilities.homeLoan, current.liabilities.homeLoan, { category: "Liabilities", betterWhen: "decrease" }),
@@ -3075,7 +3110,7 @@
       compareValue("Savings rate", historical.calculated.savingsRate, current.calculated.savingsRate, { category: "Cashflow", betterWhen: "increase" }),
       compareValue("Emergency fund months", historical.calculated.emergencyFundMonths, current.calculated.emergencyFundMonths, { category: "Financial Security", betterWhen: "increase" }),
       compareValue("Passive-income coverage", historical.calculated.annualLifestyleSpending ? historical.calculated.passiveIncome / historical.calculated.annualLifestyleSpending * 100 : 0, current.calculated.annualLifestyleSpending ? current.calculated.passiveIncome / current.calculated.annualLifestyleSpending * 100 : 0, { category: "Financial Security", betterWhen: "increase" }),
-      compareValue("Financial Freedom progress", historical.calculated.financialIndependenceProgress, current.calculated.financialIndependenceProgress, { category: "Financial Independence", betterWhen: "increase" }),
+      compareValue("Financial Freedom progress", historical.calculated.financialIndependenceProgress, current.calculated.financialIndependenceProgress, { category: "Financial Freedom", betterWhen: "increase" }),
     ];
     const fromDate = historical.snapshotDate;
     const toDate = current.snapshotDate;
@@ -3086,7 +3121,7 @@
       fromDate,
       toDate,
       monthsElapsed: monthDifference(fromDate, toDate),
-      keyMovements: rows.filter((row) => ["Net worth", "Total liabilities", "Net FI assets", "Investment assets", "Superannuation", "Annual cash surplus", "Financial Freedom progress"].includes(row.label)),
+      keyMovements: rows.filter((row) => ["Net worth", "Total liabilities", "Net Financial Freedom assets", "Investment assets", "Superannuation", "Annual cash surplus", "Financial Freedom progress"].includes(row.label)),
     };
   }
 
@@ -3184,8 +3219,8 @@
         netWorthChange: row("Net worth").change,
         debtChange: row("Total liabilities").change,
         investmentChange: row("Investment assets").change,
-        netFiAssetsChange: row("Net FI assets").change,
-        fiTargetChange: row("FI target assets").change,
+        netFiAssetsChange: row("Net Financial Freedom assets").change,
+        fiTargetChange: row("Financial Freedom target assets").change,
         superChange: row("Superannuation").change,
         cashChange: row("Cash and offset balances").change,
         passiveIncomeChange: row("Passive Cash Income").change,
@@ -5469,8 +5504,8 @@
           <div class="summary-grid mt-4">
             ${summaryTile("Progress to this milestone", plainPercent(progress))}
             ${summaryTile("Estimated timing", reach.label)}
-            ${summaryTile("Target FI Assets", money(milestone.requiredCapital), "", "targetFiAssets")}
-            ${summaryTile("Current FI Assets", money(result.financialIndependenceAssets), "", "currentFiAssets")}
+            ${summaryTile("Financial Freedom target assets", money(milestone.requiredCapital), "", "targetFiAssets")}
+            ${summaryTile("Current Financial Freedom assets", money(result.financialIndependenceAssets), "", "currentFiAssets")}
             ${summaryTile("Projected assets at target age", money(milestone.projectedFiAssets))}
             ${summaryTile("Passive income estimate", money(milestone.passiveIncomeEstimate))}
           </div>
@@ -5501,7 +5536,7 @@
         ${metricCard("Current stage", stage.name)}
         ${metricCard("Passive Cash Income", money(passive), "", "Recurring income from passive sources, separate from unrealised growth.", "passiveIncome")}
         ${metricCard("Annual Lifestyle Target", money(target), "", "The estimated yearly amount you want investments to support once you reach Financial Freedom.", "annualLifestyleTarget")}
-        ${metricCard("Financial Freedom progress", plainPercent(percent), "", "Current net FI assets divided by target FI assets.", "financialFreedomProgress")}
+        ${metricCard("Financial Freedom progress", plainPercent(percent), "", "Current net Financial Freedom assets divided by target Financial Freedom assets.", "financialFreedomProgress")}
       </div>
       <button class="btn btn-primary mt-4 w-full justify-center" type="button" data-view="dashboard">View Dashboard</button>
     `;
@@ -5631,7 +5666,7 @@
     const id = options.resultsId === null ? "" : (options.resultsId || "dashboardFutureYouResults");
     return `
       <div class="dashboard-future-results"${id ? ` id="${escapeHtml(id)}"` : ""} data-dashboard-future-results>
-        ${summaryTile("Projected FI assets", money(future.projectedFiAssets), "", "currentFiAssets")}
+        ${summaryTile("Financial Freedom assets", money(future.projectedFiAssets), "", "currentFiAssets")}
         ${summaryTile("Projected net worth", money(future.netWorth))}
         ${summaryTile("Projected passive income", `${money(future.passiveIncome)} pa`, "", "passiveIncome")}
         ${summaryTile("Financial Freedom %", plainPercent(future.progress), "", "financialFreedomProgress")}
@@ -5671,12 +5706,13 @@
           <input id="${escapeHtml(inputId)}" type="range" min="${bounds.min}" max="${bounds.max}" step="1" value="${value}" data-dashboard-future-age aria-label="Select Future You age">
         </label>
         ${dashboardFutureMetricsHtml(future, { resultsId })}
-        <p class="field-help">Figures come from the app's existing projection row for the selected age.</p>
+        <p class="field-help">Based on your current plan and assumptions.</p>
       </article>
     `;
   }
 
-  function dashboardSnapshotHtml(result, readyState, percent, annualSurplus, passiveIncome) {
+  function dashboardSnapshotHtml(result, readyState, percent, annualSurplus, passiveIncome, options = {}) {
+    const showDetailsButton = options.showDetailsButton !== false;
     if (!readyState.ready) {
       return `
         <article class="dashboard-compact-card dashboard-snapshot-card">
@@ -5693,7 +5729,7 @@
             <span class="metric-label">Snapshot</span>
             <h3>Four numbers to watch</h3>
           </div>
-          <button class="dashboard-text-button" type="button" data-dashboard-detail-open>View Financial Details</button>
+          ${showDetailsButton ? `<button class="dashboard-text-button" type="button" data-dashboard-detail-open>View Financial Details</button>` : ""}
         </div>
         <div class="dashboard-snapshot-grid">
           ${summaryTile("Net Worth", money(result.currentNetWorth))}
@@ -5705,7 +5741,7 @@
     `;
   }
 
-  function dashboardAiCoachHtml(readyState) {
+  function dashboardAiCoachHtml(result, readyState) {
     if (!readyState.ready) {
       return `
         <article class="dashboard-compact-card dashboard-ai-card">
@@ -5716,18 +5752,18 @@
         </article>
       `;
     }
-    return aiOpeningInsightHtml().replace("engagement-card engagement-ai-card", "dashboard-compact-card dashboard-ai-card");
+    return aiOpeningInsightHtml(result).replace("engagement-card engagement-ai-card", "dashboard-compact-card dashboard-ai-card");
   }
 
   function dashboardSimplifiedHtml(result, context) {
     return `
       <div class="dashboard-simplified-grid">
         ${dashboardMissionHtml(result, context.readyState)}
-        ${dashboardFutureYouHtml(result, context.readyState)}
+        ${dashboardSnapshotHtml(result, context.readyState, context.percent, context.annualSurplus, context.passiveIncome)}
       </div>
       <div class="dashboard-simplified-grid dashboard-simplified-grid-secondary">
-        ${dashboardSnapshotHtml(result, context.readyState, context.percent, context.annualSurplus, context.passiveIncome)}
-        ${dashboardAiCoachHtml(context.readyState)}
+        ${dashboardFutureYouHtml(result, context.readyState)}
+        ${dashboardAiCoachHtml(result, context.readyState)}
       </div>
     `;
   }
@@ -5779,14 +5815,21 @@
     const heroScore = document.getElementById("heroScore");
     const scoreRing = document.querySelector(".score-ring");
     const scoreRingLabel = document.querySelector(".score-ring span");
+    const dashboardHero = document.querySelector(".dashboard-hero");
     const progressSection = document.querySelector(".freedom-progress-section");
     const nextMilestoneCard = document.querySelector(".next-milestone-card");
+    const mission = currentWeeklyMission(result);
+    const nextStepLabel = mission.week && mission.week.isCompleted
+      ? "Review your Weekly Plan"
+      : "Complete this week's financial review";
+    const freedomEstimate = estimatedFinancialIndependenceLabel(result).replace(" - ", " · ");
 
+    dashboardHero?.classList.toggle("dashboard-compact-title", true);
     progressSection?.classList.toggle("dashboard-journey-simple", true);
     nextMilestoneCard?.classList.add("hidden");
     if (dashboardReady) {
-      dashboardTitle.textContent = `${engagementGreeting()}, ${greetingName}. You are ${plainPercent(percent)} of the way toward Financial Freedom.`;
-      dashboardSubtitle.textContent = dashboardFinancialFreedomLabel(result);
+      dashboardTitle.textContent = `${engagementGreeting()}, ${greetingName}`;
+      dashboardSubtitle.textContent = "Your Dashboard shows where you are, where you are heading and what to do next.";
       heroScore.textContent = plainPercent(percent);
       if (scoreRingLabel) scoreRingLabel.textContent = "Financial Freedom";
       if (scoreRing) scoreRing.style.borderColor = percent >= 100 ? "#bdebd7" : percent >= 75 ? "#f3d08c" : "#dbe4ee";
@@ -5795,22 +5838,21 @@
           <span class="metric-label">Financial Freedom Journey</span>
           ${infoButtonHtml("financialStage", "financial stages")}
         </div>
-        <div class="dashboard-stage-summary">
-          <div>
-            <span class="metric-label">Current stage</span>
-            <strong id="freedomStageLabel">${escapeHtml(stage.name)}</strong>
-          </div>
-          <div>
-            <span class="metric-label">Progress</span>
-            <strong>${plainPercent(percent)}</strong>
-          </div>
-        </div>
+        <strong class="dashboard-journey-score">${plainPercent(percent)}</strong>
         <div class="progress-track progress-track-large" aria-label="Financial Freedom progress ${plainPercent(progressWidth)}"><span id="freedomProgressBar" style="width:${progressWidth}%"></span></div>
+        <div class="dashboard-journey-meta">
+          <strong id="freedomStageLabel">${escapeHtml(stage.name)}</strong>
+          <span>Estimated Financial Freedom: ${escapeHtml(freedomEstimate)}</span>
+        </div>
         <p id="freedomStageText">${escapeHtml(stage.explanation)}</p>
-        <p id="freedomPassiveText" class="progress-caption">Based on current net FI assets compared with your target FI assets. Passive Cash Income is tracked separately.</p>
-        <div class="dashboard-stage-next">
-          <span class="metric-label">What helps next</span>
-          <strong>${escapeHtml(stageInfo.actions[0] || milestone.text)}</strong>
+        <p id="freedomPassiveText" class="progress-caption">Based on current net Financial Freedom assets compared with your target Financial Freedom assets. Passive Cash Income is tracked separately.</p>
+        <div class="dashboard-stage-next dashboard-stage-next-compact">
+          <span class="metric-label">Next step</span>
+          <strong>${escapeHtml(nextStepLabel)}</strong>
+          <div class="dashboard-journey-actions">
+            <button class="btn btn-primary" type="button" data-engagement-action="weeklyplan">Continue Weekly Plan</button>
+            <button class="btn" type="button" data-engagement-action="goals">View Full Journey</button>
+          </div>
         </div>
       `;
     } else {
@@ -5848,7 +5890,7 @@
       metricCard("Final Projected Surplus", money(annualSurplus), annualSurplus >= 0 ? "status-green" : "status-amber", "Estimated money left after tax, Medicare, STSL compulsory repayments, living costs, loan repayments, investing and extra super."),
       metricCard("Investments", money(result.investmentBalance), "", "Projected investment balance includes contributions and earnings over time."),
       metricCard("Super", money(result.superannuationBalance), "status-green", "Tracked separately from other investments."),
-      metricCard("Financial Freedom Progress", plainPercent(percent), percent >= 75 ? "status-green" : "", "Based on current net FI assets divided by target FI assets.", "financialFreedomProgress"),
+      metricCard("Financial Freedom Progress", plainPercent(percent), percent >= 75 ? "status-green" : "", "Based on current net Financial Freedom assets divided by target Financial Freedom assets.", "financialFreedomProgress"),
     ].join("");
     document.getElementById("secondMetricGrid").innerHTML = [
       metricCard("Your Current Financial Stage", stage.name),
@@ -5856,11 +5898,11 @@
       metricCard("Debt Balance", money(result.totalLiabilities), result.totalLiabilities <= result.totalAssets * 0.5 ? "status-green" : "status-amber"),
       metricCard("Monthly Surplus / Deficit", money(monthlySurplus), monthlySurplus >= 0 ? "status-green" : "status-amber"),
       metricCard("Accessible Investments", money(result.accessibleInvestmentAssets), "", "Accessible assets counted before super access age, net of linked investment debt.", "accessibleInvestments"),
-      metricCard("Current Net FI Assets", money(result.financialIndependenceAssets), "", "Income-producing and investable assets counted toward Financial Freedom, net of linked investment debt.", "currentFiAssets"),
-      metricCard("Target FI Assets", money(result.targetCapital), "", "Annual lifestyle spending divided by the selected withdrawal rate.", "targetFiAssets"),
+      metricCard("Current Net Financial Freedom Assets", money(result.financialIndependenceAssets), "", "Income-producing and investable assets counted toward Financial Freedom, net of linked investment debt.", "currentFiAssets"),
+      metricCard("Financial Freedom Target Assets", money(result.targetCapital), "", "Annual lifestyle spending divided by the selected withdrawal rate.", "targetFiAssets"),
       metricCard("Annual Lifestyle Target", money(target), "", "The estimated yearly amount you want investments to support once you reach Financial Freedom.", "annualLifestyleTarget"),
       metricCard("Remaining Required", money(result.fiTargetRemaining ?? Math.max(0, result.targetCapital - result.financialIndependenceAssets))),
-      metricCard("Estimated Sustainable Income", money(result.estimatedSustainableIncomeFromCurrentFiAssets), "", "Current net FI assets multiplied by the selected withdrawal rate.", "sustainableIncome"),
+      metricCard("Estimated Sustainable Income", money(result.estimatedSustainableIncomeFromCurrentFiAssets), "", "Current net Financial Freedom assets multiplied by the selected withdrawal rate.", "sustainableIncome"),
       metricCard("Passive Cash Income", money(passiveIncome), "", "Estimated annual cash income from investments, such as dividends, interest and net rental income.", "passiveIncome"),
       metricCard("Projected Financial Investment Growth", money(result.projectedFinancialInvestmentGrowth ?? result.projectedInvestmentGrowth ?? 0), "", "Estimated annual growth on gross financial investments before deducting related investment debt.", "projectedInvestmentGrowth"),
       metricCard("Projected Property Growth", money(result.projectedPropertyGrowth || 0), "", "Estimated annual growth on gross investment property values.", "projectedPropertyGrowth"),
@@ -6499,9 +6541,16 @@
       : Number(goal?.recurringAmount) || 0;
     const displayName = engagementGreetingName();
     const hasPlanData = isEngagementPlanReady(result);
-    const previousStage = stageInfo.index > 0 ? engagementJourneyStages[stageInfo.index - 1] : null;
-    const nextStage = engagementJourneyStages[stageInfo.index + 1] || null;
-    const nextStageProgress = nextStage ? Math.max(0, Math.min(100, progress.financialIndependence)) : 100;
+    const annualSurplus = estimatedCashflow(result);
+    const passiveIncome = annualPassiveIncome(result);
+    const homeProgressWidth = Math.min(100, Math.max(0, progress.financialFreedom));
+    const homeFreedomEstimate = estimatedFinancialIndependenceLabel(result).replace(" - ", " · ");
+    const homeNextStep = mission.week && mission.week.isCompleted
+      ? "Review your Weekly Plan"
+      : "Complete this week's financial review";
+    const homeNextStepText = mission.week && mission.week.isCompleted
+      ? "You are on track. A quick weekly review will keep your journey current."
+      : "Open your Weekly Plan, confirm this week's figures and record what actually happened.";
     const goalProjected = goal?.targetDate
       ? goalTimeRemaining(goal)
       : goal && goalRequiredWeekly > 0
@@ -6567,42 +6616,58 @@
     }
 
     container.innerHTML = `
-      <section class="engagement-hero">
+      <section class="engagement-hero engagement-journey-hero">
         <div class="engagement-hero-copy">
           <span class="metric-label">${escapeHtml(engagementGreeting())}, ${escapeHtml(displayName)}</span>
           <h2>Your Financial Freedom Journey</h2>
           <div class="engagement-hero-progress" aria-label="Financial Freedom progress ${plainPercent(progress.financialFreedom)}">
             <strong>${plainPercent(progress.financialFreedom)}</strong>
-            <div class="engagement-progress-track"><span style="width:${progress.financialFreedom}%"></span></div>
+            <div class="engagement-progress-track"><span style="width:${homeProgressWidth}%"></span></div>
           </div>
-          <div class="engagement-hero-facts">
-            <div><span>Current stage</span><strong>${escapeHtml(stageInfo.stage.name)}</strong></div>
-            <div><span>Estimated Financial Independence</span><strong>${escapeHtml(estimatedFinancialIndependenceLabel(result))}</strong></div>
-            <div><span>This week</span><strong>${weeklyAmount > 0 ? `${money(weeklyAmount)} recorded toward goals` : "No progress recorded this week yet."}</strong></div>
+          <div class="engagement-journey-meta">
+            <strong>${escapeHtml(stageInfo.stage.name)}</strong>
+            <span>Estimated Financial Freedom: ${escapeHtml(homeFreedomEstimate)}</span>
+            <small>This week: ${weeklyAmount > 0 ? `${money(weeklyAmount)} recorded toward goals` : "No progress recorded this week yet."}</small>
           </div>
         </div>
         <aside class="engagement-hero-action">
-          <span class="metric-label">Today's Opportunity</span>
-          <h3>${escapeHtml(todayWin.title)}</h3>
-          <p>${escapeHtml(todayWin.text)}</p>
-          <button class="btn btn-primary" type="button" data-engagement-action="${escapeHtml(todayWin.action)}"${todayWin.goalId ? ` data-goal-id="${escapeHtml(todayWin.goalId)}"` : ""}>${escapeHtml(todayWin.actionLabel === "View Dashboard" ? "Review Progress" : todayWin.actionLabel)}</button>
+          <span class="metric-label">Next step</span>
+          <h3>${escapeHtml(homeNextStep)}</h3>
+          <p>${escapeHtml(homeNextStepText)}</p>
+          <div class="engagement-button-row">
+            <button class="btn btn-primary" type="button" data-engagement-action="weeklyplan">Continue Weekly Plan</button>
+            <button class="btn" type="button" data-engagement-action="goals">View Full Journey</button>
+          </div>
         </aside>
       </section>
 
-      <section class="engagement-two-column">
+      <section class="engagement-home-section">
         ${dashboardMissionHtml(result, homeReadyState)}
+      </section>
 
-        <article class="engagement-card engagement-goal-card">
+      <section class="engagement-home-section">
+        ${dashboardSnapshotHtml(result, homeReadyState, progress.financialFreedom, annualSurplus, passiveIncome, { showDetailsButton: false })}
+      </section>
+
+      <section class="engagement-dashboard-feature">
+        ${dashboardFutureYouHtml(result, homeReadyState, { idPrefix: "home" })}
+      </section>
+
+      <section class="engagement-two-column">
+
+        <article class="dashboard-compact-card engagement-goal-card engagement-goal-compact">
           <span class="metric-label">Primary Goal</span>
           ${goal ? `
             <div class="engagement-section-heading-row">
               <h3>${escapeHtml(goal.name)}</h3>
               <strong>${plainPercent(goalPercent)}</strong>
             </div>
+            <p class="engagement-goal-progress-line">${money(goal.currentAmount)} / ${money(goal.targetAmount)} · ${plainPercent(goalPercent)}</p>
             <div class="engagement-progress-track" aria-label="${escapeHtml(goal.name)} ${plainPercent(goalPercent)} complete"><span style="width:${goalPercent}%"></span></div>
-            <p>${money(goal.currentAmount)} of ${money(goal.targetAmount)}</p>
-            <small>${escapeHtml(goalProjected)}</small>
-            <small>Next planned contribution: ${goalRequiredWeekly ? money(goalRequiredWeekly) : "Not set"}</small>
+            <div class="engagement-goal-meta">
+              <small>${escapeHtml(goalProjected)}</small>
+              <small>Next planned contribution: ${goalRequiredWeekly ? money(goalRequiredWeekly) : "Not set"}</small>
+            </div>
             <div class="engagement-button-row">
               <button class="btn btn-primary" type="button" data-engagement-action="add-goal-progress" data-goal-id="${escapeHtml(goal.id)}">Add Progress</button>
               <button class="btn" type="button" data-engagement-action="goals">View Goal</button>
@@ -6613,26 +6678,8 @@
             <button class="btn btn-primary" type="button" data-engagement-action="goals">Create Goal</button>
           `}
         </article>
-      </section>
 
-      <section class="engagement-two-column">
-        <article class="engagement-card engagement-journey-snapshot">
-          <span class="metric-label">Your Journey</span>
-          <div class="engagement-compact-stage-row">
-            ${previousStage ? `<div><span>Previous</span><strong>${escapeHtml(previousStage.name)}</strong></div>` : ""}
-            <div class="current"><span>Current stage</span><strong>${escapeHtml(stageInfo.stage.name)}</strong></div>
-            ${nextStage ? `<div><span>Next</span><strong>${escapeHtml(nextStage.name)}</strong></div>` : `<div><span>Status</span><strong>Financial Freedom</strong></div>`}
-          </div>
-          <div class="engagement-progress-track" aria-label="${nextStage ? `Progress toward ${nextStage.name} ${plainPercent(nextStageProgress)}` : "Financial Freedom stage reached"}"><span style="width:${nextStage ? Math.max(12, nextStageProgress) : 100}%"></span></div>
-          <p>${escapeHtml(stageInfo.actions[0] || stageInfo.stage.priority)}</p>
-          <button class="btn" type="button" data-engagement-action="goals">View Full Journey</button>
-        </article>
-
-        ${aiOpeningInsightHtml()}
-      </section>
-
-      <section class="engagement-dashboard-feature">
-        ${dashboardFutureYouHtml(result, homeReadyState, { idPrefix: "home" })}
+        ${aiOpeningInsightHtml(result)}
       </section>
 
       <section class="engagement-card engagement-progress-achievement">
@@ -6643,7 +6690,7 @@
             <ul class="engagement-event-list">
               ${recentEvents.map((event) => `<li><strong>${escapeHtml(event.title)}</strong><span>${event.amount ? money(event.amount) : ""}</span></li>`).join("")}
             </ul>
-          ` : `<p>Complete your first weekly review or record a goal contribution to begin your history.</p>`}
+          ` : `<p>Complete a weekly review or add goal progress to start your history.</p>`}
         </div>
         <div>
           <span class="metric-label">First milestone</span>
@@ -6940,17 +6987,17 @@
       ["20 year net worth", result.netWorthProjection[19]?.closingBalance || 0],
       ["30 year net worth", result.netWorthProjection[29]?.closingBalance || 0],
       ["Age-60+ sustainability assets", result.totalRetirementAssets],
-      ["Target FI Capital", result.targetCapital],
+      ["Financial Freedom target capital", result.targetCapital],
     ];
-    document.getElementById("forecastCards").innerHTML = cards.map(([label, value]) => metricCard(label, money(value), "", "", label === "Target FI Capital" ? "targetFiCapital" : "")).join("");
+    document.getElementById("forecastCards").innerHTML = cards.map(([label, value]) => metricCard(label, money(value), "", "", label === "Financial Freedom target capital" ? "targetFiCapital" : "")).join("");
   }
 
   function renderGoalsSummary(result) {
     const container = document.getElementById("goalsFiSummary");
     if (!container) return;
     container.innerHTML = [
-      summaryTile("Target FI Capital", money(result.targetCapital), "", "targetFiCapital"),
-      summaryTile("Current FI Assets", money(result.financialIndependenceAssets), "", "currentFiAssets"),
+      summaryTile("Financial Freedom target capital", money(result.targetCapital), "", "targetFiCapital"),
+      summaryTile("Current Financial Freedom assets", money(result.financialIndependenceAssets), "", "currentFiAssets"),
       summaryTile("Current Passive Cash Income", money(annualPassiveIncome(result)), "", "passiveIncome"),
       summaryTile("Financial Freedom progress", plainPercent(freedomPercent(result)), "", "financialFreedomProgress"),
       summaryTile("Annual Lifestyle Spending Needed for Financial Freedom", money(plan.personal.targetAnnualSpending), "", "annualLifestyleSpending"),
@@ -11448,7 +11495,7 @@
       <div class="report-progress-bar" aria-label="Financial Freedom progress">
         <span style="width:${capped}%"></span>
       </div>
-      <p class="report-small-note">Visual progress is capped at 100%. The calculated progress shown in the figures may be higher where projected Financial Independence assets exceed the selected target.</p>
+      <p class="report-small-note">Visual progress is capped at 100%. The calculated progress shown in the figures may be higher where projected Financial Freedom assets exceed the selected target.</p>
     `;
   }
 
@@ -11542,7 +11589,7 @@
     if (gap > 0) {
       recommendations.push({
         priority: "Medium",
-        title: "Continue building Financial Independence assets",
+        title: "Continue building Financial Freedom assets",
         why: `The estimated gap to the Financial Freedom target is ${money(gap)}.`,
         impact: `Current planned annual investing is ${money(result.annualInvestmentContributions)} and extra super contributions are ${money(result.annualExtraSuperContributions)}.`,
       });
@@ -11552,7 +11599,7 @@
       recommendations.push({
         priority: "High",
         title: "Build accessible investments outside superannuation",
-        why: "The model currently shows little or no accessible Financial Independence assets before superannuation access age.",
+        why: "The model currently shows little or no accessible Financial Freedom assets before superannuation access age.",
         impact: "Building accessible investments may improve flexibility before age 60, based on the assumptions entered.",
       });
     } else if (result.superannuationBalance > accessibleAssets * 2 && result.plan.personal.person1Age < result.superAccessAge) {
@@ -11793,7 +11840,7 @@
     if (Number(result.annualExtraSuperContributions) > 0) nextYear.push("Review extra super contributions for affordability and access timing.");
     if (!nextYear.length) nextYear.push("Update the plan with income, expenses, assets and debt details, then regenerate this report.");
 
-    if (gap > 0) longTerm.push(`Continue building Financial Independence assets toward the estimated target gap of ${money(gap)}.`);
+    if (gap > 0) longTerm.push(`Continue building Financial Freedom assets toward the estimated target gap of ${money(gap)}.`);
     longTerm.push("Review assumptions at least annually or after major changes to income, expenses, interest rates or investment returns.");
     longTerm.push("Use saved scenarios inside the app to compare trade-offs, while keeping this report focused on the current plan.");
 
@@ -11833,7 +11880,7 @@
         ${summaryTile("Investment movement", changeText(row("Investment assets")), progressToneClass(row("Investment assets")?.tone))}
         ${summaryTile("Superannuation movement", changeText(row("Superannuation")), progressToneClass(row("Superannuation")?.tone))}
         ${summaryTile("Cash surplus movement", changeText(row("Annual cash surplus")), progressToneClass(row("Annual cash surplus")?.tone))}
-        ${summaryTile("FI progress movement", changeText(row("Financial Freedom progress")), progressToneClass(row("Financial Freedom progress")?.tone))}
+        ${summaryTile("Financial Freedom progress movement", changeText(row("Financial Freedom progress")), progressToneClass(row("Financial Freedom progress")?.tone))}
       </div>
       <p class="report-narrative">${escapeHtml(explanation || "Historical progress has been calculated from the selected snapshot and the current plan.")}</p>
     `, "report-page-break report-compact-section");
@@ -11862,15 +11909,15 @@
       : "The model shows a positive cash buffer after tax, STSL compulsory repayments, spending, debt repayments and planned wealth-building contributions.";
     const tenYearProgress = progressAtYear(result, 10);
     const tenYearProgressText = tenYearProgress > 100
-      ? "Projected net FI assets exceed the selected target in the 10-year view, based on the assumptions entered."
+      ? "Projected net Financial Freedom assets exceed the selected target in the 10-year view, based on the assumptions entered."
       : `Projected Financial Freedom progress is ${plainPercent(tenYearProgress)} in 10 years, based on the assumptions entered.`;
     if (activeView === "reports") maybeCreateAutomaticFinancialSnapshot(result, "report");
     const progressReportSection = financialProgressReportSectionHtml(result);
 
     const summaryNarrative = `
       <div class="report-narrative-box">
-        <p>Your current net worth is approximately <strong>${money(result.currentNetWorth)}</strong>. Of this amount, approximately <strong>${money(result.financialIndependenceAssets)}</strong> is currently counted as Financial Independence (FI) assets capable of supporting your future lifestyle.</p>
-        <p>Based on annual lifestyle spending of <strong>${money(plan.personal.targetAnnualSpending)}</strong>, your estimated Financial Freedom target is <strong>${money(result.targetCapital)}</strong>. Your current net FI assets represent approximately <strong>${plainPercent(percent)}</strong> of that target.</p>
+        <p>Your current net worth is approximately <strong>${money(result.currentNetWorth)}</strong>. Of this amount, approximately <strong>${money(result.financialIndependenceAssets)}</strong> is currently counted as Financial Freedom assets capable of supporting your future lifestyle.</p>
+        <p>Based on annual lifestyle spending of <strong>${money(plan.personal.targetAnnualSpending)}</strong>, your estimated Financial Freedom target is <strong>${money(result.targetCapital)}</strong>. Your current net Financial Freedom assets represent approximately <strong>${plainPercent(percent)}</strong> of that target.</p>
         <p>${escapeHtml(financialHealth)}</p>
       </div>
     `;
@@ -11890,8 +11937,8 @@
           ${summaryTile("Current annual surplus", money(annualFinalSurplus), annualFinalSurplus >= 0 ? "status-green" : "status-amber")}
           ${summaryTile("Current investment amount", money(result.investmentBalance))}
           ${summaryTile("Current debt", money(result.totalLiabilities))}
-          ${summaryTile("Target FI assets", money(result.targetCapital))}
-          ${summaryTile("Estimated FI age", estimatedFiAge)}
+          ${summaryTile("Financial Freedom target assets", money(result.targetCapital))}
+          ${summaryTile("Estimated partial-funding age", estimatedFiAge)}
           ${summaryTile("Estimated Financial Freedom age", estimatedFreedomAge)}
         </div>
         <div class="report-top-actions mt-4">
@@ -11902,7 +11949,7 @@
 
       ${progressReportSection}
 
-      ${reportSection("Current Financial Position", "A clean summary of income, expenses, assets, liabilities and the assets currently counted toward Financial Independence.", `
+      ${reportSection("Current Financial Position", "A clean summary of income, expenses, assets, liabilities and the assets currently counted toward Financial Freedom.", `
         <div class="summary-grid">
           ${summaryTile("Income", money(result.annualGrossIncome))}
           ${summaryTile("Expenses", money(result.annualLivingExpenses))}
@@ -11912,12 +11959,12 @@
           ${Number((result.stslRepaymentEstimate || result.helpRepaymentEstimate)?.person1?.balance || 0) > 0 ? summaryTile(`${personDisplayName(1)} STSL balance`, money((result.stslRepaymentEstimate || result.helpRepaymentEstimate).person1.balance)) : ""}
           ${Number((result.stslRepaymentEstimate || result.helpRepaymentEstimate)?.person2?.balance || 0) > 0 ? summaryTile(`${personDisplayName(2)} STSL balance`, money((result.stslRepaymentEstimate || result.helpRepaymentEstimate).person2.balance)) : ""}
           ${summaryTile("Net worth", money(result.currentNetWorth))}
-          ${summaryTile("Current FI assets", money(result.financialIndependenceAssets))}
+          ${summaryTile("Current Financial Freedom assets", money(result.financialIndependenceAssets))}
           ${summaryTile("Current investment portfolio", money(result.investmentBalance))}
           ${summaryTile("Superannuation balance", money(result.superannuationBalance))}
         </div>
         <p class="report-narrative">You currently have total assets of ${money(result.totalAssets)} and total liabilities of ${money(result.totalLiabilities)}, resulting in net worth of approximately ${money(result.currentNetWorth)}.</p>
-        <p class="report-narrative">Your current FI assets may be lower than total net worth because some assets, such as your home, vehicles or personal-use assets, may not currently be treated as available to fund living costs.</p>
+        <p class="report-narrative">Your current Financial Freedom assets may be lower than total net worth because some assets, such as your home, vehicles or personal-use assets, may not currently be treated as available to fund living costs.</p>
       `, "report-page-break")}
 
       ${reportSection("Cashflow Analysis", "A step-by-step view of how gross income is reduced by estimated tax, STSL compulsory repayments, living costs, debt repayments and planned wealth-building contributions.", `
@@ -11941,10 +11988,10 @@
         <div class="${cashflowTone}"><strong>${cashflowHeading}</strong><p>${cashflowText}</p></div>
       `, "report-page-break report-compact-section")}
 
-      ${reportSection("Financial Freedom Progress", "This section compares current net FI assets with the target assets needed to support your chosen lifestyle. Passive Cash Income is shown separately as supporting context.", `
+      ${reportSection("Financial Freedom Progress", "This section compares current net Financial Freedom assets with the target assets needed to support your chosen lifestyle. Passive Cash Income is shown separately as supporting context.", `
         <div class="summary-grid">
-          ${summaryTile("Current FI assets", money(result.financialIndependenceAssets))}
-          ${summaryTile("Target FI assets", money(result.targetCapital))}
+          ${summaryTile("Current Financial Freedom assets", money(result.financialIndependenceAssets))}
+          ${summaryTile("Financial Freedom target assets", money(result.targetCapital))}
           ${summaryTile("Gap to target", money(gap))}
           ${summaryTile("Financial Freedom progress", plainPercent(percent))}
           ${summaryTile("Estimated sustainable income", money(result.estimatedSustainableIncomeFromCurrentFiAssets), "", "sustainableIncome")}
@@ -11961,18 +12008,18 @@
           <article class="report-chart-card report-chart-wide">
             <h3>Financial Freedom progress</h3>
             <svg id="reportProgressChart" class="chart" viewBox="0 0 760 280" role="img" aria-label="Report Financial Freedom progress"></svg>
-            <p>Current progress compares current net FI assets with target FI assets. Future projected progress includes super from the age it becomes accessible in the model.</p>
+            <p>Current progress compares current net Financial Freedom assets with target Financial Freedom assets. Future projected progress includes super from the age it becomes accessible in the model.</p>
           </article>
         </div>
       `, "report-page-break")}
 
-      ${reportSection("Future Projections", "Estimated changes in net worth, FI assets and debt if the current assumptions continue.", `
+      ${reportSection("Future Projections", "Estimated changes in net worth, Financial Freedom assets and debt if the current assumptions continue.", `
         <div class="summary-grid">
           ${summaryTile("1-year projected net worth", money(netWorthAtYear(result, 1)))}
           ${summaryTile("2-year projected net worth", money(netWorthAtYear(result, 2)))}
           ${summaryTile("10-year projected net worth", money(netWorthAtYear(result, 10)))}
           ${summaryTile("30-year projected net worth", money(netWorthAtYear(result, 30)))}
-          ${summaryTile("10-year FI assets", money(projectedFiAssetsAtYear(result, 10)))}
+          ${summaryTile("10-year Financial Freedom assets", money(projectedFiAssetsAtYear(result, 10)))}
           ${summaryTile("10-year investment portfolio", money(investmentAtYear(result, 10)))}
           ${summaryTile("10-year debt estimate", money(projectedDebtAtYear(result, 10)))}
           ${summaryTile("Estimated Financial Freedom age", estimatedFreedomAge)}
@@ -11988,9 +12035,9 @@
             <p>Estimated net worth over time based on the current assumptions.</p>
           </article>
           <article class="report-chart-card">
-            <h3>FI assets projection</h3>
-            <svg id="reportFiAssetsChart" class="chart" viewBox="0 0 760 280" role="img" aria-label="Report FI assets forecast"></svg>
-            <p>Estimated FI assets, including superannuation only from the modelled access age.</p>
+            <h3>Financial Freedom assets projection</h3>
+            <svg id="reportFiAssetsChart" class="chart" viewBox="0 0 760 280" role="img" aria-label="Report Financial Freedom assets forecast"></svg>
+            <p>Estimated Financial Freedom assets, including superannuation only from the modelled access age.</p>
           </article>
           <article class="report-chart-card">
             <h3>Debt reduction</h3>
@@ -12017,8 +12064,8 @@
           ${reportExplainer("Loan interest", `${Number(plan.liabilities.homeLoanInterestRatePct || 0).toFixed(2)}%`, "Entered home loan interest rate used by the loan model.")}
           ${reportExplainer("Super growth", `${Number(plan.investing.expectedSuperReturnPct || 0).toFixed(1)}%`, "Estimated average annual return for superannuation.")}
           ${reportExplainer("Retirement assumptions", `Age ${plan.personal.fullRetirementAge || "not set"}`, "Target age entered for long-term financial freedom planning.")}
-          ${reportExplainer("Withdrawal assumptions", `${Number(plan.investing.safeWithdrawalRatePct || 0).toFixed(1)}%`, "Percentage of FI assets assumed to fund annual lifestyle spending.")}
-          ${reportExplainer("Annual lifestyle spending needed for Financial Freedom", money(plan.personal.targetAnnualSpending), "Annual spending target used to estimate required FI assets.")}
+          ${reportExplainer("Withdrawal assumptions", `${Number(plan.investing.safeWithdrawalRatePct || 0).toFixed(1)}%`, "Percentage of Financial Freedom assets assumed to fund annual lifestyle spending.")}
+          ${reportExplainer("Annual lifestyle spending needed for Financial Freedom", money(plan.personal.targetAnnualSpending), "Annual spending target used to estimate required Financial Freedom assets.")}
           ${reportExplainer("Projection period", "30 years", "Long-term projection period currently shown by the app.")}
         </div>
       `, "report-page-break report-compact-section")}
@@ -12029,8 +12076,8 @@
           <div class="summary-grid mt-4">
             ${summaryTile("Financial Freedom progress", plainPercent(percent))}
             ${summaryTile("Estimated Financial Freedom age", estimatedFreedomAge)}
-            ${summaryTile("Target FI capital", money(result.targetCapital))}
-            ${summaryTile("Current FI assets", money(result.financialIndependenceAssets))}
+            ${summaryTile("Financial Freedom target capital", money(result.targetCapital))}
+            ${summaryTile("Current Financial Freedom assets", money(result.financialIndependenceAssets))}
             ${summaryTile("Gap remaining", money(gap))}
             ${summaryTile("Monthly projected surplus", money(monthlyFinalSurplus), monthlyFinalSurplus >= 0 ? "status-green" : "status-amber")}
           </div>
@@ -12062,7 +12109,7 @@
       points: [{ x: 0, y: Math.min(100, percent) }, ...result.financialFreedomProgressProjection.map((row) => ({ x: row.year, y: Math.min(100, row.progress) }))],
     }], { height: 280, xMarks: [0, 10, 20, 30], xLabel: (mark) => `${mark}y`, yLabel: (value) => `${Math.round(value)}%` });
     lineChart("reportFiAssetsChart", [{
-      label: "FI assets",
+      label: "Financial Freedom assets",
       color: "#0f9f6e",
       points: projectionYears.map((year) => ({ x: year, y: year === 0 ? result.financialIndependenceAssets : projectedFiAssetsAtYear(result, year) })),
     }], { height: 280, xMarks: [0, 10, 20, 30], xLabel: (mark) => `${mark}y` });
@@ -12147,7 +12194,7 @@
       const revisedMilestone = nextMilestone(revisedResult, freedomPercent(revisedResult));
       tiles.push(
         summaryTile("Projected investment balance in 10 years", `${money(investmentAtYear(result, 10))} -> ${money(investmentAtYear(revisedResult, 10))}`),
-        summaryTile("Projected FI assets in 10 years", `${money(currentFiAssets10)} -> ${money(revisedFiAssets10)}`),
+        summaryTile("Projected Financial Freedom assets in 10 years", `${money(currentFiAssets10)} -> ${money(revisedFiAssets10)}`),
         summaryTile("Projected passive income in 10 years", `${money(currentPassive10)} -> ${money(revisedPassive10)}`),
         summaryTile("Financial Freedom progress", `${plainPercent(freedomPercent(result))} -> ${plainPercent(freedomPercent(revisedResult))}`),
         summaryTile("Target age outcome", `${targetAgeOutcome(result)} -> ${targetAgeOutcome(revisedResult)}`),
