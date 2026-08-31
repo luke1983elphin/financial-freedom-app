@@ -266,9 +266,9 @@ test("Stage B1 invalid property-growth input preserves validation state instead 
   assert.ok(run.validation.errors.some((error) => error.path === "assumptions.investmentPropertyCapitalGrowthRatePct"));
 });
 
-test("Stage B1 user-facing UI labels include capital growth assumptions and no property sale implication", () => {
-  assert.match(appSource, /Principal residence capital growth \(%\)/);
-  assert.match(appSource, /Investment property capital growth \(%\)/);
+test("Stage B1 user-facing UI labels include property growth assumptions and no property sale implication", () => {
+  assert.match(appSource, /Principal residence growth \(%\)/);
+  assert.match(appSource, /Investment property growth \(%\)/);
   assert.match(appSource, /Capital growth assumption/);
   assert.match(appSource, /Property equity contributes to projected net worth but is not treated as available retirement spending/);
 });

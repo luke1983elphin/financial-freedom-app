@@ -79,6 +79,29 @@
   padding: 16px;
 }
 
+.semi-retirement-scenario-note {
+  border: 1px solid #bbf7d0;
+  border-radius: 14px;
+  background: #f0fdf4;
+  color: #14532d;
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+}
+
+.semi-retirement-scenario-note strong {
+  color: #0f2742;
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.semi-retirement-scenario-note p {
+  color: #14532d;
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
 .semi-retirement-input-details {
   border: 1px solid #e2e8f0;
   border-radius: 14px;
@@ -136,11 +159,16 @@
 
 .semi-retirement-one-off-summary {
   align-items: start;
+  cursor: pointer;
   display: flex;
   flex-wrap: wrap;
   gap: 6px 12px;
   justify-content: space-between;
   min-width: 0;
+}
+
+.semi-retirement-one-off-summary::-webkit-details-marker {
+  display: none;
 }
 
 .semi-retirement-one-off-summary strong {
@@ -192,6 +220,17 @@
   font-weight: 700;
   line-height: 1.5;
   padding: 12px 14px;
+}
+
+.semi-retirement-disclaimer > summary {
+  color: #0f2742;
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.semi-retirement-disclaimer > summary:focus-visible {
+  outline: 3px solid rgba(14, 165, 233, 0.35);
+  outline-offset: 4px;
 }
 
 .semi-retirement-disclaimer p {
@@ -413,6 +452,38 @@
   border-radius: 16px;
   overflow: hidden;
   padding: 16px;
+}
+
+.semi-retirement-outlook.is-funded {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.semi-retirement-outlook.is-shortfall {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.semi-retirement-outlook-header {
+  align-items: start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.semi-retirement-outlook-header h4 {
+  font-size: 22px;
+  line-height: 1.18;
+}
+
+.semi-retirement-outlook-header p {
+  color: #475569;
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.5;
+  margin-top: 6px;
+  max-width: 68rem;
 }
 
 .semi-retirement-results-section > summary {
@@ -832,6 +903,14 @@
   padding: 10px;
 }
 
+.semi-retirement-row-positive {
+  border: 1px solid #bbf7d0;
+  border-radius: 10px;
+  background: #f0fdf4;
+  color: #14532d;
+  padding: 10px;
+}
+
 .semi-retirement-annual-cards {
   display: none;
 }
@@ -887,6 +966,10 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .input-grid.semi-retirement-lifestyle-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .semi-retirement-adjustment-layout {
     grid-template-columns: minmax(0, 1.35fr) minmax(260px, 0.65fr);
   }
@@ -911,11 +994,21 @@
     display: grid;
   }
 
-  .semi-retirement-adjustments > .card-subheading,
-  .semi-retirement-adjustment-heading,
-  .semi-retirement-impact-panel > div {
+  .semi-retirement-outlook-header {
     display: grid;
     grid-template-columns: 1fr;
+  }
+
+  .semi-retirement-adjustments > .card-subheading,
+  .semi-retirement-adjustment-heading,
+  .semi-retirement-impact-panel > div,
+  .semi-retirement-results-section > summary {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .semi-retirement-results-section > summary > span:last-child {
+    justify-self: start;
   }
 
   .semi-retirement-adjustment-controls {

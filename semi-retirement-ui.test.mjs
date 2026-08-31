@@ -1274,8 +1274,9 @@ test("Stage F1 semi-retirement user-facing workspace copy removes internal stage
 
 test("Stage F2 scenario workspace renders one main page title", () => {
   const snippet = sourceBetween(appSource, "function renderSemiRetirementScenario(result)", "function renderDecision(result)");
-  const matches = snippet.match(/Semi-Retirement & Retirement Scenario/g) || [];
-  assert.equal(matches.length, 1);
+  assert.match(indexSource, /<h2>Retirement Plan<\/h2>/);
+  assert.doesNotMatch(snippet, /Semi-Retirement & Retirement Scenario/);
+  assert.match(snippet, /Changes here apply to this scenario only and won't change your Financial Plan/);
 });
 
 test("Stage F3 selected conceptual info buttons are wired into scenario fields", () => {
@@ -1294,16 +1295,17 @@ test("Stage F4 info buttons use click/tap controls and keyboard-close modal beha
   assert.match(appSource, /event\.key === "Escape"[\s\S]*closeGoalInfo\(\)/);
 });
 
-test("Stage F5 Assumptions Used is collapsed by default", () => {
+test("Stage F5 Assumptions are collapsed by default", () => {
   const snippet = sourceBetween(appSource, "function renderSemiRetirementAssumptionsHtml", "function renderSemiRetirementWarningsHtml");
   assert.match(snippet, /<details class="semi-retirement-results-section">/);
+  assert.match(snippet, /<strong>Assumptions<\/strong>/);
   assert.doesNotMatch(snippet, /<details class="semi-retirement-results-section" open>/);
 });
 
-test("Stage F6 Income & Tax Detail is collapsed by default", () => {
+test("Stage F6 Income & tax is collapsed by default", () => {
   const snippet = sourceBetween(appSource, "function renderSemiRetirementPassiveIncomeHtml", "function renderSemiRetirementDebtWarningsHtml");
   assert.match(snippet, /<details class="semi-retirement-results-section">/);
-  assert.match(snippet, /Income & Tax Detail/);
+  assert.match(snippet, /Income & tax/);
   assert.doesNotMatch(snippet, /<details class="semi-retirement-results-section" open>/);
 });
 
@@ -1541,7 +1543,7 @@ test("Stage G2 AI Coach is removed from Plan Workspace navigation but AI feature
 
 test("Stage G3 Retirement Planning nav label keeps the existing page heading", () => {
   assert.match(indexSource, /data-view="semiretirement"[^>]*>Retirement Planning<\/button>/);
-  assert.match(indexSource, /<h2>Semi-Retirement & Retirement Scenario<\/h2>/);
+  assert.match(indexSource, /<h2>Retirement Plan<\/h2>/);
   assert.match(appSource, /button\.textContent = "Retirement Planning"/);
 });
 
@@ -1688,11 +1690,11 @@ test("Stage G2-LS1 new Retirement Planning scenarios default spending from Finan
 
 test("Stage G2-LS2 lifestyle spending source and controls are visible and accessible", () => {
   const renderSnippet = sourceBetween(appSource, "function renderSemiRetirementScenario", "function renderDecision");
-  assert.match(renderSnippet, /Your current household living expenses, used as the starting point for this retirement scenario\./);
+  assert.match(renderSnippet, /Current household living expenses used as the starting point\./);
   assert.match(appSource, /Financial Plan living expenses:/);
   assert.match(appSource, /data-semi-action="view-living-expenses"/);
   assert.match(appSource, /data-semi-action="use-plan-living-expenses"/);
-  assert.match(appSource, /aria-label="Use current Financial Plan annual living expenses for current annual lifestyle spending"/);
+  assert.match(appSource, /aria-label="Use current Financial Plan annual living expenses for current spending"/);
   assert.match(stageFStyles(), /\.semi-retirement-source-note\s*\{[^}]*flex-wrap: wrap;/s);
 });
 
@@ -1780,11 +1782,11 @@ test("Stage G2B-R affected assumptions use plain-English copy without user-facin
   assert.doesNotMatch(combined, /Stage [A-G]|Stage 1|Stage 2|Stage 3|Stage 4|modelled in Stage|entered in Stage/);
 });
 
-test("Stage G2B-R Debt at projection end displays dynamic ages from the projection row", () => {
+test("Stage G2B-R projected net worth displays dynamic ages from the selected projection row", () => {
   const snippet = sourceBetween(appSource, "function renderSemiRetirementDebtPropertyHtml", "function semiRetirementDetailRows");
-  assert.match(snippet, /const debtAtEndItem = debtProperty\.milestoneDebt\?\.find/);
-  assert.match(snippet, /semiRetirementMilestoneAgesFromRow\(debtAtEndItem\?\.row, viewModel\.people \|\| \[\]\)/);
-  assert.match(snippet, /semiRetirementMetricCard\("Debt at projection end", semiRetirementMoney\(debtAtEnd\), debtAtEndAges\.length \? semiRetirementAgeList\(debtAtEndAges\) : ""\)/);
+  assert.match(snippet, /const netWorthAge = semiRetirementFirstAgeLabel\(netWorth\.ages \|\| \[\]\)/);
+  assert.match(snippet, /const netWorthLabel = netWorthAge === "Age not available" \? "Projected net worth at projection end" : `Projected net worth at \$\{netWorthAge\}`/);
+  assert.match(snippet, /Future value based on the assumptions entered/);
   assert.doesNotMatch(snippet, /Luke age 91|Lisa age 90/);
 });
 
@@ -1803,7 +1805,7 @@ test("Stage G2D Adjust Your Scenario directs one-off spending edits back to scen
   const adjustmentSnippet = sourceBetween(appSource, "function renderSemiRetirementAdjustmentsHtml", "function renderSemiRetirementComparisonControls");
   assert.match(adjustmentSnippet, /manage-one-off-lifestyle-events/);
   assert.match(adjustmentSnippet, /Each event applies once in the selected year and is inflated from today's dollars\./);
-  assert.match(appSource, /Add larger expenses that happen in a specific year/);
+  assert.match(appSource, /Add larger expenses such as travel, vehicles, renovations or family support/);
   assert.doesNotMatch(adjustmentSnippet, /no semi-retirement period/);
 });
 
@@ -1898,4 +1900,158 @@ test("Stage G2D retirement comparison preserves different one-off event lists on
   assert.equal(comparisonEventYear.household.oneOffLifestyleSpendingTodayDollars, 20000);
   assert.equal(comparisonViewModel.semiRetirementFunding.totalOneOffLifestyleSpendingTodayDollars, 20000);
   assert.ok(comparisonViewModel.semiRetirementFunding.totalOneOffLifestyleSpending > current.viewModel.semiRetirementFunding.totalOneOffLifestyleSpending);
+});
+
+test("Stage G2F combines same-year semi-retirement and full-retirement timeline milestones", () => {
+  const { viewModel } = projectionFor((draft) => {
+    draft.people.forEach((person) => {
+      person.currentAge = 40;
+      person.hasSemiRetirement = true;
+      person.semiRetirementAge = 50;
+      person.fullRetirementAge = 65;
+    });
+    draft.projectionEndAge = 90;
+  });
+  const titles = viewModel.timeline.flatMap((group) => group.events.map((event) => event.title));
+  assert.ok(titles.includes("Luke & Lisa semi-retire"));
+  assert.ok(titles.includes("Luke & Lisa fully retire"));
+  assert.ok(!titles.includes("Luke semi-retires"));
+  assert.ok(!titles.includes("Lisa semi-retires"));
+  assert.ok(!titles.includes("First person fully retires"));
+  assert.ok(!titles.includes("Household fully retired"));
+});
+
+test("Stage G2F keeps separate timeline milestones when retirement years differ", () => {
+  const { viewModel } = projectionFor((draft) => {
+    draft.people.forEach((person) => {
+      person.currentAge = 40;
+      person.hasSemiRetirement = true;
+    });
+    draft.people[0].semiRetirementAge = 50;
+    draft.people[0].fullRetirementAge = 63;
+    draft.people[1].semiRetirementAge = 52;
+    draft.people[1].fullRetirementAge = 66;
+    draft.projectionEndAge = 90;
+  });
+  const titles = viewModel.timeline.flatMap((group) => group.events.map((event) => event.title));
+  assert.ok(titles.includes("Luke semi-retires"));
+  assert.ok(titles.includes("Lisa semi-retires"));
+  assert.ok(titles.includes("Luke fully retires"));
+  assert.ok(titles.includes("Lisa fully retires"));
+  assert.ok(!titles.includes("Luke & Lisa semi-retire"));
+  assert.ok(!titles.includes("Luke & Lisa fully retire"));
+});
+
+test("Stage G2F accessible investments used while super remains available is not a funding failure", () => {
+  const { viewModel } = projectionFor((draft) => {
+    draft.assumptions.inflationRatePct = 0;
+    draft.people.forEach((person) => {
+      person.currentAge = 58;
+      person.currentGrossEmploymentIncome = 0;
+      person.openingSuperBalance = 2500000;
+      person.employerSuperRatePct = 0;
+      person.hasSemiRetirement = false;
+      person.semiRetirementAge = 58;
+      person.fullRetirementAge = 58;
+      person.superAccessAge = 60;
+      person.superReturnBeforeRetirementPct = 0;
+      person.superReturnAfterRetirementPct = 0;
+    });
+    draft.accessibleInvestments.openingBalance = 140000;
+    draft.accessibleInvestments.annualReturnRatePct = 0;
+    draft.accessibleInvestments.externalAnnualAccessibleContribution = 0;
+    draft.household.currentLifestyleSpending = 70000;
+    draft.household.semiRetirementLifestyleSpending = 70000;
+    draft.household.fullRetirementLifestyleSpending = 70000;
+    draft.projectionEndAge = 70;
+  });
+  assert.equal(viewModel.status.type, "funded");
+  assert.equal(viewModel.longevity.totalUnfundedSpending, 0);
+  const accessibleEvents = timelineEvents(viewModel, /Accessible investments used/);
+  assert.equal(accessibleEvents.length, 1);
+  assert.equal(accessibleEvents[0].tone, "neutral");
+  assert.match(accessibleEvents[0].detail, /Available super continues funding retirement/);
+});
+
+test("Stage G2F true funding shortfalls remain clearly flagged", () => {
+  const { viewModel } = shortfallProjection();
+  assert.equal(viewModel.status.type, "shortfall");
+  assert.ok(viewModel.longevity.totalUnfundedSpending > 0);
+  const events = timelineEvents(viewModel, /First projected funding shortfall/);
+  assert.ok(events.length >= 1);
+  assert.equal(events[0].tone, "warning");
+});
+
+test("Stage G2F Retirement Plan source uses the simplified input labels and calculation action", () => {
+  const snippet = sourceBetween(appSource, "function renderSemiRetirementScenario(result)", "function renderDecision(result)");
+  [
+    "People & retirement timing",
+    "Lifestyle spending",
+    "Current spending",
+    "Semi-retirement spending",
+    "Retirement spending",
+    "Investments & super",
+    "Investments available before super",
+    "Planned annual investing",
+    "What should happen to extra money while you're working?",
+    "What should happen if you have money left over?",
+    "Project to age",
+    "Calculate Retirement Plan",
+  ].forEach((label) => assert.match(snippet, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))));
+  assert.doesNotMatch(snippet, /Expected annual income after semi-retirement|working-phase surplus|retirement surplus/i);
+});
+
+test("Stage G2F planned big expenses are collapsed but remain editable", () => {
+  const snippet = sourceBetween(appSource, "function semiRetirementOneOffLifestyleEventsHtml", "function semiRetirementPlannedConcessionalContributionsHtml");
+  assert.match(snippet, /Planned big expenses/);
+  assert.match(snippet, /<details class="semi-retirement-one-off-row"/);
+  assert.match(snippet, /path: `\$\{prefix\}\.description`/);
+  assert.match(snippet, /data-semi-action="remove-one-off-lifestyle-event"/);
+  assert.doesNotMatch(snippet, /<article class="semi-retirement-one-off-row"/);
+});
+
+test("Stage G2F advanced assumptions are behind a collapsed disclosure", () => {
+  const snippet = sourceBetween(appSource, "function renderSemiRetirementScenario(result)", "function renderDecision(result)");
+  const openingBalanceIndex = snippet.indexOf("Investments available before super");
+  const plannedInvestingIndex = snippet.indexOf("Planned annual investing");
+  const advancedIndex = snippet.indexOf("<summary>Advanced assumptions</summary>");
+  const returnIndex = snippet.indexOf("Investment return (%)");
+  const inflationIndex = snippet.indexOf("Inflation (%)");
+  assert.ok(openingBalanceIndex >= 0 && plannedInvestingIndex > openingBalanceIndex);
+  assert.ok(advancedIndex > plannedInvestingIndex);
+  assert.ok(returnIndex > advancedIndex);
+  assert.ok(inflationIndex > advancedIndex);
+  assert.doesNotMatch(snippet, /<details class="semi-retirement-input-details mt-4" open>/);
+});
+
+test("Stage G2F result hierarchy answers funding before detailed workings", () => {
+  const snippet = sourceBetween(appSource, "function renderSemiRetirementScenarioResultHtml", "function renderSemiRetirementScenario(result)");
+  assert.match(snippet, /Your Retirement Plan Results/);
+  assert.match(snippet, /renderSemiRetirementSnapshotHtml\(viewModel\)[\s\S]*renderSemiRetirementTimelineHtml\(viewModel\)[\s\S]*renderSemiRetirementLongevityHtml\(viewModel\)[\s\S]*renderSemiRetirementFundingHtml\(viewModel\)[\s\S]*renderSemiRetirementPassiveIncomeHtml\(viewModel\)[\s\S]*renderSemiRetirementDebtPropertyHtml\(viewModel\)[\s\S]*renderSemiRetirementAnnualProjectionHtml\(viewModel\)[\s\S]*renderSemiRetirementAssumptionsHtml\(viewModel\)/);
+});
+
+test("Stage G2F outlook, funding and debt copy avoid false funding alarms", () => {
+  const outlookCopySnippet = sourceBetween(appSource, "function semiRetirementOutlookCopy", "function semiRetirementAdjustmentError");
+  const outlookSnippet = sourceBetween(appSource, "function renderSemiRetirementSnapshotHtml", "function semiRetirementComparisonSummary");
+  const fundingSnippet = sourceBetween(appSource, "function renderSemiRetirementLongevityHtml", "function renderSemiRetirementPassiveIncomeHtml");
+  const debtSnippet = sourceBetween(appSource, "function renderSemiRetirementDebtPropertyHtml", "function semiRetirementDetailRows");
+  assert.match(outlookSnippet, /Your retirement outlook/);
+  assert.match(outlookCopySnippet, /Your lifestyle is projected to be funded through/);
+  assert.match(fundingSnippet, /Investments available before super/);
+  assert.match(fundingSnippet, /Available super continues funding retirement where required/);
+  assert.match(fundingSnippet, /Unfunded lifestyle spending/);
+  assert.match(debtSnippet, /Home & debt/);
+  assert.match(debtSnippet, /Property equity when you retire/);
+  assert.match(debtSnippet, /Projected net worth at \$\{netWorthAge\}/);
+  assert.match(debtSnippet, /Future value based on the assumptions entered/);
+  assert.match(debtSnippet, /Your property isn't automatically used to fund retirement/);
+  assert.doesNotMatch(debtSnippet, /No-sale behaviour/i);
+});
+
+test("Stage G2F Income and tax mobile summary stacks without a narrow side action", () => {
+  const styles = stageFStyles();
+  assert.match(styles, /@media \(max-width: 640px\)[\s\S]*\.semi-retirement-results-section > summary\s*\{\s*display: grid;[\s\S]*grid-template-columns: 1fr;/s);
+  const snippet = sourceBetween(appSource, "function renderSemiRetirementPassiveIncomeHtml", "function renderSemiRetirementDebtWarningsHtml");
+  assert.match(snippet, /<strong>Income & tax<\/strong>/);
+  assert.match(snippet, /<span>View details<\/span>/);
 });

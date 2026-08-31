@@ -389,7 +389,7 @@ test("Stage G2E-S UI source includes advanced section, info wording and saved-sc
   assert.match(appSource, /Financial Freedom assumes planned extra concessional contributions receive concessional tax treatment/);
   assert.match(appSource, /Money contributed to super may not be accessible until the assumed super access age/);
   assert.match(appSource, /planned extra concessional contribution events are included in this comparison/);
-  assert.match(appSource, /No one-off lifestyle spending or planned extra concessional contribution events are included/);
+  assert.match(appSource, /No planned big expenses or planned extra concessional contribution events are included/);
   assert.match(appSource, /Added: \$\{contributionSummary/);
   assert.doesNotMatch(appSource, /Available cap:/);
 });

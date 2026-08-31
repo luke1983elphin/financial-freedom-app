@@ -755,11 +755,11 @@
     }
     const workingSurplusDestination = draft.scenario?.workingPhaseSurplusDestination || "accessible-investments";
     if (!["accessible-investments", "enjoyment", "unallocated"].includes(workingSurplusDestination)) {
-      add("scenario.workingPhaseSurplusDestination", "Choose what should happen to working-phase surplus.");
+      add("scenario.workingPhaseSurplusDestination", "Choose what should happen to extra money while you're working.");
     }
     const retirementSurplusDestination = draft.scenario?.surplusDestination || "enjoyment";
     if (!["enjoyment", "super", "accessible-investments", "unallocated"].includes(retirementSurplusDestination)) {
-      add("scenario.surplusDestination", "Choose what should happen to retirement surplus.");
+      add("scenario.surplusDestination", "Choose what should happen if you have money left over.");
     }
     const { startYear, endYear } = projectionYearRange(draft);
     const eventIds = new Set();
@@ -1008,8 +1008,8 @@
   function surplusDestinationLabel(value = "") {
     const labels = {
       enjoyment: "Extra lifestyle / enjoyment",
-      super: "Contribute to super",
-      "accessible-investments": "Contribute to accessible investments",
+      super: "Add to super",
+      "accessible-investments": "Add to investments",
       unallocated: "Leave as unallocated surplus",
     };
     return labels[value] || labels.enjoyment;
@@ -1018,7 +1018,7 @@
   function workingSurplusDestinationLabel(value = "") {
     const labels = {
       enjoyment: "Extra lifestyle / spending",
-      "accessible-investments": "Contribute to accessible investments",
+      "accessible-investments": "Add to investments",
       unallocated: "Leave as unallocated surplus",
     };
     return labels[value] || labels["accessible-investments"];
@@ -1036,7 +1036,7 @@
     if (!text) return "";
     return text
       .replace(/superByPersonAtAge60/g, "age-60 super balance")
-      .replace(/External annual accessible contribution/g, "Planned accessible investment contribution while working")
+      .replace(/External annual accessible contribution/g, "Planned annual investing")
       .replace(/Input mutation was detected\. This should not occur\./g, "The projection input changed unexpectedly while calculating. Review the scenario and calculate again.");
   }
 
@@ -1366,6 +1366,45 @@
     groups.byYear.set(event.calendarYear, group);
   }
 
+  function timelineNameList(names = []) {
+    const cleanNames = asArray(names).map((name) => String(name || "").trim()).filter(Boolean);
+    if (cleanNames.length <= 1) return cleanNames[0] || "Household";
+    if (cleanNames.length === 2) return `${cleanNames[0]} & ${cleanNames[1]}`;
+    return `${cleanNames.slice(0, -1).join(", ")} & ${cleanNames.at(-1)}`;
+  }
+
+  function phaseTransitionEventsForRow(row = {}, people = [], lastPhaseByPerson = {}) {
+    const semiRetiredNames = [];
+    const fullyRetiredNames = [];
+    asArray(row.people).forEach((person) => {
+      const previousPhase = lastPhaseByPerson[person.id];
+      const displayPerson = people.find((candidate) => candidate.id === person.id);
+      const name = displayPerson?.name || person.name || person.id;
+      if (person.employmentPhase === "semi-retired" && previousPhase !== "semi-retired" && previousPhase !== "fully-retired") {
+        semiRetiredNames.push(name);
+      }
+      if (person.employmentPhase === "fully-retired" && previousPhase !== "fully-retired") {
+        fullyRetiredNames.push(name);
+      }
+    });
+    return [
+      semiRetiredNames.length ? {
+        calendarYear: row.calendarYear,
+        ages: rowAges(row, people),
+        title: `${timelineNameList(semiRetiredNames)} ${semiRetiredNames.length === 1 ? "semi-retires" : "semi-retire"}`,
+        detail: "Reduced work begins in the projection.",
+      } : null,
+      fullyRetiredNames.length ? {
+        calendarYear: row.calendarYear,
+        ages: rowAges(row, people),
+        title: `${timelineNameList(fullyRetiredNames)} ${fullyRetiredNames.length === 1 ? "fully retires" : "fully retire"}`,
+        detail: fullyRetiredNames.length === people.length
+          ? "Employment income for the household is no longer included from this point."
+          : `Employment income for ${timelineNameList(fullyRetiredNames)} is no longer included from this point.`,
+      } : null,
+    ].filter(Boolean);
+  }
+
   function buildRetirementTimeline(projection = {}, people = []) {
     const years = asArray(projection.years);
     const summary = projection.summary || {};
@@ -1374,24 +1413,8 @@
     const superAccessSeen = new Set();
 
     years.forEach((row) => {
+      phaseTransitionEventsForRow(row, people, lastPhaseByPerson).forEach((event) => addTimelineEvent(groups, event));
       asArray(row.people).forEach((person) => {
-        const previousPhase = lastPhaseByPerson[person.id];
-        if (person.employmentPhase === "semi-retired" && previousPhase !== "semi-retired" && previousPhase !== "fully-retired") {
-          addTimelineEvent(groups, {
-            calendarYear: row.calendarYear,
-            ages: rowAges(row, people),
-            title: `${person.name || person.id} semi-retires`,
-            detail: "Reduced work begins in the projection.",
-          });
-        }
-        if (person.employmentPhase === "fully-retired" && previousPhase !== "fully-retired") {
-          addTimelineEvent(groups, {
-            calendarYear: row.calendarYear,
-            ages: rowAges(row, people),
-            title: `${person.name || person.id} fully retires`,
-            detail: `Employment income for ${person.name || person.id} is no longer included from this point.`,
-          });
-        }
         const displayPerson = people.find((candidate) => candidate.id === person.id);
         const superAccessAge = finiteNumberOrNull(displayPerson?.superAccessAge);
         if (!superAccessSeen.has(person.id) && superAccessAge !== null && person.age >= superAccessAge) {
@@ -1410,7 +1433,13 @@
       });
     });
 
-    if (milestoneHasYear(summary.firstPersonFullRetirement)) {
+    const phaseTitlesForYear = (calendarYear) => {
+      const group = groups.byYear.get(calendarYear);
+      return asArray(group?.events).map((event) => event.title);
+    };
+    const hasFullRetirementPhaseEvent = (calendarYear) => phaseTitlesForYear(calendarYear).some((title) => /fully retire/i.test(title));
+
+    if (milestoneHasYear(summary.firstPersonFullRetirement) && !hasFullRetirementPhaseEvent(summary.firstPersonFullRetirement.calendarYear)) {
       const retiredNames = asArray(summary.firstPersonFullRetirement.retiredPersonIds)
         .map((id) => people.find((person) => person.id === id)?.name || id)
         .join(", ");
@@ -1423,7 +1452,7 @@
           : "",
       });
     }
-    if (milestoneHasYear(summary.householdFullRetirement)) {
+    if (milestoneHasYear(summary.householdFullRetirement) && !hasFullRetirementPhaseEvent(summary.householdFullRetirement.calendarYear)) {
       addTimelineEvent(groups, {
         calendarYear: summary.householdFullRetirement.calendarYear,
         ages: milestoneAges(summary.householdFullRetirement, people),
@@ -1432,11 +1461,15 @@
       });
     }
     if (milestoneHasYear(summary.accessibleFundsExhausted)) {
+      const hasFundingShortfall = milestoneHasYear(summary.firstUnfundedSpending) || number(summary.totalUnfundedSpending) > 0;
       addTimelineEvent(groups, {
         calendarYear: summary.accessibleFundsExhausted.calendarYear,
         ages: milestoneAges(summary.accessibleFundsExhausted, people),
-        title: "Accessible investments reach $0",
-        tone: "warning",
+        title: "Accessible investments used",
+        detail: hasFundingShortfall
+          ? "Review the funding shortfall shown below."
+          : "Available super continues funding retirement from this point where required.",
+        tone: hasFundingShortfall ? "warning" : "neutral",
       });
     }
     if (milestoneHasYear(summary.firstUnfundedSpending)) {
@@ -1577,7 +1610,7 @@
     const oneOffRows = oneOffEvents.length
       ? [
         {
-          label: "One-off lifestyle spending",
+          label: "Planned big expenses",
           value: `${oneOffEvents.length} planned event${oneOffEvents.length === 1 ? "" : "s"}`,
           type: "plain",
           note: oneOffEvents.map((event) => `${event.description || "One-off expense"} - ${roundCurrency(event.amountTodayDollars).toLocaleString(undefined, { style: "currency", currency: "AUD", maximumFractionDigits: 0 })} today - ${event.year}`).join("; "),
@@ -1604,8 +1637,8 @@
       { label: "Inflation", value: inputs.inflationRate, type: "percentRate" },
       { label: "Accessible investment return", value: inputs.accessibleInvestments?.annualReturnRate, type: "percentRate" },
       { label: "Accessible investment fees", value: inputs.accessibleInvestments?.annualFeesRate, type: "percentRate" },
-      { label: "Planned accessible investment contribution while working", value: inputs.accessibleInvestments?.externalAnnualAccessibleContribution ?? inputs.accessibleInvestments?.currentAnnualContributions, type: "currency" },
-      { label: "Working-phase surplus destination", value: workingSurplusDestinationLabel(inputs.scenario?.workingPhaseSurplusDestination || "accessible-investments"), type: "plain" },
+      { label: "Planned annual investing", value: inputs.accessibleInvestments?.externalAnnualAccessibleContribution ?? inputs.accessibleInvestments?.currentAnnualContributions, type: "currency" },
+      { label: "Extra money while working", value: workingSurplusDestinationLabel(inputs.scenario?.workingPhaseSurplusDestination || "accessible-investments"), type: "plain" },
       { label: "Opening offset balance inside accessible assets", value: inputs.accessibleInvestments?.openingOffsetBalance, type: "currency" },
       { label: "Current lifestyle spending", value: inputs.household?.currentLifestyleSpending, type: "currency" },
       { label: "Semi-retirement lifestyle spending", value: inputs.household?.semiRetirementLifestyleSpending, type: "currency" },
@@ -1614,7 +1647,7 @@
       { label: "Other annual income", value: inputs.household?.otherAnnualIncome, type: "currency" },
       ...oneOffRows,
       ...plannedConcessionalRows,
-      { label: "Retirement surplus destination", value: surplusDestinationLabel(inputs.scenario?.surplusDestination), type: "plain" },
+      { label: "Money left over", value: surplusDestinationLabel(inputs.scenario?.surplusDestination), type: "plain" },
       { label: "Minimum accessible balance", value: inputs.scenario?.minimumAccessibleBalance, type: "currency" },
       { label: "Withdrawal order", value: inputs.scenario?.withdrawalOrder || assumptions.withdrawalOrder || "accessible investments first", type: "plain" },
       ...people.flatMap((person) => [
