@@ -643,6 +643,7 @@
         optionalAdditionalLifestyleWithdrawal: 0,
         semiRetirementAccessibleWithdrawal: 0,
         oneOffLifestyleEvents: [],
+        workingPhaseSurplusDestination: "accessible-investments",
         surplusDestination: "enjoyment",
         minimumAccessibleBalance: 0,
         minimumEstateBalanceAtEndAge: 0,
@@ -720,6 +721,14 @@
     const legacyDraw = legacyOptionalLifestyleDrawAmount(draft);
     if (legacyDraw > 0) {
       add("scenario.legacyOptionalAdditionalLifestyleWithdrawal", `This scenario was saved using an earlier recurring additional-lifestyle assumption of ${roundCurrency(legacyDraw).toLocaleString(undefined, { style: "currency", currency: "AUD", maximumFractionDigits: 0 })} per year. Review it and replace it with one-off lifestyle spending events before recalculating.`);
+    }
+    const workingSurplusDestination = draft.scenario?.workingPhaseSurplusDestination || "accessible-investments";
+    if (!["accessible-investments", "enjoyment", "unallocated"].includes(workingSurplusDestination)) {
+      add("scenario.workingPhaseSurplusDestination", "Choose what should happen to working-phase surplus.");
+    }
+    const retirementSurplusDestination = draft.scenario?.surplusDestination || "enjoyment";
+    if (!["enjoyment", "super", "accessible-investments", "unallocated"].includes(retirementSurplusDestination)) {
+      add("scenario.surplusDestination", "Choose what should happen to retirement surplus.");
     }
     const { startYear, endYear } = projectionYearRange(draft);
     const eventIds = new Set();
@@ -851,6 +860,7 @@
         oneOffLifestyleEvents: normaliseOneOffLifestyleEvents(draft.scenario?.oneOffLifestyleEvents),
         optionalAdditionalLifestyleWithdrawal: legacyOptionalLifestyleDrawAmount(draft),
         semiRetirementAccessibleWithdrawal: legacyOptionalLifestyleDrawAmount(draft),
+        workingPhaseSurplusDestination: draft.scenario?.workingPhaseSurplusDestination || "accessible-investments",
         surplusDestination: draft.scenario?.surplusDestination || "enjoyment",
         fullRetirementAnnualSpending: nonNegative(draft.household?.fullRetirementLifestyleSpending),
         minimumAccessibleBalance: nonNegative(draft.scenario?.minimumAccessibleBalance),
@@ -959,6 +969,15 @@
     return labels[value] || labels.enjoyment;
   }
 
+  function workingSurplusDestinationLabel(value = "") {
+    const labels = {
+      enjoyment: "Extra lifestyle / spending",
+      "accessible-investments": "Contribute to accessible investments",
+      unallocated: "Leave as unallocated surplus",
+    };
+    return labels[value] || labels["accessible-investments"];
+  }
+
   function roundDisplayAmount(value) {
     return Math.round((number(value) + Number.EPSILON) * 100) / 100;
   }
@@ -971,7 +990,7 @@
     if (!text) return "";
     return text
       .replace(/superByPersonAtAge60/g, "age-60 super balance")
-      .replace(/External annual accessible contribution/g, "Additional planned investment contribution")
+      .replace(/External annual accessible contribution/g, "Planned accessible investment contribution while working")
       .replace(/Input mutation was detected\. This should not occur\./g, "The projection input changed unexpectedly while calculating. Review the scenario and calculate again.");
   }
 
@@ -1525,7 +1544,8 @@
       { label: "Inflation", value: inputs.inflationRate, type: "percentRate" },
       { label: "Accessible investment return", value: inputs.accessibleInvestments?.annualReturnRate, type: "percentRate" },
       { label: "Accessible investment fees", value: inputs.accessibleInvestments?.annualFeesRate, type: "percentRate" },
-      { label: "Working-phase planned investment contribution", value: inputs.accessibleInvestments?.externalAnnualAccessibleContribution ?? inputs.accessibleInvestments?.currentAnnualContributions, type: "currency" },
+      { label: "Planned accessible investment contribution while working", value: inputs.accessibleInvestments?.externalAnnualAccessibleContribution ?? inputs.accessibleInvestments?.currentAnnualContributions, type: "currency" },
+      { label: "Working-phase surplus destination", value: workingSurplusDestinationLabel(inputs.scenario?.workingPhaseSurplusDestination || "accessible-investments"), type: "plain" },
       { label: "Opening offset balance inside accessible assets", value: inputs.accessibleInvestments?.openingOffsetBalance, type: "currency" },
       { label: "Current lifestyle spending", value: inputs.household?.currentLifestyleSpending, type: "currency" },
       { label: "Semi-retirement lifestyle spending", value: inputs.household?.semiRetirementLifestyleSpending, type: "currency" },

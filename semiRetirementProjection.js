@@ -262,6 +262,12 @@
     return "enjoyment";
   }
 
+  function normaliseWorkingPhaseSurplusDestination(value) {
+    if (value === undefined || value === null || value === "") return "accessible-investments";
+    const destination = normaliseSurplusDestination(value);
+    return destination === "super" ? "accessible-investments" : destination;
+  }
+
   function normaliseRecordId(item = {}, prefix = "record", index = 0) {
     return String(item.id || item.assetId || item.liabilityId || item.uid || item.key || `${prefix}-${index + 1}`);
   }
@@ -1053,6 +1059,11 @@
         optionalAdditionalLifestyleWithdrawal: 0,
         // Deprecated alias retained for older consumers; new G2D scenarios do not use it.
         semiRetirementAccessibleWithdrawal: 0,
+        workingPhaseSurplusDestination: normaliseWorkingPhaseSurplusDestination(
+          input?.scenario?.workingPhaseSurplusDestination
+          ?? input?.scenario?.workingSurplusDestination
+          ?? input?.scenario?.workingPhaseSurplusTreatment,
+        ),
         surplusDestination: normaliseSurplusDestination(input?.scenario?.surplusDestination ?? input?.scenario?.semiRetirementSurplusDestination),
         fullRetirementAnnualSpending: number(input?.scenario?.fullRetirementAnnualSpending),
         minimumAccessibleBalance: number(input?.scenario?.minimumAccessibleBalance),
@@ -1136,6 +1147,9 @@
     });
     if (input.scenario?.surplusDestination && !["enjoyment", "super", "accessible-investments", "unallocated"].includes(normaliseSurplusDestination(input.scenario.surplusDestination))) {
       addValidation(errors, "scenario.surplusDestination", "Surplus destination is not supported.");
+    }
+    if (input.scenario?.workingPhaseSurplusDestination && !["enjoyment", "accessible-investments", "unallocated"].includes(normaliseWorkingPhaseSurplusDestination(input.scenario.workingPhaseSurplusDestination))) {
+      addValidation(errors, "scenario.workingPhaseSurplusDestination", "Working-phase surplus destination is not supported.");
     }
 
     const assetInputs = Array.isArray(input.assets) ? input.assets.map(normaliseProjectionAsset) : [];
@@ -1466,7 +1480,7 @@
         "Calculate household lifestyle requirement in nominal dollars using today's-dollar inflation, including one-off lifestyle events only in their selected calendar year.",
         "Calculate annual operating surplus or shortfall before portfolio withdrawals.",
         "Fund required lifestyle shortfalls from accessible assets first, then available super where permitted.",
-        "Apply surplus destination rules to retirement-phase surplus cash.",
+        "Apply the selected working-phase or retirement surplus destination to remaining surplus cash.",
         "Apply midpoint total-return earnings to earning accessible investments and super balances.",
       ],
       ageConvention: "A person's currentAge is treated as their age at the start of projection year zero. Semi-retirement, full-retirement, super access and contribution stop transitions apply when age >= the entered transition age.",
@@ -1484,7 +1498,8 @@
       superContributionTiming: "Employer and additional concessional contributions are reduced by 15% contributions tax before being added to super. The projection does not optimise concessional caps or carry-forward amounts.",
       superAccessTreatment: "scenario-assumed-access-age",
       superAccessNote: "Super availability is modelled using the entered scenario access age. The engine does not independently determine whether all legal conditions of release are satisfied.",
-      accessibleContributionTreatment: "accessibleInvestments.externalAnnualAccessibleContribution/currentAnnualContributions is treated as a working-phase discretionary contribution. It ceases once the household enters semi-retirement unless surplusDestination is accessible-investments.",
+      accessibleContributionTreatment: "accessibleInvestments.externalAnnualAccessibleContribution/currentAnnualContributions is treated as a planned accessible investment contribution while working. It is deducted from working cashflow before any remaining surplus is allocated and ceases once the household enters semi-retirement.",
+      workingPhaseSurplusTreatment: `Working-phase cash surplus after normal cash needs and planned accessible investment contributions uses the selected one-destination rule: ${normalised.scenario.workingPhaseSurplusDestination}. Legacy scenarios default to accessible investments to preserve prior projection behaviour.`,
       additionalSuperContributionTreatment: "Person-specific voluntary/additional super contributions cease at the person's own semi-retirement age by default. Employer super continues while that person still has employment income.",
       semiRetirementSurplusTreatment: `Retirement-phase annual surplus uses the selected one-destination rule: ${normalised.scenario.surplusDestination}. The default is extra lifestyle/enjoyment.`,
       oneOffLifestyleSpendingTreatment: "scenario.oneOffLifestyleEvents stores larger expenses that occur in selected projection years. Amounts are entered in today's dollars, inflated to the event year using the scenario inflation rate, added to that year's lifestyle requirement only, and funded through the same household cash, accessible-investment and eligible-super waterfall as other spending.",
@@ -1546,7 +1561,7 @@
       }
     });
     if (normalised.accessibleInvestments.externalAnnualAccessibleContribution > 0) {
-      warnings.push("External annual accessible contribution is modelled only in working-phase years and ceases once the household enters semi-retirement.");
+      warnings.push("Planned accessible investment contribution while working is modelled only in working-phase years and ceases once the household enters semi-retirement.");
     }
     const assetStates = {};
     normalised.assets.forEach((asset) => {
@@ -1712,24 +1727,39 @@
       const totalRentalTaxableIncome = roundCurrency(passiveIncomeRows.filter((income) => income.type === "rentalTaxableIncome").reduce((total, income) => total + income.taxableIncome, 0));
       const otherIncome = roundCurrency(normalised.household.otherAnnualIncome);
       const plannedAdditionalSuperContribution = roundCurrency(peopleYear.reduce((total, person) => total + person.additionalSuperContribution, 0));
-      const householdCashRequirement = roundCurrency(totalProjectedLifestyleSpending + annualDebtCashRequirement + plannedAdditionalSuperContribution);
       const netHouseholdCashIncome = roundCurrency(totalNetEmploymentIncome + otherIncome + netRentalCashflow);
-      const cashSurplusOrShortfall = roundCurrency(netHouseholdCashIncome - householdCashRequirement);
-      const annualLifestyleSurplusOrShortfall = cashSurplusOrShortfall;
-      const positiveAnnualSurplus = roundCurrency(Math.max(0, annualLifestyleSurplusOrShortfall));
-      const surplusDestination = normalised.scenario.surplusDestination;
-      const plannedExternalAccessibleContribution = phase === "working"
+      const householdCashRequirementBeforePlannedAccessibleContribution = roundCurrency(totalProjectedLifestyleSpending + annualDebtCashRequirement + plannedAdditionalSuperContribution);
+      const requestedPlannedExternalAccessibleContribution = phase === "working"
         ? roundCurrency(normalised.accessibleInvestments.externalAnnualAccessibleContribution)
         : 0;
+      const plannedExternalAccessibleContributionCapacity = phase === "working"
+        ? roundCurrency(Math.max(0, netHouseholdCashIncome - householdCashRequirementBeforePlannedAccessibleContribution))
+        : 0;
+      const plannedExternalAccessibleContribution = roundCurrency(Math.min(
+        requestedPlannedExternalAccessibleContribution,
+        plannedExternalAccessibleContributionCapacity,
+      ));
+      const plannedExternalAccessibleContributionShortfall = roundCurrency(Math.max(
+        0,
+        requestedPlannedExternalAccessibleContribution - plannedExternalAccessibleContribution,
+      ));
+      const plannedExternalAccessibleContributionWasReduced = plannedExternalAccessibleContributionShortfall > 0;
       const ceasedExternalAccessibleContribution = phase === "working"
         ? 0
         : roundCurrency(normalised.accessibleInvestments.externalAnnualAccessibleContribution);
-      let householdSurplusAccessibleContribution = phase === "working" ? positiveAnnualSurplus : 0;
+      const householdCashRequirement = roundCurrency(householdCashRequirementBeforePlannedAccessibleContribution + plannedExternalAccessibleContribution);
+      const cashSurplusOrShortfall = roundCurrency(netHouseholdCashIncome - householdCashRequirement);
+      const annualLifestyleSurplusOrShortfall = cashSurplusOrShortfall;
+      const positiveAnnualSurplus = roundCurrency(Math.max(0, annualLifestyleSurplusOrShortfall));
+      const workingPhaseSurplusDestination = normalised.scenario.workingPhaseSurplusDestination;
+      const retirementSurplusDestination = normalised.scenario.surplusDestination;
+      const surplusDestination = phase === "working" ? workingPhaseSurplusDestination : retirementSurplusDestination;
+      let householdSurplusAccessibleContribution = 0;
       let surplusToAccessibleInvestments = 0;
       let surplusToSuper = 0;
       let surplusAvailableForEnjoyment = 0;
       let unallocatedSurplus = 0;
-      if (phase !== "working" && positiveAnnualSurplus > 0) {
+      if (positiveAnnualSurplus > 0) {
         if (surplusDestination === "accessible-investments") {
           surplusToAccessibleInvestments = positiveAnnualSurplus;
         } else if (surplusDestination === "super") {
@@ -1739,6 +1769,10 @@
         } else {
           surplusAvailableForEnjoyment = positiveAnnualSurplus;
         }
+      }
+      if (phase === "working") {
+        householdSurplusAccessibleContribution = surplusToAccessibleInvestments;
+        surplusToSuper = 0;
       }
       if (surplusToSuper > 0) {
         const allocations = allocateHouseholdAmountToPeople(surplusToSuper, peopleYear);
@@ -1751,8 +1785,7 @@
       }
       const totalAdditionalSuperContribution = roundCurrency(peopleYear.reduce((total, person) => total + person.additionalSuperContribution, 0));
       const accessibleInvestmentContribution = roundCurrency(
-        householdSurplusAccessibleContribution
-        + plannedExternalAccessibleContribution
+        plannedExternalAccessibleContribution
         + surplusToAccessibleInvestments,
       );
       let ordinaryAccessibleBalance = roundCurrency(Math.max(0, accessibleOpening - offsetOpeningBalance));
@@ -1844,7 +1877,6 @@
       const accessibleReconciliationExpectedClosing = roundCurrency(
         accessibleOpening
         + accessibleInvestmentEarnings
-        + householdSurplusAccessibleContribution
         + plannedExternalAccessibleContribution
         + surplusToAccessibleInvestments
         - totalAccessibleInvestmentWithdrawal
@@ -1999,8 +2031,15 @@
           totalNetWorth,
           plannedAdditionalConcessionalContributionsPaidFromCash: plannedAdditionalSuperContribution,
           additionalConcessionalContributionsPaidFromCash: totalAdditionalSuperContribution,
+          householdCashRequirementBeforePlannedAccessibleContribution,
+          cashSurplusBeforePlannedAccessibleContribution: roundCurrency(netHouseholdCashIncome - householdCashRequirementBeforePlannedAccessibleContribution),
           householdCashRequirement,
           householdCashRequirementBeforeSurplusDestination: householdCashRequirement,
+          plannedAccessibleInvestmentContributionRequested: requestedPlannedExternalAccessibleContribution,
+          plannedAccessibleInvestmentContributionApplied: plannedExternalAccessibleContribution,
+          plannedExternalAccessibleContributionRequested: requestedPlannedExternalAccessibleContribution,
+          plannedExternalAccessibleContributionShortfall,
+          plannedExternalAccessibleContributionWasReduced,
           normalLifestyleSpending: applicableLifestyleSpending,
           oneOffLifestyleSpending,
           oneOffLifestyleSpendingTodayDollars,
@@ -2008,6 +2047,7 @@
           totalProjectedLifestyleSpending,
           annualLifestyleSurplusOrShortfall,
           cashSurplusOrShortfall,
+          cashSurplusBeforeAllocation: cashSurplusOrShortfall,
           requiredTotalPortfolioWithdrawal,
           totalPortfolioWithdrawal,
           optionalAdditionalLifestyleWithdrawal,
@@ -2030,6 +2070,8 @@
           externalAnnualAccessibleContribution: plannedExternalAccessibleContribution,
           plannedExternalAccessibleContribution,
           ceasedExternalAccessibleContribution,
+          workingPhaseSurplusDestination,
+          retirementSurplusDestination,
           surplusDestination,
           surplusToSuper,
           surplusToAccessibleInvestments,
