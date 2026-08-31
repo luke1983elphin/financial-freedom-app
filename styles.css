@@ -166,6 +166,18 @@
   min-width: 0;
 }
 
+.semi-retirement-concessional-fields {
+  grid-template-columns: minmax(150px, 0.8fr) minmax(230px, 1.2fr) minmax(190px, 0.9fr) auto;
+}
+
+.semi-retirement-concessional-fields.is-single-person {
+  grid-template-columns: minmax(230px, 1.2fr) minmax(190px, 0.9fr) auto;
+}
+
+.semi-retirement-concessional-section .field-help {
+  max-width: 72rem;
+}
+
 .semi-retirement-results-dashboard {
   display: grid;
   gap: 18px;

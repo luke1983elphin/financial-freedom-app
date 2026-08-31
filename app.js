@@ -267,8 +267,8 @@
       body: "The age this scenario assumes super becomes available. Actual access depends on superannuation preservation and conditions-of-release rules.",
     },
     semiAdditionalSuperContribution: {
-      title: "Additional super contribution",
-      body: "A voluntary contribution above employer super. In this scenario, planned voluntary contributions stop when that person semi-retires unless surplus is later directed to super.",
+      title: "Existing recurring additional super contribution",
+      body: "A recurring voluntary concessional contribution above employer super. In this scenario, planned recurring contributions reduce the person's modelled taxable income, receive the 15% contributions-tax treatment inside super, and stop when that person semi-retires unless surplus is later directed to super.",
     },
     semiRetirementLifestyleSpending: {
       title: "Semi-retirement lifestyle spending",
@@ -293,6 +293,22 @@
     semiPlannedAccessibleInvestmentContribution: {
       title: "Planned accessible investment contribution while working",
       body: "This is a fixed amount you plan to invest each year while fully working. It is separate from any additional cash surplus remaining after expenses and other commitments.",
+    },
+    semiAdvancedConcessionalContributions: {
+      title: "Planned extra concessional contributions",
+      body: "Financial Freedom assumes planned extra concessional contributions receive concessional tax treatment for this scenario. The contribution reduces the selected person's modelled taxable income and 15% contributions tax is applied within super. Actual eligibility, contribution caps, deductions and additional super taxes can depend on your circumstances and are not verified by this projection.",
+    },
+    semiExtraConcessionalContributionAmount: {
+      title: "Extra concessional contribution",
+      body: "This amount is additional to employer super already included in the projection. The scenario applies simplified concessional tax treatment; actual contribution limits and eligibility must be checked separately.",
+    },
+    semiExtraConcessionalContributionYear: {
+      title: "Financial year",
+      body: "Choose the financial year in which the extra concessional contribution is modelled. A 2030-31 selection is applied once to the 2030 annual projection row.",
+    },
+    semiExtraConcessionalContributionPerson: {
+      title: "Person",
+      body: "Choose whose super account receives this planned extra concessional contribution.",
     },
     semiWorkingSurplusDestination: {
       title: "Working-phase surplus destination",
@@ -7143,6 +7159,33 @@
     return `${description} - ${money(event.amountTodayDollars)} today - ${event.year}${ageLabel ? ` (${ageLabel})` : ""}`;
   }
 
+  function semiRetirementPersonOptions(draft = semiRetirementScenarioDraft) {
+    return (draft?.people || []).map((person, index) => [
+      person.id || `person${index + 1}`,
+      person.name || `Person ${index + 1}`,
+    ]);
+  }
+
+  function semiRetirementConcessionalYearOptions(draft = semiRetirementScenarioDraft, personId = "") {
+    const range = window.FFSSemiRetirementUi?.projectionYearRange?.(draft) || {};
+    const startYear = Number.isFinite(Number(range.startYear)) ? Number(range.startYear) : currentYear();
+    const endYear = Number.isFinite(Number(range.endYear)) ? Number(range.endYear) : startYear + 40;
+    const cappedEndYear = Math.max(startYear, Math.min(endYear, startYear + 80));
+    return Array.from({ length: cappedEndYear - startYear + 1 }, (_, offset) => {
+      const year = startYear + offset;
+      const label = window.FFSSemiRetirementUi?.financialYearLabel?.(year) || `${year}-${String((year + 1) % 100).padStart(2, "0")}`;
+      const ageLabel = window.FFSSemiRetirementUi?.plannedConcessionalContributionAgeLabel?.(draft, year, personId) || "";
+      return [year, ageLabel ? `${label} - ${ageLabel}` : label];
+    });
+  }
+
+  function semiRetirementConcessionalContributionSummary(event, draft = semiRetirementScenarioDraft) {
+    const person = (draft?.people || []).find((candidate) => String(candidate.id) === String(event.personId));
+    const personNameLabel = person?.name || event.personId || "Person";
+    const yearLabel = window.FFSSemiRetirementUi?.financialYearLabel?.(event.financialYear) || String(event.financialYear || "financial year");
+    return `${personNameLabel} extra concessional super - ${money(event.amount)} - ${yearLabel}`;
+  }
+
   function semiRetirementLegacyOptionalDrawNoticeHtml(draft = semiRetirementScenarioDraft) {
     const amount = window.FFSSemiRetirementUi?.legacyOptionalLifestyleDrawAmount?.(draft) || 0;
     if (amount <= 0) return "";
@@ -7191,6 +7234,52 @@
           <p class="semi-retirement-one-off-empty">No one-off lifestyle expenses added. Your normal lifestyle spending still inflates each year.</p>
         `}
       </section>
+    `;
+  }
+
+  function semiRetirementPlannedConcessionalContributionsHtml(draft = semiRetirementScenarioDraft) {
+    const events = window.FFSSemiRetirementUi?.normalisePlannedConcessionalContributions?.(draft?.scenario?.plannedConcessionalContributions) || [];
+    const peopleOptions = semiRetirementPersonOptions(draft);
+    const hasSinglePerson = peopleOptions.length <= 1;
+    const buttonText = events.length ? "+ Add another financial year" : "+ Add concessional contribution";
+    return `
+      <details class="semi-retirement-input-details semi-retirement-concessional-details mt-4">
+        <summary>Advanced super contributions</summary>
+        <section class="semi-retirement-one-off-section semi-retirement-concessional-section" data-planned-concessional-contributions>
+          <div class="semi-retirement-one-off-heading">
+            <div>
+              <span class="field-label field-label-with-info"><span>Planned extra concessional contributions</span>${infoButtonHtml("semiAdvancedConcessionalContributions", "Planned extra concessional contributions")}</span>
+              <p class="field-help">Add extra concessional super contributions for selected financial years to see how they may affect your retirement projection.</p>
+            </div>
+            <button class="btn btn-small" type="button" data-semi-action="add-planned-concessional-contribution">${escapeHtml(buttonText)}</button>
+          </div>
+          ${events.length ? `
+            <div class="semi-retirement-one-off-list">
+              ${events.map((event, index) => {
+                const prefix = `scenario.plannedConcessionalContributions.${index}`;
+                return `
+                  <article class="semi-retirement-one-off-row semi-retirement-concessional-row" data-planned-concessional-id="${escapeHtml(event.id)}">
+                    <div class="semi-retirement-one-off-summary">
+                      <strong>${escapeHtml(semiRetirementConcessionalContributionSummary(event, draft))}</strong>
+                      <span>Contribution limits may apply.</span>
+                    </div>
+                    <div class="semi-retirement-one-off-fields semi-retirement-concessional-fields ${hasSinglePerson ? "is-single-person" : ""}">
+                      ${hasSinglePerson ? "" : semiRetirementInput({ label: "Person", path: `${prefix}.personId`, type: "select", options: peopleOptions, infoKey: "semiExtraConcessionalContributionPerson" })}
+                      ${semiRetirementInput({ label: "Financial year", path: `${prefix}.financialYear`, type: "select", options: semiRetirementConcessionalYearOptions(draft, event.personId), infoKey: "semiExtraConcessionalContributionYear" })}
+                      ${semiRetirementInput({ label: "Extra concessional contribution", path: `${prefix}.amount`, step: "1000", infoKey: "semiExtraConcessionalContributionAmount", help: "Enter the additional concessional contribution you want to model for this financial year. The projection applies its simplified concessional tax treatment; actual contribution limits and eligibility must be checked separately." })}
+                      <button class="btn btn-small" type="button" data-semi-action="remove-planned-concessional-contribution" data-contribution-id="${escapeHtml(event.id)}" aria-label="Remove ${escapeHtml(semiRetirementConcessionalContributionSummary(event, draft))}">Remove</button>
+                    </div>
+                  </article>
+                `;
+              }).join("")}
+            </div>
+          ` : `
+            <p class="semi-retirement-one-off-empty">No planned extra concessional contribution events added.</p>
+          `}
+          <p class="field-help">Contribution limits apply. Employer contributions and other concessional contributions may reduce the amount available under the annual cap. Unused carry-forward amounts may also be available in some circumstances. This projection does not verify your actual available cap.</p>
+          <p class="field-help">Money contributed to super may not be accessible until the assumed super access age used in this scenario. Additional super tax can apply in some circumstances and is not fully modelled here.</p>
+        </section>
+      </details>
     `;
   }
 
@@ -7702,6 +7791,14 @@
   function renderSemiRetirementComparisonControls() {
     if (!semiRetirementComparisonDraft) return "";
     const people = semiRetirementComparisonDraft.people || [];
+    const comparisonOneOffEvents = window.FFSSemiRetirementUi?.normaliseOneOffLifestyleEvents?.(semiRetirementComparisonDraft?.scenario?.oneOffLifestyleEvents) || [];
+    const comparisonConcessionalEvents = window.FFSSemiRetirementUi?.normalisePlannedConcessionalContributions?.(semiRetirementComparisonDraft?.scenario?.plannedConcessionalContributions) || [];
+    const comparisonEventNotes = [];
+    if (comparisonOneOffEvents.length) comparisonEventNotes.push(`${comparisonOneOffEvents.length} one-off lifestyle spending event${comparisonOneOffEvents.length === 1 ? "" : "s"}`);
+    if (comparisonConcessionalEvents.length) comparisonEventNotes.push(`${comparisonConcessionalEvents.length} planned extra concessional contribution event${comparisonConcessionalEvents.length === 1 ? "" : "s"}`);
+    const comparisonEventNote = comparisonEventNotes.length
+      ? `${comparisonEventNotes.join(" and ")} are included in this comparison. Edit advanced event schedules in the main scenario inputs before creating a comparison.`
+      : "No one-off lifestyle spending or planned extra concessional contribution events are included in this comparison.";
     return `
       <div class="semi-retirement-comparison-controls">
         ${people.map((person, index) => {
@@ -7726,7 +7823,7 @@
             ${semiRetirementComparisonInput({ label: "Working-phase surplus destination", path: "scenario.workingPhaseSurplusDestination", type: "select", options: [["accessible-investments", "Contribute to accessible investments"], ["enjoyment", "Extra lifestyle / spending"], ["unallocated", "Leave as unallocated surplus"]] })}
             ${semiRetirementComparisonInput({ label: "Retirement surplus destination", path: "scenario.surplusDestination", type: "select", options: [["enjoyment", "Extra lifestyle / enjoyment"], ["super", "Contribute to super"], ["accessible-investments", "Contribute to accessible investments"], ["unallocated", "Leave as unallocated surplus"]] })}
           </div>
-          <p class="semi-retirement-comparison-note">${escapeHtml((window.FFSSemiRetirementUi?.normaliseOneOffLifestyleEvents?.(semiRetirementComparisonDraft?.scenario?.oneOffLifestyleEvents) || []).length ? "One-off lifestyle spending events are included in this comparison. Edit them in the main scenario inputs before creating a comparison." : "No one-off lifestyle spending events are included in this comparison.")}</p>
+          <p class="semi-retirement-comparison-note">${escapeHtml(comparisonEventNote)}</p>
         </article>
       </div>
     `;
@@ -8168,6 +8265,39 @@
       ["Property equity", semiRetirementMoney(household.totalPropertyEquity)],
       ["Projected net worth", semiRetirementMoney(household.totalNetWorth)],
     ].map(([label, value]) => ({ label, value }));
+    const superContributionRows = row.people.flatMap((person) => {
+      const name = person.name || person.id;
+      return [
+        { label: `${name} employer super`, value: semiRetirementMoney(person.employerSuperContribution) },
+        Number(person.recurringAdditionalSuperContribution || 0) > 0
+          ? { label: `${name} existing recurring extra super`, value: semiRetirementMoney(person.recurringAdditionalSuperContribution) }
+          : null,
+        Number(person.plannedExtraConcessionalContribution || 0) > 0
+          ? { label: `${name} planned extra concessional contribution`, value: semiRetirementMoney(person.plannedExtraConcessionalContribution) }
+          : null,
+        Number(person.plannedExtraConcessionalContribution || 0) > 0
+          ? { label: `${name} planned contribution tax`, value: semiRetirementMoney(person.plannedExtraConcessionalContributionTax) }
+          : null,
+        Number(person.plannedExtraConcessionalContribution || 0) > 0
+          ? { label: `${name} net planned contribution added to super`, value: semiRetirementMoney(person.netPlannedExtraConcessionalContribution) }
+          : null,
+        Number(person.surplusAdditionalSuperContribution || 0) > 0
+          ? { label: `${name} surplus directed to super`, value: semiRetirementMoney(person.surplusAdditionalSuperContribution) }
+          : null,
+        { label: `${name} total modelled super contributions`, value: semiRetirementMoney(person.totalModelledSuperContributions ?? (Number(person.employerSuperContribution || 0) + Number(person.additionalSuperContribution || 0))) },
+        Number(person.superContributionsTax || 0) > 0
+          ? { label: `${name} contributions tax`, value: semiRetirementMoney(person.superContributionsTax) }
+          : null,
+        Number(person.superWithdrawal || 0) > 0
+          ? { label: `${name} super withdrawal`, value: semiRetirementMoney(person.superWithdrawal) }
+          : null,
+        { label: `${name} closing super balance`, value: semiRetirementMoney(person.closingSuperBalance) },
+      ].filter(Boolean);
+    });
+    superContributionRows.push(
+      { label: "Total planned extra concessional contribution", value: semiRetirementMoney(household.plannedExtraConcessionalContributionsPaidFromCash) },
+      { label: "Combined household closing super balance", value: semiRetirementMoney(household.totalSuperBalance) },
+    );
     return `
       <div class="semi-retirement-annual-detail">
         ${row.people.map((person) => `
@@ -8180,14 +8310,23 @@
               { label: "Dividend income", value: semiRetirementMoney(person.dividendIncome) },
               { label: "Rental taxable income", value: semiRetirementMoney(person.rentalTaxableIncome) },
               { label: "Distribution income", value: semiRetirementMoney(person.distributionIncome) },
+              { label: "Taxable income before modelled concessional contributions", value: semiRetirementMoney(person.taxableIncomeBeforeModelledConcessionalContributions ?? person.totalTaxableIncome) },
+              { label: "Modelled concessional contribution taxable-income reduction", value: semiRetirementMoney(person.modelledConcessionalContributionTaxableIncomeReduction) },
               { label: "Total taxable income", value: semiRetirementMoney(person.totalTaxableIncome) },
               { label: "Income tax", value: semiRetirementMoney(person.incomeTax) },
               { label: "Medicare", value: semiRetirementMoney(person.medicareLevy) },
               { label: "Medicare Levy Surcharge", value: semiRetirementMoney(person.medicareLevySurcharge) },
+              { label: "STSL repayment income", value: semiRetirementMoney(person.stslRepaymentIncome ?? person.totalTaxableIncome) },
               { label: "STSL", value: semiRetirementMoney(person.stslRepayment) },
               { label: "Net cash income", value: semiRetirementMoney(person.netIncome ?? person.netEmploymentIncome) },
               { label: "Employer super", value: semiRetirementMoney(person.employerSuperContribution) },
-              { label: "Additional super contribution", value: semiRetirementMoney(person.additionalSuperContribution) },
+              { label: "Existing recurring extra super", value: semiRetirementMoney(person.recurringAdditionalSuperContribution) },
+              { label: "Planned extra concessional contribution", value: semiRetirementMoney(person.plannedExtraConcessionalContribution) },
+              { label: "Planned contribution tax", value: semiRetirementMoney(person.plannedExtraConcessionalContributionTax) },
+              { label: "Net planned contribution added to super", value: semiRetirementMoney(person.netPlannedExtraConcessionalContribution) },
+              { label: "Total additional super contribution", value: semiRetirementMoney(person.additionalSuperContribution) },
+              { label: "Total modelled super contributions", value: semiRetirementMoney(person.totalModelledSuperContributions ?? (Number(person.employerSuperContribution || 0) + Number(person.additionalSuperContribution || 0))) },
+              { label: "Contributions tax", value: semiRetirementMoney(person.superContributionsTax) },
               { label: "Opening super", value: semiRetirementMoney(person.openingSuperBalance) },
               { label: "Super earnings", value: semiRetirementMoney(person.superInvestmentEarnings) },
               { label: "Super withdrawal", value: semiRetirementMoney(person.superWithdrawal) },
@@ -8200,6 +8339,10 @@
           ${semiRetirementDetailRows(cashflowSummaryRows)}
           ${household.plannedExternalAccessibleContributionWasReduced ? `<p class="field-help mt-2">The planned accessible investment contribution was reduced because available working cashflow was lower than the planned amount.</p>` : ""}
           ${row.warnings?.length ? `<div class="semi-retirement-row-warning"><strong>Notes</strong><ul>${row.warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}</ul></div>` : ""}
+        </section>
+        <section>
+          <h5>Super contributions</h5>
+          ${semiRetirementDetailRows(superContributionRows)}
         </section>
         <section>
           <h5>Surplus allocation</h5>
@@ -8239,7 +8382,7 @@
           <table class="semi-retirement-annual-table">
             <thead>
               <tr>
-                <th>Year</th><th>Person 1 age</th><th>Person 2 age</th><th>Household phase</th><th>Net cash income</th><th>Projected spending</th><th>Accessible withdrawal</th><th>Accessible investments</th><th>Super</th><th>Total investable assets</th><th>Total debt</th><th>Net rental cashflow</th><th>Projected net worth</th><th>Unfunded spending</th><th>Details</th>
+                <th>Year</th><th>Person 1 age</th><th>Person 2 age</th><th>Household phase</th><th>Net cash income</th><th>Projected spending</th><th>Accessible withdrawal</th><th>Accessible investments</th><th>Super balance</th><th>Total investable assets</th><th>Total debt</th><th>Net rental cashflow</th><th>Projected net worth</th><th>Unfunded spending</th><th>Details</th>
               </tr>
             </thead>
             <tbody>
@@ -8279,6 +8422,7 @@
                   { label: "Lifestyle spending", value: semiRetirementMoney(household.applicableLifestyleSpending) },
                   { label: "Portfolio withdrawal", value: semiRetirementMoney(household.totalAccessibleWithdrawal) },
                   { label: "Accessible investments", value: semiRetirementMoney(household.closingAccessibleInvestmentBalance) },
+                  { label: "Super balance", value: semiRetirementMoney(household.totalSuperBalance) },
                 ])}
                 <details><summary>View details</summary>${renderSemiRetirementAnnualDetailHtml(row)}</details>
               </article>
@@ -8478,6 +8622,7 @@
             ${semiRetirementInput({ label: "Investment property capital growth (%)", path: "assumptions.investmentPropertyCapitalGrowthRatePct", step: "0.1", help: "Scenario-only assumption used for rental and investment properties unless a property-specific rate has been entered." })}
             ${semiRetirementInput({ label: "Planned accessible investment contribution while working", path: "accessibleInvestments.externalAnnualAccessibleContribution", step: "1000", infoKey: "semiPlannedAccessibleInvestmentContribution", help: "A fixed amount you plan to add to accessible investments each year while the household is fully working. Any additional cash surplus is handled separately using the working-phase surplus setting." })}
           </div>
+          ${semiRetirementPlannedConcessionalContributionsHtml(draft)}
           <p class="field-help mt-3">For global assumptions used elsewhere in the app, update the main Financial Plan assumptions. These assumptions apply only to this scenario and do not change your main Financial Plan.</p>
         </section>
         <section class="semi-retirement-input-section">
@@ -8683,6 +8828,70 @@
     renderSemiRetirementScenario(CALC.calculatePlan(plan));
     document.querySelector("[data-one-off-lifestyle-spending]")?.scrollIntoView({ behavior: "smooth", block: "center" });
     updateSaveStatus("One-off lifestyle expense removed. Calculate the scenario to update results.");
+  }
+
+  function addSemiRetirementPlannedConcessionalContribution() {
+    if (!window.FFSSemiRetirementUi) return;
+    ensureSemiRetirementScenarioDraft(CALC.calculatePlan(plan));
+    const events = window.FFSSemiRetirementUi.normalisePlannedConcessionalContributions(semiRetirementScenarioDraft.scenario?.plannedConcessionalContributions);
+    const peopleOptions = semiRetirementPersonOptions(semiRetirementScenarioDraft);
+    const range = window.FFSSemiRetirementUi.projectionYearRange(semiRetirementScenarioDraft);
+    const startYear = Number.isFinite(Number(range.startYear)) ? Number(range.startYear) : currentYear();
+    const endYear = Number.isFinite(Number(range.endYear)) ? Number(range.endYear) : startYear + 40;
+    const existing = new Set(events.map((event) => `${event.personId}:${event.financialYear}`));
+    let selected = null;
+    for (let year = startYear; year <= endYear && !selected; year += 1) {
+      for (const [personId] of peopleOptions) {
+        if (!existing.has(`${personId}:${year}`)) {
+          selected = { personId, financialYear: year };
+          break;
+        }
+      }
+    }
+    if (!selected) {
+      updateSaveStatus("Each supported person and financial year already has a planned extra contribution. Edit an existing row instead.");
+      return;
+    }
+    const nextIndex = events.length;
+    events.push({
+      id: window.FFSSemiRetirementUi.plannedConcessionalContributionEventId(nextIndex),
+      personId: selected.personId,
+      financialYear: selected.financialYear,
+      amount: 0,
+    });
+    window.FFSSemiRetirementUi.setDraftPath(semiRetirementScenarioDraft, "scenario.plannedConcessionalContributions", events);
+    clearSemiRetirementAdjustmentState();
+    clearSemiRetirementComparisonState();
+    semiRetirementScenarioResult = null;
+    semiRetirementScenarioInputs = null;
+    semiRetirementScenarioResultDraft = null;
+    semiRetirementScenarioDirty = true;
+    renderSemiRetirementScenario(CALC.calculatePlan(plan));
+    window.requestAnimationFrame(() => {
+      const target = document.querySelector(`[data-semi-input="scenario.plannedConcessionalContributions.${nextIndex}.amount"]`);
+      target?.focus({ preventScroll: true });
+      target?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    updateSaveStatus("Planned extra concessional contribution added. Calculate the scenario to update results.");
+  }
+
+  function removeSemiRetirementPlannedConcessionalContribution(eventId) {
+    if (!window.FFSSemiRetirementUi || !eventId) return;
+    ensureSemiRetirementScenarioDraft(CALC.calculatePlan(plan));
+    const events = window.FFSSemiRetirementUi
+      .normalisePlannedConcessionalContributions(semiRetirementScenarioDraft.scenario?.plannedConcessionalContributions)
+      .filter((event) => event.id !== eventId);
+    window.FFSSemiRetirementUi.setDraftPath(semiRetirementScenarioDraft, "scenario.plannedConcessionalContributions", events);
+    clearSemiRetirementAdjustmentState();
+    clearSemiRetirementComparisonState();
+    semiRetirementScenarioResult = null;
+    semiRetirementScenarioInputs = null;
+    semiRetirementScenarioResultDraft = null;
+    semiRetirementScenarioDirty = true;
+    semiRetirementScenarioErrors = semiRetirementScenarioErrors.filter((error) => !String(error.path || "").startsWith("scenario.plannedConcessionalContributions"));
+    renderSemiRetirementScenario(CALC.calculatePlan(plan));
+    document.querySelector("[data-planned-concessional-contributions]")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    updateSaveStatus("Planned extra concessional contribution removed. Calculate the scenario to update results.");
   }
 
   function focusSemiRetirementOneOffLifestyleEvents() {
@@ -12474,6 +12683,27 @@
         if (!afterByKey.has(eventKey(event))) rows.push(scenarioChange(`Removed one-off expense: ${event.description || "One-off expense"}`, eventSummary(event), "Not included"));
       });
     }
+    const beforeConcessionalEvents = window.FFSSemiRetirementUi?.normalisePlannedConcessionalContributions?.(baseDraft?.scenario?.plannedConcessionalContributions) || [];
+    const afterConcessionalEvents = window.FFSSemiRetirementUi?.normalisePlannedConcessionalContributions?.(scenarioDraft?.scenario?.plannedConcessionalContributions) || [];
+    const contributionSummary = (event, draft) => semiRetirementConcessionalContributionSummary(event, draft);
+    const contributionKey = (event) => `${event.personId}-${event.financialYear}`;
+    const beforeConcessionalByKey = new Map(beforeConcessionalEvents.map((event) => [contributionKey(event), event]));
+    const afterConcessionalByKey = new Map(afterConcessionalEvents.map((event) => [contributionKey(event), event]));
+    if (JSON.stringify(beforeConcessionalEvents) !== JSON.stringify(afterConcessionalEvents)) {
+      rows.push(scenarioChange(
+        "Planned extra concessional contributions",
+        beforeConcessionalEvents.length ? `${beforeConcessionalEvents.length} event${beforeConcessionalEvents.length === 1 ? "" : "s"}` : "None",
+        afterConcessionalEvents.length ? `${afterConcessionalEvents.length} event${afterConcessionalEvents.length === 1 ? "" : "s"}` : "None",
+      ));
+      afterConcessionalEvents.forEach((event) => {
+        const beforeEvent = beforeConcessionalByKey.get(contributionKey(event));
+        if (!beforeEvent) rows.push(scenarioChange(`Added: ${contributionSummary(event, scenarioDraft)}`, "Not included", contributionSummary(event, scenarioDraft)));
+        else if (JSON.stringify(beforeEvent) !== JSON.stringify(event)) rows.push(scenarioChange(`Changed: ${contributionSummary(event, scenarioDraft)}`, contributionSummary(beforeEvent, baseDraft), contributionSummary(event, scenarioDraft)));
+      });
+      beforeConcessionalEvents.forEach((event) => {
+        if (!afterConcessionalByKey.has(contributionKey(event))) rows.push(scenarioChange(`Removed: ${contributionSummary(event, baseDraft)}`, contributionSummary(event, baseDraft), "Not included"));
+      });
+    }
     return rows;
   }
 
@@ -14008,6 +14238,8 @@
         if (semiAction.dataset.semiAction === "use-plan-living-expenses") useFinancialPlanLivingExpensesForSemiRetirementScenario();
         if (semiAction.dataset.semiAction === "add-one-off-lifestyle-event") addSemiRetirementOneOffLifestyleEvent();
         if (semiAction.dataset.semiAction === "remove-one-off-lifestyle-event") removeSemiRetirementOneOffLifestyleEvent(semiAction.dataset.eventId);
+        if (semiAction.dataset.semiAction === "add-planned-concessional-contribution") addSemiRetirementPlannedConcessionalContribution();
+        if (semiAction.dataset.semiAction === "remove-planned-concessional-contribution") removeSemiRetirementPlannedConcessionalContribution(semiAction.dataset.contributionId);
         if (semiAction.dataset.semiAction === "manage-one-off-lifestyle-events") focusSemiRetirementOneOffLifestyleEvents();
         if (semiAction.dataset.semiAction === "edit-inputs") {
           const target = document.querySelector("[data-semi-retirement-inputs]");

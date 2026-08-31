@@ -173,6 +173,7 @@
       totalOptionalAdditionalLifestyleWithdrawals: 0,
       totalOneOffLifestyleSpending: 0,
       totalOneOffLifestyleSpendingTodayDollars: 0,
+      totalPlannedExtraConcessionalContributions: 0,
       totalSurplusToSuper: 0,
       totalSurplusToAccessibleInvestments: 0,
       totalSurplusAvailableForEnjoyment: 0,
@@ -594,6 +595,21 @@
       amountTodayDollars: roundCurrency(Math.max(0, number(item.amountTodayDollars ?? item.amount ?? item.todayDollarAmount))),
       year: Math.round(number(item.year ?? item.calendarYear)),
     };
+  }
+
+  function normalisePlannedConcessionalContributionEvent(item = {}, index = 0) {
+    return {
+      id: normaliseRecordId(item, "planned-concessional", index),
+      personId: String(item.personId || item.owner || "").trim(),
+      financialYear: Math.round(number(item.financialYear ?? item.year ?? item.calendarYear)),
+      amount: roundCurrency(Math.max(0, number(item.amount ?? item.extraConcessionalContribution ?? item.contributionAmount))),
+    };
+  }
+
+  function plannedConcessionalContributionForYear(events = [], personId = "", calendarYear = null) {
+    return roundCurrency(events
+      .filter((event) => event.personId === personId && event.financialYear === calendarYear)
+      .reduce((total, event) => total + number(event.amount), 0));
   }
 
   function oneOffLifestyleEventsForYear(events = [], calendarYear, inflationRate, yearIndex) {
@@ -1055,6 +1071,9 @@
         oneOffLifestyleEvents: Array.isArray(input?.scenario?.oneOffLifestyleEvents)
           ? input.scenario.oneOffLifestyleEvents.map(normaliseOneOffLifestyleEvent)
           : [],
+        plannedConcessionalContributions: Array.isArray(input?.scenario?.plannedConcessionalContributions)
+          ? input.scenario.plannedConcessionalContributions.map(normalisePlannedConcessionalContributionEvent)
+          : [],
         legacyOptionalAdditionalLifestyleWithdrawal: roundCurrency(Math.max(0, legacyOptionalAdditionalLifestyleWithdrawal)),
         optionalAdditionalLifestyleWithdrawal: 0,
         // Deprecated alias retained for older consumers; new G2D scenarios do not use it.
@@ -1131,6 +1150,33 @@
     const projectionEndYear = projectionRangeYears === null || !Number.isFinite(projectionStartYear)
       ? null
       : projectionStartYear + projectionRangeYears;
+    const peopleIdsForEvents = new Set(projectionRangePeople.map((person, index) => String(person?.id || `person${index + 1}`)));
+    const plannedConcessionalEvents = Array.isArray(input.scenario?.plannedConcessionalContributions)
+      ? input.scenario.plannedConcessionalContributions
+      : [];
+    const plannedConcessionalIds = new Set();
+    const plannedConcessionalPersonYears = new Set();
+    plannedConcessionalEvents.forEach((rawEvent, index) => {
+      const prefix = `scenario.plannedConcessionalContributions.${index}`;
+      const event = normalisePlannedConcessionalContributionEvent(rawEvent, index);
+      const amountSource = rawEvent?.amount ?? rawEvent?.extraConcessionalContribution ?? rawEvent?.contributionAmount;
+      if (plannedConcessionalIds.has(event.id)) addValidation(errors, `${prefix}.id`, "Planned concessional contribution events need unique IDs.");
+      plannedConcessionalIds.add(event.id);
+      if (!event.personId || !peopleIdsForEvents.has(event.personId)) {
+        addValidation(errors, `${prefix}.personId`, "Choose a person for this planned concessional contribution.");
+      }
+      if (!hasFiniteNumber(amountSource) || number(amountSource) <= 0) {
+        addValidation(errors, `${prefix}.amount`, "Enter an extra concessional contribution greater than $0.");
+      }
+      if (!Number.isFinite(event.financialYear) || event.financialYear < projectionStartYear || (projectionEndYear !== null && event.financialYear > projectionEndYear)) {
+        addValidation(errors, `${prefix}.financialYear`, "Choose a financial year within this projection.");
+      }
+      const personYearKey = `${event.personId}:${event.financialYear}`;
+      if (plannedConcessionalPersonYears.has(personYearKey)) {
+        addValidation(errors, `${prefix}.financialYear`, "Use one planned extra concessional contribution per person and financial year, then edit that amount if needed.");
+      }
+      plannedConcessionalPersonYears.add(personYearKey);
+    });
     const oneOffEvents = Array.isArray(input.scenario?.oneOffLifestyleEvents)
       ? input.scenario.oneOffLifestyleEvents.map(normaliseOneOffLifestyleEvent)
       : [];
@@ -1327,6 +1373,19 @@
     return 0;
   }
 
+  function stslRepaymentIncomeForPerson(taxableIncomeAfterConcessionalContribution, taxReducingConcessionalContribution) {
+    if (typeof CALC.calculatePersonSTSLRepaymentIncome === "function") {
+      return CALC.calculatePersonSTSLRepaymentIncome({
+        taxableIncomeBeforeFHSSAdjustments: taxableIncomeAfterConcessionalContribution,
+        personalDeductibleSuperContributions: taxReducingConcessionalContribution,
+      });
+    }
+    return roundCurrency(
+      Math.max(0, number(taxableIncomeAfterConcessionalContribution))
+      + Math.max(0, number(taxReducingConcessionalContribution)),
+    );
+  }
+
   function employerSuperContribution(grossIncome, rate) {
     const cappedIncome = DEFAULT_MAXIMUM_CONTRIBUTION_BASE > 0
       ? Math.min(Math.max(0, grossIncome), DEFAULT_MAXIMUM_CONTRIBUTION_BASE)
@@ -1473,7 +1532,7 @@
       financialYear: DEFAULT_FINANCIAL_YEAR,
       annualCalculationOrder: [
         "Determine person employment phases and gross employment income.",
-        "Allocate passive taxable income by owner, then calculate person-level tax, Medicare levy, MLS and capped STSL repayment using existing helpers.",
+        "Allocate passive taxable income by owner, apply modelled tax-reducing concessional super contributions, then calculate person-level tax, Medicare levy, MLS and capped STSL repayment using existing helpers.",
         "Calculate gross and net employer/additional concessional super contributions.",
         "Project annual debt schedules and property values from explicit asset/liability inputs.",
         "Escalate rental/property cash income by CPI, then calculate cashflow using the selected after-interest or before-interest treatment.",
@@ -1496,6 +1555,7 @@
       inflation: "Household lifestyle spending and rental cash income are treated as projection-start dollars and inflated from projection year zero using the same CPI assumption.",
       investmentReturnTiming: "Total-return method. Earnings equal opening balance return plus 50% of net annual cash movement return. Fees use the same midpoint balance. Dividends, interest and rent are not added separately.",
       superContributionTiming: "Employer and additional concessional contributions are reduced by 15% contributions tax before being added to super. The projection does not optimise concessional caps or carry-forward amounts.",
+      plannedExtraConcessionalContributionTreatment: "Planned extra concessional contribution events are selected by person and financial year. The financial year is mapped to the annual projection row with the same starting calendar year, so 2030-31 is applied once to calendarYear 2030. Events are paid from household cash once, reduce the selected person's modelled taxable income under the simplified concessional assumption, and use the same 15% contributions-tax treatment as other additional concessional contributions.",
       superAccessTreatment: "scenario-assumed-access-age",
       superAccessNote: "Super availability is modelled using the entered scenario access age. The engine does not independently determine whether all legal conditions of release are satisfied.",
       accessibleContributionTreatment: "accessibleInvestments.externalAnnualAccessibleContribution/currentAnnualContributions is treated as a planned accessible investment contribution while working. It is deducted from working cashflow before any remaining surplus is allocated and ceases once the household enters semi-retirement.",
@@ -1522,7 +1582,8 @@
       superWithdrawalOrder: normalised.scenario.superWithdrawalOrder || "oldest available person first",
       limitations: [
         "No Age Pension, Monte Carlo modelling, contribution optimisation, account-based pension minimums or transfer balance cap treatment.",
-        "Additional concessional contributions are paid from household cash and receive the simplified contributions-tax treatment described in this projection.",
+        "Additional concessional contributions are paid from household cash once and receive the simplified taxable-income and contributions-tax treatment described in this projection.",
+        "Planned extra concessional contributions do not verify the user's available cap, carry-forward amount, $500,000 eligibility condition, Division 293 tax or excess-contribution consequences.",
         "Investment assumptions use a total-return model to avoid double counting cash yield.",
         "Property sale, downsizing, refinance, redraw, dynamic offset depletion, CGT, depreciation and negative-gearing optimisation are intentionally deferred.",
       ],
@@ -1599,7 +1660,20 @@
       });
       const passiveIncomeRows = projectPassiveIncomeRows(normalised, yearIndex);
       peopleYear.forEach((person) => {
+        const source = normalised.people.find((item) => item.id === person.id) || person;
         const passive = passiveIncomeForPerson(passiveIncomeRows, person.id);
+        const contributionStopAge = discretionaryContributionStopAge(source);
+        const recurringAdditionalSuperContribution = person.grossEmploymentIncome > 0 && person.age < contributionStopAge
+          ? roundCurrency(source.existingAdditionalConcessionalContributions)
+          : 0;
+        const plannedExtraConcessionalContribution = plannedConcessionalContributionForYear(
+          normalised.scenario.plannedConcessionalContributions,
+          person.id,
+          calendarYear,
+        );
+        const taxReducingConcessionalContribution = roundCurrency(recurringAdditionalSuperContribution + plannedExtraConcessionalContribution);
+        const taxableIncomeBeforeConcessional = roundCurrency(person.grossEmploymentIncome + passive.taxableIncome);
+        const taxableIncomeAfterConcessional = roundCurrency(Math.max(0, taxableIncomeBeforeConcessional - taxReducingConcessionalContribution));
         person.employmentIncome = roundCurrency(person.grossEmploymentIncome);
         person.interestIncome = passive.interestIncome;
         person.dividendIncome = passive.dividendIncome;
@@ -1608,26 +1682,34 @@
         person.otherTaxableIncome = passive.otherTaxableIncome;
         person.totalPassiveTaxableIncome = passive.taxableIncome;
         person.totalPassiveCashIncome = passive.cashIncome;
-        person.totalTaxableIncome = roundCurrency(person.grossEmploymentIncome + passive.taxableIncome);
+        person.taxableIncomeBeforeModelledConcessionalContributions = taxableIncomeBeforeConcessional;
+        person.modelledTaxReducingConcessionalContribution = taxReducingConcessionalContribution;
+        person.modelledConcessionalContributionTaxableIncomeReduction = roundCurrency(taxableIncomeBeforeConcessional - taxableIncomeAfterConcessional);
+        person.totalTaxableIncome = taxableIncomeAfterConcessional;
+        person.stslRepaymentIncome = stslRepaymentIncomeForPerson(taxableIncomeAfterConcessional, taxReducingConcessionalContribution);
         person.totalCashIncomeBeforeTax = roundCurrency(person.grossEmploymentIncome + passive.cashIncome);
+        person.discretionaryContributionStopAge = contributionStopAge;
+        person.plannedAdditionalSuperStoppedBySemiRetirement = Boolean(source.hasSemiRetirement && person.age >= source.semiRetirementAge);
+        person.recurringAdditionalSuperContribution = recurringAdditionalSuperContribution;
+        person.netRecurringAdditionalSuperContribution = roundCurrency(recurringAdditionalSuperContribution * (1 - DEFAULT_CONTRIBUTIONS_TAX_RATE));
+        person.plannedExtraConcessionalContribution = plannedExtraConcessionalContribution;
+        person.plannedExtraConcessionalContributionTax = roundCurrency(plannedExtraConcessionalContribution * DEFAULT_CONTRIBUTIONS_TAX_RATE);
+        person.netPlannedExtraConcessionalContribution = roundCurrency(plannedExtraConcessionalContribution * (1 - DEFAULT_CONTRIBUTIONS_TAX_RATE));
+        person.additionalSuperContribution = roundCurrency(recurringAdditionalSuperContribution + plannedExtraConcessionalContribution);
       });
 
       const mls = calculateMls(peopleYear, normalised);
       if (mls.warning) warnings.push(`${calendarYear}: ${mls.warning}`);
 
       peopleYear.forEach((person, index) => {
-        const source = normalised.people.find((item) => item.id === person.id);
+        const source = normalised.people.find((item) => item.id === person.id) || person;
         const taxBreakdown = typeof CALC.individualTaxBreakdown === "function"
           ? CALC.individualTaxBreakdown(person.totalTaxableIncome)
           : fallbackTaxBreakdown(person.totalTaxableIncome);
         const stslOpeningBalance = peopleStates[person.id].stslBalance;
-        const stslRepayment = roundCurrency(Math.min(stslOpeningBalance, estimateStslRepayment(person.totalTaxableIncome, stslOpeningBalance)));
+        const stslRepayment = roundCurrency(Math.min(stslOpeningBalance, estimateStslRepayment(person.stslRepaymentIncome, stslOpeningBalance)));
         peopleStates[person.id].stslBalance = roundCurrency(Math.max(0, stslOpeningBalance - stslRepayment));
         const medicareLevySurcharge = index === 0 ? mls.person1Surcharge : mls.person2Surcharge;
-        const contributionStopAge = discretionaryContributionStopAge(source);
-        const additionalSuperContribution = person.grossEmploymentIncome > 0 && person.age < contributionStopAge
-          ? roundCurrency(source.existingAdditionalConcessionalContributions)
-          : 0;
         const employerSuper = employerSuperContribution(person.grossEmploymentIncome, source.employerSuperRate);
         person.incomeTax = roundCurrency(taxBreakdown.incomeTax);
         person.medicareLevy = roundCurrency(taxBreakdown.medicareLevy);
@@ -1638,9 +1720,6 @@
         person.netEmploymentIncome = roundCurrency(Math.max(0, person.totalCashIncomeBeforeTax - person.incomeTax - person.medicareLevy - person.medicareLevySurcharge - stslRepayment));
         person.netIncome = person.netEmploymentIncome;
         person.employerSuperContribution = employerSuper;
-        person.discretionaryContributionStopAge = contributionStopAge;
-        person.plannedAdditionalSuperStoppedBySemiRetirement = Boolean(source.hasSemiRetirement && person.age >= source.semiRetirementAge);
-        person.additionalSuperContribution = additionalSuperContribution;
         person.surplusAdditionalSuperContribution = 0;
         refreshSuperContributionTotals(person);
         person.openingSuperBalance = peopleStates[person.id].openingSuperBalance;
@@ -1726,6 +1805,8 @@
       const totalDistributionCashIncome = roundCurrency(passiveIncomeRows.filter((income) => income.type === "distributions").reduce((total, income) => total + income.cashIncome, 0));
       const totalRentalTaxableIncome = roundCurrency(passiveIncomeRows.filter((income) => income.type === "rentalTaxableIncome").reduce((total, income) => total + income.taxableIncome, 0));
       const otherIncome = roundCurrency(normalised.household.otherAnnualIncome);
+      const plannedRecurringAdditionalSuperContribution = roundCurrency(peopleYear.reduce((total, person) => total + person.recurringAdditionalSuperContribution, 0));
+      const plannedExtraConcessionalContribution = roundCurrency(peopleYear.reduce((total, person) => total + person.plannedExtraConcessionalContribution, 0));
       const plannedAdditionalSuperContribution = roundCurrency(peopleYear.reduce((total, person) => total + person.additionalSuperContribution, 0));
       const netHouseholdCashIncome = roundCurrency(totalNetEmploymentIncome + otherIncome + netRentalCashflow);
       const householdCashRequirementBeforePlannedAccessibleContribution = roundCurrency(totalProjectedLifestyleSpending + annualDebtCashRequirement + plannedAdditionalSuperContribution);
@@ -1969,6 +2050,7 @@
           name: person.name,
           age: person.age,
           employmentPhase: person.employmentPhase,
+          superAccessAge: person.superAccessAge,
           grossEmploymentIncome: roundCurrency(person.grossEmploymentIncome),
           employmentIncome: roundCurrency(person.employmentIncome),
           interestIncome: person.interestIncome,
@@ -1978,7 +2060,11 @@
           otherTaxableIncome: person.otherTaxableIncome,
           totalPassiveTaxableIncome: person.totalPassiveTaxableIncome,
           totalPassiveCashIncome: person.totalPassiveCashIncome,
+          taxableIncomeBeforeModelledConcessionalContributions: person.taxableIncomeBeforeModelledConcessionalContributions,
+          modelledTaxReducingConcessionalContribution: person.modelledTaxReducingConcessionalContribution,
+          modelledConcessionalContributionTaxableIncomeReduction: person.modelledConcessionalContributionTaxableIncomeReduction,
           totalTaxableIncome: person.totalTaxableIncome,
+          stslRepaymentIncome: person.stslRepaymentIncome,
           totalCashIncomeBeforeTax: person.totalCashIncomeBeforeTax,
           incomeTax: person.incomeTax,
           medicareLevy: person.medicareLevy,
@@ -1991,8 +2077,14 @@
           netEmployerSuperContribution: person.netEmployerSuperContribution,
           discretionaryContributionStopAge: person.discretionaryContributionStopAge,
           plannedAdditionalSuperStoppedBySemiRetirement: person.plannedAdditionalSuperStoppedBySemiRetirement,
+          recurringAdditionalSuperContribution: person.recurringAdditionalSuperContribution,
+          netRecurringAdditionalSuperContribution: person.netRecurringAdditionalSuperContribution,
+          plannedExtraConcessionalContribution: person.plannedExtraConcessionalContribution,
+          plannedExtraConcessionalContributionTax: person.plannedExtraConcessionalContributionTax,
+          netPlannedExtraConcessionalContribution: person.netPlannedExtraConcessionalContribution,
           additionalSuperContribution: person.additionalSuperContribution,
           surplusAdditionalSuperContribution: person.surplusAdditionalSuperContribution,
+          totalModelledSuperContributions: roundCurrency(person.employerSuperContribution + person.additionalSuperContribution),
           netAdditionalSuperContribution: person.netAdditionalSuperContribution,
           superContributionsTax: person.superContributionsTax,
           openingSuperBalance: person.openingSuperBalance,
@@ -2029,6 +2121,8 @@
           totalPropertyEquity,
           totalDebt,
           totalNetWorth,
+          plannedRecurringAdditionalConcessionalContributionsPaidFromCash: plannedRecurringAdditionalSuperContribution,
+          plannedExtraConcessionalContributionsPaidFromCash: plannedExtraConcessionalContribution,
           plannedAdditionalConcessionalContributionsPaidFromCash: plannedAdditionalSuperContribution,
           additionalConcessionalContributionsPaidFromCash: totalAdditionalSuperContribution,
           householdCashRequirementBeforePlannedAccessibleContribution,
@@ -2142,6 +2236,7 @@
       summary.totalOptionalAdditionalLifestyleWithdrawals = roundCurrency(summary.totalOptionalAdditionalLifestyleWithdrawals + optionalAdditionalLifestyleWithdrawal);
       summary.totalOneOffLifestyleSpending = roundCurrency(summary.totalOneOffLifestyleSpending + oneOffLifestyleSpending);
       summary.totalOneOffLifestyleSpendingTodayDollars = roundCurrency(summary.totalOneOffLifestyleSpendingTodayDollars + oneOffLifestyleSpendingTodayDollars);
+      summary.totalPlannedExtraConcessionalContributions = roundCurrency(summary.totalPlannedExtraConcessionalContributions + plannedExtraConcessionalContribution);
       summary.totalSurplusToSuper = roundCurrency(summary.totalSurplusToSuper + surplusToSuper);
       summary.totalSurplusToAccessibleInvestments = roundCurrency(summary.totalSurplusToAccessibleInvestments + surplusToAccessibleInvestments);
       summary.totalSurplusAvailableForEnjoyment = roundCurrency(summary.totalSurplusAvailableForEnjoyment + surplusAvailableForEnjoyment);
@@ -2196,5 +2291,6 @@
     normaliseRetirementProjectionInputs: normaliseInputs,
     projectDebtYearForAudit: projectDebtYear,
     projectPassiveIncomeRowsForAudit: projectPassiveIncomeRows,
+    normalisePlannedConcessionalContributionEventForAudit: normalisePlannedConcessionalContributionEvent,
   };
 })(globalThis);

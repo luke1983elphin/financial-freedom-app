@@ -30,12 +30,25 @@
     return `one-off-${Date.now().toString(36)}-${index}-${Math.random().toString(36).slice(2, 8)}`;
   }
 
+  function plannedConcessionalContributionEventId(index = 0) {
+    return `planned-concessional-${Date.now().toString(36)}-${index}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
   function normaliseOneOffLifestyleEvents(events = []) {
     return (Array.isArray(events) ? events : []).map((event, index) => ({
       id: String(event.id || oneOffEventId(index)),
       description: String(event.description || event.name || "").trim(),
       amountTodayDollars: roundCurrency(nonNegative(event.amountTodayDollars ?? event.amount ?? event.todayDollarAmount)),
       year: Math.round(number(event.year ?? event.calendarYear)),
+    }));
+  }
+
+  function normalisePlannedConcessionalContributions(events = []) {
+    return (Array.isArray(events) ? events : []).map((event, index) => ({
+      id: String(event.id || plannedConcessionalContributionEventId(index)),
+      personId: String(event.personId || event.owner || "").trim(),
+      financialYear: Math.round(number(event.financialYear ?? event.year ?? event.calendarYear)),
+      amount: roundCurrency(nonNegative(event.amount ?? event.extraConcessionalContribution ?? event.contributionAmount)),
     }));
   }
 
@@ -58,6 +71,23 @@
     return (draft.people || []).map((person, index) => {
       const age = number(person.currentAge) + yearIndex;
       return `${person.name || `Person ${index + 1}`} age ${age}`;
+    }).join(" / ");
+  }
+
+  function financialYearLabel(year) {
+    const startYear = Math.round(number(year));
+    if (!Number.isFinite(startYear)) return "Choose financial year";
+    return `${startYear}-${String((startYear + 1) % 100).padStart(2, "0")}`;
+  }
+
+  function plannedConcessionalContributionAgeLabel(draft = {}, financialYear, personId = "") {
+    const startYear = Math.round(number(draft.projectionStartYear, currentYear()));
+    const yearIndex = Math.round(number(financialYear) - startYear);
+    const people = Array.isArray(draft.people) ? draft.people : [];
+    const matchingPeople = personId ? people.filter((person) => String(person.id) === String(personId)) : people;
+    return matchingPeople.map((person, index) => {
+      const age = number(person.currentAge) + yearIndex;
+      return `${person.name || `Person ${index + 1}`} age ${age}/${age + 1}`;
     }).join(" / ");
   }
 
@@ -643,6 +673,7 @@
         optionalAdditionalLifestyleWithdrawal: 0,
         semiRetirementAccessibleWithdrawal: 0,
         oneOffLifestyleEvents: [],
+        plannedConcessionalContributions: [],
         workingPhaseSurplusDestination: "accessible-investments",
         surplusDestination: "enjoyment",
         minimumAccessibleBalance: 0,
@@ -739,6 +770,20 @@
       if (!event.description) add(`${prefix}.description`, "Add a short description, such as Holiday, New car or Renovation.");
       if (event.amountTodayDollars <= 0) add(`${prefix}.amountTodayDollars`, "Enter an amount greater than $0.");
       if (!Number.isFinite(event.year) || event.year < startYear || event.year > endYear) add(`${prefix}.year`, "Choose a year within this projection.");
+    });
+    const personIds = new Set((draft.people || []).map((person, index) => String(person.id || personId(index + 1))));
+    const contributionIds = new Set();
+    const contributionPersonYears = new Set();
+    normalisePlannedConcessionalContributions(draft.scenario?.plannedConcessionalContributions).forEach((event, index) => {
+      const prefix = `scenario.plannedConcessionalContributions.${index}`;
+      if (contributionIds.has(event.id)) add(`${prefix}.id`, "Planned concessional contribution events need unique IDs.");
+      contributionIds.add(event.id);
+      if (!event.personId || !personIds.has(event.personId)) add(`${prefix}.personId`, "Choose a person for this planned concessional contribution.");
+      if (event.amount <= 0) add(`${prefix}.amount`, "Enter an extra concessional contribution greater than $0.");
+      if (!Number.isFinite(event.financialYear) || event.financialYear < startYear || event.financialYear > endYear) add(`${prefix}.financialYear`, "Choose a financial year within this projection.");
+      const personYearKey = `${event.personId}:${event.financialYear}`;
+      if (contributionPersonYears.has(personYearKey)) add(`${prefix}.financialYear`, "Use one planned extra concessional contribution per person and financial year, then edit that amount if needed.");
+      contributionPersonYears.add(personYearKey);
     });
     [
       ["accessibleInvestments.annualReturnRatePct", draft.accessibleInvestments?.annualReturnRatePct],
@@ -858,6 +903,7 @@
       }),
       scenario: {
         oneOffLifestyleEvents: normaliseOneOffLifestyleEvents(draft.scenario?.oneOffLifestyleEvents),
+        plannedConcessionalContributions: normalisePlannedConcessionalContributions(draft.scenario?.plannedConcessionalContributions),
         optionalAdditionalLifestyleWithdrawal: legacyOptionalLifestyleDrawAmount(draft),
         semiRetirementAccessibleWithdrawal: legacyOptionalLifestyleDrawAmount(draft),
         workingPhaseSurplusDestination: draft.scenario?.workingPhaseSurplusDestination || "accessible-investments",
@@ -1538,6 +1584,20 @@
         },
       ]
       : [];
+    const plannedConcessionalEvents = normalisePlannedConcessionalContributions(inputs.scenario?.plannedConcessionalContributions);
+    const plannedConcessionalRows = plannedConcessionalEvents.length
+      ? [
+        {
+          label: "Planned extra concessional contributions",
+          value: `${plannedConcessionalEvents.length} planned event${plannedConcessionalEvents.length === 1 ? "" : "s"}`,
+          type: "plain",
+          note: plannedConcessionalEvents.map((event) => {
+            const person = people.find((candidate) => candidate.id === event.personId);
+            return `${person?.name || event.personId || "Person"} - ${roundCurrency(event.amount).toLocaleString(undefined, { style: "currency", currency: "AUD", maximumFractionDigits: 0 })} - ${financialYearLabel(event.financialYear)}`;
+          }).join("; "),
+        },
+      ]
+      : [];
     return [
       { label: "Projection start year", value: inputs.projectionStartYear ?? assumptions.projectionStartYear ?? null, type: "plain" },
       { label: "Projection end age", value: inputs.projectionEndAge ?? null, type: "age" },
@@ -1553,6 +1613,7 @@
       { label: "Annual loan principal repayments", value: inputs.household?.annualLoanPrincipalRepayments, type: "currency" },
       { label: "Other annual income", value: inputs.household?.otherAnnualIncome, type: "currency" },
       ...oneOffRows,
+      ...plannedConcessionalRows,
       { label: "Retirement surplus destination", value: surplusDestinationLabel(inputs.scenario?.surplusDestination), type: "plain" },
       { label: "Minimum accessible balance", value: inputs.scenario?.minimumAccessibleBalance, type: "currency" },
       { label: "Withdrawal order", value: inputs.scenario?.withdrawalOrder || assumptions.withdrawalOrder || "accessible investments first", type: "plain" },
@@ -1880,8 +1941,12 @@
     resetScenarioAdjustmentsToBaseline,
     normaliseOneOffLifestyleEvents,
     oneOffEventId,
+    normalisePlannedConcessionalContributions,
+    plannedConcessionalContributionEventId,
     projectionYearRange,
     eventAgeLabel,
+    financialYearLabel,
+    plannedConcessionalContributionAgeLabel,
     legacyOptionalLifestyleDrawAmount,
     isSemiRetirementUiEnabled,
     setSemiRetirementProjectionEnabledForDevelopment,
