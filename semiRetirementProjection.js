@@ -26,6 +26,8 @@
   };
   const DEFAULT_CONTRIBUTIONS_TAX_RATE = 0.15;
   const DEFAULT_EMPLOYER_SUPER_RATE = 0.12;
+  const DOWNSIZER_CONTRIBUTION_LIMIT = 300000;
+  const DOWNSIZER_MINIMUM_AGE = 55;
   const DEFAULT_FINANCIAL_YEAR = CALC.FINANCIAL_YEAR || "2026-27";
   const DEFAULT_FINANCIAL_YEAR_CONFIG = CALC.financialYearConfigs?.[DEFAULT_FINANCIAL_YEAR] || {};
   const DEFAULT_MAXIMUM_CONTRIBUTION_BASE = DEFAULT_FINANCIAL_YEAR_CONFIG.employerSuperMaximumContributionBase || 0;
@@ -70,6 +72,7 @@
     "incomeProducingProperty",
   ]);
   const PERSONAL_USE_ASSET_TYPES = new Set(["home", "principalResidence", "principal_residence", "vehicle", "personalUse"]);
+  const DOWNSIZE_ALLOCATION_OPTIONS = new Set(["accessible-investments", "downsizer-super", "split"]);
 
   function hasFiniteNumber(value) {
     return value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value));
@@ -173,7 +176,14 @@
       totalOptionalAdditionalLifestyleWithdrawals: 0,
       totalOneOffLifestyleSpending: 0,
       totalOneOffLifestyleSpendingTodayDollars: 0,
+      totalOneOffIncome: 0,
+      totalOneOffIncomeTodayDollars: 0,
       totalPlannedExtraConcessionalContributions: 0,
+      totalDownsizerContributions: 0,
+      totalDownsizeCashReleased: 0,
+      totalDownsizeAccessibleInvestmentContribution: 0,
+      totalDownsizeAdditionalFundsRequired: 0,
+      totalDownsizeUnfundedShortfall: 0,
       totalSurplusToSuper: 0,
       totalSurplusToAccessibleInvestments: 0,
       totalSurplusAvailableForEnjoyment: 0,
@@ -597,6 +607,15 @@
     };
   }
 
+  function normaliseOneOffIncomeEvent(item = {}, index = 0) {
+    return {
+      id: normaliseRecordId(item, "one-off-income", index),
+      description: String(item.description || item.name || "").trim(),
+      amountTodayDollars: roundCurrency(Math.max(0, number(item.amountTodayDollars ?? item.amount ?? item.todayDollarAmount))),
+      year: Math.round(number(item.year ?? item.calendarYear)),
+    };
+  }
+
   function normalisePlannedConcessionalContributionEvent(item = {}, index = 0) {
     return {
       id: normaliseRecordId(item, "planned-concessional", index),
@@ -625,6 +644,220 @@
     const total = roundCurrency(matchingEvents.reduce((sum, event) => sum + event.projectedAmount, 0));
     const totalTodayDollars = roundCurrency(matchingEvents.reduce((sum, event) => sum + event.amountTodayDollars, 0));
     return { events: matchingEvents, total, totalTodayDollars };
+  }
+
+  function oneOffIncomeEventsForYear(events = [], calendarYear, inflationRate, yearIndex) {
+    const matchingEvents = events
+      .filter((event) => event.year === calendarYear)
+      .map((event) => ({
+        id: event.id,
+        description: event.description,
+        amountTodayDollars: event.amountTodayDollars,
+        year: event.year,
+        projectedAmount: todayDollarAmount(event.amountTodayDollars, inflationRate, yearIndex),
+      }));
+    const total = roundCurrency(matchingEvents.reduce((sum, event) => sum + event.projectedAmount, 0));
+    const totalTodayDollars = roundCurrency(matchingEvents.reduce((sum, event) => sum + event.amountTodayDollars, 0));
+    return { events: matchingEvents, total, totalTodayDollars };
+  }
+
+  function normaliseDownsizeAllocation(value) {
+    const text = String(value || "").trim();
+    if (["super", "downsizerSuper", "downsizer-super"].includes(text)) return "downsizer-super";
+    if (["mixed", "split", "split-between-super-and-investments"].includes(text)) return "split";
+    if (["accessible", "accessibleInvestments", "accessible-investments", "investments"].includes(text)) return "accessible-investments";
+    return "accessible-investments";
+  }
+
+  function normaliseDownsizeHomeEvent(item = {}, people = []) {
+    const enabled = item?.enabled === true || item?.isEnabled === true || item?.modelDownsizeHome === true;
+    const contributionSource = item?.downsizerContributions || item?.personContributions || item?.contributions || {};
+    const downsizerContributions = {};
+    (people || []).forEach((person, index) => {
+      const personId = String(person?.id || `person${index + 1}`);
+      downsizerContributions[personId] = roundCurrency(Math.max(
+        0,
+        number(
+          contributionSource[personId]
+          ?? item?.[`${personId}DownsizerContribution`]
+          ?? item?.[`person${index + 1}DownsizerContribution`],
+        ),
+      ));
+    });
+    return {
+      enabled,
+      year: Math.round(number(item?.year ?? item?.calendarYear)),
+      currentHomeSaleValueToday: roundCurrency(Math.max(0, number(item?.currentHomeSaleValueToday ?? item?.currentHomeValueToday ?? item?.saleValueToday))),
+      replacementHomeValueToday: roundCurrency(Math.max(0, number(item?.replacementHomeValueToday ?? item?.replacementHomePurchasePriceToday ?? item?.replacementValueToday))),
+      saleCostRate: rateFromPercentOrDecimal(item?.saleCostRate ?? item?.saleCostPct ?? item?.saleCostPercent, 0.025),
+      purchaseCostRate: rateFromPercentOrDecimal(item?.purchaseCostRate ?? item?.purchaseCostPct ?? item?.purchaseCostPercent, 0.045),
+      allocation: normaliseDownsizeAllocation(item?.allocation || item?.releasedCashAllocation || item?.proceedsAllocation),
+      downsizerContributions,
+    };
+  }
+
+  function isPrincipalResidenceType(type) {
+    return type === "home" || type === "principalResidence" || type === "principal_residence";
+  }
+
+  function principalResidenceAssetRow(assetRows = []) {
+    return assetRows.find((asset) => isPrincipalResidenceType(asset.type)) || null;
+  }
+
+  function linkedHomeLoanRowsForPrincipalResidence(normalised = {}, liabilityRows = [], principalResidenceAssetId = "") {
+    const homeLoans = liabilityRows.filter((debt) => HOME_LOAN_TYPES.has(debt.type));
+    const linked = principalResidenceAssetId
+      ? homeLoans.filter((debt) => debt.linkedAssetId && debt.linkedAssetId === principalResidenceAssetId)
+      : [];
+    return linked.length ? linked : homeLoans;
+  }
+
+  function emptyDownsizeHomeResult() {
+    return {
+      applied: false,
+      warnings: [],
+      accessibleInvestmentContribution: 0,
+      accessibleWithdrawal: 0,
+      accessibleInvestmentWithdrawal: 0,
+      unallocatedWithdrawal: 0,
+      additionalFundsRequired: 0,
+      unfundedShortfall: 0,
+      downsizerContributions: {},
+      totalDownsizerContributions: 0,
+    };
+  }
+
+  function applyDownsizeHomeEvent({
+    event,
+    calendarYear,
+    yearIndex,
+    peopleYear,
+    assetRows,
+    liabilityRows,
+    assetStates,
+    liabilityStates,
+    replacementHomeStates,
+    debtPayoffRecorded,
+    summary,
+  }) {
+    if (!event?.enabled || event.year !== calendarYear) return emptyDownsizeHomeResult();
+    const warnings = [];
+    const homeRow = principalResidenceAssetRow(assetRows);
+    if (!homeRow) {
+      warnings.push("Downsize home could not be modelled because no principal residence asset was available.");
+      return { ...emptyDownsizeHomeResult(), applied: false, warnings };
+    }
+
+    const projectedSaleValue = grownAmount(event.currentHomeSaleValueToday, event.principalResidenceGrowthRate ?? 0, yearIndex);
+    const projectedReplacementHomeValue = grownAmount(event.replacementHomeValueToday, event.principalResidenceGrowthRate ?? 0, yearIndex);
+    const saleCosts = roundCurrency(projectedSaleValue * Math.max(0, event.saleCostRate));
+    const purchaseCosts = roundCurrency(projectedReplacementHomeValue * Math.max(0, event.purchaseCostRate));
+    const linkedDebtRows = linkedHomeLoanRowsForPrincipalResidence(null, liabilityRows, homeRow.id);
+    const linkedHomeDebtRepaid = roundCurrency(linkedDebtRows.reduce((total, debt) => total + number(debt.closingBalance), 0));
+
+    linkedDebtRows.forEach((debt) => {
+      const repaid = roundCurrency(number(debt.closingBalance));
+      debt.downsizeDischargedBalance = repaid;
+      debt.closingBalance = 0;
+      debt.paidOffThisYear = debt.openingBalance > 0 || repaid > 0;
+      liabilityStates[debt.id] = 0;
+      if (debt.paidOffThisYear && !debtPayoffRecorded.has(debt.id)) {
+        summary.debtPayoffMilestones.push({
+          liabilityId: debt.id,
+          name: debt.name,
+          calendarYear,
+          person1Age: peopleYear[0]?.age ?? null,
+          person2Age: peopleYear[1]?.age ?? null,
+          type: debt.type,
+        });
+        debtPayoffRecorded.add(debt.id);
+      }
+    });
+
+    const netSaleProceeds = roundCurrency(projectedSaleValue - saleCosts - linkedHomeDebtRepaid);
+    const replacementHomeCashRequirement = roundCurrency(projectedReplacementHomeValue + purchaseCosts);
+    const netCashReleased = roundCurrency(netSaleProceeds - replacementHomeCashRequirement);
+    const positiveReleasedCash = roundCurrency(Math.max(0, netCashReleased));
+    let remainingReleasedCash = positiveReleasedCash;
+    const downsizerContributions = {};
+
+    if (positiveReleasedCash > 0 && (event.allocation === "downsizer-super" || event.allocation === "split")) {
+      peopleYear.forEach((person) => {
+        const requested = roundCurrency(Math.max(0, number(event.downsizerContributions?.[person.id])));
+        if (requested <= 0) {
+          downsizerContributions[person.id] = 0;
+          return;
+        }
+        if (person.age < DOWNSIZER_MINIMUM_AGE) {
+          downsizerContributions[person.id] = 0;
+          warnings.push(`${person.name || person.id} is under age ${DOWNSIZER_MINIMUM_AGE}, so their requested downsizer contribution was not modelled.`);
+          return;
+        }
+        const cappedByLimit = roundCurrency(Math.min(requested, DOWNSIZER_CONTRIBUTION_LIMIT));
+        if (cappedByLimit < requested) {
+          warnings.push(`${person.name || person.id}'s downsizer contribution was capped at ${DOWNSIZER_CONTRIBUTION_LIMIT.toLocaleString(undefined, { style: "currency", currency: "AUD", maximumFractionDigits: 0 })}.`);
+        }
+        const applied = roundCurrency(Math.min(cappedByLimit, remainingReleasedCash));
+        if (applied < cappedByLimit) {
+          warnings.push(`${person.name || person.id}'s downsizer contribution was reduced because released cash was insufficient.`);
+        }
+        downsizerContributions[person.id] = applied;
+        person.downsizerSuperContribution = roundCurrency((person.downsizerSuperContribution || 0) + applied);
+        remainingReleasedCash = roundCurrency(remainingReleasedCash - applied);
+      });
+    }
+
+    peopleYear.forEach((person) => {
+      if (!Object.prototype.hasOwnProperty.call(downsizerContributions, person.id)) downsizerContributions[person.id] = 0;
+    });
+
+    const totalDownsizerContributions = roundCurrency(Object.values(downsizerContributions).reduce((total, value) => total + number(value), 0));
+    const accessibleInvestmentContribution = roundCurrency(remainingReleasedCash);
+    const additionalFundsRequired = roundCurrency(Math.max(0, -netCashReleased));
+
+    homeRow.downsizeOriginalName = homeRow.name;
+    homeRow.downsizeOriginalClosingValue = homeRow.closingValue;
+    homeRow.projectedSaleValue = projectedSaleValue;
+    homeRow.saleCosts = saleCosts;
+    homeRow.linkedHomeDebtRepaid = linkedHomeDebtRepaid;
+    homeRow.projectedReplacementHomeValue = projectedReplacementHomeValue;
+    homeRow.purchaseCosts = purchaseCosts;
+    homeRow.netSaleProceeds = netSaleProceeds;
+    homeRow.replacementHomeCashRequirement = replacementHomeCashRequirement;
+    homeRow.netCashReleased = netCashReleased;
+    homeRow.wasDownsizedHome = true;
+    homeRow.name = "Replacement home";
+    homeRow.closingValue = projectedReplacementHomeValue;
+    homeRow.propertyGrowth = roundCurrency(projectedReplacementHomeValue - homeRow.openingValue);
+    homeRow.annualGrowth = homeRow.propertyGrowth;
+    assetStates[homeRow.id] = projectedReplacementHomeValue;
+    replacementHomeStates[homeRow.id] = { name: "Replacement home" };
+
+    return {
+      applied: true,
+      calendarYear,
+      yearIndex,
+      warnings,
+      projectedSaleValue,
+      saleCosts,
+      linkedHomeDebtRepaid,
+      netSaleProceeds,
+      projectedReplacementHomeValue,
+      purchaseCosts,
+      replacementHomeCashRequirement,
+      netCashReleased,
+      additionalFundsRequired,
+      accessibleInvestmentContribution,
+      downsizerContributions,
+      totalDownsizerContributions,
+      remainingReleasedCashToAccessibleInvestments: accessibleInvestmentContribution,
+      allocation: event.allocation,
+      saleCostRate: event.saleCostRate,
+      purchaseCostRate: event.purchaseCostRate,
+      propertyGrowthRate: event.principalResidenceGrowthRate ?? 0,
+      currentHomeSaleValueToday: event.currentHomeSaleValueToday,
+      replacementHomeValueToday: event.replacementHomeValueToday,
+    };
   }
 
   function projectDebtYear(liability, openingBalance, yearIndex = 0, calendarYear = null, offsetBalanceOverride = null) {
@@ -1071,9 +1304,17 @@
         oneOffLifestyleEvents: Array.isArray(input?.scenario?.oneOffLifestyleEvents)
           ? input.scenario.oneOffLifestyleEvents.map(normaliseOneOffLifestyleEvent)
           : [],
+        oneOffIncomeEvents: Array.isArray(input?.scenario?.oneOffIncomeEvents)
+          ? input.scenario.oneOffIncomeEvents.map(normaliseOneOffIncomeEvent)
+          : [],
         plannedConcessionalContributions: Array.isArray(input?.scenario?.plannedConcessionalContributions)
           ? input.scenario.plannedConcessionalContributions.map(normalisePlannedConcessionalContributionEvent)
           : [],
+        downsizeHomeEvent: (() => {
+          const event = normaliseDownsizeHomeEvent(input?.scenario?.downsizeHomeEvent, people);
+          event.principalResidenceGrowthRate = propertyGrowthAssumptions.principalResidenceCapitalGrowthRate;
+          return event;
+        })(),
         legacyOptionalAdditionalLifestyleWithdrawal: roundCurrency(Math.max(0, legacyOptionalAdditionalLifestyleWithdrawal)),
         optionalAdditionalLifestyleWithdrawal: 0,
         // Deprecated alias retained for older consumers; new G2D scenarios do not use it.
@@ -1191,6 +1432,51 @@
         addValidation(errors, `${prefix}.year`, "Choose a year within this projection.");
       }
     });
+    const oneOffIncomeEvents = Array.isArray(input.scenario?.oneOffIncomeEvents)
+      ? input.scenario.oneOffIncomeEvents.map(normaliseOneOffIncomeEvent)
+      : [];
+    const oneOffIncomeIds = new Set();
+    oneOffIncomeEvents.forEach((event, index) => {
+      const prefix = `scenario.oneOffIncomeEvents.${index}`;
+      if (oneOffIncomeIds.has(event.id)) addValidation(errors, `${prefix}.id`, "One-off income events need unique IDs.");
+      oneOffIncomeIds.add(event.id);
+      if (!event.description) addValidation(errors, `${prefix}.description`, "Add a short description, such as inheritance, family assistance or insurance proceeds.");
+      if (!hasFiniteNumber(event.amountTodayDollars) || event.amountTodayDollars <= 0) addValidation(errors, `${prefix}.amountTodayDollars`, "Enter an amount greater than $0.");
+      if (!Number.isFinite(event.year) || event.year < projectionStartYear || (projectionEndYear !== null && event.year > projectionEndYear)) {
+        addValidation(errors, `${prefix}.year`, "Choose a year within this projection.");
+      }
+    });
+    const downsizeHomeEvent = normaliseDownsizeHomeEvent(input.scenario?.downsizeHomeEvent, projectionRangePeople);
+    if (downsizeHomeEvent.enabled) {
+      const prefix = "scenario.downsizeHomeEvent";
+      const downsizeAssetInputs = Array.isArray(input.assets) ? input.assets.map(normaliseProjectionAsset) : [];
+      if (!Number.isFinite(downsizeHomeEvent.year) || downsizeHomeEvent.year < projectionStartYear || (projectionEndYear !== null && downsizeHomeEvent.year > projectionEndYear)) {
+        addValidation(errors, `${prefix}.year`, "Choose a downsizing year within this projection.");
+      }
+      if (!hasFiniteNumber(downsizeHomeEvent.currentHomeSaleValueToday) || downsizeHomeEvent.currentHomeSaleValueToday <= 0) {
+        addValidation(errors, `${prefix}.currentHomeSaleValueToday`, "Enter the current home sale value in today's dollars.");
+      }
+      if (!hasFiniteNumber(downsizeHomeEvent.replacementHomeValueToday) || downsizeHomeEvent.replacementHomeValueToday <= 0) {
+        addValidation(errors, `${prefix}.replacementHomeValueToday`, "Enter the replacement home value in today's dollars.");
+      }
+      if (downsizeHomeEvent.saleCostRate < 0) addValidation(errors, `${prefix}.saleCostRate`, "Sale costs cannot be negative.");
+      if (downsizeHomeEvent.purchaseCostRate < 0) addValidation(errors, `${prefix}.purchaseCostRate`, "Purchase costs cannot be negative.");
+      if (!DOWNSIZE_ALLOCATION_OPTIONS.has(downsizeHomeEvent.allocation)) addValidation(errors, `${prefix}.allocation`, "Choose how released money should be allocated.");
+      if (!downsizeAssetInputs.some((asset) => isPrincipalResidenceType(asset.type))) {
+        addValidation(errors, `${prefix}.currentHomeSaleValueToday`, "Add a principal residence asset before modelling a home downsizing event.");
+      }
+      projectionRangePeople.forEach((person, index) => {
+        const personId = String(person?.id || `person${index + 1}`);
+        const amount = number(downsizeHomeEvent.downsizerContributions?.[personId]);
+        if (amount < 0) addValidation(errors, `${prefix}.downsizerContributions.${personId}`, "Downsizer contributions cannot be negative.");
+        if (amount > DOWNSIZER_CONTRIBUTION_LIMIT) {
+          addValidation(errors, `${prefix}.downsizerContributions.${personId}`, `Downsizer contribution cannot exceed ${roundCurrency(DOWNSIZER_CONTRIBUTION_LIMIT).toLocaleString(undefined, { style: "currency", currency: "AUD", maximumFractionDigits: 0 })} for one person.`);
+        }
+        if (amount > 0 && number(person?.currentAge) + (downsizeHomeEvent.year - projectionStartYear) < DOWNSIZER_MINIMUM_AGE) {
+          addValidation(errors, `${prefix}.downsizerContributions.${personId}`, "Downsizer contributions generally require the person to be at least age 55 in the downsizing year.");
+        }
+      });
+    }
     if (input.scenario?.surplusDestination && !["enjoyment", "super", "accessible-investments", "unallocated"].includes(normaliseSurplusDestination(input.scenario.surplusDestination))) {
       addValidation(errors, "scenario.surplusDestination", "Surplus destination is not supported.");
     }
@@ -1537,6 +1823,7 @@
         "Project annual debt schedules and property values from explicit asset/liability inputs.",
         "Escalate rental/property cash income by CPI, then calculate cashflow using the selected after-interest or before-interest treatment.",
         "Calculate household lifestyle requirement in nominal dollars using today's-dollar inflation, including one-off lifestyle events only in their selected calendar year.",
+        "Apply scenario-only one-off income and home-downsizing transactions in their selected year.",
         "Calculate annual operating surplus or shortfall before portfolio withdrawals.",
         "Fund required lifestyle shortfalls from accessible assets first, then available super where permitted.",
         "Apply the selected working-phase or retirement surplus destination to remaining surplus cash.",
@@ -1563,6 +1850,10 @@
       additionalSuperContributionTreatment: "Person-specific voluntary/additional super contributions cease at the person's own semi-retirement age by default. Employer super continues while that person still has employment income.",
       semiRetirementSurplusTreatment: `Retirement-phase annual surplus uses the selected one-destination rule: ${normalised.scenario.surplusDestination}. The default is extra lifestyle/enjoyment.`,
       oneOffLifestyleSpendingTreatment: "scenario.oneOffLifestyleEvents stores larger expenses that occur in selected projection years. Amounts are entered in today's dollars, inflated to the event year using the scenario inflation rate, added to that year's lifestyle requirement only, and funded through the same household cash, accessible-investment and eligible-super waterfall as other spending.",
+      oneOffIncomeTreatment: "scenario.oneOffIncomeEvents stores lump-sum cash receipts that occur once in selected projection years. Amounts are entered in today's dollars, inflated to the event year using the scenario inflation rate, added directly to accessible investments, and are not treated as taxable income by default.",
+      downsizeHomeTreatment: normalised.scenario.downsizeHomeEvent.enabled
+        ? "scenario.downsizeHomeEvent is a scenario-only downsizing transaction. Sale and replacement-home values are entered in today's dollars, grown with the principal-residence capital-growth assumption, transaction costs and linked principal-residence debt are applied in the event year, the old home is replaced, and released cash is allocated to accessible investments and/or person-specific downsizer super contributions."
+        : "No automatic property sale, refinance, downsizing or redraw event is assumed unless scenario.downsizeHomeEvent is enabled.",
       legacyOptionalAdditionalLifestyleWithdrawalTreatment: "Positive legacy optionalAdditionalLifestyleWithdrawal/semiRetirementAccessibleWithdrawal values are not silently converted into one-off events because the old field represented a recurring annual draw.",
       debtAndPropertyTreatment: "Supplied non-STSL liabilities are projected annually, separating interest charged, total repayment, principal repaid, capitalised interest, final repayments and repayment cashflow. STSL remains person-level and outside the generic debt schedule.",
       rentalIncomeTreatment: "Rental/property income uses rentalCashflowTreatment. Entered rental cash income is the projection-start annual amount, CPI-escalated each projection year before loan cashflows are applied. afterInterest means loan interest is already included in the entered rental cash income, so only linked principal is deducted from property cashflow. beforeInterest deducts linked loan interest and principal exactly once.",
@@ -1576,7 +1867,9 @@
         rentalCashIncomeGrowthSource: "cpi",
         hierarchy: "Property-specific rate, then scenario-level rate for the matching property type, then a documented 0% fallback only where no applicable rate exists.",
       },
-      propertySaleTreatment: "No automatic property sale, refinance, downsizing or redraw event is assumed.",
+      propertySaleTreatment: normalised.scenario.downsizeHomeEvent.enabled
+        ? "A scenario-only home-downsizing transaction is modelled in the selected year; otherwise no automatic property sale, refinance or redraw event is assumed."
+        : "No automatic property sale, refinance, downsizing or redraw event is assumed.",
       offsetTreatment: "Offset cash remains an accessible asset and reduces linked home-loan interest while the loan exists. Offset cash earns no normal accessible-investment return during the same period. If retirement spending draws from offset cash, later loan-interest calculations use the remaining offset balance. If the linked loan is repaid, remaining offset cash is treated as ordinary accessible cash from the next projection year.",
       withdrawalOrder: normalised.scenario.withdrawalOrder,
       superWithdrawalOrder: normalised.scenario.superWithdrawalOrder || "oldest available person first",
@@ -1585,7 +1878,7 @@
         "Additional concessional contributions are paid from household cash once and receive the simplified taxable-income and contributions-tax treatment described in this projection.",
         "Planned extra concessional contributions do not verify the user's available cap, carry-forward amount, $500,000 eligibility condition, Division 293 tax or excess-contribution consequences.",
         "Investment assumptions use a total-return model to avoid double counting cash yield.",
-        "Property sale, downsizing, refinance, redraw, dynamic offset depletion, CGT, depreciation and negative-gearing optimisation are intentionally deferred.",
+        "Downsizing uses simplified sale and purchase costs and does not calculate CGT, detailed stamp duty, refinance, redraw, depreciation or negative-gearing optimisation.",
       ],
     };
 
@@ -1633,6 +1926,7 @@
       liabilityStates[liability.id] = roundCurrency(liability.openingBalance);
     });
     const debtPayoffRecorded = new Set();
+    const replacementHomeStates = {};
     let accessibleOpening = roundCurrency(normalised.accessibleInvestments.openingBalance);
     const offsetStates = buildInitialOffsetStates(normalised, accessibleOpening);
     let unallocatedSurplusBalance = 0;
@@ -1721,13 +2015,18 @@
         person.netIncome = person.netEmploymentIncome;
         person.employerSuperContribution = employerSuper;
         person.surplusAdditionalSuperContribution = 0;
+        person.downsizerSuperContribution = 0;
         refreshSuperContributionTotals(person);
         person.openingSuperBalance = peopleStates[person.id].openingSuperBalance;
         person.superWithdrawal = 0;
       });
 
       const assetRows = normalised.assets.map((asset) => {
-        const row = projectAssetYear(asset, assetStates[asset.id]);
+        const replacementState = replacementHomeStates[asset.id] || null;
+        const effectiveAsset = replacementState
+          ? { ...asset, name: replacementState.name || asset.name, type: "home" }
+          : asset;
+        const row = projectAssetYear(effectiveAsset, assetStates[asset.id]);
         assetStates[asset.id] = row.closingValue;
         return row;
       });
@@ -1756,6 +2055,20 @@
         row.warnings.forEach((warning) => warnings.push(`${calendarYear} ${row.name}: ${warningCodeMessage(warning)}`));
         return row;
       });
+      const downsizeHomeEvent = applyDownsizeHomeEvent({
+        event: normalised.scenario.downsizeHomeEvent,
+        calendarYear,
+        yearIndex,
+        peopleYear,
+        assetRows,
+        liabilityRows,
+        assetStates,
+        liabilityStates,
+        replacementHomeStates,
+        debtPayoffRecorded,
+        summary,
+      });
+      downsizeHomeEvent.warnings.forEach((warning) => warnings.push(`${calendarYear}: ${warning}`));
       const propertyIncomeRows = projectPropertyIncomeRows(normalised, liabilityRows, yearIndex);
       const propertyRows = projectPropertyRows(normalised, assetRows, liabilityRows, propertyIncomeRows);
       const debtIdsLinkedToPropertyIncome = new Set(propertyIncomeRows.flatMap((income) => income.linkedLoanIds));
@@ -1796,6 +2109,14 @@
       );
       const oneOffLifestyleSpending = oneOffLifestyle.total;
       const oneOffLifestyleSpendingTodayDollars = oneOffLifestyle.totalTodayDollars;
+      const oneOffIncome = oneOffIncomeEventsForYear(
+        normalised.scenario.oneOffIncomeEvents,
+        calendarYear,
+        normalised.inflationRate,
+        yearIndex,
+      );
+      const oneOffIncomeAccessibleContribution = oneOffIncome.total;
+      const oneOffIncomeTodayDollars = oneOffIncome.totalTodayDollars;
       const totalProjectedLifestyleSpending = roundCurrency(applicableLifestyleSpending + oneOffLifestyleSpending);
       const totalNetEmploymentIncome = roundCurrency(peopleYear.reduce((total, person) => total + person.netEmploymentIncome, 0));
       const totalPassiveCashIncome = roundCurrency(passiveIncomeRows.reduce((total, income) => total + income.cashIncome, 0));
@@ -1867,7 +2188,9 @@
       const totalAdditionalSuperContribution = roundCurrency(peopleYear.reduce((total, person) => total + person.additionalSuperContribution, 0));
       const accessibleInvestmentContribution = roundCurrency(
         plannedExternalAccessibleContribution
-        + surplusToAccessibleInvestments,
+        + surplusToAccessibleInvestments
+        + oneOffIncomeAccessibleContribution
+        + number(downsizeHomeEvent.accessibleInvestmentContribution),
       );
       let ordinaryAccessibleBalance = roundCurrency(Math.max(0, accessibleOpening - offsetOpeningBalance));
       if (accessibleInvestmentContribution > 0) {
@@ -1905,6 +2228,24 @@
           unfunded: roundCurrency(request - total),
         };
       };
+      let downsizeAccessibleWithdrawal = 0;
+      let downsizeAccessibleInvestmentWithdrawal = 0;
+      let downsizeUnallocatedWithdrawal = 0;
+      if (downsizeHomeEvent.additionalFundsRequired > 0) {
+        const downsizeFunding = withdrawAccessibleBalance(downsizeHomeEvent.additionalFundsRequired);
+        downsizeAccessibleWithdrawal = downsizeFunding.total;
+        downsizeUnallocatedWithdrawal = downsizeFunding.fromUnallocated;
+        downsizeAccessibleInvestmentWithdrawal = roundCurrency(downsizeFunding.total - downsizeFunding.fromUnallocated);
+        downsizeHomeEvent.accessibleWithdrawal = downsizeAccessibleWithdrawal;
+        downsizeHomeEvent.accessibleInvestmentWithdrawal = downsizeAccessibleInvestmentWithdrawal;
+        downsizeHomeEvent.unallocatedWithdrawal = downsizeUnallocatedWithdrawal;
+        downsizeHomeEvent.unfundedShortfall = downsizeFunding.unfunded;
+        if (downsizeFunding.unfunded > 0) {
+          const warning = `Downsizing requires ${roundCurrency(downsizeHomeEvent.additionalFundsRequired).toLocaleString(undefined, { style: "currency", currency: "AUD", maximumFractionDigits: 0 })} of additional cash, and ${roundCurrency(downsizeFunding.unfunded).toLocaleString(undefined, { style: "currency", currency: "AUD", maximumFractionDigits: 0 })} could not be funded from available accessible assets.`;
+          downsizeHomeEvent.warnings.push(warning);
+          warnings.push(`${calendarYear}: ${warning}`);
+        }
+      }
       const requiredWithdrawal = withdrawAccessibleBalance(requiredShortfall);
       const requiredAccessibleWithdrawal = requiredWithdrawal.total;
       const requiredAccessibleInvestmentWithdrawal = roundCurrency(requiredWithdrawal.total - requiredWithdrawal.fromUnallocated);
@@ -1945,7 +2286,11 @@
       );
       const unmetSpending = roundCurrency(requiredSuperFunding.unmet + unfundedOptionalAdditionalLifestyleWithdrawal);
       const totalAccessibleWithdrawal = roundCurrency(requiredAccessibleWithdrawal + optionalAdditionalLifestyleAccessibleWithdrawal);
-      const totalAccessibleInvestmentWithdrawal = roundCurrency(requiredAccessibleInvestmentWithdrawal + optionalAdditionalLifestyleInvestmentWithdrawal);
+      const totalAccessibleInvestmentWithdrawal = roundCurrency(
+        requiredAccessibleInvestmentWithdrawal
+        + optionalAdditionalLifestyleInvestmentWithdrawal
+        + downsizeAccessibleInvestmentWithdrawal,
+      );
       const offsetClosingBalance = activeOffsetTotal(offsetStates, liabilityOpeningBalances);
       const ordinaryOpeningBalance = roundCurrency(Math.max(0, accessibleOpening - offsetOpeningBalance));
       const ordinaryNetMovement = roundCurrency(ordinaryAccessibleBalance - ordinaryOpeningBalance);
@@ -1960,6 +2305,8 @@
         + accessibleInvestmentEarnings
         + plannedExternalAccessibleContribution
         + surplusToAccessibleInvestments
+        + oneOffIncomeAccessibleContribution
+        + number(downsizeHomeEvent.accessibleInvestmentContribution)
         - totalAccessibleInvestmentWithdrawal
         - accessibleInvestmentFees,
       );
@@ -1970,7 +2317,7 @@
         const opening = person.openingSuperBalance;
         const netContributions = roundCurrency(person.netEmployerSuperContribution + person.netAdditionalSuperContribution);
         const rate = person.employmentPhase === "fully-retired" ? source.superReturnAfterRetirement : source.superReturnBeforeRetirement;
-        const movement = roundCurrency(netContributions - person.superWithdrawal);
+        const movement = roundCurrency(netContributions + person.downsizerSuperContribution - person.superWithdrawal);
         const earningsBasis = Math.max(0, opening + movement * 0.5);
         person.superInvestmentEarnings = roundCurrency(earningsBasis * rate);
         person.superFees = roundCurrency(earningsBasis * Math.max(0, source.superAnnualFeesRate));
@@ -1980,6 +2327,7 @@
           + person.employerSuperContribution
           + person.additionalSuperContribution
           - person.superContributionsTax
+          + person.downsizerSuperContribution
           + person.superInvestmentEarnings
           - person.superFees
           - person.superWithdrawal,
@@ -1988,6 +2336,7 @@
           openingBalance: opening,
           employerContributionGross: person.employerSuperContribution,
           additionalContributionGross: person.additionalSuperContribution,
+          downsizerContribution: person.downsizerSuperContribution,
           contributionsTax: person.superContributionsTax,
           investmentEarnings: person.superInvestmentEarnings,
           fees: person.superFees,
@@ -2007,6 +2356,7 @@
         .map(warningCodeMessage)
         .filter(Boolean);
       const yearWarnings = yearIndex === 0 ? propertyIncomeWarningMessages : [];
+      downsizeHomeEvent.warnings.forEach((warning) => yearWarnings.push(warning));
       if (requiredSuperFunding.unmet > 0) yearWarnings.push("Household spending shortfall could not be fully funded.");
       if (closingAccessibleInvestmentBalance === 0 && totalAccessibleWithdrawal > 0 && milestoneIsUnset(summary.accessibleFundsExhausted)) {
         summary.accessibleFundsExhausted = milestoneForYear(calendarYear, peopleYear);
@@ -2084,6 +2434,7 @@
           netPlannedExtraConcessionalContribution: person.netPlannedExtraConcessionalContribution,
           additionalSuperContribution: person.additionalSuperContribution,
           surplusAdditionalSuperContribution: person.surplusAdditionalSuperContribution,
+          downsizerSuperContribution: person.downsizerSuperContribution,
           totalModelledSuperContributions: roundCurrency(person.employerSuperContribution + person.additionalSuperContribution),
           netAdditionalSuperContribution: person.netAdditionalSuperContribution,
           superContributionsTax: person.superContributionsTax,
@@ -2138,6 +2489,9 @@
           oneOffLifestyleSpending,
           oneOffLifestyleSpendingTodayDollars,
           oneOffLifestyleEvents: oneOffLifestyle.events,
+          oneOffIncome: oneOffIncomeAccessibleContribution,
+          oneOffIncomeTodayDollars,
+          oneOffIncomeEvents: oneOffIncome.events,
           totalProjectedLifestyleSpending,
           annualLifestyleSurplusOrShortfall,
           cashSurplusOrShortfall,
@@ -2175,6 +2529,14 @@
           unallocatedSurplusWithdrawal: roundCurrency(requiredUnallocatedWithdrawal + optionalAdditionalLifestyleUnallocatedWithdrawal),
           unallocatedSurplusClosingBalance: unallocatedSurplusBalance,
           accessibleInvestmentContribution,
+          oneOffIncomeAccessibleContribution,
+          downsizeHomeEvent: downsizeHomeEvent.applied ? { ...downsizeHomeEvent } : null,
+          downsizeAccessibleInvestmentContribution: number(downsizeHomeEvent.accessibleInvestmentContribution),
+          downsizeAccessibleWithdrawal,
+          downsizeAccessibleInvestmentWithdrawal,
+          downsizeUnallocatedWithdrawal,
+          downsizeAdditionalFundsRequired: number(downsizeHomeEvent.additionalFundsRequired),
+          downsizeUnfundedShortfall: number(downsizeHomeEvent.unfundedShortfall),
           openingAccessibleInvestmentBalance: accessibleOpening,
           openingAccessibleAssetsIncludingUnallocated: roundCurrency(accessibleOpening + unallocatedSurplusOpeningBalance),
           ordinaryAccessibleOpeningBalance: ordinaryOpeningBalance,
@@ -2193,8 +2555,11 @@
             externalAnnualAccessibleContribution: plannedExternalAccessibleContribution,
             plannedExternalAccessibleContribution,
             surplusToAccessibleInvestments,
+            oneOffIncomeAccessibleContribution,
+            downsizeAccessibleInvestmentContribution: number(downsizeHomeEvent.accessibleInvestmentContribution),
             investmentEarnings: accessibleInvestmentEarnings,
             requiredAccessibleWithdrawal: requiredAccessibleInvestmentWithdrawal,
+            downsizeAccessibleInvestmentWithdrawal,
             optionalAdditionalLifestyleWithdrawal: optionalAdditionalLifestyleInvestmentWithdrawal,
             plannedSemiRetirementWithdrawal: optionalAdditionalLifestyleInvestmentWithdrawal,
             totalAccessibleInvestmentWithdrawal,
@@ -2236,7 +2601,14 @@
       summary.totalOptionalAdditionalLifestyleWithdrawals = roundCurrency(summary.totalOptionalAdditionalLifestyleWithdrawals + optionalAdditionalLifestyleWithdrawal);
       summary.totalOneOffLifestyleSpending = roundCurrency(summary.totalOneOffLifestyleSpending + oneOffLifestyleSpending);
       summary.totalOneOffLifestyleSpendingTodayDollars = roundCurrency(summary.totalOneOffLifestyleSpendingTodayDollars + oneOffLifestyleSpendingTodayDollars);
+      summary.totalOneOffIncome = roundCurrency(summary.totalOneOffIncome + oneOffIncomeAccessibleContribution);
+      summary.totalOneOffIncomeTodayDollars = roundCurrency(summary.totalOneOffIncomeTodayDollars + oneOffIncomeTodayDollars);
       summary.totalPlannedExtraConcessionalContributions = roundCurrency(summary.totalPlannedExtraConcessionalContributions + plannedExtraConcessionalContribution);
+      summary.totalDownsizerContributions = roundCurrency(summary.totalDownsizerContributions + number(downsizeHomeEvent.totalDownsizerContributions));
+      summary.totalDownsizeCashReleased = roundCurrency(summary.totalDownsizeCashReleased + Math.max(0, number(downsizeHomeEvent.netCashReleased)));
+      summary.totalDownsizeAccessibleInvestmentContribution = roundCurrency(summary.totalDownsizeAccessibleInvestmentContribution + number(downsizeHomeEvent.accessibleInvestmentContribution));
+      summary.totalDownsizeAdditionalFundsRequired = roundCurrency(summary.totalDownsizeAdditionalFundsRequired + number(downsizeHomeEvent.additionalFundsRequired));
+      summary.totalDownsizeUnfundedShortfall = roundCurrency(summary.totalDownsizeUnfundedShortfall + number(downsizeHomeEvent.unfundedShortfall));
       summary.totalSurplusToSuper = roundCurrency(summary.totalSurplusToSuper + surplusToSuper);
       summary.totalSurplusToAccessibleInvestments = roundCurrency(summary.totalSurplusToAccessibleInvestments + surplusToAccessibleInvestments);
       summary.totalSurplusAvailableForEnjoyment = roundCurrency(summary.totalSurplusAvailableForEnjoyment + surplusAvailableForEnjoyment);
@@ -2292,5 +2664,9 @@
     projectDebtYearForAudit: projectDebtYear,
     projectPassiveIncomeRowsForAudit: projectPassiveIncomeRows,
     normalisePlannedConcessionalContributionEventForAudit: normalisePlannedConcessionalContributionEvent,
+    normaliseOneOffIncomeEventForAudit: normaliseOneOffIncomeEvent,
+    normaliseDownsizeHomeEventForAudit: normaliseDownsizeHomeEvent,
+    DOWNSIZER_CONTRIBUTION_LIMIT,
+    DOWNSIZER_MINIMUM_AGE,
   };
 })(globalThis);

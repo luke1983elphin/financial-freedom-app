@@ -30,6 +30,10 @@
     return `one-off-${Date.now().toString(36)}-${index}-${Math.random().toString(36).slice(2, 8)}`;
   }
 
+  function oneOffIncomeEventId(index = 0) {
+    return `one-off-income-${Date.now().toString(36)}-${index}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
   function plannedConcessionalContributionEventId(index = 0) {
     return `planned-concessional-${Date.now().toString(36)}-${index}-${Math.random().toString(36).slice(2, 8)}`;
   }
@@ -43,6 +47,15 @@
     }));
   }
 
+  function normaliseOneOffIncomeEvents(events = []) {
+    return (Array.isArray(events) ? events : []).map((event, index) => ({
+      id: String(event.id || oneOffIncomeEventId(index)),
+      description: String(event.description || event.name || "").trim(),
+      amountTodayDollars: roundCurrency(nonNegative(event.amountTodayDollars ?? event.amount ?? event.todayDollarAmount)),
+      year: Math.round(number(event.year ?? event.calendarYear)),
+    }));
+  }
+
   function normalisePlannedConcessionalContributions(events = []) {
     return (Array.isArray(events) ? events : []).map((event, index) => ({
       id: String(event.id || plannedConcessionalContributionEventId(index)),
@@ -50,6 +63,37 @@
       financialYear: Math.round(number(event.financialYear ?? event.year ?? event.calendarYear)),
       amount: roundCurrency(nonNegative(event.amount ?? event.extraConcessionalContribution ?? event.contributionAmount)),
     }));
+  }
+
+  function downsizeAllocation(value) {
+    const text = String(value || "").trim();
+    if (["super", "downsizerSuper", "downsizer-super"].includes(text)) return "downsizer-super";
+    if (["mixed", "split", "split-between-super-and-investments"].includes(text)) return "split";
+    return "accessible-investments";
+  }
+
+  function normaliseDownsizeHomeEvent(event = {}, people = []) {
+    const source = event || {};
+    const contributionSource = source.downsizerContributions || source.personContributions || source.contributions || {};
+    const downsizerContributions = {};
+    (people || []).forEach((person, index) => {
+      const id = String(person?.id || personId(index + 1));
+      downsizerContributions[id] = roundCurrency(nonNegative(
+        contributionSource[id]
+        ?? source[`${id}DownsizerContribution`]
+        ?? source[`person${index + 1}DownsizerContribution`],
+      ));
+    });
+    return {
+      enabled: source.enabled === true || source.isEnabled === true || source.modelDownsizeHome === true,
+      year: Math.round(number(source.year ?? source.calendarYear)),
+      currentHomeSaleValueToday: roundCurrency(nonNegative(source.currentHomeSaleValueToday ?? source.currentHomeValueToday ?? source.saleValueToday)),
+      replacementHomeValueToday: roundCurrency(nonNegative(source.replacementHomeValueToday ?? source.replacementHomePurchasePriceToday ?? source.replacementValueToday)),
+      saleCostPct: number(source.saleCostPct ?? source.saleCostPercent ?? (source.saleCostRate !== undefined ? number(source.saleCostRate) * 100 : 2.5), 2.5),
+      purchaseCostPct: number(source.purchaseCostPct ?? source.purchaseCostPercent ?? (source.purchaseCostRate !== undefined ? number(source.purchaseCostRate) * 100 : 4.5), 4.5),
+      allocation: downsizeAllocation(source.allocation || source.releasedCashAllocation || source.proceedsAllocation),
+      downsizerContributions,
+    };
   }
 
   function legacyOptionalLifestyleDrawAmount(draft = {}) {
@@ -634,6 +678,24 @@
     };
   }
 
+  function defaultDownsizeHomeEvent(draftPeople = [], assets = [], projectionStartYear = currentYear()) {
+    const home = (assets || []).find((asset) => propertyTypeGroup(asset.type || asset.category) === "principal-residence");
+    const contributions = {};
+    (draftPeople || []).forEach((person, index) => {
+      contributions[String(person.id || personId(index + 1))] = 0;
+    });
+    return {
+      enabled: false,
+      year: projectionStartYear,
+      currentHomeSaleValueToday: nonNegative(home?.openingValue),
+      replacementHomeValueToday: 0,
+      saleCostPct: 2.5,
+      purchaseCostPct: 4.5,
+      allocation: "accessible-investments",
+      downsizerContributions: contributions,
+    };
+  }
+
   function buildSemiRetirementScenarioDefaults(plan = {}, result = {}) {
     const lifestyleSpending = defaultScenarioLifestyleSpending(plan, result);
     const people = [personDefaults(plan, result, 1)];
@@ -673,7 +735,9 @@
         optionalAdditionalLifestyleWithdrawal: 0,
         semiRetirementAccessibleWithdrawal: 0,
         oneOffLifestyleEvents: [],
+        oneOffIncomeEvents: [],
         plannedConcessionalContributions: [],
+        downsizeHomeEvent: defaultDownsizeHomeEvent(people, assets, currentYear()),
         workingPhaseSurplusDestination: "accessible-investments",
         surplusDestination: "enjoyment",
         minimumAccessibleBalance: 0,
@@ -771,6 +835,15 @@
       if (event.amountTodayDollars <= 0) add(`${prefix}.amountTodayDollars`, "Enter an amount greater than $0.");
       if (!Number.isFinite(event.year) || event.year < startYear || event.year > endYear) add(`${prefix}.year`, "Choose a year within this projection.");
     });
+    const incomeEventIds = new Set();
+    normaliseOneOffIncomeEvents(draft.scenario?.oneOffIncomeEvents).forEach((event, index) => {
+      const prefix = `scenario.oneOffIncomeEvents.${index}`;
+      if (incomeEventIds.has(event.id)) add(`${prefix}.id`, "One-off income events need unique IDs.");
+      incomeEventIds.add(event.id);
+      if (!event.description) add(`${prefix}.description`, "Add a short description, such as inheritance, family assistance or insurance proceeds.");
+      if (event.amountTodayDollars <= 0) add(`${prefix}.amountTodayDollars`, "Enter an amount greater than $0.");
+      if (!Number.isFinite(event.year) || event.year < startYear || event.year > endYear) add(`${prefix}.year`, "Choose a year within this projection.");
+    });
     const personIds = new Set((draft.people || []).map((person, index) => String(person.id || personId(index + 1))));
     const contributionIds = new Set();
     const contributionPersonYears = new Set();
@@ -785,6 +858,27 @@
       if (contributionPersonYears.has(personYearKey)) add(`${prefix}.financialYear`, "Use one planned extra concessional contribution per person and financial year, then edit that amount if needed.");
       contributionPersonYears.add(personYearKey);
     });
+    const downsizeEvent = normaliseDownsizeHomeEvent(draft.scenario?.downsizeHomeEvent, draft.people || []);
+    if (downsizeEvent.enabled) {
+      const prefix = "scenario.downsizeHomeEvent";
+      const limit = number(global.FFSSemiRetirementProjection?.DOWNSIZER_CONTRIBUTION_LIMIT, 300000);
+      const hasPrincipalResidence = (draft.assets || []).some((asset) => propertyTypeGroup(asset.type || asset.category) === "principal-residence");
+      if (!hasPrincipalResidence) add(`${prefix}.currentHomeSaleValueToday`, "Add a principal residence asset before modelling downsizing.");
+      if (!Number.isFinite(downsizeEvent.year) || downsizeEvent.year < startYear || downsizeEvent.year > endYear) add(`${prefix}.year`, "Choose a downsizing year within this projection.");
+      if (downsizeEvent.currentHomeSaleValueToday <= 0) add(`${prefix}.currentHomeSaleValueToday`, "Enter the current home sale value in today's dollars.");
+      if (downsizeEvent.replacementHomeValueToday <= 0) add(`${prefix}.replacementHomeValueToday`, "Enter the replacement home value in today's dollars.");
+      if (downsizeEvent.saleCostPct < 0) add(`${prefix}.saleCostPct`, "Sale costs cannot be negative.");
+      if (downsizeEvent.purchaseCostPct < 0) add(`${prefix}.purchaseCostPct`, "Purchase costs cannot be negative.");
+      if (!["accessible-investments", "downsizer-super", "split"].includes(downsizeEvent.allocation)) add(`${prefix}.allocation`, "Choose how released money should be allocated.");
+      (draft.people || []).forEach((person, index) => {
+        const id = String(person.id || personId(index + 1));
+        const amount = number(downsizeEvent.downsizerContributions?.[id]);
+        const ageAtEvent = number(person.currentAge) + (downsizeEvent.year - startYear);
+        if (amount < 0) add(`${prefix}.downsizerContributions.${id}`, "Downsizer contributions cannot be negative.");
+        if (amount > limit) add(`${prefix}.downsizerContributions.${id}`, `Downsizer contribution cannot exceed ${roundCurrency(limit).toLocaleString(undefined, { style: "currency", currency: "AUD", maximumFractionDigits: 0 })} for one person.`);
+        if (amount > 0 && ageAtEvent < 55) add(`${prefix}.downsizerContributions.${id}`, "Downsizer contributions generally require the person to be at least age 55 in the downsizing year.");
+      });
+    }
     [
       ["accessibleInvestments.annualReturnRatePct", draft.accessibleInvestments?.annualReturnRatePct],
       ["accessibleInvestments.annualFeesRatePct", draft.accessibleInvestments?.annualFeesRatePct],
@@ -903,7 +997,9 @@
       }),
       scenario: {
         oneOffLifestyleEvents: normaliseOneOffLifestyleEvents(draft.scenario?.oneOffLifestyleEvents),
+        oneOffIncomeEvents: normaliseOneOffIncomeEvents(draft.scenario?.oneOffIncomeEvents),
         plannedConcessionalContributions: normalisePlannedConcessionalContributions(draft.scenario?.plannedConcessionalContributions),
+        downsizeHomeEvent: normaliseDownsizeHomeEvent(draft.scenario?.downsizeHomeEvent, draft.people || []),
         optionalAdditionalLifestyleWithdrawal: legacyOptionalLifestyleDrawAmount(draft),
         semiRetirementAccessibleWithdrawal: legacyOptionalLifestyleDrawAmount(draft),
         workingPhaseSurplusDestination: draft.scenario?.workingPhaseSurplusDestination || "accessible-investments",
@@ -1504,6 +1600,38 @@
         tone: isBalloon ? "warning" : "positive",
       });
     });
+    years.forEach((row) => {
+      const household = row.household || {};
+      asArray(household.oneOffIncomeEvents).forEach((event) => {
+        addTimelineEvent(groups, {
+          calendarYear: row.calendarYear,
+          ages: rowAges(row, people),
+          title: `One-off income - ${event.description || "scenario income"}`,
+          detail: `${roundDisplayAmount(event.projectedAmount).toLocaleString(undefined, { style: "currency", currency: "AUD", maximumFractionDigits: 0 })} is added to accessible investments in this scenario year.`,
+          tone: "positive",
+        });
+      });
+      if (household.downsizeHomeEvent?.applied) {
+        const event = household.downsizeHomeEvent;
+        const released = number(event.netCashReleased);
+        const downsizer = number(event.totalDownsizerContributions);
+        const accessible = number(event.accessibleInvestmentContribution);
+        const detailParts = released >= 0
+          ? [
+            `${roundDisplayAmount(released).toLocaleString(undefined, { style: "currency", currency: "AUD", maximumFractionDigits: 0 })} net cash released`,
+            downsizer > 0 ? `${roundDisplayAmount(downsizer).toLocaleString(undefined, { style: "currency", currency: "AUD", maximumFractionDigits: 0 })} to downsizer super` : "",
+            accessible > 0 ? `${roundDisplayAmount(accessible).toLocaleString(undefined, { style: "currency", currency: "AUD", maximumFractionDigits: 0 })} to accessible investments` : "",
+          ].filter(Boolean)
+          : [`${roundDisplayAmount(event.additionalFundsRequired).toLocaleString(undefined, { style: "currency", currency: "AUD", maximumFractionDigits: 0 })} additional cash required`];
+        addTimelineEvent(groups, {
+          calendarYear: row.calendarYear,
+          ages: rowAges(row, people),
+          title: "Home downsized",
+          detail: detailParts.join("; "),
+          tone: released >= 0 ? "positive" : "warning",
+        });
+      }
+    });
 
     return Array.from(groups.byYear.values()).sort((a, b) => a.calendarYear - b.calendarYear);
   }
@@ -1617,6 +1745,17 @@
         },
       ]
       : [];
+    const oneOffIncomeEvents = normaliseOneOffIncomeEvents(inputs.scenario?.oneOffIncomeEvents);
+    const oneOffIncomeRows = oneOffIncomeEvents.length
+      ? [
+        {
+          label: "One-off income",
+          value: `${oneOffIncomeEvents.length} planned event${oneOffIncomeEvents.length === 1 ? "" : "s"}`,
+          type: "plain",
+          note: oneOffIncomeEvents.map((event) => `${event.description || "One-off income"} - ${roundCurrency(event.amountTodayDollars).toLocaleString(undefined, { style: "currency", currency: "AUD", maximumFractionDigits: 0 })} today - ${event.year}`).join("; "),
+        },
+      ]
+      : [];
     const plannedConcessionalEvents = normalisePlannedConcessionalContributions(inputs.scenario?.plannedConcessionalContributions);
     const plannedConcessionalRows = plannedConcessionalEvents.length
       ? [
@@ -1628,6 +1767,17 @@
             const person = people.find((candidate) => candidate.id === event.personId);
             return `${person?.name || event.personId || "Person"} - ${roundCurrency(event.amount).toLocaleString(undefined, { style: "currency", currency: "AUD", maximumFractionDigits: 0 })} - ${financialYearLabel(event.financialYear)}`;
           }).join("; "),
+        },
+      ]
+      : [];
+    const downsizeHomeEvent = normaliseDownsizeHomeEvent(inputs.scenario?.downsizeHomeEvent, people);
+    const downsizeRows = downsizeHomeEvent.enabled
+      ? [
+        {
+          label: "Downsize home",
+          value: `Modelled in ${downsizeHomeEvent.year}`,
+          type: "plain",
+          note: `Current home ${roundCurrency(downsizeHomeEvent.currentHomeSaleValueToday).toLocaleString(undefined, { style: "currency", currency: "AUD", maximumFractionDigits: 0 })} today; replacement home ${roundCurrency(downsizeHomeEvent.replacementHomeValueToday).toLocaleString(undefined, { style: "currency", currency: "AUD", maximumFractionDigits: 0 })} today; allocation ${downsizeHomeEvent.allocation.replace(/-/g, " ")}.`,
         },
       ]
       : [];
@@ -1646,7 +1796,9 @@
       { label: "Annual loan principal repayments", value: inputs.household?.annualLoanPrincipalRepayments, type: "currency" },
       { label: "Other annual income", value: inputs.household?.otherAnnualIncome, type: "currency" },
       ...oneOffRows,
+      ...oneOffIncomeRows,
       ...plannedConcessionalRows,
+      ...downsizeRows,
       { label: "Money left over", value: surplusDestinationLabel(inputs.scenario?.surplusDestination), type: "plain" },
       { label: "Minimum accessible balance", value: inputs.scenario?.minimumAccessibleBalance, type: "currency" },
       { label: "Withdrawal order", value: inputs.scenario?.withdrawalOrder || assumptions.withdrawalOrder || "accessible investments first", type: "plain" },
@@ -1712,6 +1864,14 @@
     const totalOneOffLifestyleSpendingTodayDollars = summary.totalOneOffLifestyleSpendingTodayDollars ?? years.reduce((total, row) => {
       const household = row.household || {};
       return roundDisplayAmount(total + number(household.oneOffLifestyleSpendingTodayDollars));
+    }, 0);
+    const totalOneOffIncome = summary.totalOneOffIncome ?? years.reduce((total, row) => {
+      const household = row.household || {};
+      return roundDisplayAmount(total + number(household.oneOffIncome));
+    }, 0);
+    const totalOneOffIncomeTodayDollars = summary.totalOneOffIncomeTodayDollars ?? years.reduce((total, row) => {
+      const household = row.household || {};
+      return roundDisplayAmount(total + number(household.oneOffIncomeTodayDollars));
     }, 0);
     const totalAssetWithdrawalsDuringSemiRetirement = semiRetirementRows.reduce((total, row) => {
       const household = row.household || {};
@@ -1784,6 +1944,13 @@
       semiRetirementFunding: {
         totalOneOffLifestyleSpending,
         totalOneOffLifestyleSpendingTodayDollars,
+        totalOneOffIncome,
+        totalOneOffIncomeTodayDollars,
+        totalDownsizerContributions: roundDisplayAmount(summary.totalDownsizerContributions),
+        totalDownsizeCashReleased: roundDisplayAmount(summary.totalDownsizeCashReleased),
+        totalDownsizeAccessibleInvestmentContribution: roundDisplayAmount(summary.totalDownsizeAccessibleInvestmentContribution),
+        totalDownsizeAdditionalFundsRequired: roundDisplayAmount(summary.totalDownsizeAdditionalFundsRequired),
+        totalDownsizeUnfundedShortfall: roundDisplayAmount(summary.totalDownsizeUnfundedShortfall),
         requiredPortfolioWithdrawalsDuringSemiRetirement,
         requiredAccessibleWithdrawalsDuringSemiRetirement,
         superWithdrawalsDuringSemiRetirement,
@@ -1842,6 +2009,8 @@
       values: {
         fullRetirementLifestyleSpending: scenarioAdjustmentValue(draft, "fullRetirementLifestyleSpending"),
         oneOffLifestyleEventCount: normaliseOneOffLifestyleEvents(draft.scenario?.oneOffLifestyleEvents).length,
+        oneOffIncomeEventCount: normaliseOneOffIncomeEvents(draft.scenario?.oneOffIncomeEvents).length,
+        hasDownsizeHomeEvent: normaliseDownsizeHomeEvent(draft.scenario?.downsizeHomeEvent, draft.people || []).enabled,
       },
       statusType: viewModel.status?.type || "funded",
       statusTitle: viewModel.status?.title || "",
@@ -1875,6 +2044,7 @@
           - scenarioAdjustmentValue({ household: { fullRetirementLifestyleSpending: baseline.values?.fullRetirementLifestyleSpending } }, "fullRetirementLifestyleSpending"),
         ),
         oneOffLifestyleEventCount: number(adjusted.values?.oneOffLifestyleEventCount) - number(baseline.values?.oneOffLifestyleEventCount),
+        oneOffIncomeEventCount: number(adjusted.values?.oneOffIncomeEventCount) - number(baseline.values?.oneOffIncomeEventCount),
       },
     };
   }
@@ -1888,6 +2058,8 @@
       values: {
         fullRetirementLifestyleSpending: retirementValue,
         oneOffLifestyleEventCount: normaliseOneOffLifestyleEvents(draft.scenario?.oneOffLifestyleEvents).length,
+        oneOffIncomeEventCount: normaliseOneOffIncomeEvents(draft.scenario?.oneOffIncomeEvents).length,
+        hasDownsizeHomeEvent: normaliseDownsizeHomeEvent(draft.scenario?.downsizeHomeEvent, draft.people || []).enabled,
       },
       controls: {
         fullRetirementLifestyleSpending: {
@@ -1974,8 +2146,12 @@
     resetScenarioAdjustmentsToBaseline,
     normaliseOneOffLifestyleEvents,
     oneOffEventId,
+    normaliseOneOffIncomeEvents,
+    oneOffIncomeEventId,
     normalisePlannedConcessionalContributions,
     plannedConcessionalContributionEventId,
+    normaliseDownsizeHomeEvent,
+    downsizeAllocation,
     projectionYearRange,
     eventAgeLabel,
     financialYearLabel,

@@ -206,6 +206,38 @@
   max-width: 72rem;
 }
 
+.semi-retirement-input-details > summary small {
+  color: #64748b;
+  display: block;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+  margin-top: 3px;
+}
+
+.semi-retirement-one-off-income-section {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.semi-retirement-downsize-section {
+  background: #ffffff;
+  border-color: #dbeafe;
+}
+
+.semi-retirement-downsize-core {
+  grid-template-columns: minmax(180px, 0.7fr) minmax(220px, 1fr);
+}
+
+.semi-retirement-downsize-values {
+  grid-template-columns: repeat(2, minmax(180px, 1fr));
+}
+
+.semi-retirement-downsize-contributions {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 12px;
+}
+
 .semi-retirement-results-dashboard {
   display: grid;
   gap: 18px;
@@ -1020,7 +1052,9 @@
   }
 
   .semi-retirement-one-off-heading,
-  .semi-retirement-one-off-fields {
+  .semi-retirement-one-off-fields,
+  .semi-retirement-downsize-core,
+  .semi-retirement-downsize-values {
     display: grid;
     grid-template-columns: 1fr;
   }
