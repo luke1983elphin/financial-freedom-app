@@ -1418,24 +1418,26 @@ test("Stage FC5 comparison difference values reconcile mathematically", () => {
   assert.notEqual(comparisonViewModel.keyResults.projectionEnd.projectedNetWorth, undefined);
 });
 
-test("Stage FC6 comparison displays only key outputs", () => {
-  const snippet = sourceBetween(appSource, "function renderSemiRetirementComparisonHtml", "function renderSemiRetirementTimelineHtml");
-  ["Both fully retired", "Assets at retirement", "Accessible assets last", "Semi-retirement withdrawals", "Surplus in first full-retirement year", "Debt at retirement", "Projected end net worth"].forEach((label) => {
+test("Stage FC6 comparison displays the G2H headline outcome set", () => {
+  const snippet = sourceBetween(appSource, "function semiRetirementComparisonMetricDefinitions", "function semiRetirementComparisonCellHtml");
+  ["Household fully retired", "Assets at full retirement", "Accessible investments at full retirement", "Super at full retirement", "Accessible investments last until", "Retirement funding status", "Debt at full retirement", "First projected funding shortfall", "Projection-end net worth", "One-off lifestyle spending", "Extra concessional contributions"].forEach((label) => {
     assert.match(snippet, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   });
-  assert.doesNotMatch(snippet, /renderSemiRetirementAnnualProjectionHtml|renderSemiRetirementDebtPropertyHtml/);
+  assert.doesNotMatch(sourceBetween(appSource, "function renderSemiRetirementComparisonHtml", "function renderSemiRetirementTimelineHtml"), /renderSemiRetirementAnnualProjectionHtml|renderSemiRetirementDebtPropertyHtml/);
 });
 
 test("Stage FC7 comparison copy is descriptive and not advisory", () => {
   const snippet = sourceBetween(appSource, "function renderSemiRetirementComparisonHtml", "function renderSemiRetirementTimelineHtml");
-  assert.doesNotMatch(snippet, /Recommended|Best option|You should|Optimal/i);
-  assert.match(snippet, /Temporary comparison only/);
+  assert.doesNotMatch(snippet, /Recommended|Best option|You should|Winner|Optimal/i);
+  assert.match(snippet, /Temporary comparisons and saved Retirement Planning scenarios use the same projection engine/);
+  assert.match(appSource, /Temporary scenario only/);
 });
 
 test("Stage FC8 comparison mobile layout stacks without horizontal overflow", () => {
   const styles = stageFStyles();
-  assert.match(styles, /@media \(max-width: 640px\)[\s\S]*\.semi-retirement-comparison-row\s*\{\s*grid-template-columns: 1fr;/s);
+  assert.match(styles, /@media \(max-width: 640px\)[\s\S]*\.semi-retirement-comparison-summary-row,[\s\S]*grid-template-columns: 1fr;/s);
   assert.match(styles, /@media \(max-width: 640px\)[\s\S]*\.semi-retirement-comparison-header\s*\{\s*display: none;/s);
+  assert.match(styles, /\.semi-retirement-comparison-cell::before\s*\{[\s\S]*content: attr\(data-scenario-label\)/s);
 });
 
 test("Stage FC9 comparison state survives ordinary workspace switching during the session", () => {
@@ -1450,9 +1452,11 @@ test("Stage FC10 reset comparison removes only comparison state", () => {
   assert.doesNotMatch(snippet, /semiRetirementScenarioResult = null|semiRetirementScenarioDraft = null|plan =/);
 });
 
-test("Stage F1-A comparison displays Semi-retirement withdrawals label", () => {
-  const snippet = sourceBetween(appSource, "function renderSemiRetirementComparisonHtml", "function renderSemiRetirementTimelineHtml");
-  assert.match(snippet, /Semi-retirement withdrawals/);
+test("Stage F1-A semi-retirement withdrawal source remains available outside headline metrics", () => {
+  const summarySnippet = sourceBetween(appSource, "function semiRetirementComparisonSummary", "function semiRetirementComparisonDelta");
+  const metricSnippet = sourceBetween(appSource, "function semiRetirementComparisonMetricDefinitions", "function semiRetirementComparisonCellHtml");
+  assert.match(summarySnippet, /requiredWithdrawals: viewModel\.semiRetirementFunding\?\.requiredAccessibleWithdrawalsDuringSemiRetirement/);
+  assert.doesNotMatch(metricSnippet, /Semi-retirement withdrawals/);
 });
 
 test("Stage F1-B old Required withdrawals label is removed from the aggregate comparison metric", () => {
@@ -1460,17 +1464,19 @@ test("Stage F1-B old Required withdrawals label is removed from the aggregate co
   assert.doesNotMatch(snippet, /"Required withdrawals"/);
 });
 
-test("Stage F1-C aggregate semi-retirement withdrawals are not labelled per year", () => {
-  const snippet = sourceBetween(appSource, "function renderSemiRetirementComparisonHtml", "function renderSemiRetirementTimelineHtml");
-  const rowStart = snippet.indexOf("Semi-retirement withdrawals");
-  assert.ok(rowStart >= 0, "Expected semi-retirement withdrawals comparison row");
-  const rowSnippet = snippet.slice(rowStart, rowStart + 700);
+test("Stage F1-C aggregate semi-retirement withdrawals are not presented as a per-year headline", () => {
+  const summarySnippet = sourceBetween(appSource, "function semiRetirementComparisonSummary", "function semiRetirementComparisonDelta");
+  const rowStart = summarySnippet.indexOf("requiredWithdrawals");
+  assert.ok(rowStart >= 0, "Expected semi-retirement withdrawals source to be retained");
+  const rowSnippet = summarySnippet.slice(rowStart, rowStart + 300);
   assert.doesNotMatch(rowSnippet, /\bp\.a\.|per year/i);
 });
 
-test("Stage F1-D comparison displays Surplus in first full-retirement year label", () => {
-  const snippet = sourceBetween(appSource, "function renderSemiRetirementComparisonHtml", "function renderSemiRetirementTimelineHtml");
-  assert.match(snippet, /Surplus in first full-retirement year/);
+test("Stage F1-D first full-retirement surplus source remains available outside headline metrics", () => {
+  const summarySnippet = sourceBetween(appSource, "function semiRetirementComparisonSummary", "function semiRetirementComparisonDelta");
+  const metricSnippet = sourceBetween(appSource, "function semiRetirementComparisonMetricDefinitions", "function semiRetirementComparisonCellHtml");
+  assert.match(summarySnippet, /lifestyleSurplus: fullRetirementHousehold\.annualLifestyleSurplusOrShortfall \?\? fullRetirementHousehold\.cashSurplusOrShortfall/);
+  assert.doesNotMatch(metricSnippet, /Surplus in first full-retirement year/);
 });
 
 test("Stage F1-E old Lifestyle surplus label is removed from the comparison metric", () => {
@@ -1478,23 +1484,20 @@ test("Stage F1-E old Lifestyle surplus label is removed from the comparison metr
   assert.doesNotMatch(snippet, /"Lifestyle surplus"/);
 });
 
-test("Stage F1-F comparison helper text explains both clarified metrics", () => {
-  const snippet = sourceBetween(appSource, "function renderSemiRetirementComparisonMetric", "function renderSemiRetirementTimelineHtml");
-  assert.match(appSource, /semiComparisonWithdrawals/);
-  assert.match(appSource, /semiComparisonFirstRetirementSurplus/);
-  assert.match(snippet, /Total accessible-investment withdrawals required to cover normal cashflow shortfalls during the semi-retirement years\./);
-  assert.match(snippet, /Cash remaining after normal projected lifestyle spending in the first year the household is fully retired\./);
+test("Stage F1-F comparison helper text explains the G2H funding distinction", () => {
+  const snippet = sourceBetween(appSource, "function semiRetirementComparisonBreakdownRows", "function renderSemiRetirementComparisonBreakdown");
+  assert.match(snippet, /Available super continues funding spending where required/);
+  assert.match(snippet, /First unmet spending/);
+  assert.match(snippet, /Projection end/);
 });
 
 test("Stage F1-G underlying comparison value sources are unchanged", () => {
   const summarySnippet = sourceBetween(appSource, "function semiRetirementComparisonSummary", "function semiRetirementComparisonDelta");
-  const renderSnippet = sourceBetween(appSource, "function renderSemiRetirementComparisonHtml", "function renderSemiRetirementTimelineHtml");
+  const metricSnippet = sourceBetween(appSource, "function semiRetirementComparisonMetricDefinitions", "function semiRetirementComparisonCellHtml");
   assert.match(summarySnippet, /requiredWithdrawals: viewModel\.semiRetirementFunding\?\.requiredAccessibleWithdrawalsDuringSemiRetirement/);
   assert.match(summarySnippet, /lifestyleSurplus: fullRetirementHousehold\.annualLifestyleSurplusOrShortfall \?\? fullRetirementHousehold\.cashSurplusOrShortfall/);
-  assert.match(renderSnippet, /current\.requiredWithdrawals/);
-  assert.match(renderSnippet, /comparison\.requiredWithdrawals/);
-  assert.match(renderSnippet, /current\.lifestyleSurplus/);
-  assert.match(renderSnippet, /comparison\.lifestyleSurplus/);
+  assert.match(metricSnippet, /summary\.assetsAtRetirement/);
+  assert.match(metricSnippet, /summary\.projectedEndNetWorth/);
 });
 
 test("Stage F1-H current and comparison projections remain identical for identical inputs", () => {

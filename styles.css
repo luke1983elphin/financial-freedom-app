@@ -630,13 +630,12 @@
   overflow: hidden;
 }
 
-.semi-retirement-debt-progression div,
-.semi-retirement-comparison-row {
+.semi-retirement-debt-progression div {
   align-items: start;
   border-top: 1px solid #e2e8f0;
   display: grid;
   gap: 10px;
-  grid-template-columns: minmax(0, 1fr) repeat(3, minmax(0, 0.75fr));
+  grid-template-columns: minmax(0, 1fr) auto;
   min-width: 0;
   padding: 10px 12px;
 }
@@ -646,8 +645,28 @@
   border-top: 0;
 }
 
-.semi-retirement-debt-progression div {
-  grid-template-columns: minmax(0, 1fr) auto;
+.semi-retirement-comparison-row {
+  border-top: 1px solid #e2e8f0;
+  min-width: 0;
+}
+
+.semi-retirement-comparison-summary-row,
+.semi-retirement-comparison-header {
+  align-items: start;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(180px, 1.15fr) repeat(var(--semi-comparison-columns, 2), minmax(130px, 0.9fr));
+  min-width: 0;
+  padding: 10px 12px;
+}
+
+.semi-retirement-comparison-summary-row {
+  cursor: pointer;
+  list-style: none;
+}
+
+.semi-retirement-comparison-summary-row::-webkit-details-marker {
+  display: none;
 }
 
 .semi-retirement-comparison-header {
@@ -655,7 +674,7 @@
   color: #0f2742;
 }
 
-.semi-retirement-comparison-row > span,
+.semi-retirement-comparison-header > span,
 .semi-retirement-debt-progression span {
   color: #64748b;
   font-size: 12px;
@@ -692,18 +711,185 @@
   flex: 0 0 auto;
 }
 
-.semi-retirement-comparison-row strong,
+.semi-retirement-comparison-cell,
 .semi-retirement-debt-progression strong {
   color: #0f2742;
+  display: grid;
+  gap: 4px;
   font-size: 14px;
   font-weight: 950;
   overflow-wrap: anywhere;
+}
+
+.semi-retirement-comparison-cell small {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.semi-retirement-main-differences {
+  border: 1px solid #dbeafe;
+  border-radius: 14px;
+  background: #ffffff;
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 14px;
+}
+
+.semi-retirement-main-differences > div {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.semi-retirement-main-differences article {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 12px;
+}
+
+.semi-retirement-main-differences ul {
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+  margin: 8px 0 0 18px;
+}
+
+.semi-retirement-comparison-breakdown {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  padding: 0 12px 12px;
+}
+
+.semi-retirement-comparison-breakdown-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.semi-retirement-comparison-breakdown-card div {
+  align-items: start;
+  border-top: 1px solid #eef2f7;
+  display: grid;
+  gap: 4px;
+  grid-template-columns: minmax(0, 1fr);
+  padding-top: 8px;
+}
+
+.semi-retirement-comparison-breakdown-card div:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.semi-retirement-comparison-breakdown-card span,
+.semi-retirement-comparison-breakdown-card small {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.semi-retirement-comparison-breakdown-card strong {
+  color: #0f2742;
+  font-size: 14px;
+  font-weight: 950;
+  line-height: 1.35;
 }
 
 .semi-retirement-comparison-controls {
   display: grid;
   gap: 12px;
   margin-top: 14px;
+}
+
+.semi-retirement-comparison-selector {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.semi-retirement-comparison-actions,
+.semi-retirement-saved-selector > div,
+.semi-retirement-comparison-chip-list {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.semi-retirement-saved-selector {
+  border: 1px solid #dbeafe;
+  border-radius: 14px;
+  background: #ffffff;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.semi-retirement-saved-selector select {
+  min-width: min(100%, 280px);
+}
+
+.semi-retirement-comparison-chip-list article {
+  border: 1px solid #dbeafe;
+  border-radius: 14px;
+  background: #ffffff;
+  display: grid;
+  gap: 6px;
+  min-width: min(100%, 210px);
+  padding: 10px 12px;
+}
+
+.semi-retirement-comparison-chip-list article.is-active {
+  border-color: #16a34a;
+  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.12);
+}
+
+.semi-retirement-comparison-chip-list span,
+.semi-retirement-comparison-editor-heading span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.semi-retirement-comparison-chip-list strong {
+  color: #0f2742;
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.semi-retirement-comparison-chip-list article > div,
+.semi-retirement-comparison-editor-heading {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.semi-retirement-comparison-empty {
+  border: 1px dashed #cbd5e1;
+  border-radius: 14px;
+  background: #ffffff;
+  color: #475569;
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+  padding: 16px;
+}
+
+.semi-retirement-comparison-print-report {
+  display: none;
 }
 
 .semi-retirement-comparison-card {
@@ -1097,30 +1283,41 @@
     min-width: 0;
   }
 
-  .semi-retirement-comparison-row {
-    grid-template-columns: 1fr;
-  }
-
   .semi-retirement-comparison-header {
     display: none;
   }
 
-  .semi-retirement-comparison-row strong:nth-of-type(1)::before {
-    content: "Current: ";
+  .semi-retirement-comparison-summary-row,
+  .semi-retirement-comparison-breakdown,
+  .semi-retirement-print-assumptions {
+    grid-template-columns: 1fr;
+  }
+
+  .semi-retirement-comparison-cell {
+    border-top: 1px solid #e2e8f0;
+    padding-top: 8px;
+  }
+
+  .semi-retirement-comparison-cell::before {
+    content: attr(data-scenario-label);
     color: #64748b;
+    font-size: 12px;
     font-weight: 900;
   }
 
-  .semi-retirement-comparison-row strong:nth-of-type(2)::before {
-    content: "Comparison: ";
-    color: #64748b;
-    font-weight: 900;
+  .semi-retirement-comparison-actions,
+  .semi-retirement-saved-selector > div,
+  .semi-retirement-comparison-chip-list,
+  .semi-retirement-comparison-chip-list article > div {
+    align-items: stretch;
+    flex-direction: column;
   }
 
-  .semi-retirement-comparison-row strong:nth-of-type(3)::before {
-    content: "Difference: ";
-    color: #64748b;
-    font-weight: 900;
+  .semi-retirement-comparison-actions .btn,
+  .semi-retirement-saved-selector .btn,
+  .semi-retirement-saved-selector select,
+  .semi-retirement-comparison-chip-list .btn {
+    width: 100%;
   }
 
   .semi-retirement-projection-scroll {
@@ -1504,8 +1701,9 @@ main {
   right: 0;
   z-index: 40;
   display: grid;
-  min-width: 190px;
-  gap: 4px;
+  min-width: 250px;
+  max-width: min(360px, calc(100vw - 32px));
+  gap: 6px;
   margin-top: 8px;
   border: 1px solid #e2e8f0;
   border-radius: 18px;
@@ -1521,14 +1719,24 @@ main {
 
 .plan-menu-panel button,
 .sample-plan-menu-panel button {
-  min-height: 42px;
+  align-content: center;
+  display: grid;
+  gap: 3px;
+  min-height: 44px;
   width: 100%;
   border-radius: 12px;
-  padding: 0 12px;
+  padding: 9px 12px;
   color: #172033;
   font-size: 14px;
   font-weight: 800;
   text-align: left;
+}
+
+.sample-plan-menu-panel button small {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
 }
 
 .plan-menu-panel button:hover,
@@ -1546,6 +1754,13 @@ main {
 
 .sample-plan-menu-panel {
   animation: sampleMenuIn 140ms ease-out;
+}
+
+@media (max-width: 900px) {
+  .toolbar-actions .sample-plan-menu .sample-plan-menu-panel {
+    left: 0;
+    right: auto;
+  }
 }
 
 @keyframes sampleMenuIn {
@@ -7424,6 +7639,14 @@ textarea.field-input {
 }
 
 @media (max-width: 520px) {
+  .sample-plan-menu-panel {
+    left: 0;
+    right: auto;
+    width: min(calc(100vw - 32px), 360px);
+    max-height: min(70vh, 440px);
+    overflow-y: auto;
+  }
+
   header {
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
@@ -8114,14 +8337,106 @@ body.scenario-save-modal-open {
     page-break-inside: avoid;
   }
 
-  body:not([data-print-mode="weekly-planner"]):not([data-active-view="reports"]) [data-view-panel]:not([data-view-panel="dashboard"]),
-  body:not([data-print-mode="weekly-planner"])[data-active-view="reports"] [data-view-panel]:not([data-view-panel="reports"]) {
+  body[data-print-mode="retirement-comparison"] [data-view-panel]:not([data-view-panel="semiretirement"]) {
+    display: none !important;
+  }
+
+  body[data-print-mode="retirement-comparison"] [data-view-panel="semiretirement"],
+  body[data-print-mode="retirement-comparison"] #appWorkspace {
+    display: block !important;
+  }
+
+  body[data-print-mode="retirement-comparison"] [data-view-panel="semiretirement"] > .section-heading,
+  body[data-print-mode="retirement-comparison"] [data-semi-retirement-scenario] > :not(.semi-retirement-result-card),
+  body[data-print-mode="retirement-comparison"] .semi-retirement-results-dashboard > :not(.semi-retirement-comparison),
+  body[data-print-mode="retirement-comparison"] .semi-retirement-comparison > :not(.semi-retirement-comparison-print-report) {
+    display: none !important;
+  }
+
+  body[data-print-mode="retirement-comparison"] .semi-retirement-comparison,
+  body[data-print-mode="retirement-comparison"] .semi-retirement-result-card,
+  body[data-print-mode="retirement-comparison"] .semi-retirement-comparison-print-report {
+    display: block !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+
+  body[data-print-mode="retirement-comparison"] .semi-retirement-print-cover {
+    border-bottom: 2px solid #0f2742;
+    margin-bottom: 8mm;
+    padding-bottom: 6mm;
+  }
+
+  body[data-print-mode="retirement-comparison"] .semi-retirement-print-cover p {
+    color: #2563eb;
+    font-size: 12px;
+    font-weight: 950;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  body[data-print-mode="retirement-comparison"] .semi-retirement-print-cover h1 {
+    color: #0f2742;
+    font-size: 28px;
+    line-height: 1.1;
+    margin: 3mm 0;
+  }
+
+  body[data-print-mode="retirement-comparison"] .semi-retirement-comparison-print-report section {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    margin: 0 0 8mm;
+  }
+
+  body[data-print-mode="retirement-comparison"] .semi-retirement-comparison-print-report h2,
+  body[data-print-mode="retirement-comparison"] .semi-retirement-comparison-print-report h3 {
+    color: #0f2742;
+    page-break-after: avoid;
+  }
+
+  body[data-print-mode="retirement-comparison"] .semi-retirement-print-table {
+    border-collapse: collapse;
+    font-size: 10.5px;
+    page-break-inside: auto;
+    width: 100%;
+  }
+
+  body[data-print-mode="retirement-comparison"] .semi-retirement-print-table thead {
+    display: table-header-group;
+  }
+
+  body[data-print-mode="retirement-comparison"] .semi-retirement-print-table th,
+  body[data-print-mode="retirement-comparison"] .semi-retirement-print-table td {
+    border: 1px solid #cbd5e1;
+    padding: 6px;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  body[data-print-mode="retirement-comparison"] .semi-retirement-comparison-breakdown,
+  body[data-print-mode="retirement-comparison"] .semi-retirement-print-assumptions {
+    display: grid;
+    gap: 6mm;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 0;
+  }
+
+  body[data-print-mode="retirement-comparison"] .semi-retirement-comparison-breakdown-card {
+    border: 1px solid #cbd5e1;
+    break-inside: avoid;
+    page-break-inside: avoid;
+    padding: 8px;
+  }
+
+  body:not([data-print-mode="weekly-planner"]):not([data-print-mode="retirement-comparison"]):not([data-active-view="reports"]) [data-view-panel]:not([data-view-panel="dashboard"]),
+  body:not([data-print-mode="weekly-planner"]):not([data-print-mode="retirement-comparison"])[data-active-view="reports"] [data-view-panel]:not([data-view-panel="reports"]) {
     display: none !important;
   }
 
   #appWorkspace,
-  body:not([data-print-mode="weekly-planner"]):not([data-active-view="reports"]) [data-view-panel="dashboard"],
-  body:not([data-print-mode="weekly-planner"])[data-active-view="reports"] [data-view-panel="reports"] {
+  body:not([data-print-mode="weekly-planner"]):not([data-print-mode="retirement-comparison"]):not([data-active-view="reports"]) [data-view-panel="dashboard"],
+  body:not([data-print-mode="weekly-planner"]):not([data-print-mode="retirement-comparison"])[data-active-view="reports"] [data-view-panel="reports"] {
     display: block !important;
   }
 
