@@ -523,10 +523,11 @@
   let savedScenarioComparisonTargetId = "";
   let pendingScenarioSave = null;
   let aiInsightsConfig = {
-    enabled: Boolean(window.FFS_ENABLE_AI_INSIGHTS),
-    configLoaded: Boolean(window.FFS_ENABLE_AI_INSIGHTS),
+    enabled: false,
+    configLoaded: false,
     maxGenerations: AI_INSIGHTS_DEFAULT_MAX_GENERATIONS,
     cooldownMs: AI_INSIGHTS_DEFAULT_COOLDOWN_MS,
+    message: "AI insights are currently unavailable. You can continue using the financial planning tools.",
   };
   const aiInsightsUi = {
     isOpen: false,
@@ -3951,9 +3952,15 @@
         configLoaded: true,
         maxGenerations: Number(config.maxGenerations) || AI_INSIGHTS_DEFAULT_MAX_GENERATIONS,
         cooldownMs: Number(config.cooldownMs) || AI_INSIGHTS_DEFAULT_COOLDOWN_MS,
+        message: config.message || "",
       };
     } catch {
-      aiInsightsConfig = { ...aiInsightsConfig, enabled: Boolean(window.FFS_ENABLE_AI_INSIGHTS), configLoaded: true };
+      aiInsightsConfig = {
+        ...aiInsightsConfig,
+        enabled: false,
+        configLoaded: true,
+        message: "AI insights are currently unavailable. You can continue using the financial planning tools.",
+      };
     }
     renderOutputs();
   }
@@ -4172,6 +4179,11 @@
 
   async function generateAiInsights() {
     if (aiInsightsUi.isLoading) return;
+    if (!aiInsightsConfig.enabled) {
+      aiInsightsUi.error = aiInsightsConfig.message || "AI insights are currently unavailable. You can continue using the financial planning tools.";
+      renderAiInsightsModal();
+      return;
+    }
     const result = CALC.calculatePlan(plan);
     const completion = isFinancialPlanComplete(plan, result);
     if (!completion.complete) {
