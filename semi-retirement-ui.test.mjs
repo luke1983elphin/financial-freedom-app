@@ -1069,8 +1069,7 @@ test("Stage 4U mobile adjustment layout avoids page-level overflow", () => {
 test("Stage 4V prior regression scripts remain available", () => {
   const packageSource = readFileSync(new URL("../package.json", import.meta.url), "utf8");
   assert.ok(packageSource.includes('"test:semi-retirement"'));
-  assert.ok(packageSource.includes("semi-retirement-projection.test.mjs"));
-  assert.ok(packageSource.includes("semi-retirement-ui.test.mjs"));
+  assert.ok(packageSource.includes("node scripts/run-tests.mjs --group semi-retirement"));
 });
 
 function stage4ControllerState(mutator = () => {}) {

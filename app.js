@@ -6803,8 +6803,12 @@
   function renderAssumptions(result) {
     const container = document.getElementById("assumptionsList");
     if (!container) return;
+    const governance = CALC.getRuleGovernance({ calculationYear: result.taxEstimate.taxYear });
     const rows = [
-      ["Tax year", result.taxEstimate.taxYear],
+      ["Rates and rules", result.taxEstimate.taxYear],
+      ["Calculation version", governance.calculationVersion],
+      ["Rules last reviewed", governance.rulesLastReviewed],
+      ["Future tax rules", governance.futureRuleAssumption],
       ["Investment return", `${Number(plan.investing.expectedInvestmentReturnPct || 0).toFixed(1)}% per year estimate`],
       ["Super return", `${Number(plan.investing.expectedSuperReturnPct || 0).toFixed(1)}% per year estimate`],
       ["Inflation", `${Number(plan.investing.inflationPct || 0).toFixed(1)}% per year estimate`],
@@ -6816,8 +6820,9 @@
       ["Concessional contributions tax", "15% applied before money is invested in super"],
       ["Safe withdrawal rate", `${Number(plan.investing.safeWithdrawalRatePct || 0).toFixed(1)}% estimate`],
       ["Super access age", `Age ${result.superAccessAge} in this model`],
+      ["Important limitations", governance.deferredLimitations.join(" ")],
     ];
-    container.innerHTML = rows.map(([label, value]) => summaryTile(label, value)).join("");
+    container.innerHTML = `${governance.warning ? `<p class="tax-note status-amber">${escapeHtml(governance.warning)}</p>` : ""}${rows.map(([label, value]) => summaryTile(label, value)).join("")}`;
   }
 
   function renderHelpReview(result) {
@@ -8544,6 +8549,8 @@
           <div>Generated ${escapeHtml(generated)}</div>
           <div>Plan: ${escapeHtml(planName)}</div>
           <div>Scenarios: ${scenarioSet.map((scenario) => escapeHtml(scenario.name)).join(", ")}</div>
+          <div>Calculation version: ${escapeHtml(CALC.CALCULATION_VERSION)}</div>
+          <div>Rates/rules: supported Australian financial-year configurations</div>
         </header>
         <section>
           <h2>Main differences</h2>
@@ -8602,6 +8609,7 @@
           <p>Currency note: lifestyle inputs are entered in today's dollars. Future balances and projected spending outputs are nominal future values where the existing projection engine inflates them.</p>
           <p>Property equity contributes to projected net worth but is not automatically available to fund retirement spending unless a specific strategy releases it.</p>
           <p>Super access ages used in this report are scenario assumptions and are not a legal determination of eligibility to access super.</p>
+          <p>${escapeHtml(CALC.getRuleGovernance().futureRuleAssumption)}</p>
         </section>
       </article>
     `;
@@ -9395,6 +9403,7 @@
         <details class="semi-retirement-disclaimer">
           <summary>About this projection</summary>
           <p>This projection uses the information and assumptions entered in the app to illustrate possible future outcomes. Results are estimates, not predictions.</p>
+          <p>Supported enacted tax rules are applied for each financial year, then the last supported rule set is held for later years. Future thresholds are not indexed unless enacted.</p>
         </details>
         ${semiRetirementErrorSummaryHtml()}
         <section class="semi-retirement-input-section mt-4" data-semi-retirement-inputs>
@@ -10841,12 +10850,86 @@
       advance();
       guard += 1;
     }
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    const nextDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    if (item.endDate) {
+      const endDate = new Date(`${item.endDate}T00:00:00`);
+      if (!Number.isNaN(endDate.getTime()) && date > endDate) return "";
+    }
+    return nextDate;
+  }
+
+  function weeklyTimingFutureCustomOverrides(item) {
+    if (!weeklyPlan || item?.active === false) return [];
+    const currentWeek = weeklyPlan.weeks?.[(weeklyPlan.currentWeekNumber || 1) - 1];
+    const startIso = currentWeek?.startDate || weeklyPlan.startDate || item.firstDate || "";
+    const start = new Date(`${startIso}T00:00:00`);
+    const plannerEndIso = weeklyPlan.weeks?.at(-1)?.endDate || "";
+    const plannerEnd = new Date(`${plannerEndIso}T00:00:00`);
+    if (Number.isNaN(start.getTime())) return [];
+    return (weeklyPlan.settings?.occurrenceOverrides || [])
+      .filter((override) => override?.itemId === item.id && override.active !== false)
+      .map((override) => {
+        const dateIso = override.date || override.occurrenceDate || "";
+        const date = new Date(`${dateIso}T00:00:00`);
+        return {
+          dateIso,
+          date,
+          amount: override.amount === undefined ? item.amount : Number(override.amount),
+        };
+      })
+      .filter((override) => !Number.isNaN(override.date.getTime()) && override.date >= start)
+      .filter((override) => Number.isNaN(plannerEnd.getTime()) || override.date <= plannerEnd)
+      .sort((a, b) => a.date - b.date);
+  }
+
+  function weeklyTimingNextDateText(item) {
+    const nextDate = weeklyTimingNextDate(item);
+    if (nextDate) return `Next ${plannerShortDate(nextDate)}`;
+    const customOverrides = weeklyTimingFutureCustomOverrides(item);
+    if (customOverrides.length) {
+      const nextCustom = customOverrides[0];
+      const prefix = item.paidOffLoanTimingStatus?.startsWith("auto-stopped") ? "Regular payments stopped; next custom payment" : "Next custom payment";
+      return `${prefix} ${plannerShortDate(nextCustom.dateIso)}`;
+    }
+    return "No further scheduled payments";
   }
 
   function weeklyTimingFrequencyText(item) {
     const frequency = item.type === "money-in" && item.frequency === "weeklyProvision" ? "weekly" : item.frequency;
     return (weeklyTimingFrequencyOptions.find(([value]) => value === frequency)?.[1] || frequency || "Weekly").toLowerCase();
+  }
+
+  function weeklyTimingReviewNoticeHtml(item) {
+    if (!item.reviewRequired && !item.paidOffLoanTimingStatus) return "";
+    const status = item.paidOffLoanTimingStatus || "review-required";
+    const boundary = item.paidOffLoanTimingEffectiveEndDate || item.endDate || "";
+    const customOverrides = weeklyTimingFutureCustomOverrides(item);
+    const details = [];
+    if (boundary && status.startsWith("auto-stopped")) details.push(`Automatic payments are stopped after ${plannerShortDate(boundary)}.`);
+    if (status === "manual-review" || status === "classifier-unavailable") {
+      details.push(item.reviewRequired
+        ? "This item remains included until you edit or deactivate it."
+        : "This item remains included under your reviewed timing decision.");
+    }
+    if (!item.reviewRequired && item.reviewResolution === "deactivated") details.push("This item is inactive under your reviewed timing decision.");
+    if (item.paidOffLoanTimingHasCustomOverrides || customOverrides.length) {
+      details.push(item.reviewRequired
+        ? "Custom occurrence changes remain included until you review this item."
+        : "Custom occurrence changes remain included under your reviewed timing decision.");
+    }
+    if (customOverrides.length) {
+      const nextCustom = customOverrides[0];
+      const amount = Number.isFinite(nextCustom.amount) ? ` for ${money(nextCustom.amount)}` : "";
+      details.push(`Next custom payment is ${plannerShortDate(nextCustom.dateIso)}${amount}.`);
+    }
+    details.push("Past completed weeks and actuals remain preserved.");
+    return `
+      <div class="weekly-warning weekly-review-notice mt-3" role="status">
+        <strong>${item.reviewRequired ? "Review required" : "Review recorded"}</strong>
+        <span>${escapeHtml(item.reviewRequired ? (item.reviewReason || "Review this timing item before relying on the schedule.") : `Decision recorded${item.reviewResolution ? `: ${item.reviewResolution.replaceAll("-", " ")}` : ""}.`)}</span>
+        <small>${escapeHtml(details.join(" "))}</small>
+      </div>
+    `;
   }
 
   function beginWeeklyTimingEdit(itemId) {
@@ -10868,6 +10951,7 @@
   function weeklyTimingEditorHtml(item) {
     const draft = editingTimingItemId === item.id && timingEditDraft ? timingEditDraft : { ...item, amountInput: weeklyInputValue(item.amount) };
     const amountValue = draft.amountInput ?? weeklyInputValue(draft.amount);
+    const isReviewing = Boolean(item.reviewRequired);
     return `
       <div class="weekly-timing-editor" data-timing-editor data-weekly-timing-id="${escapeHtml(item.id)}">
         <div class="weekly-setup-grid mt-3">
@@ -10914,8 +10998,9 @@
             <input type="checkbox" data-weekly-timing-draft="${escapeHtml(item.id)}" data-key="active" data-type="boolean"${draft.active !== false ? " checked" : ""}>
           </label>
         </div>
+        ${isReviewing ? `<p class="weekly-muted mt-3">Saving this item confirms your review decision. Select Cancel if you only want to inspect it and keep the review pending.</p>` : ""}
         <div class="weekly-action-row mt-3">
-          <button class="btn btn-primary" type="button" data-weekly-action="save-timing-item" data-weekly-timing-id="${escapeHtml(item.id)}">Save Changes</button>
+          <button class="btn btn-primary" type="button" data-weekly-action="save-timing-item" data-weekly-timing-id="${escapeHtml(item.id)}">${isReviewing ? "Save and mark reviewed" : "Save Changes"}</button>
           <button class="btn" type="button" data-weekly-action="cancel-timing-item" data-weekly-timing-id="${escapeHtml(item.id)}">Cancel</button>
         </div>
         <div class="weekly-occurrence-editor mt-4">
@@ -10980,15 +11065,17 @@
                   <div class="weekly-timing-summary">
                     <div>
                       <strong>${escapeHtml(item.description || "Cashflow item")}</strong>
-                      <span>${money(item.amount)} ${escapeHtml(weeklyTimingFrequencyText(item))} · Next ${plannerShortDate(weeklyTimingNextDate(item))}</span>
+                      <span>${money(item.amount)} ${escapeHtml(weeklyTimingFrequencyText(item))} · ${escapeHtml(weeklyTimingNextDateText(item))}</span>
                       ${item.isNetPay ? `<small>Estimated net pay</small>` : ""}
                     </div>
                     <div class="weekly-timing-summary-meta">
+                      ${item.reviewRequired ? `<span>Review required</span>` : ""}
                       ${item.active === false ? `<span>Inactive</span>` : ""}
                       ${isEditing ? `<span>Editing draft</span>` : ""}
                       <button class="btn btn-small" type="button" data-weekly-action="begin-timing-edit" data-weekly-timing-id="${escapeHtml(item.id)}">${isEditing ? "Editing" : "Edit"}</button>
                     </div>
                   </div>
+                  ${weeklyTimingReviewNoticeHtml(item)}
                   ${isEditing ? weeklyTimingEditorHtml(item) : ""}
                 </article>
               `;
@@ -11050,6 +11137,7 @@
       const duplicateKey = [item.type, item.description, item.amount, item.frequency, item.firstDate].join("|").toLowerCase();
       if (seen.has(duplicateKey)) warnings.push(`${label} appears to duplicate another active timing item.`);
       seen.add(duplicateKey);
+      if (item.reviewRequired) blocking.push(`${label} needs review. ${item.reviewReason || "Edit or deactivate this item before finishing timing review."}`);
     });
     if (!activeItems.some((item) => item.type === "money-in")) warnings.push("No active income item is currently included.");
     return {
@@ -12504,7 +12592,7 @@
     const itemId = target.dataset.weeklyTiming;
     const key = target.dataset.key;
     const value = target.dataset.type === "boolean" ? target.checked : target.dataset.type === "text" ? target.value : Number(target.value) || 0;
-    weeklyPlan = window.FFSWeeklyPlan.updateTimingItem(plan, CALC.calculatePlan(plan), weeklyPlan, itemId, { [key]: value });
+    weeklyPlan = window.FFSWeeklyPlan.updateTimingItem(plan, CALC.calculatePlan(plan), weeklyPlan, itemId, { [key]: value, resolveReview: false });
     generatedWeeklyPlanner = null;
     syncWeeklyPlanExportSettings();
     saveWeeklyPlan("Weekly timing saved.");
@@ -12546,9 +12634,14 @@
     }
     const patch = { ...timingEditDraft, amount };
     delete patch.amountInput;
+    const existingItem = (weeklyPlan.settings?.timingItems || []).find((item) => item.id === itemId);
     if (patch.type === "money-in") {
       patch.treatment = "pay-on-date";
       if (patch.frequency === "weeklyProvision") patch.frequency = "weekly";
+    }
+    if (existingItem?.reviewRequired) {
+      patch.resolveReview = true;
+      patch.reviewResolution = patch.active === false ? "deactivated" : "timing-reviewed";
     }
     weeklyPlan = window.FFSWeeklyPlan.updateTimingItem(plan, CALC.calculatePlan(plan), weeklyPlan, itemId, patch);
     markWeeklyTimingReviewRequired();
@@ -12583,6 +12676,7 @@
       patch.treatment = "pay-on-date";
       if (patch.frequency === "weeklyProvision") patch.frequency = "weekly";
     }
+    patch.resolveReview = false;
     weeklyPlan = window.FFSWeeklyPlan.updateTimingItem(plan, CALC.calculatePlan(plan), weeklyPlan, editingTimingItemId, patch);
     editingTimingItemId = null;
     timingEditDraft = null;
@@ -15710,6 +15804,45 @@
     document.getElementById("weeklyPlanBackupExportButton").addEventListener("click", exportWeeklyPlanBackup);
     document.getElementById("weeklyPlanBackupImportButton").addEventListener("click", triggerWeeklyPlanImport);
     document.getElementById("weeklyPlanImportInput").addEventListener("change", (event) => importWeeklyPlanBackup(event.target.files?.[0]));
+  }
+
+  if (window.FFS_TEST_HOOKS_ENABLED === true) {
+    window.FFSWeeklyPlanUiTestHooks = {
+      setPlan(nextPlan) {
+        plan = CALC.clonePlan ? CALC.clonePlan(nextPlan) : JSON.parse(JSON.stringify(nextPlan || {}));
+        return plan;
+      },
+      setWeeklyPlan(nextWeeklyPlan) {
+        weeklyPlan = window.FFSWeeklyPlan?.migrate ? window.FFSWeeklyPlan.migrate(nextWeeklyPlan) : nextWeeklyPlan;
+        editingTimingItemId = null;
+        timingEditDraft = null;
+        return weeklyPlan;
+      },
+      getWeeklyPlan() {
+        return weeklyPlan;
+      },
+      getTimingDraft() {
+        return timingEditDraft;
+      },
+      getEditingTimingItemId() {
+        return editingTimingItemId;
+      },
+      beginWeeklyTimingEdit,
+      updateWeeklyTimingDraft(patch = {}) {
+        if (!timingEditDraft) return null;
+        timingEditDraft = { ...timingEditDraft, ...patch };
+        return timingEditDraft;
+      },
+      saveWeeklyTimingDraft,
+      savePendingWeeklyTimingDrafts,
+      cancelWeeklyTimingDraft,
+      completeWeeklyTimingReview,
+      weeklyTimingValidation,
+      weeklyTimingNextDateText,
+      weeklyTimingReviewNoticeHtml,
+      weeklyTimingRowsHtml,
+    };
+    return;
   }
 
   bindEvents();

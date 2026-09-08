@@ -6471,6 +6471,16 @@ textarea.field-input {
   line-height: 1.55;
 }
 
+.weekly-review-notice {
+  display: grid;
+  gap: 4px;
+}
+
+.weekly-review-notice span,
+.weekly-review-notice small {
+  display: block;
+}
+
 .weekly-summary-grid,
 .weekly-week-detail-grid,
 .weekly-actual-grid,
