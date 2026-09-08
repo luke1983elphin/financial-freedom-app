@@ -131,10 +131,10 @@ test("Stage G2E-S1 no planned contribution events preserve deterministic no-even
   assert.equal(luke.taxableIncomeBeforeModelledConcessionalContributions, 100000);
   assert.equal(luke.modelledTaxReducingConcessionalContribution, 0);
   assert.equal(luke.totalTaxableIncome, 100000);
-  assert.equal(luke.incomeTax, 20520);
+  assert.equal(luke.incomeTax, 20252);
   assert.equal(luke.medicareLevy, 2000);
-  assert.equal(luke.netEmploymentIncome, 77480);
-  assert.equal(row.household.closingAccessibleInvestmentBalance, 587400);
+  assert.equal(luke.netEmploymentIncome, 77748);
+  assert.equal(row.household.closingAccessibleInvestmentBalance, 588472);
   assert.equal(row.household.totalSuperBalance, 101000);
 });
 
@@ -154,7 +154,7 @@ test("Stage G2E-S1 planned extra concessional contribution reduces taxable incom
   assert.equal(eventLuke.modelledTaxReducingConcessionalContribution, 10000);
   assert.equal(eventLuke.modelledConcessionalContributionTaxableIncomeReduction, 10000);
   assert.equal(eventLuke.totalTaxableIncome, 90000);
-  assert.equal(eventLuke.incomeTax, 17520);
+  assert.equal(eventLuke.incomeTax, 17252);
   assert.equal(eventLuke.medicareLevy, 1800);
   assert.equal(eventLuke.plannedExtraConcessionalContribution, 10000);
   assert.equal(eventLuke.plannedExtraConcessionalContributionTax, 1500);
@@ -176,12 +176,12 @@ test("Stage G2E-S1 contribution tax effect applies only in the selected financia
 
   assert.equal(personIn(rowForYear(result, 2029)).plannedExtraConcessionalContribution, 0);
   assert.equal(personIn(rowForYear(result, 2029)).totalTaxableIncome, 100000);
-  assert.equal(personIn(rowForYear(result, 2029)).incomeTax, 20520);
+  assert.equal(personIn(rowForYear(result, 2029)).incomeTax, 20252);
   assert.equal(personIn(rowForYear(result, 2030)).plannedExtraConcessionalContribution, 10000);
   assert.equal(personIn(rowForYear(result, 2030)).totalTaxableIncome, 90000);
   assert.equal(personIn(rowForYear(result, 2031)).plannedExtraConcessionalContribution, 0);
   assert.equal(personIn(rowForYear(result, 2031)).totalTaxableIncome, 100000);
-  assert.equal(personIn(rowForYear(result, 2031)).incomeTax, 20520);
+  assert.equal(personIn(rowForYear(result, 2031)).incomeTax, 20252);
 });
 
 test("Stage G2E-S1 planned contribution is person-specific for Luke and does not alter Lisa taxable income", () => {
@@ -293,9 +293,9 @@ test("Stage G2E-S1 comparison scenarios use the same corrected tax treatment", (
   assert.equal(personIn(current).plannedExtraConcessionalContribution, 0);
   assert.equal(personIn(comparison).plannedExtraConcessionalContribution, 10000);
   assert.equal(personIn(comparison).totalTaxableIncome, 90000);
-  assertMoney(comparison.household.closingAccessibleInvestmentBalance, 580600);
+  assertMoney(comparison.household.closingAccessibleInvestmentBalance, 581672);
   assertMoney(comparison.household.totalSuperBalance, 109500);
-  assertMoney(comparison.household.totalNetWorth, 690100);
+  assertMoney(comparison.household.totalNetWorth, 691172);
 });
 
 test("Stage G2E-S1 super balances include net planned contribution and carry forward", () => {

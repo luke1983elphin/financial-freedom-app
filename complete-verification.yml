@@ -1,0 +1,117 @@
+name: Complete Verification
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  complete-verification:
+    name: Complete Verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      # R2 local preparation could not verify full action commit SHAs without
+      # authorised network/remote CI access. Owner should pin these tags to
+      # reviewed full SHAs before making branch protection depend on this file.
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.19.0"
+
+      - name: Enable pinned pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.19.0 --activate
+          node --version
+          pnpm --version
+
+      - name: Install dependencies from lockfile
+        id: install
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify test inventory
+        id: inventory
+        if: always()
+        continue-on-error: true
+        run: pnpm run test:inventory
+
+      - name: Run syntax checks
+        id: syntax
+        if: always()
+        continue-on-error: true
+        run: pnpm run syntax
+
+      - name: Run syntax checker self-test
+        id: syntax-self-test
+        if: always()
+        continue-on-error: true
+        run: pnpm run syntax:self-test
+
+      - name: Run numerical parity validator self-test
+        id: parity-self-test
+        if: always()
+        continue-on-error: true
+        run: pnpm run parity:self-test
+
+      - name: Run explicit R1 AI containment suite
+        id: r1-ai
+        if: always()
+        continue-on-error: true
+        env:
+          AI_INSIGHTS_SERVER_ENABLED: "false"
+        run: pnpm run test:r1-ai
+
+      - name: Prove runner failure propagation
+        id: runner-self-test
+        if: always()
+        continue-on-error: true
+        run: pnpm run test:runner
+
+      - name: Run local secret-pattern scan
+        id: secret-scan
+        if: always()
+        continue-on-error: true
+        run: pnpm run security:scan
+
+      - name: Run credential-file scan self-test
+        id: secret-scan-self-test
+        if: always()
+        continue-on-error: true
+        run: pnpm run security:scan:self-test
+
+      - name: Run complete test suite
+        id: full-suite
+        if: always()
+        continue-on-error: true
+        env:
+          AI_INSIGHTS_SERVER_ENABLED: "false"
+        run: pnpm test
+
+      - name: Final verification gate
+        if: always()
+        run: |
+          echo "inventory=${{ steps.inventory.outcome }}"
+          echo "syntax=${{ steps.syntax.outcome }}"
+          echo "syntax-self-test=${{ steps.syntax-self-test.outcome }}"
+          echo "parity-self-test=${{ steps.parity-self-test.outcome }}"
+          echo "r1-ai=${{ steps.r1-ai.outcome }}"
+          echo "runner-self-test=${{ steps.runner-self-test.outcome }}"
+          echo "secret-scan=${{ steps.secret-scan.outcome }}"
+          echo "secret-scan-self-test=${{ steps.secret-scan-self-test.outcome }}"
+          echo "full-suite=${{ steps.full-suite.outcome }}"
+          test "${{ steps.inventory.outcome }}" = "success"
+          test "${{ steps.syntax.outcome }}" = "success"
+          test "${{ steps.syntax-self-test.outcome }}" = "success"
+          test "${{ steps.parity-self-test.outcome }}" = "success"
+          test "${{ steps.r1-ai.outcome }}" = "success"
+          test "${{ steps.runner-self-test.outcome }}" = "success"
+          test "${{ steps.secret-scan.outcome }}" = "success"
+          test "${{ steps.secret-scan-self-test.outcome }}" = "success"
+          test "${{ steps.full-suite.outcome }}" = "success"

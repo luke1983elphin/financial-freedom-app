@@ -216,5 +216,5 @@ test("Stage G2H mobile comparison stacks selected scenarios without page-level h
 });
 
 test("Stage G2H package scripts include the focused regression", () => {
-  assert.match(packageSource, /sample-plans-multi-comparison-g2h\.test\.mjs/);
+  assert.match(packageSource, /"test:stage-g2h": "node scripts\/run-tests\.mjs --group stage-g2h"/);
 });

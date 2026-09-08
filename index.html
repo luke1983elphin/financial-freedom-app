@@ -4,27 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Financial Freedom</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            colors: {
-              navy: "#0f2742",
-              ink: "#172033",
-              mist: "#f5f8fb",
-              line: "#e2e8f0",
-              success: "#0f9f6e",
-              caution: "#d99121",
-              danger: "#dc4c3e"
-            },
-            boxShadow: {
-              soft: "0 18px 50px rgba(15, 39, 66, 0.08)"
-            }
-          }
-        }
-      };
-    </script>
+    <link rel="stylesheet" href="tailwind-static.css">
     <link rel="stylesheet" href="styles.css">
   </head>
   <body class="bg-white text-ink antialiased">
@@ -750,6 +730,7 @@
       </main>
     </div>
 
+    <script src="security.js"></script>
     <script src="v2-data.js"></script>
     <script src="calculator.js"></script>
     <script src="semiRetirementProjection.js"></script>

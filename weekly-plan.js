@@ -1,5 +1,6 @@
 (function attachWeeklyPlanEngine(global) {
   const WEEKLY_PLAN_VERSION = 1;
+  const SECURITY = global.FFSSecurity || null;
   const DAY_MS = 24 * 60 * 60 * 1000;
   const frequencyLabels = {
     weekly: "Weekly",
@@ -1558,8 +1559,15 @@
   }
 
   function importPayload(payload) {
-    if (!payload || typeof payload !== "object") throw new Error("The selected file is not a valid Weekly Plan backup.");
+    SECURITY?.assertSafeData(payload);
+    const isPlainObject = SECURITY?.isPlainObject || ((value) => Boolean(value) && typeof value === "object" && !Array.isArray(value));
+    if (!isPlainObject(payload)) throw new Error("The selected file is not a valid Weekly Plan backup.");
+    if (payload.type && payload.type !== "financial-freedom-weekly-plan-backup") throw new Error("The selected file is not a Weekly Plan backup.");
+    SECURITY?.assertSupportedVersion(payload.schemaVersion, { label: "Weekly Plan backup", minimum: 1, maximum: WEEKLY_PLAN_VERSION, allowMissing: true });
+    if (payload.exportedAt) SECURITY?.assertValidIsoDate(payload.exportedAt, "The Weekly Plan backup export date");
     const raw = payload.weeklyPlan || payload;
+    if (!isPlainObject(raw)) throw new Error("No Weekly Plan data was found in the selected file.");
+    if (raw.weeks !== undefined && !Array.isArray(raw.weeks)) throw new Error("The Weekly Plan weeks section is invalid.");
     const migrated = migrate(raw);
     if (!migrated || !Array.isArray(migrated.weeks)) throw new Error("No Weekly Plan data was found in the selected file.");
     return migrated;

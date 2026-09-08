@@ -1,6 +1,7 @@
 (function bootFinancialFreedomApp() {
   const DATA = window.FFS_DATA;
   const CALC = window.FFSCalculator;
+  const SECURITY = window.FFSSecurity;
   const CALCULATION_VERSION = CALC?.CALCULATION_VERSION || "2026.27.1";
   const FINANCIAL_YEAR = CALC?.FINANCIAL_YEAR || "2026-27";
   const DRAFT_KEY = "ffs-current-plan-v3-mobile-dashboard-ux-test";
@@ -17,6 +18,7 @@
   const APP_VERSION = "3.0-test-weekly-planner";
   const WEEKLY_EDITOR_BUILD_ID = "2026-07-17-02";
   const EXPORT_SCHEMA_VERSION = 1;
+  const MAX_IMPORT_BYTES = SECURITY?.DEFAULT_MAX_IMPORT_BYTES || 5 * 1024 * 1024;
   const AI_INSIGHTS_ENDPOINT = "/api/ai-insights";
   const AI_INSIGHTS_DEFAULT_MAX_GENERATIONS = 5;
   const AI_INSIGHTS_DEFAULT_COOLDOWN_MS = 60000;
@@ -2094,11 +2096,12 @@
   }
 
   function escapeHtml(value) {
-    return String(value ?? "")
+    return SECURITY?.escapeHtml(value) ?? String(value ?? "")
       .replaceAll("&", "&amp;")
       .replaceAll("<", "&lt;")
       .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;");
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;");
   }
 
   function getPath(object, path) {
@@ -3684,12 +3687,9 @@
   }
 
   function safeFilename(value, extension) {
-    const base = String(value || "Financial-Freedom")
-      .replace(/[^a-z0-9-_]+/gi, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-|-$/g, "")
-      .slice(0, 80) || "Financial-Freedom";
-    return `${base}.${extension}`;
+    if (SECURITY?.safeFilename) return SECURITY.safeFilename(value, extension);
+    const base = String(value || "Financial-Freedom").replace(/[^a-z0-9-_]+/gi, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").slice(0, 80) || "Financial-Freedom";
+    return `${base}.${String(extension || "").replace(/[^a-z0-9]/gi, "")}`;
   }
 
   function downloadBlob(blob, filename) {
@@ -3737,9 +3737,19 @@
   }
 
   function validateImportedPlanPayload(payload) {
-    if (!payload || typeof payload !== "object") throw new Error("The selected file is not a valid Financial Freedom plan export.");
+    SECURITY?.assertSafeData(payload);
+    const isPlainObject = SECURITY?.isPlainObject || ((value) => Boolean(value) && typeof value === "object" && !Array.isArray(value));
+    if (!isPlainObject(payload)) throw new Error("The selected file is not a valid Financial Freedom plan export.");
+    if (payload.type && payload.type !== "financial-freedom-plan-export") throw new Error("The selected file is not a Financial Freedom plan export.");
+    SECURITY?.assertSupportedVersion(payload.schemaVersion, { label: "Financial Freedom plan backup", minimum: 1, maximum: EXPORT_SCHEMA_VERSION, allowMissing: true });
+    if (payload.exportedAt) SECURITY?.assertValidIsoDate(payload.exportedAt, "The backup export date");
     const rawPlan = payload.plan || (payload.personal || payload.assets ? payload : null);
-    if (!rawPlan || typeof rawPlan !== "object") throw new Error("No plan data was found in the selected file.");
+    if (!isPlainObject(rawPlan)) throw new Error("No plan data was found in the selected file.");
+    if (payload.scenarios !== undefined && !Array.isArray(payload.scenarios)) throw new Error("The backup contains an invalid scenarios section.");
+    if (Array.isArray(payload.scenarios) && payload.scenarios.some((item) => !item || typeof item !== "object" || Array.isArray(item))) throw new Error("The backup contains an invalid scenario.");
+    if (payload.snapshots !== undefined && !Array.isArray(payload.snapshots)) throw new Error("The backup contains an invalid financial history section.");
+    if (payload.ui !== undefined && (!payload.ui || typeof payload.ui !== "object" || Array.isArray(payload.ui))) throw new Error("The backup contains invalid interface settings.");
+    if (payload.userState !== undefined && (!payload.userState || typeof payload.userState !== "object" || Array.isArray(payload.userState))) throw new Error("The backup contains invalid user settings.");
     return {
       plan: migratePlanData(rawPlan),
       scenarios: migrateScenarioList(payload.scenarios || []),
@@ -3789,12 +3799,19 @@
 
   function importPlanJsonFile(file) {
     if (!file) return;
+    if (Number(file.size) > MAX_IMPORT_BYTES) {
+      updateSaveStatus(`Import failed. Choose a Financial Freedom backup smaller than ${Math.floor(MAX_IMPORT_BYTES / 1024 / 1024)} MB.`);
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        importPlanPayload(JSON.parse(String(reader.result || "")));
-      } catch {
-        updateSaveStatus("Import failed. Choose a valid Financial Freedom JSON export.");
+        const payload = SECURITY?.parseJsonImport
+          ? SECURITY.parseJsonImport(String(reader.result || ""), { maxBytes: MAX_IMPORT_BYTES })
+          : JSON.parse(String(reader.result || ""));
+        importPlanPayload(payload);
+      } catch (error) {
+        updateSaveStatus(error?.message || "Import failed. Choose a valid Financial Freedom JSON export.");
       }
     };
     reader.onerror = () => updateSaveStatus("Import failed. The selected file could not be read.");
@@ -12788,10 +12805,17 @@
 
   function importWeeklyPlanBackup(file) {
     if (!file) return;
+    if (Number(file.size) > MAX_IMPORT_BYTES) {
+      updateSaveStatus(`Weekly Plan import failed. Choose a backup smaller than ${Math.floor(MAX_IMPORT_BYTES / 1024 / 1024)} MB.`);
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        const imported = window.FFSWeeklyPlan.importPayload(JSON.parse(String(reader.result || "")));
+        const payload = SECURITY?.parseJsonImport
+          ? SECURITY.parseJsonImport(String(reader.result || ""), { maxBytes: MAX_IMPORT_BYTES })
+          : JSON.parse(String(reader.result || ""));
+        const imported = window.FFSWeeklyPlan.importPayload(payload);
         if (!window.confirm("Import this Weekly Plan backup? This will replace the current Weekly Plan history on this device, but not your full Financial Freedom plan.")) {
           updateSaveStatus("Weekly Plan import cancelled.");
           return;

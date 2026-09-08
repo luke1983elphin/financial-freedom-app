@@ -14,6 +14,13 @@ function loadProjectionEngine() {
   };
 }
 
+function loadProjectionWithoutCalculator() {
+  const context = { console };
+  context.globalThis = context;
+  vm.runInNewContext(readFileSync(new URL("../semiRetirementProjection.js", import.meta.url), "utf8"), context);
+  return context.FFSSemiRetirementProjection;
+}
+
 function mergeDeep(base, override) {
   if (Array.isArray(override)) return override.map((item) => mergeDeep({}, item));
   if (!override || typeof override !== "object") return override;
@@ -137,6 +144,29 @@ function rowForAge(result, age, personId = "person1") {
   assert.ok(row, `Expected projection row for ${personId} at age ${age}`);
   return row;
 }
+
+test("R3D Retirement Planning fails closed when the authoritative tax helper is unavailable", () => {
+  const engine = loadProjectionWithoutCalculator();
+  const result = engine.projectRetirementScenario(baseInput());
+  assert.equal(result.validation.isValid, false);
+  assert.equal(result.years.length, 0);
+  assert.ok(result.validation.errors.some((error) => error.path === "financialRules"));
+  assert.match(result.validation.errors.find((error) => error.path === "financialRules").message, /authoritative tax calculation helper is unavailable/i);
+});
+
+test("R3D Retirement Planning applies the deterministic financial year to each annual row", () => {
+  const result = runProjection({
+    projectionStartYear: 2026,
+    projectionEndAge: 60,
+    household: { currentLifestyleSpending: 0, semiRetirementLifestyleSpending: 0, fullRetirementLifestyleSpending: 0 },
+    people: [person1({ currentAge: 50, currentGrossEmploymentIncome: 80000, annualIncomeGrowthRate: 0, semiRetirementAge: 60, fullRetirementAge: 60, hasPrivateHealthCover: true })],
+  });
+  assert.equal(result.validation.isValid, true);
+  assert.equal(result.years[0].financialYear, "2026-27");
+  assert.equal(result.years[1].financialYear, "2027-28");
+  assert.equal(result.years[0].people[0].incomeTax - result.years[1].people[0].incomeTax, 268);
+  assert.match(result.assumptions.financialYearConvention, /1 July/);
+});
 
 function person(row, personId) {
   const value = row.people.find((entry) => entry.id === personId);

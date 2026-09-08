@@ -1,0 +1,12 @@
+{
+  "type": "financial-freedom-plan-export",
+  "schemaVersion": 1,
+  "plan": {
+    "personal": {
+      "person1Name": "Fictional import"
+    },
+    "__proto__": {
+      "polluted": true
+    }
+  }
+}

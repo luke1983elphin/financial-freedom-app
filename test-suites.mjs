@@ -26,10 +26,12 @@ export const ACTIVE_TEST_SUITES = [
   { id: "stage-g2g", file: "tests/semi-retirement-follow-up-g2g.test.mjs", groups: ["all", "mjs", "semi-retirement", "stage-g2g"] },
   { id: "stage-g2h", file: "tests/sample-plans-multi-comparison-g2h.test.mjs", groups: ["all", "mjs", "semi-retirement", "stage-g2h"] },
   { id: "ai-containment-r1", file: "tests/ai-containment-r1.test.mjs", groups: ["all", "mjs", "r1-ai"] },
+  { id: "browser-security-r4a", file: "tests/browser-security-r4a.test.mjs", groups: ["all", "mjs", "r4a"] },
 ];
 
 export const SYNTAX_CHECK_FILES = [
   "app.js",
+  "security.js",
   "api/ai-insights.js",
   "calculator.js",
   "semiRetirementProjection.js",
@@ -46,5 +48,7 @@ export const SYNTAX_CHECK_FILES = [
   "scripts/test-inventory.mjs",
   "scripts/r1-numerical-parity.mjs",
   "scripts/r1-numerical-parity-self-test.mjs",
+  "scripts/verify-browser-security.mjs",
   "tests/main-calculator-zero-balance-loan-r3-blocker.test.mjs",
+  "tests/browser-security-r4a.test.mjs",
 ];
