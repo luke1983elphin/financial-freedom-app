@@ -1,5 +1,6 @@
 (function attachWeeklyPlanEngine(global) {
   const WEEKLY_PLAN_VERSION = 1;
+  const SECURITY = global.FFSSecurity || null;
   const DAY_MS = 24 * 60 * 60 * 1000;
   const frequencyLabels = {
     weekly: "Weekly",
@@ -97,8 +98,14 @@
     return dateIso(date);
   }
 
+  function civilDayOrdinal(date) {
+    if (!date || typeof date.getTime !== "function" || Number.isNaN(date.getTime())) return NaN;
+    return Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / DAY_MS);
+  }
+
   function weekIndexForDate(date, startDate, weeksCount) {
-    const index = Math.floor((date.getTime() - startDate.getTime()) / (7 * DAY_MS));
+    const calendarDayOffset = civilDayOrdinal(date) - civilDayOrdinal(startDate);
+    const index = Math.floor(calendarDayOffset / 7);
     return index >= 0 && index < weeksCount ? index : -1;
   }
 
@@ -224,6 +231,256 @@
     return fallback;
   }
 
+  function validFrequency(value) {
+    return ["weekly", "fortnightly", "monthly", "quarterly", "annually", "oneOff", "weeklyProvision"].includes(value)
+      ? value
+      : "";
+  }
+
+  function normalisedSalaryType(item = {}) {
+    const value = String(item.type || item.incomeType || item.category || "").trim();
+    return ["salaryWages", "salary_wages", "salary", "wages", "employment"].includes(value);
+  }
+
+  function salaryOwner(item = {}) {
+    const owner = String(item.owner || item.incomeOwner || "").trim();
+    if (owner === "person1" || owner === "person2") return owner;
+    const id = String(item.id || "").trim();
+    if (["income-person-1", "income-person1-salary"].includes(id)) return "person1";
+    if (["income-person-2", "income-person2-salary"].includes(id)) return "person2";
+    return "";
+  }
+
+  function canonicalSalaryTimingSource(plan = {}, personKey = "person1") {
+    const preferredIds = personKey === "person1"
+      ? ["income-person-1", "income-person1-salary"]
+      : ["income-person-2", "income-person2-salary"];
+    const candidates = (Array.isArray(plan.incomeItems) ? plan.incomeItems : [])
+      .filter((item) => normalisedSalaryType(item) && salaryOwner(item) === personKey && validFrequency(item.frequency));
+    return candidates.find((item) => preferredIds.includes(String(item.id || ""))) || candidates[0] || null;
+  }
+
+  function resolveSalaryTimingSource(plan = {}, personKey = "person1") {
+    const canonical = canonicalSalaryTimingSource(plan, personKey);
+    if (canonical) {
+      return {
+        frequency: validFrequency(canonical.frequency),
+        sourceId: String(canonical.id || `income-${personKey.replace("person", "person-")}`),
+        source: "canonical-income-item",
+      };
+    }
+    const legacyKey = personKey === "person1" ? "person1Frequency" : "person2Frequency";
+    return {
+      frequency: validFrequency(plan.income?.[legacyKey]) || "fortnightly",
+      sourceId: personKey === "person1" ? "income-person-1" : "income-person-2",
+      source: validFrequency(plan.income?.[legacyKey]) ? "legacy-income-summary" : "safe-default",
+    };
+  }
+
+  const forwardServicingLoanTypes = new Set([
+    "homeLoan",
+    "rentalPropertyLoan",
+    "investmentLoan",
+    "shareInvestmentLoan",
+    "managedFundLoan",
+    "personalLoan",
+    "vehicleLoan",
+    "carLoan",
+  ]);
+
+  function isForwardServicingLoan(item = {}) {
+    return forwardServicingLoanTypes.has(item.type);
+  }
+
+  function loanPaidOffForForwardCashflow(item = {}) {
+    const helper = global.FFSCalculator?.isLoanPaidOffForForwardCashflow;
+    return typeof helper === "function" && helper(item);
+  }
+
+  function loanPaidOffClassification(item = {}) {
+    const helper = global.FFSCalculator?.isLoanPaidOffForForwardCashflow;
+    if (typeof helper !== "function") {
+      return {
+        available: false,
+        paidOff: false,
+        reason: "Unable to confirm this loan's paid-off status because the shared loan classifier is unavailable. Review this timing item before relying on the schedule.",
+      };
+    }
+    return { available: true, paidOff: Boolean(helper(item)), reason: "" };
+  }
+
+  function liabilityById(plan = {}) {
+    const entries = (plan.liabilityItems || [])
+      .filter((item) => item?.id)
+      .map((item) => [String(item.id), item]);
+    return new Map(entries);
+  }
+
+  function validIsoDate(value) {
+    const text = String(value || "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return "";
+    const date = dateFromIso(text);
+    return Number.isNaN(date.getTime()) ? "" : text;
+  }
+
+  function minIsoDate(...values) {
+    return values
+      .map(validIsoDate)
+      .filter(Boolean)
+      .sort()[0] || "";
+  }
+
+  function sourceSnapshotFromItem(item = {}) {
+    return {
+      sourceId: String(item.sourceId || ""),
+      sourceKind: String(item.sourceKind || ""),
+      description: String(item.description || ""),
+      amount: roundMoney(item.amount),
+      frequency: normaliseFrequency(item.frequency, "weekly"),
+      firstDate: validIsoDate(item.firstDate),
+      type: normaliseType(item.type, "bill"),
+      transferType: String(item.transferType || ""),
+      treatment: item.treatment || (item.type === "provision" || item.frequency === "weeklyProvision" ? "set-aside" : "pay-on-date"),
+      active: item.active !== false,
+      note: String(item.note || ""),
+    };
+  }
+
+  function normaliseSourceSnapshot(snapshot = null) {
+    if (!snapshot || typeof snapshot !== "object") return null;
+    return sourceSnapshotFromItem(snapshot);
+  }
+
+  function timingItemMatchesSourceSnapshot(item = {}) {
+    const snapshot = normaliseSourceSnapshot(item.sourceSnapshot);
+    if (!snapshot) return false;
+    const current = sourceSnapshotFromItem(item);
+    return Object.keys(snapshot).every((key) => snapshot[key] === current[key]);
+  }
+
+  function isAutoDerivedLoanTimingItem(item = {}, loan = {}) {
+    const loanId = String(loan.id || "");
+    if (!loanId || String(item.sourceId || "") !== loanId) return false;
+    const hasGeneratedIdentity = item.autoGenerated && item.sourceKind === "liability" && String(item.id || "") === `timing-liability-${loanId}`;
+    return hasGeneratedIdentity && timingItemMatchesSourceSnapshot(item);
+  }
+
+  function isEditedTimingSeries(item = {}) {
+    return Boolean(
+      item.parentSeriesId
+        || item.replacementSeriesId
+        || item.supersedesFrom
+        || item.splitFrom
+        || item.userEdited
+        || item.manuallyEdited
+        || item.editSource
+        || item.lastEditedAt
+    );
+  }
+
+  function hasActiveOccurrenceOverrides(settings = {}, item = {}) {
+    return (settings.occurrenceOverrides || [])
+      .map(normaliseOccurrenceOverride)
+      .filter(Boolean)
+      .some((override) => override.itemId === item.id && override.active !== false);
+  }
+
+  function weekHasActualValues(week = {}) {
+    if (!week.actual || typeof week.actual !== "object") return false;
+    return ["openingBalance", "income", "essentialCosts", "discretionarySpending", "investment", "extraSuper", "extraDebtRepayment", "offsetTransfer", "otherTransfers", "closingBalance", "enteredBankBalance"]
+      .some((key) => week.actual[key] !== undefined && week.actual[key] !== null && String(week.actual[key]) !== "");
+  }
+
+  function futureServicingEndDate(settings = {}, weeks = [], existingPlan = null) {
+    if (!weeks.length) return "";
+    const startDate = dateFromIso(settings.startDate);
+    const todaySource = settings.todayIso ? dateFromIso(settings.todayIso) : new Date();
+    const today = new Date(todaySource.getFullYear(), todaySource.getMonth(), todaySource.getDate());
+    const currentIndex = weekIndexForDate(today, startDate, weeks.length);
+    if (currentIndex >= 0) {
+      const currentWeek = weeks[currentIndex];
+      const weekStart = dateFromIso(currentWeek.startDate);
+      const existingWeek = (existingPlan?.weeks || []).find((week) => Number(week.weekNumber) === Number(currentWeek.weekNumber));
+      if (today > weekStart || weekHasActualValues(existingWeek)) return currentWeek.endDate;
+      return dateIso(addDays(weekStart, -1));
+    }
+    if (today < startDate) return dateIso(addDays(dateFromIso(weeks[0].startDate), -1));
+    return weeks.at(-1)?.endDate || "";
+  }
+
+  function paidOffReviewFields(item = {}, reason, status = "review-required", extra = {}) {
+    return normaliseTimingItem({
+      ...item,
+      ...extra,
+      reviewRequired: true,
+      reviewReason: reason,
+      paidOffLoanTimingStatus: status,
+      paidOffLoanTimingReviewedAt: item.paidOffLoanTimingReviewedAt || new Date().toISOString(),
+    });
+  }
+
+  function reviewResolvedForPaidOffLoan(item = {}, loan = {}) {
+    return Boolean(
+      item.reviewResolvedAt
+        && item.reviewResolvedSourceId
+        && String(item.reviewResolvedSourceId) === String(loan.id || "")
+        && item.reviewResolvedStatus === "paid-off-zero"
+    );
+  }
+
+  function applyPaidOffLoanTimingPolicy(settings = {}, plan = {}, weeks = [], existingPlan = null) {
+    const timingItems = Array.isArray(settings.timingItems) ? settings.timingItems.map(normaliseTimingItem) : [];
+    if (!timingItems.length) return settings;
+    const loans = liabilityById(plan);
+    const proposedCutoffDate = futureServicingEndDate(settings, weeks, existingPlan);
+    let changed = false;
+    let needsReview = false;
+    const updatedItems = timingItems.map((item) => {
+      const loan = loans.get(String(item.sourceId || ""));
+      if (!loan || !isForwardServicingLoan(loan)) return item;
+      const classification = loanPaidOffClassification(loan);
+      if (!classification.available) {
+        needsReview = true;
+        return paidOffReviewFields(item, classification.reason, "classifier-unavailable");
+      }
+      if (!classification.paidOff) return item;
+      if (reviewResolvedForPaidOffLoan(item, loan)) return item;
+      if (item.active === false) return item;
+      const hasCustomOverrides = hasActiveOccurrenceOverrides(settings, item);
+      if (!isAutoDerivedLoanTimingItem(item, loan) || isEditedTimingSeries(item)) {
+        needsReview = true;
+        return paidOffReviewFields(
+          item,
+          "This loan timing was changed or saved without enough edit history, and the linked loan is now recorded with a zero balance. It remains included until you review this item.",
+          "manual-review"
+        );
+      }
+      const cutoffDate = minIsoDate(item.paidOffLoanTimingEffectiveEndDate, item.endDate, proposedCutoffDate);
+      if (!cutoffDate || item.endDate === cutoffDate) return item;
+      changed = true;
+      needsReview = true;
+      return paidOffReviewFields(
+        item,
+        hasCustomOverrides
+          ? "Automatic recurring repayments have been stopped from the effective boundary because the linked loan balance is recorded as zero. Custom occurrence changes remain included until you review them."
+          : "Automatic future repayments have been stopped because the linked loan balance is recorded as zero. Past and completed actuals remain unchanged.",
+        hasCustomOverrides ? "auto-stopped-with-custom-overrides" : "auto-stopped",
+        {
+          endDate: cutoffDate,
+          paidOffLoanTimingEffectiveEndDate: cutoffDate,
+          paidOffLoanTimingHasCustomOverrides: hasCustomOverrides,
+        }
+      );
+    });
+    if (!changed && !needsReview) return settings;
+    return {
+      ...settings,
+      timingItems: updatedItems,
+      timingSetupNeedsReview: true,
+      timingSetupRequiresReview: true,
+    };
+  }
+
   function normaliseTimingItem(item = {}) {
     const type = normaliseType(item.type, "bill");
     const frequency = normaliseFrequency(item.frequency, type === "provision" ? "weeklyProvision" : "weekly");
@@ -244,6 +501,23 @@
       note: item.note || "",
       estimated: Boolean(item.estimated),
       isNetPay: Boolean(item.isNetPay),
+      sourceKind: String(item.sourceKind || ""),
+      autoGenerated: Boolean(item.autoGenerated),
+      sourceSnapshot: normaliseSourceSnapshot(item.sourceSnapshot),
+      userEdited: Boolean(item.userEdited || item.manuallyEdited),
+      manuallyEdited: Boolean(item.manuallyEdited || item.userEdited),
+      editSource: String(item.editSource || ""),
+      lastEditedAt: String(item.lastEditedAt || ""),
+      reviewRequired: Boolean(item.reviewRequired),
+      reviewReason: String(item.reviewReason || ""),
+      reviewResolvedAt: String(item.reviewResolvedAt || ""),
+      reviewResolution: String(item.reviewResolution || ""),
+      reviewResolvedSourceId: String(item.reviewResolvedSourceId || ""),
+      reviewResolvedStatus: String(item.reviewResolvedStatus || ""),
+      paidOffLoanTimingStatus: String(item.paidOffLoanTimingStatus || ""),
+      paidOffLoanTimingEffectiveEndDate: validIsoDate(item.paidOffLoanTimingEffectiveEndDate),
+      paidOffLoanTimingReviewedAt: String(item.paidOffLoanTimingReviewedAt || ""),
+      paidOffLoanTimingHasCustomOverrides: Boolean(item.paidOffLoanTimingHasCustomOverrides),
       supersedesFrom: item.supersedesFrom || item.splitFrom || "",
       splitFrom: item.supersedesFrom || item.splitFrom || "",
     };
@@ -259,6 +533,10 @@
       date: override.date || "",
       active: override.active !== false,
       note: override.note || "",
+      editSource: String(override.editSource || ""),
+      createdAt: String(override.createdAt || ""),
+      reviewRequired: Boolean(override.reviewRequired),
+      reviewReason: String(override.reviewReason || ""),
     };
   }
 
@@ -336,36 +614,45 @@
       });
     });
     const addItem = (item) => {
-      const normalised = normaliseTimingItem(item);
+      let normalised = normaliseTimingItem(item);
+      if (normalised.autoGenerated && normalised.sourceKind && !normalised.sourceSnapshot) {
+        normalised = normaliseTimingItem({ ...normalised, sourceSnapshot: sourceSnapshotFromItem(normalised) });
+      }
       if (normalised.amount > 0) items.push(normalised);
     };
-    const p1Frequency = normaliseFrequency(plan.income?.person1Frequency, "fortnightly");
-    const p2Frequency = normaliseFrequency(plan.income?.person2Frequency, "fortnightly");
+    const person1SalaryTiming = resolveSalaryTimingSource(plan, "person1");
+    const person2SalaryTiming = resolveSalaryTimingSource(plan, "person2");
+    const p1Frequency = person1SalaryTiming.frequency;
+    const p2Frequency = person2SalaryTiming.frequency;
     const otherFrequency = normaliseFrequency(plan.income?.otherIncomeFrequency, "annually");
     addItem({
       id: "timing-income-person-1",
-      sourceId: "income-person-1",
+      sourceId: person1SalaryTiming.sourceId,
       description: `${defaultIncomeName(plan, "person1", "Salary")} - estimated net pay`,
       amount: amountFromAnnual(netIncome.person1Net, p1Frequency),
       frequency: p1Frequency,
-      firstDate: firstDateFor(settings, "income-person-1", settings.startDate),
+      firstDate: firstDateFor(settings, person1SalaryTiming.sourceId, firstDateFor(settings, "income-person-1", settings.startDate)),
       type: "money-in",
       active: netIncome.person1Annual > 0,
       isNetPay: true,
       estimated: true,
+      sourceKind: "income",
+      autoGenerated: true,
       note: "Estimated net amount after tax, Medicare and STSL compulsory repayments based on the information entered in the plan.",
     });
     addItem({
       id: "timing-income-person-2",
-      sourceId: "income-person-2",
+      sourceId: person2SalaryTiming.sourceId,
       description: `${defaultIncomeName(plan, "person2", "Partner salary")} - estimated net pay`,
       amount: amountFromAnnual(netIncome.person2Net, p2Frequency),
       frequency: p2Frequency,
-      firstDate: firstDateFor(settings, "income-person-2", settings.startDate),
+      firstDate: firstDateFor(settings, person2SalaryTiming.sourceId, firstDateFor(settings, "income-person-2", settings.startDate)),
       type: "money-in",
       active: netIncome.person2Annual > 0,
       isNetPay: true,
       estimated: true,
+      sourceKind: "income",
+      autoGenerated: true,
       note: "Estimated net amount after tax, Medicare and STSL compulsory repayments based on the information entered in the plan.",
     });
     addItem({
@@ -401,6 +688,16 @@
 
     (plan.liabilityItems || []).forEach((item) => {
       if (item.type === "hecsHelp") return;
+      const forwardServicing = isForwardServicingLoan(item);
+      const classification = forwardServicing ? loanPaidOffClassification(item) : { available: true, paidOff: false, reason: "" };
+      if (forwardServicing && classification.available && classification.paidOff) return;
+      const classifierReview = forwardServicing && !classification.available
+        ? {
+          reviewRequired: true,
+          reviewReason: classification.reason,
+          paidOffLoanTimingStatus: "classifier-unavailable",
+        }
+        : {};
       if (item.type === "rentalPropertyLoan") {
         const rentalDeduction = rentalLoanCashflowById.get(String(item.id || ""));
         if (rentalDeduction) {
@@ -418,6 +715,9 @@
             treatment: "pay-on-date",
             active: true,
             estimated: true,
+            sourceKind: "liability",
+            autoGenerated: true,
+            ...classifierReview,
             note: rentalDeduction.treatment === "afterInterest"
               ? "Principal-only cashflow amount because linked rental property income is entered after loan interest."
               : "Full repayment cashflow amount because linked rental property income is entered before loan interest.",
@@ -436,6 +736,9 @@
         type: "bill",
         treatment: "pay-on-date",
         active: true,
+        sourceKind: "liability",
+        autoGenerated: true,
+        ...classifierReview,
       });
     });
 
@@ -473,6 +776,41 @@
       active: true,
     });
     return items;
+  }
+
+  function refreshUntouchedGeneratedSalaryTiming(settings = {}, plan = {}, result = {}) {
+    const timingItems = Array.isArray(settings.timingItems) ? settings.timingItems.map(normaliseTimingItem) : [];
+    if (!timingItems.length) return settings;
+    const desiredById = new Map(buildDefaultTimingItems(plan, result, settings)
+      .filter((item) => item.sourceKind === "income" && item.autoGenerated)
+      .map((item) => [item.id, item]));
+    let changed = false;
+    const updatedItems = timingItems.map((item) => {
+      const desired = desiredById.get(item.id);
+      if (!desired
+        || item.sourceKind !== "income"
+        || !item.autoGenerated
+        || !timingItemMatchesSourceSnapshot(item)
+        || isEditedTimingSeries(item)
+        || hasActiveOccurrenceOverrides(settings, item)) return item;
+      const sourceChanged = item.sourceId !== desired.sourceId
+        || item.frequency !== desired.frequency;
+      if (!sourceChanged) return item;
+      changed = true;
+      return normaliseTimingItem({
+        ...desired,
+        id: item.id,
+        reviewRequired: true,
+        reviewReason: `Financial Plan salary timing changed from ${frequencyLabels[item.frequency] || item.frequency} to ${frequencyLabels[desired.frequency] || desired.frequency}. Review the future schedule.`,
+      });
+    });
+    if (!changed) return settings;
+    return {
+      ...settings,
+      timingItems: updatedItems,
+      timingSetupNeedsReview: true,
+      timingSetupRequiresReview: true,
+    };
   }
 
   function displayName(options, fallback) {
@@ -868,9 +1206,11 @@
 
   function createFromPlan(plan = {}, result = {}, options = {}, existingPlan = null) {
     const now = new Date().toISOString();
-    const settings = defaultSettings(plan, result, existingPlan?.settings ? { ...existingPlan.settings, ...options } : options);
+    let settings = defaultSettings(plan, result, existingPlan?.settings ? { ...existingPlan.settings, ...options } : options);
     const weeksBase = createWeeks(settings.startDate, settings.durationWeeks);
     if (!settings.timingItems.length) settings.timingItems = buildDefaultTimingItems(plan, result, settings);
+    else settings = refreshUntouchedGeneratedSalaryTiming(settings, plan, result);
+    settings = applyPaidOffLoanTimingPolicy(settings, plan, weeksBase, existingPlan);
     const schedule = buildScheduleItems(plan, result, settings, weeksBase);
     const completed = completedWeekMap(existingPlan);
     const actuals = actualWeekMap(existingPlan);
@@ -1159,7 +1499,31 @@
     const settings = { ...(migrated.settings || {}) };
     const timingItems = (settings.timingItems || []).map(normaliseTimingItem);
     const index = timingItems.findIndex((item) => item.id === itemId);
-    if (index >= 0) timingItems[index] = normaliseTimingItem({ ...timingItems[index], ...patch, id: timingItems[index].id });
+    if (index >= 0) {
+      const existing = timingItems[index];
+      const now = new Date().toISOString();
+      const resolvingReview = existing.reviewRequired && patch.resolveReview === true;
+      const resolutionPatch = resolvingReview
+        ? {
+          reviewRequired: false,
+          reviewReason: "",
+          reviewResolvedAt: now,
+          reviewResolution: patch.reviewResolution || (patch.active === false ? "deactivated" : "timing-reviewed"),
+          reviewResolvedSourceId: existing.sourceId,
+          reviewResolvedStatus: existing.paidOffLoanTimingStatus ? "paid-off-zero" : "reviewed",
+        }
+        : {};
+      timingItems[index] = normaliseTimingItem({
+        ...existing,
+        ...patch,
+        ...resolutionPatch,
+        id: existing.id,
+        userEdited: true,
+        manuallyEdited: true,
+        editSource: patch.editSource || "timing-editor",
+        lastEditedAt: now,
+      });
+    }
     settings.timingItems = timingItems;
     return createFromPlan(plan, result, settings, migrated);
   }
@@ -1199,7 +1563,15 @@
         allPatch.firstDate = allPatch.date;
         delete allPatch.date;
       }
-      timingItems[index] = normaliseTimingItem({ ...item, ...allPatch, id: item.id });
+      timingItems[index] = normaliseTimingItem({
+        ...item,
+        ...allPatch,
+        id: item.id,
+        userEdited: true,
+        manuallyEdited: true,
+        editSource: "occurrence-all",
+        lastEditedAt: new Date().toISOString(),
+      });
     } else if (scope === "future") {
       const selectedOccurrenceDate = occurrenceDate;
       const replacementStartDate = patch.date || selectedOccurrenceDate;
@@ -1216,7 +1588,16 @@
       });
       index = timingItems.findIndex((candidate) => candidate.id === itemId);
       const originalSeriesEndDate = dateIso(addDays(dateFromIso(selectedOccurrenceDate), -1));
-      timingItems[index] = normaliseTimingItem({ ...item, endDate: originalSeriesEndDate, id: item.id, parentSeriesId: item.parentSeriesId });
+      timingItems[index] = normaliseTimingItem({
+        ...item,
+        endDate: originalSeriesEndDate,
+        id: item.id,
+        parentSeriesId: item.parentSeriesId,
+        userEdited: true,
+        manuallyEdited: true,
+        editSource: "occurrence-future-original",
+        lastEditedAt: new Date().toISOString(),
+      });
       timingItems.push(normaliseTimingItem({
         ...item,
         ...patch,
@@ -1227,6 +1608,10 @@
         firstDate: replacementStartDate,
         endDate: "",
         supersedesFrom: selectedOccurrenceDate,
+        userEdited: true,
+        manuallyEdited: true,
+        editSource: "occurrence-future-replacement",
+        lastEditedAt: new Date().toISOString(),
       }));
       const remainingOverrides = (settings.occurrenceOverrides || [])
         .map(normaliseOccurrenceOverride)
@@ -1248,6 +1633,8 @@
         date: patch.date,
         active: patch.active !== false,
         note: patch.note || "",
+        editSource: "occurrence-this",
+        createdAt: new Date().toISOString(),
       }));
       settings.occurrenceOverrides = overrides;
     }
@@ -1266,8 +1653,15 @@
   }
 
   function importPayload(payload) {
-    if (!payload || typeof payload !== "object") throw new Error("The selected file is not a valid Weekly Plan backup.");
+    SECURITY?.assertSafeData(payload);
+    const isPlainObject = SECURITY?.isPlainObject || ((value) => Boolean(value) && typeof value === "object" && !Array.isArray(value));
+    if (!isPlainObject(payload)) throw new Error("The selected file is not a valid Weekly Plan backup.");
+    if (payload.type && payload.type !== "financial-freedom-weekly-plan-backup") throw new Error("The selected file is not a Weekly Plan backup.");
+    SECURITY?.assertSupportedVersion(payload.schemaVersion, { label: "Weekly Plan backup", minimum: 1, maximum: WEEKLY_PLAN_VERSION, allowMissing: true });
+    if (payload.exportedAt) SECURITY?.assertValidIsoDate(payload.exportedAt, "The Weekly Plan backup export date");
     const raw = payload.weeklyPlan || payload;
+    if (!isPlainObject(raw)) throw new Error("No Weekly Plan data was found in the selected file.");
+    if (raw.weeks !== undefined && !Array.isArray(raw.weeks)) throw new Error("The Weekly Plan weeks section is invalid.");
     const migrated = migrate(raw);
     if (!migrated || !Array.isArray(migrated.weeks)) throw new Error("No Weekly Plan data was found in the selected file.");
     return migrated;

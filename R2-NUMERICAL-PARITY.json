@@ -1,0 +1,353 @@
+{
+  "comparedAt": "2026-09-08T09:29:32.204Z",
+  "baselineRoot": "C:\\Users\\Elphin Accounting\\Documents\\Codex\\2026-06-26\\i\\r6a-clean-verify-20260908-173059",
+  "candidateRoot": "C:\\Users\\Elphin Accounting\\Documents\\Codex\\2026-06-26\\i\\stage-r6b-canonical-salary-timing-20260908",
+  "selectedSampleIds": [],
+  "metricDefinitions": [
+    {
+      "label": "annualGrossIncome",
+      "path": "annualGrossIncome",
+      "type": "number",
+      "nullable": false
+    },
+    {
+      "label": "annualNetIncome",
+      "path": "annualNetIncome",
+      "type": "number",
+      "nullable": false
+    },
+    {
+      "label": "annualLivingExpenses",
+      "path": "annualLivingExpenses",
+      "type": "number",
+      "nullable": false
+    },
+    {
+      "label": "annualExpenses",
+      "path": "annualExpenses",
+      "type": "number",
+      "nullable": false
+    },
+    {
+      "label": "annualDebtRepayments",
+      "path": "annualDebtRepayments",
+      "type": "number",
+      "nullable": false
+    },
+    {
+      "label": "annualMortgageRepayments",
+      "path": "annualMortgageRepayments",
+      "type": "number",
+      "nullable": false
+    },
+    {
+      "label": "finalProjectedCashSurplus",
+      "path": "finalProjectedCashSurplus",
+      "type": "number",
+      "nullable": false
+    },
+    {
+      "label": "currentNetWorth",
+      "path": "currentNetWorth",
+      "type": "number",
+      "nullable": false
+    },
+    {
+      "label": "currentNetFiAssets",
+      "path": "currentNetFiAssets",
+      "type": "number",
+      "nullable": false
+    },
+    {
+      "label": "annualPassiveIncome",
+      "path": "annualPassiveIncome",
+      "type": "number",
+      "nullable": false
+    },
+    {
+      "label": "financialFreedomProgressDisplay",
+      "path": "financialFreedomProgressDisplay",
+      "type": "number",
+      "nullable": false
+    },
+    {
+      "label": "lifestyleFundingPercent",
+      "path": "lifestyleFundingPercent",
+      "type": "number",
+      "nullable": false
+    },
+    {
+      "label": "targetCapital",
+      "path": "targetCapital",
+      "type": "number",
+      "nullable": false
+    },
+    {
+      "label": "rentalPropertyCashflow.annualHouseholdCashflowContribution",
+      "path": "rentalPropertyCashflow.annualHouseholdCashflowContribution",
+      "type": "number",
+      "nullable": false
+    }
+  ],
+  "samples": [
+    {
+      "sample": "established-family-wealth-building",
+      "inputPlanHash": "d0af6a2dc483407aa106937398f0d924f41a05baee60b168b56db1051894eae1",
+      "before": {
+        "annualGrossIncome": 281800,
+        "annualNetIncome": 281800,
+        "annualLivingExpenses": 117780,
+        "annualExpenses": 117780,
+        "annualDebtRepayments": 51600,
+        "annualMortgageRepayments": 51600,
+        "finalProjectedCashSurplus": -2069.32,
+        "currentNetWorth": 2478000,
+        "currentNetFiAssets": 771000,
+        "annualPassiveIncome": 7600,
+        "financialFreedomProgressDisplay": 22.1006,
+        "lifestyleFundingPercent": 32.8085,
+        "targetCapital": 3488588.25,
+        "rentalPropertyCashflow.annualHouseholdCashflowContribution": 0
+      },
+      "after": {
+        "annualGrossIncome": 281800,
+        "annualNetIncome": 281800,
+        "annualLivingExpenses": 117780,
+        "annualExpenses": 117780,
+        "annualDebtRepayments": 51600,
+        "annualMortgageRepayments": 51600,
+        "finalProjectedCashSurplus": -2069.32,
+        "currentNetWorth": 2478000,
+        "currentNetFiAssets": 771000,
+        "annualPassiveIncome": 7600,
+        "financialFreedomProgressDisplay": 22.1006,
+        "lifestyleFundingPercent": 32.8085,
+        "targetCapital": 3488588.25,
+        "rentalPropertyCashflow.annualHouseholdCashflowContribution": 0
+      },
+      "identical": true
+    },
+    {
+      "sample": "growing-family",
+      "inputPlanHash": "a417a5d4439e69f55c4221a73cca872736446256ca8f616cceb3a8b893bb3942",
+      "before": {
+        "annualGrossIncome": 210200,
+        "annualNetIncome": 210200,
+        "annualLivingExpenses": 101180,
+        "annualExpenses": 101180,
+        "annualDebtRepayments": 52200,
+        "annualMortgageRepayments": 49200,
+        "finalProjectedCashSurplus": -7684,
+        "currentNetWorth": 878500,
+        "currentNetFiAssets": 190000,
+        "annualPassiveIncome": 4200,
+        "financialFreedomProgressDisplay": 4.7748,
+        "lifestyleFundingPercent": 8.6364,
+        "targetCapital": 3979197,
+        "rentalPropertyCashflow.annualHouseholdCashflowContribution": 0
+      },
+      "after": {
+        "annualGrossIncome": 210200,
+        "annualNetIncome": 210200,
+        "annualLivingExpenses": 101180,
+        "annualExpenses": 101180,
+        "annualDebtRepayments": 52200,
+        "annualMortgageRepayments": 49200,
+        "finalProjectedCashSurplus": -7684,
+        "currentNetWorth": 878500,
+        "currentNetFiAssets": 190000,
+        "annualPassiveIncome": 4200,
+        "financialFreedomProgressDisplay": 4.7748,
+        "lifestyleFundingPercent": 8.6364,
+        "targetCapital": 3979197,
+        "rentalPropertyCashflow.annualHouseholdCashflowContribution": 0
+      },
+      "identical": true
+    },
+    {
+      "sample": "pre-retirement",
+      "inputPlanHash": "d34d309793f084aff7fd07aa4952e587151db8c95d8a326860eb9d16f09f5443",
+      "before": {
+        "annualGrossIncome": 217000,
+        "annualNetIncome": 217000,
+        "annualLivingExpenses": 105060,
+        "annualExpenses": 105060,
+        "annualDebtRepayments": 31200,
+        "annualMortgageRepayments": 31200,
+        "finalProjectedCashSurplus": 100,
+        "currentNetWorth": 3962000,
+        "currentNetFiAssets": 1440000,
+        "annualPassiveIncome": 5200,
+        "financialFreedomProgressDisplay": 50.6819,
+        "lifestyleFundingPercent": 58.7755,
+        "targetCapital": 2841248.75,
+        "rentalPropertyCashflow.annualHouseholdCashflowContribution": 0
+      },
+      "after": {
+        "annualGrossIncome": 217000,
+        "annualNetIncome": 217000,
+        "annualLivingExpenses": 105060,
+        "annualExpenses": 105060,
+        "annualDebtRepayments": 31200,
+        "annualMortgageRepayments": 31200,
+        "finalProjectedCashSurplus": 100,
+        "currentNetWorth": 3962000,
+        "currentNetFiAssets": 1440000,
+        "annualPassiveIncome": 5200,
+        "financialFreedomProgressDisplay": 50.6819,
+        "lifestyleFundingPercent": 58.7755,
+        "targetCapital": 2841248.75,
+        "rentalPropertyCashflow.annualHouseholdCashflowContribution": 0
+      },
+      "identical": true
+    },
+    {
+      "sample": "retirement-ready",
+      "inputPlanHash": "d22fa8a2d20c963391e60bb4af95d35dc51133d75e85207feeb682036a191ba7",
+      "before": {
+        "annualGrossIncome": 114000,
+        "annualNetIncome": 114000,
+        "annualLivingExpenses": 86020,
+        "annualExpenses": 86020,
+        "annualDebtRepayments": 19200,
+        "annualMortgageRepayments": 19200,
+        "finalProjectedCashSurplus": -23648.37,
+        "currentNetWorth": 3405000,
+        "currentNetFiAssets": 2255000,
+        "annualPassiveIncome": 9000,
+        "financialFreedomProgressDisplay": 86.6561,
+        "lifestyleFundingPercent": 98.0435,
+        "targetCapital": 2602239,
+        "rentalPropertyCashflow.annualHouseholdCashflowContribution": 0
+      },
+      "after": {
+        "annualGrossIncome": 114000,
+        "annualNetIncome": 114000,
+        "annualLivingExpenses": 86020,
+        "annualExpenses": 86020,
+        "annualDebtRepayments": 19200,
+        "annualMortgageRepayments": 19200,
+        "finalProjectedCashSurplus": -23648.37,
+        "currentNetWorth": 3405000,
+        "currentNetFiAssets": 2255000,
+        "annualPassiveIncome": 9000,
+        "financialFreedomProgressDisplay": 86.6561,
+        "lifestyleFundingPercent": 98.0435,
+        "targetCapital": 2602239,
+        "rentalPropertyCashflow.annualHouseholdCashflowContribution": 0
+      },
+      "identical": true
+    },
+    {
+      "sample": "semi-retirement",
+      "inputPlanHash": "275fb9365585ddf7b5079eda6a1dbf2fd0a26f3d6322a922a07c509c5b78965a",
+      "before": {
+        "annualGrossIncome": 246500,
+        "annualNetIncome": 246500,
+        "annualLivingExpenses": 101620,
+        "annualExpenses": 101620,
+        "annualDebtRepayments": 38400,
+        "annualMortgageRepayments": 38400,
+        "finalProjectedCashSurplus": 9622.88,
+        "currentNetWorth": 2290000,
+        "currentNetFiAssets": 682000,
+        "annualPassiveIncome": 15500,
+        "financialFreedomProgressDisplay": 22.538,
+        "lifestyleFundingPercent": 30.3111,
+        "targetCapital": 3025999.75,
+        "rentalPropertyCashflow.annualHouseholdCashflowContribution": 0
+      },
+      "after": {
+        "annualGrossIncome": 246500,
+        "annualNetIncome": 246500,
+        "annualLivingExpenses": 101620,
+        "annualExpenses": 101620,
+        "annualDebtRepayments": 38400,
+        "annualMortgageRepayments": 38400,
+        "finalProjectedCashSurplus": 9622.88,
+        "currentNetWorth": 2290000,
+        "currentNetFiAssets": 682000,
+        "annualPassiveIncome": 15500,
+        "financialFreedomProgressDisplay": 22.538,
+        "lifestyleFundingPercent": 30.3111,
+        "targetCapital": 3025999.75,
+        "rentalPropertyCashflow.annualHouseholdCashflowContribution": 0
+      },
+      "identical": true
+    },
+    {
+      "sample": "young-couple",
+      "inputPlanHash": "3e25c3e973435f7df8a4d9f4bba08d3d730bf5ccf6fcd0f913238be5929a6f8a",
+      "before": {
+        "annualGrossIncome": 199800,
+        "annualNetIncome": 199800,
+        "annualLivingExpenses": 75490,
+        "annualExpenses": 75490,
+        "annualDebtRepayments": 42000,
+        "annualMortgageRepayments": 42000,
+        "finalProjectedCashSurplus": 17974,
+        "currentNetWorth": 560000,
+        "currentNetFiAssets": 124000,
+        "annualPassiveIncome": 1800,
+        "financialFreedomProgressDisplay": 3.0316,
+        "lifestyleFundingPercent": 6.359,
+        "targetCapital": 4090256.75,
+        "rentalPropertyCashflow.annualHouseholdCashflowContribution": 0
+      },
+      "after": {
+        "annualGrossIncome": 199800,
+        "annualNetIncome": 199800,
+        "annualLivingExpenses": 75490,
+        "annualExpenses": 75490,
+        "annualDebtRepayments": 42000,
+        "annualMortgageRepayments": 42000,
+        "finalProjectedCashSurplus": 17974,
+        "currentNetWorth": 560000,
+        "currentNetFiAssets": 124000,
+        "annualPassiveIncome": 1800,
+        "financialFreedomProgressDisplay": 3.0316,
+        "lifestyleFundingPercent": 6.359,
+        "targetCapital": 4090256.75,
+        "rentalPropertyCashflow.annualHouseholdCashflowContribution": 0
+      },
+      "identical": true
+    },
+    {
+      "sample": "young-professional",
+      "inputPlanHash": "a06e8b42d55ca491b9fa45f57c117bfe9c161b56ae58abbc21627eaffcdf53f3",
+      "before": {
+        "annualGrossIncome": 98000,
+        "annualNetIncome": 98000,
+        "annualLivingExpenses": 47510,
+        "annualExpenses": 47510,
+        "annualDebtRepayments": 0,
+        "annualMortgageRepayments": 0,
+        "finalProjectedCashSurplus": 10479.2,
+        "currentNetWorth": 102500,
+        "currentNetFiAssets": 58500,
+        "annualPassiveIncome": 0,
+        "financialFreedomProgressDisplay": 1.7993,
+        "lifestyleFundingPercent": 3.7742,
+        "targetCapital": 3251229.75,
+        "rentalPropertyCashflow.annualHouseholdCashflowContribution": 0
+      },
+      "after": {
+        "annualGrossIncome": 98000,
+        "annualNetIncome": 98000,
+        "annualLivingExpenses": 47510,
+        "annualExpenses": 47510,
+        "annualDebtRepayments": 0,
+        "annualMortgageRepayments": 0,
+        "finalProjectedCashSurplus": 10479.2,
+        "currentNetWorth": 102500,
+        "currentNetFiAssets": 58500,
+        "annualPassiveIncome": 0,
+        "financialFreedomProgressDisplay": 1.7993,
+        "lifestyleFundingPercent": 3.7742,
+        "targetCapital": 3251229.75,
+        "rentalPropertyCashflow.annualHouseholdCashflowContribution": 0
+      },
+      "identical": true
+    }
+  ]
+}

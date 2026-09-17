@@ -1598,30 +1598,7 @@
     return errors;
   }
 
-  function fallbackTaxBreakdown(income) {
-    const taxable = Math.max(0, number(income));
-    const incomeTax = taxable <= 18200 ? 0
-      : taxable <= 45000 ? (taxable - 18200) * 0.15
-        : taxable <= 135000 ? 4020 + (taxable - 45000) * 0.30
-          : taxable <= 190000 ? 31020 + (taxable - 135000) * 0.37
-            : 51370 + (taxable - 190000) * 0.45;
-    const medicareConfig = DEFAULT_FINANCIAL_YEAR_CONFIG.medicareLevy || {};
-    const lowerThreshold = Math.max(0, number(medicareConfig.individualLowerThreshold));
-    const upperThreshold = Math.max(0, number(medicareConfig.individualPhaseInUpperThreshold));
-    const phaseInRate = Math.max(0, number(medicareConfig.phaseInRate, 0.10));
-    const fullMedicareLevy = roundCurrency(taxable * 0.02);
-    const medicareLevy = lowerThreshold > 0 && taxable <= lowerThreshold
-      ? 0
-      : upperThreshold > lowerThreshold && taxable <= upperThreshold
-        ? roundCurrency(Math.min(fullMedicareLevy, Math.max(0, taxable - lowerThreshold) * phaseInRate))
-        : fullMedicareLevy;
-    return {
-      incomeTax: roundCurrency(incomeTax),
-      medicareLevy,
-    };
-  }
-
-  function calculateMls(peopleYear, normalised) {
+  function calculateMls(peopleYear, normalised, financialYear) {
     if (typeof CALC.calculateMedicareLevySurcharge !== "function") {
       return { person1Surcharge: 0, person2Surcharge: 0, annualSurcharge: 0, warning: "Existing MLS helper was not available; MLS has been treated as zero." };
     }
@@ -1631,6 +1608,7 @@
     const p1Income = p1.totalTaxableIncome ?? p1.grossEmploymentIncome ?? 0;
     const p2Income = p2.totalTaxableIncome ?? p2.grossEmploymentIncome ?? 0;
     const result = CALC.calculateMedicareLevySurcharge({
+      financialYear,
       person1TaxableIncome: p1Income,
       person2TaxableIncome: p2Income,
       person1MLSIncomeForThreshold: p1Income,
@@ -1804,6 +1782,12 @@
   function projectRetirementScenario(inputs) {
     const originalInputs = clone(inputs);
     const validationErrors = validateInputs(inputs);
+    if (typeof CALC.individualTaxBreakdown !== "function") {
+      addValidation(validationErrors, "financialRules", "The authoritative tax calculation helper is unavailable. The projection cannot be calculated safely.");
+    }
+    if (typeof CALC.financialYearForCalendarYear !== "function") {
+      addValidation(validationErrors, "financialRules", "The financial-year resolver is unavailable. The projection cannot be calculated safely.");
+    }
     const normalised = normaliseInputs(inputs || {});
     const youngestCurrentAge = normalised.people.length
       ? Math.min(...normalised.people.map((person) => person.currentAge))
@@ -1840,6 +1824,8 @@
       projectedEndAgesByPerson,
       superAtAge60Treatment: "superByPersonAtAge60 records each person's own projected super balance only in the projection year where that person's age is exactly 60. If a person is older than 60 at projection start, the value remains null because the engine does not reconstruct historical age-60 balances.",
       inflation: "Household lifestyle spending and rental cash income are treated as projection-start dollars and inflated from projection year zero using the same CPI assumption.",
+      financialYearConvention: "Each annual projection row represents the Australian financial year beginning on 1 July of its calendarYear (for example, calendarYear 2027 uses 2027-28 rules).",
+      futureTaxRuleTreatment: "Supported enacted resident tax rates are applied for each row. For later unsupported years, the last supported rule configuration is held without assumed threshold indexation.",
       investmentReturnTiming: "Total-return method. Earnings equal opening balance return plus 50% of net annual cash movement return. Fees use the same midpoint balance. Dividends, interest and rent are not added separately.",
       superContributionTiming: "Employer and additional concessional contributions are reduced by 15% contributions tax before being added to super. The projection does not optimise concessional caps or carry-forward amounts.",
       plannedExtraConcessionalContributionTreatment: "Planned extra concessional contribution events are selected by person and financial year. The financial year is mapped to the annual projection row with the same starting calendar year, so 2030-31 is applied once to calendarYear 2030. Events are paid from household cash once, reduce the selected person's modelled taxable income under the simplified concessional assumption, and use the same 15% contributions-tax treatment as other additional concessional contributions.",
@@ -1935,6 +1921,7 @@
 
     for (let yearIndex = 0; yearIndex <= maxYears; yearIndex += 1) {
       const calendarYear = normalised.projectionStartYear + yearIndex;
+      const financialYear = CALC.financialYearForCalendarYear(calendarYear);
       const peopleYear = normalised.people.map((person) => {
         const age = person.currentAge + yearIndex;
         const employmentPhase = employmentPhaseForAge(person, age);
@@ -1992,14 +1979,14 @@
         person.additionalSuperContribution = roundCurrency(recurringAdditionalSuperContribution + plannedExtraConcessionalContribution);
       });
 
-      const mls = calculateMls(peopleYear, normalised);
+      const mls = calculateMls(peopleYear, normalised, financialYear);
       if (mls.warning) warnings.push(`${calendarYear}: ${mls.warning}`);
 
       peopleYear.forEach((person, index) => {
         const source = normalised.people.find((item) => item.id === person.id) || person;
-        const taxBreakdown = typeof CALC.individualTaxBreakdown === "function"
-          ? CALC.individualTaxBreakdown(person.totalTaxableIncome)
-          : fallbackTaxBreakdown(person.totalTaxableIncome);
+        const taxBreakdown = CALC.individualTaxBreakdown(person.totalTaxableIncome, {
+          financialYear,
+        });
         const stslOpeningBalance = peopleStates[person.id].stslBalance;
         const stslRepayment = roundCurrency(Math.min(stslOpeningBalance, estimateStslRepayment(person.stslRepaymentIncome, stslOpeningBalance)));
         peopleStates[person.id].stslBalance = roundCurrency(Math.max(0, stslOpeningBalance - stslRepayment));
@@ -2391,6 +2378,7 @@
 
       const annualResult = {
         calendarYear,
+        financialYear,
         yearIndex,
         householdPhase: phase,
         person1Age: peopleYear[0]?.age ?? null,

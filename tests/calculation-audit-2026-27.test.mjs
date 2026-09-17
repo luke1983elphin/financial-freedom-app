@@ -35,7 +35,7 @@ function basePlan() {
 
 test("2026-27 resident tax helper uses the audited resident bracket table before offsets and Medicare", () => {
   const CALC = loadCalculator();
-  assert.equal(CALC.CALCULATION_VERSION, "2026.27.1");
+  assert.equal(CALC.CALCULATION_VERSION, "2026.27.2");
   assert.equal(CALC.FINANCIAL_YEAR, "2026-27");
   const cases = [
     [18200, 0],
@@ -50,6 +50,41 @@ test("2026-27 resident tax helper uses the audited resident bracket table before
   for (const [income, expected] of cases) {
     assert.equal(CALC.calculateResidentIncomeTax2026_27(income), expected);
   }
+});
+
+test("R3D enacted resident tax rules resolve by Australian financial year and then hold the last supported configuration", () => {
+  const CALC = loadCalculator();
+  assert.equal(CALC.financialYearForDate("2027-06-30T12:00:00+10:00"), "2026-27");
+  assert.equal(CALC.financialYearForDate("2027-07-01T12:00:00+10:00"), "2027-28");
+  assert.equal(CALC.financialYearForCalendarYear(2027), "2027-28");
+
+  const current = CALC.individualTaxBreakdown(80000, { financialYear: "2026-27" });
+  const enacted = CALC.individualTaxBreakdown(80000, { financialYear: "2027-28" });
+  const held = CALC.individualTaxBreakdown(80000, { financialYear: "2035-36" });
+  assert.equal(current.incomeTaxBeforeOffsets, 14520);
+  assert.equal(enacted.incomeTaxBeforeOffsets, 14252);
+  assert.equal(current.incomeTaxBeforeOffsets - enacted.incomeTaxBeforeOffsets, 268);
+  assert.equal(held.incomeTaxBeforeOffsets, enacted.incomeTaxBeforeOffsets);
+  assert.equal(held.financialYear, "2035-36");
+  assert.equal(held.appliedFinancialYear, "2027-28");
+  assert.equal(held.heldLastSupported, true);
+  assert.throws(() => CALC.individualTaxBreakdown(80000, { financialYear: "2025-26" }), /unavailable/);
+});
+
+test("R3D rule governance warning follows Australian financial-year boundaries and respects historical review", () => {
+  const CALC = loadCalculator();
+  const june = CALC.getRuleGovernance({ currentDate: "2028-06-30T12:00:00+10:00" });
+  const july = CALC.getRuleGovernance({ currentDate: "2028-07-01T12:00:00+10:00" });
+  const historical = CALC.getRuleGovernance({ calculationYear: "2026-27", currentDate: "2030-07-01T12:00:00+10:00", historicalScenario: true });
+  assert.equal(june.currentFinancialYear, "2027-28");
+  assert.equal(june.currentRulesUnsupported, false);
+  assert.equal(july.currentFinancialYear, "2028-29");
+  assert.equal(july.currentRulesUnsupported, true);
+  assert.match(july.warning, /latest available rule set/);
+  assert.equal(historical.currentRulesUnsupported, false);
+  assert.equal(historical.warning, "");
+  assert.equal(july.rulesLastReviewed, "8 September 2026");
+  assert.equal(july.calculationVersion, "2026.27.2");
 });
 
 test("LITO reduces income tax only and is capped at income tax before Medicare", () => {
@@ -316,6 +351,33 @@ test("missing MLS cover information remains incomplete in the full plan rather t
   assert.equal(result.taxEstimate.medicareLevySurchargeEstimate.cannotConfirm, true);
   assert.match(result.taxEstimate.medicareLevySurchargeEstimate.note, /MLS not included/);
   assert.equal(result.estimatedTaxAndHelp, result.taxEstimate.incomeTax + result.taxEstimate.medicareLevy);
+});
+
+test("2026-27 full-year spouse MLS low-income threshold applies separately at the approved boundary", () => {
+  const CALC = loadCalculator();
+  const resultFor = (person, income) => CALC.calculateMedicareLevySurcharge({
+    person1TaxableIncome: person === 1 ? income : 230000,
+    person2TaxableIncome: person === 2 ? income : 230000,
+    person1MLSIncomeForThreshold: person === 1 ? income : 230000,
+    person2MLSIncomeForThreshold: person === 2 ? income : 230000,
+    person1CoverStatus: "no-cover",
+    person2CoverStatus: "no-cover",
+    dependants: 0,
+    hasPartner: true,
+    spouseForFullYear: true,
+  });
+
+  for (const person of [1, 2]) {
+    for (const income of [28010, 28011]) {
+      const result = resultFor(person, income);
+      assert.equal(result.individualLowIncomeSpouseThreshold, 28011);
+      assert.equal(result[`person${person}LowIncomeSpouseExempt`], true);
+      assert.equal(result[`person${person}Surcharge`], 0);
+    }
+    const above = resultFor(person, 28012);
+    assert.equal(above[`person${person}LowIncomeSpouseExempt`], false);
+    assert.equal(above[`person${person}Surcharge`], 350.15);
+  }
 });
 
 test("employer super is calculated from salary only and supports package-inclusive salary items", () => {

@@ -1052,13 +1052,83 @@
       name: person.name || `Person ${index + 1}`,
       currentAge: number(person.currentAge ?? person.age),
     })).map((person, index) => {
-      const inputPerson = inputPeople.find((candidate) => candidate.id === person.id);
+      const inputPerson = inputPeople.find((candidate) => candidate.id === person.id) || inputPeople[index];
       const draftPerson = draftPeople.find((candidate) => candidate.id === person.id) || draftPeople[index];
+      const hasSemiRetirement = Boolean(
+        draftPerson?.hasSemiRetirement
+        ?? inputPerson?.hasSemiRetirement
+        ?? projectedPeople[index]?.hasSemiRetirement,
+      );
       return {
         ...person,
+        hasSemiRetirement,
+        semiRetirementAge: finiteNumberOrNull(
+          inputPerson?.semiRetirementAge
+          ?? draftPerson?.semiRetirementAge
+          ?? projectedPeople[index]?.semiRetirementAge,
+        ),
+        fullRetirementAge: finiteNumberOrNull(
+          inputPerson?.fullRetirementAge
+          ?? draftPerson?.fullRetirementAge
+          ?? projectedPeople[index]?.fullRetirementAge,
+        ),
         superAccessAge: finiteNumberOrNull(inputPerson?.superAccessAge ?? draftPerson?.superAccessAge),
       };
     });
+  }
+
+  function personTimingLabel(people = [], field, fallback = "Not modelled") {
+    const rows = asArray(people)
+      .map((person) => ({
+        name: person.name || person.id || "Person",
+        age: finiteNumberOrNull(person[field]),
+      }))
+      .filter((row) => row.age !== null);
+    if (!rows.length) return fallback;
+    const uniqueAges = Array.from(new Set(rows.map((row) => row.age)));
+    if (uniqueAges.length === 1) return `Age ${uniqueAges[0]}`;
+    return rows.map((row) => `${row.name} age ${row.age}`).join(" / ");
+  }
+
+  function buildRetirementTimingPresentation(projection = {}, people = []) {
+    const years = asArray(projection.years);
+    const electedPeople = asArray(people).filter((person) => {
+      const semiRetirementAge = finiteNumberOrNull(person.semiRetirementAge);
+      const fullRetirementAge = finiteNumberOrNull(person.fullRetirementAge);
+      return person.hasSemiRetirement === true
+        && semiRetirementAge !== null
+        && fullRetirementAge !== null
+        && semiRetirementAge < fullRetirementAge;
+    });
+    const transitionRows = years.filter((row) => row.householdPhase === "semi-retirement");
+    const firstTransitionRow = transitionRows[0] || null;
+    const householdFullRetirementRow = years.find((row) => row.householdPhase === "full-retirement") || null;
+    const transitionStartYear = finiteNumberOrNull(firstTransitionRow?.calendarYear);
+    const transitionEndYear = finiteNumberOrNull(householdFullRetirementRow?.calendarYear)
+      ?? finiteNumberOrNull(transitionRows.at(-1)?.calendarYear);
+    const hasHouseholdTransition = transitionRows.length > 0;
+    const householdTransitionValue = hasHouseholdTransition
+      ? transitionStartYear !== null && transitionEndYear !== null && transitionStartYear !== transitionEndYear
+        ? `${transitionStartYear}-${transitionEndYear}`
+        : String(transitionStartYear ?? transitionEndYear ?? "Transition modelled")
+      : "No household transition";
+
+    return {
+      fullRetirementValue: personTimingLabel(people, "fullRetirementAge", "Not modelled"),
+      hasElectedPersonalSemiRetirement: electedPeople.length > 0,
+      personalSemiRetirementValue: electedPeople.length === 1 && people.length > 1
+        ? `${electedPeople[0].name || electedPeople[0].id || "Person"} age ${electedPeople[0].semiRetirementAge}`
+        : personTimingLabel(electedPeople, "semiRetirementAge", "None selected"),
+      hasHouseholdTransition,
+      householdTransition: {
+        startYear: transitionStartYear,
+        endYear: transitionEndYear,
+        value: householdTransitionValue,
+        note: hasHouseholdTransition
+          ? "One person is retired or semi-retired while another is still working."
+          : "The household moves directly from working to full retirement.",
+      },
+    };
   }
 
   function milestoneHasYear(milestone) {
@@ -1826,6 +1896,7 @@
     const years = asArray(projection.years);
     const summary = projection.summary || {};
     const people = personListFromProjection(projection, draft, inputs);
+    const retirementTiming = buildRetirementTimingPresentation(projection, people);
     const finalYear = years[years.length - 1] || {};
     const householdFullRetirementRow = rowForCalendarYear(years, summary.householdFullRetirement?.calendarYear)
       || years.find((row) => row.householdPhase === "full-retirement")
@@ -1890,6 +1961,7 @@
     return {
       isAvailable: true,
       people,
+      retirementTiming,
       projectionEndAge,
       projectionEndDescription: `Projection ends when the younger person reaches age ${projectionEndAge}`,
       status: {
@@ -2135,6 +2207,8 @@
     scenarioDraftToProjectionInputs,
     runSemiRetirementProjection,
     buildSemiRetirementResultsViewModel,
+    personListFromProjection,
+    buildRetirementTimingPresentation,
     buildDebtPropertyResultsViewModel,
     buildPassiveIncomeResultsViewModel,
     hasSemiRetirementPhase,
