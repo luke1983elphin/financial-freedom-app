@@ -41,7 +41,9 @@ test("financial snapshots use a stable plan-scoped storage path and avoid demo s
 test("snapshot import and export preserve progress history without replacing plan data", () => {
   assert.match(appSource, /snapshots: isDemoActive\(\) \? \[\] : loadFinancialSnapshots\(\)/);
   assert.match(appSource, /snapshots: Array\.isArray\(payload\.snapshots\)/);
-  assert.match(appSource, /saveFinancialSnapshots\(imported\.snapshots\.map/);
+  assert.match(appSource, /const importedSnapshots = imported\.snapshots\.map/);
+  assert.match(appSource, /\{ key: currentSnapshotKey\(importedPlanId\), value: importedSnapshots \}/);
+  assert.match(appSource, /storageWriteBatch/);
 });
 
 test("progress AI route is separate from plan insights and validates structured output", () => {

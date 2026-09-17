@@ -1,6 +1,7 @@
 (function bootFinancialFreedomApp() {
   const DATA = window.FFS_DATA;
   const CALC = window.FFSCalculator;
+  const SECURITY = window.FFSSecurity;
   const CALCULATION_VERSION = CALC?.CALCULATION_VERSION || "2026.27.1";
   const FINANCIAL_YEAR = CALC?.FINANCIAL_YEAR || "2026-27";
   const DRAFT_KEY = "ffs-current-plan-v3-mobile-dashboard-ux-test";
@@ -14,9 +15,11 @@
   const PERSONAL_PLAN_PREFIX = "ffs-personal-plan-v1:";
   const PERSONAL_WEEKLY_PLAN_PREFIX = "ffs-weekly-plan-v1:";
   const SNAPSHOT_PREFIX = "ffs-financial-snapshots-v1:";
+  const DURABILITY_STATE_KEY = "ffs-durability-state-v1";
   const APP_VERSION = "3.0-test-weekly-planner";
   const WEEKLY_EDITOR_BUILD_ID = "2026-07-17-02";
   const EXPORT_SCHEMA_VERSION = 1;
+  const MAX_IMPORT_BYTES = SECURITY?.DEFAULT_MAX_IMPORT_BYTES || 5 * 1024 * 1024;
   const AI_INSIGHTS_ENDPOINT = "/api/ai-insights";
   const AI_INSIGHTS_DEFAULT_MAX_GENERATIONS = 5;
   const AI_INSIGHTS_DEFAULT_COOLDOWN_MS = 60000;
@@ -24,7 +27,106 @@
   const AUTOMATIC_SNAPSHOT_MIN_DAYS = 30;
   const SNAPSHOT_MATERIAL_CHANGE_AMOUNT = 1000;
   const ENGAGEMENT_JOURNEY_ENABLED = window.FFS_ENGAGEMENT_JOURNEY_ENABLED !== false;
+  const BACKUP_REMINDER_DAYS = 30;
+  const BACKUP_REMIND_LATER_DAYS = 7;
+  const storageIssues = [];
+  let dataDeletionActive = false;
+  let planHasUnsavedChanges = false;
+  let backupPromptPending = false;
+  let backupReminderShownThisSession = false;
+  const STORAGE = window.FFSStorage?.createStorageCoordinator(window.localStorage, {
+    onIssue(issue) {
+      storageIssues.push(issue);
+    },
+  });
   console.info(`Weekly Plan editor build: ${WEEKLY_EDITOR_BUILD_ID}`);
+
+  function storageGetItem(key) {
+    if (!STORAGE) {
+      try {
+        return localStorage.getItem(key);
+      } catch {
+        return null;
+      }
+    }
+    return STORAGE.getText(key).value;
+  }
+
+  function storageCoordinatorUnavailable(key = "") {
+    return {
+      ok: false,
+      code: "coordinator-unavailable",
+      key,
+      message: "Your current plan is still open, but browser storage is unavailable. Export a backup and reload the app before trying to save or restore data.",
+    };
+  }
+
+  function storageWriteJson(key, value) {
+    if (!STORAGE) return storageCoordinatorUnavailable(key);
+    return STORAGE.writeJson(key, value);
+  }
+
+  function storageWriteText(key, value) {
+    if (!STORAGE) return storageCoordinatorUnavailable(key);
+    return STORAGE.writeText(key, value);
+  }
+
+  function storageRemove(key, options = {}) {
+    if (!STORAGE) return storageCoordinatorUnavailable(key);
+    return STORAGE.remove(key, options);
+  }
+
+  function storageWriteBatch(operations, options = {}) {
+    if (!STORAGE) return storageCoordinatorUnavailable();
+    return STORAGE.writeBatch(operations, options);
+  }
+
+  function storageFailureMessage(result) {
+    return result?.message || "Your current plan is still open, but it could not be saved in this browser. Export a backup and try saving again.";
+  }
+
+  if (storageGetItem(window.FFSStorage?.DELETION_MARKER_KEY || "ffs-data-deletion-in-progress-v1")) {
+    dataDeletionActive = true;
+    STORAGE?.suppressWrites("Financial Freedom data was deleted in another tab.");
+  }
+
+  function parseStoredJson(raw, key, validate, fallback) {
+    if (!raw) return fallback;
+    try {
+      const parsed = JSON.parse(raw);
+      SECURITY?.assertSafeData(parsed);
+      if (validate && !validate(parsed)) throw new Error("The saved record has an unsupported format.");
+      return parsed;
+    } catch {
+      storageIssues.push({ ok: false, operation: "load", key, corrupt: true, message: "Some saved Financial Freedom data could not be loaded. The stored copy has been preserved so you can recover from a backup." });
+      return fallback;
+    }
+  }
+
+  function loadDurabilityState() {
+    const parsed = parseStoredJson(storageGetItem(DURABILITY_STATE_KEY), DURABILITY_STATE_KEY, (value) => SECURITY?.isPlainObject(value), {});
+    return { version: 1, ...parsed };
+  }
+
+  function saveDurabilityState(state) {
+    return storageWriteJson(DURABILITY_STATE_KEY, { version: 1, ...state, updatedAt: new Date().toISOString() });
+  }
+
+  function addDaysIso(dateValue, days) {
+    const date = new Date(dateValue || Date.now());
+    date.setDate(date.getDate() + days);
+    return date.toISOString();
+  }
+
+  function recordSuccessfulDurableSave(savedAt) {
+    const current = loadDurabilityState();
+    const firstSuccessfulSaveAt = current.firstSuccessfulSaveAt || savedAt;
+    const nextReminderAt = current.nextReminderAt || addDaysIso(firstSuccessfulSaveAt, BACKUP_REMINDER_DAYS);
+    const next = { ...current, firstSuccessfulSaveAt, lastSuccessfulSaveAt: savedAt, nextReminderAt };
+    const result = saveDurabilityState(next);
+    if (!current.firstSavePromptShownAt) backupPromptPending = true;
+    return result;
+  }
   const frequencies = [
     ["weekly", "Weekly"],
     ["fortnightly", "Fortnightly"],
@@ -532,6 +634,7 @@
   const aiInsightsUi = {
     isOpen: false,
     consentAccepted: false,
+    dataConsentAccepted: false,
     isLoading: false,
     error: "",
   };
@@ -815,7 +918,7 @@
             <div class="engagement-stage-step ${complete ? "complete" : ""} ${current ? "current" : ""}" role="listitem" aria-current="${current ? "step" : "false"}">
               <span>${complete ? "OK" : index + 1}</span>
               <strong>${escapeHtml(stage.name)}</strong>
-              <small>${current ? "Current" : complete ? "Completed" : index === stageInfo.index + 1 ? "Next" : "Later"}</small>
+              <small>${current ? "Current journey step" : complete ? "Completed" : index === stageInfo.index + 1 ? "Next journey step" : "Later journey step"}</small>
             </div>
           `;
         }).join("")}
@@ -1191,7 +1294,7 @@
         <span class="metric-label">Your AI Coach</span>
         <h3>One suggestion based on your current plan</h3>
         <p>${escapeHtml(shortenText(report.overallPosition.summary, 230))}</p>
-        <small>Uses the anonymous financial summary from your current saved plan.</small>
+        <small>Uses a reduced financial summary from your current plan only after you choose to generate insights.</small>
         <div class="engagement-button-row">
           <button class="btn btn-primary" type="button" data-engagement-action="ai">Ask a Question</button>
           <button class="btn" type="button" data-engagement-action="ai">See Full Insight</button>
@@ -2094,11 +2197,12 @@
   }
 
   function escapeHtml(value) {
-    return String(value ?? "")
+    return SECURITY?.escapeHtml(value) ?? String(value ?? "")
       .replaceAll("&", "&amp;")
       .replaceAll("<", "&lt;")
       .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;");
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;");
   }
 
   function getPath(object, path) {
@@ -2293,7 +2397,7 @@
 
   function hasUserSavedScenario() {
     try {
-      const raw = localStorage.getItem(SCENARIO_KEY);
+      const raw = storageGetItem(SCENARIO_KEY);
       if (!raw) return false;
       return migrateScenarioList(JSON.parse(raw)).some((scenario) => (
         scenario.source !== "sample" && hasMeaningfulPersonalPlanData(scenario.plan)
@@ -2312,13 +2416,7 @@
   }
 
   function loadUserState(savedPlan) {
-    let loaded = {};
-    try {
-      const raw = localStorage.getItem(USER_STATE_KEY);
-      loaded = raw ? JSON.parse(raw) : {};
-    } catch {
-      loaded = {};
-    }
+    const loaded = parseStoredJson(storageGetItem(USER_STATE_KEY), USER_STATE_KEY, (value) => SECURITY?.isPlainObject(value), {});
     const hasCreatedPersonalPlan = Boolean(loaded.hasCreatedPersonalPlan || inferHasCreatedPersonalPlan(savedPlan));
     const state = {
       version: 1,
@@ -2333,17 +2431,13 @@
   }
 
   function persistUserState(nextState = userState) {
-    try {
-      localStorage.setItem(USER_STATE_KEY, JSON.stringify({
-        version: 1,
-        ...nextState,
-        lastPersonalPlanId: normalisePlanId(nextState.lastPersonalPlanId || activePlanId || DEFAULT_PERSONAL_PLAN_ID),
-        lastPersonalRoute: nextState.lastPersonalRoute || "dashboard",
-        updatedAt: new Date().toISOString(),
-      }));
-    } catch {
-      // The app can still run without browser storage; the intro simply behaves like a first visit.
-    }
+    return storageWriteJson(USER_STATE_KEY, {
+      version: 1,
+      ...nextState,
+      lastPersonalPlanId: normalisePlanId(nextState.lastPersonalPlanId || activePlanId || DEFAULT_PERSONAL_PLAN_ID),
+      lastPersonalRoute: nextState.lastPersonalRoute || "dashboard",
+      updatedAt: new Date().toISOString(),
+    });
   }
 
   function numberValue(value) {
@@ -2917,28 +3011,30 @@
 
   function loadFinancialSnapshots(planId = activePlanId) {
     if (isDemoActive()) return [];
-    try {
-      const raw = localStorage.getItem(currentSnapshotKey(planId));
-      const parsed = raw ? JSON.parse(raw) : [];
-      return (Array.isArray(parsed) ? parsed : [])
-        .map(recalculateSnapshot)
-        .filter((snapshot) => snapshot.planId === normalisePlanId(planId))
-        .sort((a, b) => new Date(a.snapshotDate) - new Date(b.snapshotDate));
-    } catch {
-      return [];
-    }
+    const key = currentSnapshotKey(planId);
+    const parsed = parseStoredJson(storageGetItem(key), key, Array.isArray, []);
+    return parsed
+      .map(recalculateSnapshot)
+      .filter((snapshot) => snapshot.planId === normalisePlanId(planId))
+      .sort((a, b) => new Date(a.snapshotDate) - new Date(b.snapshotDate));
   }
 
   function saveFinancialSnapshots(snapshots, message = "") {
     if (isDemoActive()) {
       updateSaveStatus("Sample Plan history is temporary and was not saved to your personal snapshots.");
-      return;
+      return false;
     }
     const clean = (Array.isArray(snapshots) ? snapshots : [])
       .map(recalculateSnapshot)
       .filter((snapshot) => snapshot.planId === normalisePlanId(activePlanId));
-    localStorage.setItem(currentSnapshotKey(), JSON.stringify(clean));
+    const result = storageWriteJson(currentSnapshotKey(), clean);
+    if (!result.ok) {
+      updateSaveStatus(storageFailureMessage(result));
+      showStorageFailureNotice(result);
+      return false;
+    }
     if (message) updateSaveStatus(message);
+    return true;
   }
 
   function selectedProgressSnapshot() {
@@ -3351,44 +3447,30 @@
   }
 
   function loadPlanContext() {
-    try {
-      const raw = localStorage.getItem(PLAN_CONTEXT_KEY);
-      const parsed = raw ? JSON.parse(raw) : {};
-      return {
-        version: 1,
-        ...parsed,
-        activePlanId: normalisePlanId(parsed.activePlanId || parsed.lastPersonalPlanId || DEFAULT_PERSONAL_PLAN_ID),
-        lastPersonalPlanId: normalisePlanId(parsed.lastPersonalPlanId || parsed.activePlanId || DEFAULT_PERSONAL_PLAN_ID),
-        mode: "personal",
-      };
-    } catch {
-      return {
-        version: 1,
-        activePlanId: DEFAULT_PERSONAL_PLAN_ID,
-        lastPersonalPlanId: DEFAULT_PERSONAL_PLAN_ID,
-        lastPersonalRoute: "dashboard",
-        mode: "personal",
-      };
-    }
+    const parsed = parseStoredJson(storageGetItem(PLAN_CONTEXT_KEY), PLAN_CONTEXT_KEY, (value) => SECURITY?.isPlainObject(value), {});
+    return {
+      version: 1,
+      ...parsed,
+      activePlanId: normalisePlanId(parsed.activePlanId || parsed.lastPersonalPlanId || DEFAULT_PERSONAL_PLAN_ID),
+      lastPersonalPlanId: normalisePlanId(parsed.lastPersonalPlanId || parsed.activePlanId || DEFAULT_PERSONAL_PLAN_ID),
+      lastPersonalRoute: parsed.lastPersonalRoute || "dashboard",
+      mode: "personal",
+    };
   }
 
   function persistPlanContext(patch = {}) {
-    try {
-      const previous = loadPlanContext();
-      const personalPlanId = normalisePlanId(patch.lastPersonalPlanId || activePlanId || previous.lastPersonalPlanId || DEFAULT_PERSONAL_PLAN_ID);
-      localStorage.setItem(PLAN_CONTEXT_KEY, JSON.stringify({
-        version: 1,
-        ...previous,
-        ...patch,
-        mode: "personal",
-        activePlanId: personalPlanId,
-        lastPersonalPlanId: personalPlanId,
-        lastPersonalRoute: patch.lastPersonalRoute || previous.lastPersonalRoute || "dashboard",
-        updatedAt: new Date().toISOString(),
-      }));
-    } catch {
-      // Context is a convenience for switching plans; legacy keys still keep the current plan recoverable.
-    }
+    const previous = loadPlanContext();
+    const personalPlanId = normalisePlanId(patch.lastPersonalPlanId || activePlanId || previous.lastPersonalPlanId || DEFAULT_PERSONAL_PLAN_ID);
+    return storageWriteJson(PLAN_CONTEXT_KEY, {
+      version: 1,
+      ...previous,
+      ...patch,
+      mode: "personal",
+      activePlanId: personalPlanId,
+      lastPersonalPlanId: personalPlanId,
+      lastPersonalRoute: patch.lastPersonalRoute || previous.lastPersonalRoute || "dashboard",
+      updatedAt: new Date().toISOString(),
+    });
   }
 
   function currentPersonalPlanKey(planId = activePlanId) {
@@ -3435,7 +3517,14 @@
   function parseStoredPlanRecord(raw) {
     if (!raw) return null;
     const saved = JSON.parse(raw);
+    SECURITY?.assertSafeData(saved);
+    if (!SECURITY?.isPlainObject(saved)) throw new Error("The saved plan has an unsupported format.");
+    if (saved.version !== undefined && (!Number.isInteger(Number(saved.version)) || Number(saved.version) < 1 || Number(saved.version) > 4)) {
+      throw new Error("The saved plan was created by an unsupported storage version.");
+    }
     if (saved?.plan) {
+      if (!SECURITY?.isPlainObject(saved.plan)) throw new Error("The saved plan data is invalid.");
+      if (saved.savedAt) SECURITY?.assertValidIsoDate(saved.savedAt, "The saved plan date");
       return {
         ...saved,
         plan: migratePlanData(saved.plan),
@@ -3454,16 +3543,18 @@
   function readPersonalDraftRecord(planId = activePlanId) {
     const personalKey = currentPersonalPlanKey(planId);
     try {
-      const namespaced = parseStoredPlanRecord(localStorage.getItem(personalKey));
+      const namespaced = parseStoredPlanRecord(storageGetItem(personalKey));
       if (namespaced?.plan) return namespaced;
-    } catch {
+    } catch (error) {
+      storageIssues.push({ ok: false, operation: "load", key: personalKey, corrupt: true, message: "Saved plan data could not be loaded. The stored copy has been preserved so you can import an earlier backup or start a new plan." });
       // Fall back to legacy below.
     }
     try {
-      const legacy = parseStoredPlanRecord(localStorage.getItem(DRAFT_KEY));
+      const legacy = parseStoredPlanRecord(storageGetItem(DRAFT_KEY));
       if (!legacy?.plan || isBundledSamplePlan(legacy.plan)) return null;
       legacy.plan = ensurePlanIdentity(legacy.plan, { source: "personal", planId });
-      localStorage.setItem(personalKey, JSON.stringify({
+      if (storageIssues.some((issue) => issue.key === personalKey && issue.corrupt)) return legacy;
+      const migrationResult = storageWriteJson(personalKey, {
         version: 4,
         appVersion: APP_VERSION,
         migratedFrom: DRAFT_KEY,
@@ -3471,16 +3562,18 @@
         savedAt: legacy.savedAt || new Date().toISOString(),
         plan: legacy.plan,
         ui: legacy.ui || {},
-      }));
-      persistPlanContext({ lastPersonalPlanId: planId, lastPersonalRoute: legacy.ui?.activeView || "dashboard" });
+      });
+      if (migrationResult.ok) persistPlanContext({ lastPersonalPlanId: planId, lastPersonalRoute: legacy.ui?.activeView || "dashboard" });
+      else storageIssues.push(migrationResult);
       return legacy;
-    } catch {
+    } catch (error) {
+      if (storageGetItem(DRAFT_KEY)) storageIssues.push({ ok: false, operation: "load", key: DRAFT_KEY, corrupt: true, message: "A legacy saved plan could not be loaded. It has not been overwritten." });
       return null;
     }
   }
 
   function writePersonalDraftRecord(message = "") {
-    if (isDemoActive() || isSwitchingPlans) return "";
+    if (isDemoActive() || isSwitchingPlans || dataDeletionActive || STORAGE?.isWriteSuppressed()) return "";
     const savedAt = new Date().toISOString();
     const ui = collectDraftUi();
     const planSnapshot = ensurePlanIdentity(migratePlanData(plan), { source: "personal", planId: activePlanId });
@@ -3500,11 +3593,32 @@
         snapshots: currentSnapshotKey(),
       },
     };
-    localStorage.setItem(currentPersonalPlanKey(), JSON.stringify(payload));
-    localStorage.setItem(DRAFT_KEY, JSON.stringify(payload));
-    localStorage.setItem(LAST_SAVED_KEY, savedAt);
+    const previousContext = loadPlanContext();
+    const personalPlanId = normalisePlanId(activePlanId || previousContext.lastPersonalPlanId || DEFAULT_PERSONAL_PLAN_ID);
+    const contextPayload = {
+      version: 1,
+      ...previousContext,
+      mode: "personal",
+      activePlanId: personalPlanId,
+      lastPersonalPlanId: personalPlanId,
+      lastPersonalRoute: activeView || previousContext.lastPersonalRoute || "dashboard",
+      updatedAt: savedAt,
+    };
+    const result = storageWriteBatch([
+        { key: currentPersonalPlanKey(), value: payload },
+        { key: DRAFT_KEY, value: payload },
+        { key: LAST_SAVED_KEY, value: savedAt, json: false },
+        { key: PLAN_CONTEXT_KEY, value: contextPayload },
+      ]);
+    if (!result.ok) {
+      planHasUnsavedChanges = true;
+      updateSaveStatus(storageFailureMessage(result));
+      showStorageFailureNotice(result);
+      return "";
+    }
     restoredDraftUi = ui;
-    persistPlanContext({ lastPersonalPlanId: activePlanId, lastPersonalRoute: activeView || "dashboard" });
+    planHasUnsavedChanges = false;
+    recordSuccessfulDurableSave(savedAt);
     if (message) updateSaveStatus(message);
     return savedAt;
   }
@@ -3559,26 +3673,33 @@
   function saveDraft(message = "") {
     if (isDemoActive()) {
       updateSaveStatus(message || "Sample Plan only. Your personal plan has not been changed.");
-      return;
+      return false;
     }
-    persistDraft();
-    updateSaveStatus(message);
+    const savedAt = persistDraft();
+    if (!savedAt) return false;
+    if (message) updateSaveStatus(message);
+    showDurabilityPromptIfNeeded();
+    return true;
   }
 
   function autosavePlan() {
     if (isDemoActive() || isSwitchingPlans) {
       updateSaveStatus("Sample Plan only. Changes here are not saved to your personal plan.");
-      return;
+      return false;
     }
+    planHasUnsavedChanges = true;
     markPersonalPlanCreated();
     updateSaveStatus("Saving...");
-    persistDraft();
+    const savedAt = persistDraft();
+    if (!savedAt) return false;
     renderSamplePlanOptions();
     window.clearTimeout(saveStatusTimer);
     saveStatusTimer = window.setTimeout(() => {
       updateSaveStatus("All changes saved");
       saveStatusTimer = window.setTimeout(() => updateSaveStatus(), 1800);
     }, 180);
+    showDurabilityPromptIfNeeded();
+    return true;
   }
 
   function formatLastSaved(value) {
@@ -3591,7 +3712,7 @@
   }
 
   function updateSaveStatus(message = "") {
-    const lastSaved = localStorage.getItem(LAST_SAVED_KEY);
+    const lastSaved = storageGetItem(LAST_SAVED_KEY);
     const formatted = formatLastSaved(lastSaved);
     const text = message || (lastSaved ? `Last saved: ${formatted}` : "Not saved yet.");
     const status = document.getElementById("wizardSaveStatus");
@@ -3610,33 +3731,42 @@
 
   function loadScenarios() {
     if (isDemoActive()) return sampleScenarioList(plan);
-    try {
-      const raw = localStorage.getItem(SCENARIO_KEY);
-      return raw ? migrateScenarioList(JSON.parse(raw)).filter((scenario) => scenario.source !== "sample") : [];
-    } catch {
-      return [];
-    }
+    const parsed = parseStoredJson(storageGetItem(SCENARIO_KEY), SCENARIO_KEY, Array.isArray, []);
+    return migrateScenarioList(parsed).filter((scenario) => scenario.source !== "sample");
   }
 
   function saveScenarios(scenarios) {
     if (isDemoActive() || isSwitchingPlans) {
       updateSaveStatus("Sample Plan scenarios are temporary and were not saved to your personal plans.");
-      return;
+      return false;
     }
-    localStorage.setItem(SCENARIO_KEY, JSON.stringify(migrateScenarioList(scenarios).filter((scenario) => scenario.source !== "sample")));
+    const result = storageWriteJson(SCENARIO_KEY, migrateScenarioList(scenarios).filter((scenario) => scenario.source !== "sample"));
+    if (!result.ok) {
+      updateSaveStatus(storageFailureMessage(result));
+      showStorageFailureNotice(result);
+      return false;
+    }
+    return true;
   }
 
   function loadWeeklyPlan() {
     if (isDemoMode) return null;
     try {
-      const namespaced = localStorage.getItem(currentPersonalWeeklyPlanKey());
-      if (namespaced) return window.FFSWeeklyPlan.migrate(JSON.parse(namespaced));
-      const raw = localStorage.getItem(WEEKLY_PLAN_KEY);
+      const namespaced = storageGetItem(currentPersonalWeeklyPlanKey());
+      if (namespaced) {
+        const parsed = parseStoredJson(namespaced, currentPersonalWeeklyPlanKey(), (value) => SECURITY?.isPlainObject(value), null);
+        return parsed ? window.FFSWeeklyPlan.migrate(parsed) : null;
+      }
+      const raw = storageGetItem(WEEKLY_PLAN_KEY);
       if (!raw) return null;
-      const migrated = window.FFSWeeklyPlan.migrate(JSON.parse(raw));
-      localStorage.setItem(currentPersonalWeeklyPlanKey(), JSON.stringify(migrated));
+      const parsed = parseStoredJson(raw, WEEKLY_PLAN_KEY, (value) => SECURITY?.isPlainObject(value), null);
+      if (!parsed) return null;
+      const migrated = window.FFSWeeklyPlan.migrate(parsed);
+      const migrationResult = storageWriteJson(currentPersonalWeeklyPlanKey(), migrated);
+      if (!migrationResult.ok) storageIssues.push(migrationResult);
       return migrated;
     } catch {
+      storageIssues.push({ ok: false, operation: "load", key: currentPersonalWeeklyPlanKey(), corrupt: true, message: "Saved Weekly Plan data could not be loaded. The stored copy has been preserved; import a Weekly Plan backup to recover it." });
       return null;
     }
   }
@@ -3644,24 +3774,41 @@
   function saveWeeklyPlan(message = "") {
     if (isDemoActive() || isSwitchingPlans) {
       if (message) updateSaveStatus("Sample Plan weekly changes are temporary and were not saved to your personal plan.");
-      return;
+      return false;
     }
     if (!weeklyPlan) {
-      localStorage.removeItem(currentPersonalWeeklyPlanKey());
-      localStorage.removeItem(WEEKLY_PLAN_KEY);
-      return;
+      const result = storageWriteBatch([{ key: currentPersonalWeeklyPlanKey(), remove: true }, { key: WEEKLY_PLAN_KEY, remove: true }]);
+      if (!result.ok) updateSaveStatus(storageFailureMessage(result));
+      if (!result.ok) showStorageFailureNotice(result);
+      return result.ok;
     }
     weeklyPlan.updatedAt = new Date().toISOString();
     const payload = window.FFSWeeklyPlan.migrate({
       ...weeklyPlan,
       planId: normalisePlanId(activePlanId),
     });
-    localStorage.setItem(currentPersonalWeeklyPlanKey(), JSON.stringify(payload));
-    localStorage.setItem(WEEKLY_PLAN_KEY, JSON.stringify(payload));
+    const result = storageWriteBatch([{ key: currentPersonalWeeklyPlanKey(), value: payload }, { key: WEEKLY_PLAN_KEY, value: payload }]);
+    if (!result.ok) {
+      updateSaveStatus(storageFailureMessage(result));
+      showStorageFailureNotice(result);
+      return false;
+    }
     if (message) updateSaveStatus(message);
+    return true;
   }
 
   function resetWeeklyPlanStorage(message = "Weekly Plan reset.") {
+    if (!isDemoActive()) {
+      const result = storageWriteBatch([
+        { key: currentPersonalWeeklyPlanKey(), remove: true },
+        { key: WEEKLY_PLAN_KEY, remove: true },
+      ], { allowWhileSuppressed: dataDeletionActive });
+      if (!result.ok) {
+        updateSaveStatus(storageFailureMessage(result));
+        showStorageFailureNotice(result);
+        return false;
+      }
+    }
     weeklyPlan = null;
     generatedWeeklyPlanner = null;
     weeklyEditingWeek = null;
@@ -3669,11 +3816,8 @@
     weeklyPlanUiState.isTimingSetupExpanded = null;
     editingTimingItemId = null;
     timingEditDraft = null;
-    if (!isDemoActive()) {
-      localStorage.removeItem(currentPersonalWeeklyPlanKey());
-      localStorage.removeItem(WEEKLY_PLAN_KEY);
-    }
     updateSaveStatus(message);
+    return true;
   }
 
   function householdNameForFile() {
@@ -3684,12 +3828,9 @@
   }
 
   function safeFilename(value, extension) {
-    const base = String(value || "Financial-Freedom")
-      .replace(/[^a-z0-9-_]+/gi, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-|-$/g, "")
-      .slice(0, 80) || "Financial-Freedom";
-    return `${base}.${extension}`;
+    if (SECURITY?.safeFilename) return SECURITY.safeFilename(value, extension);
+    const base = String(value || "Financial-Freedom").replace(/[^a-z0-9-_]+/gi, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").slice(0, 80) || "Financial-Freedom";
+    return `${base}.${String(extension || "").replace(/[^a-z0-9]/gi, "")}`;
   }
 
   function downloadBlob(blob, filename) {
@@ -3703,11 +3844,138 @@
     window.setTimeout(() => URL.revokeObjectURL(url), 1200);
   }
 
-  function exportPlanJson() {
+  function showDurabilityNotice(message, actions = []) {
+    const notice = document.getElementById("durabilityNotice");
+    if (!notice) return;
+    notice.replaceChildren();
+    const text = document.createElement("span");
+    text.textContent = message;
+    notice.appendChild(text);
+    actions.forEach(({ label, action }) => {
+      const button = document.createElement("button");
+      button.className = "btn";
+      button.type = "button";
+      button.dataset.durabilityAction = action;
+      button.textContent = label;
+      notice.appendChild(button);
+    });
+    notice.classList.remove("hidden");
+  }
+
+  function hideDurabilityNotice() {
+    document.getElementById("durabilityNotice")?.classList.add("hidden");
+  }
+
+  function showStorageFailureNotice(result) {
+    const message = storageFailureMessage(result);
+    showDurabilityNotice(message, [
+      { label: "Export backup", action: "export" },
+      { label: "Try saving again", action: "retry-save" },
+      { label: "Import an earlier backup", action: "import" },
+    ]);
+  }
+
+  function openDurabilityDialog({ title, body, actions }) {
+    const modal = document.getElementById("durabilityDialog");
+    if (!modal) return;
+    const titleElement = document.getElementById("durabilityDialogTitle");
+    const bodyElement = document.getElementById("durabilityDialogBody");
+    const actionsElement = document.getElementById("durabilityDialogActions");
+    if (titleElement) titleElement.textContent = title;
+    if (bodyElement) bodyElement.textContent = body;
+    if (actionsElement) {
+      actionsElement.replaceChildren();
+      actions.forEach(({ label, action, primary = false }) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = primary ? "btn btn-primary" : "btn";
+        button.dataset.durabilityAction = action;
+        button.textContent = label;
+        actionsElement.appendChild(button);
+      });
+    }
+    modal.classList.remove("hidden");
+    actionsElement?.querySelector("button")?.focus();
+  }
+
+  function closeDurabilityDialog() {
+    document.getElementById("durabilityDialog")?.classList.add("hidden");
+  }
+
+  function recordBackupExportInitiated(type = "complete-plan") {
+    const now = new Date().toISOString();
+    const current = loadDurabilityState();
+    saveDurabilityState({
+      ...current,
+      lastExportInitiatedAt: now,
+      lastExportType: type,
+      nextReminderAt: addDaysIso(now, BACKUP_REMINDER_DAYS),
+    });
+  }
+
+  function showDurabilityPromptIfNeeded() {
+    if (!backupPromptPending || dataDeletionActive || isDemoActive()) return;
+    const state = loadDurabilityState();
+    if (state.firstSavePromptShownAt) {
+      backupPromptPending = false;
+      return;
+    }
+    const shownAt = new Date().toISOString();
+    saveDurabilityState({ ...state, firstSavePromptShownAt: shownAt });
+    backupPromptPending = false;
+    openDurabilityDialog({
+      title: "Back up your Financial Freedom plan",
+      body: "Your plan is stored in this browser on this device. Clearing browser data can remove it, and it will not automatically appear on another device. Exporting a backup is recommended.",
+      actions: [
+        { label: "Export backup", action: "export", primary: true },
+        { label: "Remind me later", action: "remind-later" },
+        { label: "Dismiss", action: "dismiss-prompt" },
+      ],
+    });
+  }
+
+  function maybeShowBackupReminder() {
+    if (backupReminderShownThisSession || dataDeletionActive || isDemoActive()) return;
+    const state = loadDurabilityState();
+    if (!state.lastSuccessfulSaveAt || !state.nextReminderAt || Date.now() < new Date(state.nextReminderAt).getTime()) return;
+    backupReminderShownThisSession = true;
+    showDurabilityNotice("Your plan is stored only in this browser. Consider exporting a current backup before clearing browser data or changing devices.", [
+      { label: "Export backup", action: "export" },
+      { label: "Remind me later", action: "remind-later" },
+      { label: "Dismiss", action: "dismiss-reminder" },
+    ]);
+  }
+
+  function showPendingStorageIssues() {
+    const issue = storageIssues.find((item) => item.corrupt || item.operation === "read");
+    if (!issue) return;
+    showDurabilityNotice(issue.message, [
+      { label: "Import backup", action: "import" },
+      { label: "Start new plan", action: "new-plan" },
+      { label: "Continue current plan", action: "close-notice" },
+    ]);
+  }
+
+  function openPolicyPage(page) {
+    const modal = document.getElementById("policyDialog");
+    const title = document.getElementById("policyDialogTitle");
+    if (!modal || !title) return;
+    title.textContent = page === "terms" ? "Terms of Use" : "Privacy";
+    modal.classList.remove("hidden");
+    modal.querySelector("[data-policy-close]")?.focus();
+  }
+
+  function closePolicyPage() {
+    document.getElementById("policyDialog")?.classList.add("hidden");
+  }
+
+  function buildCompletePlanBackupPayload() {
     syncCollectionsToLegacy();
-    const payload = {
+    return {
       app: "Financial Freedom",
+      sourceApp: "Financial Freedom",
       type: "financial-freedom-plan-export",
+      backupType: "complete-local-plan",
       appVersion: APP_VERSION,
       calculationVersion: CALCULATION_VERSION,
       financialYear: FINANCIAL_YEAR,
@@ -3730,16 +3998,31 @@
       ui: collectDraftUi(),
       userState,
     };
+  }
+
+  function exportPlanJson() {
+    const payload = buildCompletePlanBackupPayload();
     const json = JSON.stringify(payload, null, 2);
     const blob = new Blob([json], { type: "application/json" });
     downloadBlob(blob, safeFilename(`Financial-Freedom-Plan-${householdNameForFile()}`, "json"));
-    updateSaveStatus("Plan exported as a JSON backup.");
+    recordBackupExportInitiated("complete-plan");
+    updateSaveStatus("Complete backup download initiated. Keep the downloaded file somewhere you can find it later.");
   }
 
   function validateImportedPlanPayload(payload) {
-    if (!payload || typeof payload !== "object") throw new Error("The selected file is not a valid Financial Freedom plan export.");
+    SECURITY?.assertSafeData(payload);
+    const isPlainObject = SECURITY?.isPlainObject || ((value) => Boolean(value) && typeof value === "object" && !Array.isArray(value));
+    if (!isPlainObject(payload)) throw new Error("The selected file is not a valid Financial Freedom plan export.");
+    if (payload.type && payload.type !== "financial-freedom-plan-export") throw new Error("The selected file is not a Financial Freedom plan export.");
+    SECURITY?.assertSupportedVersion(payload.schemaVersion, { label: "Financial Freedom plan backup", minimum: 1, maximum: EXPORT_SCHEMA_VERSION, allowMissing: true });
+    if (payload.exportedAt) SECURITY?.assertValidIsoDate(payload.exportedAt, "The backup export date");
     const rawPlan = payload.plan || (payload.personal || payload.assets ? payload : null);
-    if (!rawPlan || typeof rawPlan !== "object") throw new Error("No plan data was found in the selected file.");
+    if (!isPlainObject(rawPlan)) throw new Error("No plan data was found in the selected file.");
+    if (payload.scenarios !== undefined && !Array.isArray(payload.scenarios)) throw new Error("The backup contains an invalid scenarios section.");
+    if (Array.isArray(payload.scenarios) && payload.scenarios.some((item) => !item || typeof item !== "object" || Array.isArray(item))) throw new Error("The backup contains an invalid scenario.");
+    if (payload.snapshots !== undefined && !Array.isArray(payload.snapshots)) throw new Error("The backup contains an invalid financial history section.");
+    if (payload.ui !== undefined && (!payload.ui || typeof payload.ui !== "object" || Array.isArray(payload.ui))) throw new Error("The backup contains invalid interface settings.");
+    if (payload.userState !== undefined && (!payload.userState || typeof payload.userState !== "object" || Array.isArray(payload.userState))) throw new Error("The backup contains invalid user settings.");
     return {
       plan: migratePlanData(rawPlan),
       scenarios: migrateScenarioList(payload.scenarios || []),
@@ -3764,24 +4047,79 @@
       updateSaveStatus("Import cancelled.");
       return;
     }
-    plan = imported.plan;
-    activePlanId = normalisePlanId(imported.plan?.meta?.planId || payload.planId || activePlanId || DEFAULT_PERSONAL_PLAN_ID);
+    const previousPlanId = activePlanId;
+    const importedPlanId = normalisePlanId(imported.plan?.meta?.planId || payload.planId || previousPlanId || DEFAULT_PERSONAL_PLAN_ID);
+    const importedPlan = ensurePlanIdentity(imported.plan, { source: "personal", planId: importedPlanId });
+    const importedUi = imported.ui || {};
+    const savedAt = new Date().toISOString();
+    const importedUserState = {
+      version: 1,
+      ...userState,
+      ...imported.userState,
+      hasCreatedPersonalPlan: true,
+      createdAt: imported.userState?.createdAt || userState.createdAt || savedAt,
+      lastPersonalPlanId: importedPlanId,
+      lastPersonalRoute: importedUi.activeView || "dashboard",
+      updatedAt: savedAt,
+    };
+    const importedWeeklyPlan = imported.weeklyPlan ? window.FFSWeeklyPlan.migrate({ ...imported.weeklyPlan, planId: importedPlanId }) : null;
+    const importedSnapshots = imported.snapshots.map((snapshot) => ({ ...recalculateSnapshot(snapshot), planId: importedPlanId }));
+    const draftPayload = {
+      version: 4,
+      appVersion: APP_VERSION,
+      calculationVersion: CALCULATION_VERSION,
+      financialYear: FINANCIAL_YEAR,
+      savedAt,
+      planId: importedPlanId,
+      plan: importedPlan,
+      ui: importedUi,
+      storageKeys: {
+        personalPlan: currentPersonalPlanKey(importedPlanId),
+        legacyDraft: DRAFT_KEY,
+        weeklyPlan: currentPersonalWeeklyPlanKey(importedPlanId),
+        snapshots: currentSnapshotKey(importedPlanId),
+      },
+    };
+    const contextPayload = {
+      version: 1,
+      mode: "personal",
+      activePlanId: importedPlanId,
+      lastPersonalPlanId: importedPlanId,
+      lastPersonalRoute: importedUi.activeView || "dashboard",
+      updatedAt: savedAt,
+    };
+    const previousDeletionState = dataDeletionActive;
+    const previousUnsavedState = planHasUnsavedChanges;
+    dataDeletionActive = false;
+    STORAGE?.resumeWrites();
+    const writeResult = storageWriteBatch([
+      { key: currentPersonalPlanKey(importedPlanId), value: draftPayload },
+      { key: DRAFT_KEY, value: draftPayload },
+      { key: LAST_SAVED_KEY, value: savedAt, json: false },
+      { key: PLAN_CONTEXT_KEY, value: contextPayload },
+      { key: USER_STATE_KEY, value: importedUserState },
+      { key: SCENARIO_KEY, value: imported.scenarios },
+      importedWeeklyPlan ? { key: currentPersonalWeeklyPlanKey(importedPlanId), value: importedWeeklyPlan } : { key: currentPersonalWeeklyPlanKey(importedPlanId), remove: true },
+      importedWeeklyPlan ? { key: WEEKLY_PLAN_KEY, value: importedWeeklyPlan } : { key: WEEKLY_PLAN_KEY, remove: true },
+      { key: currentSnapshotKey(importedPlanId), value: importedSnapshots },
+    ]);
+    if (!writeResult.ok) {
+      activePlanId = previousPlanId;
+      dataDeletionActive = previousDeletionState;
+      planHasUnsavedChanges = previousUnsavedState;
+      updateSaveStatus(storageFailureMessage(writeResult));
+      showStorageFailureNotice(writeResult);
+      return;
+    }
+    activePlanId = importedPlanId;
     isDemoMode = false;
-    plan = ensurePlanIdentity(plan, { source: "personal", planId: activePlanId });
+    plan = importedPlan;
     generatedWeeklyPlanner = null;
-    weeklyPlan = imported.weeklyPlan;
-    restoredDraftUi = imported.ui || {};
-    if (imported.userState?.hasCreatedPersonalPlan || restoredDraftUi.hasCreatedPersonalPlan || !isBundledSamplePlan(imported.plan)) {
-      markPersonalPlanCreated();
-    }
-    saveScenarios(imported.scenarios);
-    if (imported.snapshots?.length) saveFinancialSnapshots(imported.snapshots.map((snapshot) => ({ ...snapshot, planId: activePlanId })));
-    if (weeklyPlan) saveWeeklyPlan();
-    else {
-      localStorage.removeItem(currentPersonalWeeklyPlanKey());
-      localStorage.removeItem(WEEKLY_PLAN_KEY);
-    }
-    saveDraft("Plan imported successfully.");
+    weeklyPlan = importedWeeklyPlan;
+    restoredDraftUi = importedUi;
+    userState = importedUserState;
+    planHasUnsavedChanges = false;
+    recordSuccessfulDurableSave(savedAt);
     renderAll();
     showWorkspace(activeView || "dashboard");
     updateSaveStatus("Plan imported successfully.");
@@ -3789,12 +4127,19 @@
 
   function importPlanJsonFile(file) {
     if (!file) return;
+    if (Number(file.size) > MAX_IMPORT_BYTES) {
+      updateSaveStatus(`Import failed. Choose a Financial Freedom backup smaller than ${Math.floor(MAX_IMPORT_BYTES / 1024 / 1024)} MB.`);
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        importPlanPayload(JSON.parse(String(reader.result || "")));
-      } catch {
-        updateSaveStatus("Import failed. Choose a valid Financial Freedom JSON export.");
+        const payload = SECURITY?.parseJsonImport
+          ? SECURITY.parseJsonImport(String(reader.result || ""), { maxBytes: MAX_IMPORT_BYTES })
+          : JSON.parse(String(reader.result || ""));
+        importPlanPayload(payload);
+      } catch (error) {
+        updateSaveStatus(error?.message || "Import failed. Choose a valid Financial Freedom JSON export.");
       }
     };
     reader.onerror = () => updateSaveStatus("Import failed. The selected file could not be read.");
@@ -4126,6 +4471,7 @@
     const limitMessage = aiUsageLimitMessage();
     const canGenerate = completion.complete
       && aiInsightsUi.consentAccepted
+      && aiInsightsUi.dataConsentAccepted
       && !aiInsightsUi.isLoading
       && !limitMessage;
     body.innerHTML = `
@@ -4133,12 +4479,12 @@
         <div>
           <span class="ai-beta-label">Private Beta</span>
           <h2 id="aiInsightsTitle">Your Financial Freedom Insights</h2>
-          <p>Your financial plan will be securely analysed to provide educational insights, highlight financial pressure points and suggest scenarios you may wish to explore.</p>
+          <p>If enabled in future, a reduced financial summary will be sent through the Financial Freedom server route to a third-party AI provider to prepare educational insights.</p>
         </div>
       </div>
       <div class="ai-privacy-note">
         <strong>Privacy notice</strong>
-        <p>Only an anonymous financial summary is sent for review. Names, contact details, account numbers, tax file numbers and unrelated personal notes are not included.</p>
+        <p>Direct identifiers such as names, contact details, account numbers and tax file numbers are excluded, but the reduced summary may still contain sensitive financial information.</p>
         <p>For your privacy, do not enter names, account numbers, tax file numbers or other identifying information into free-text fields.</p>
       </div>
       ${completion.complete ? "" : `<div class="ai-warning"><strong>Complete your financial plan to unlock AI Insights.</strong><p>${escapeHtml(completion.message)}</p></div>`}
@@ -4147,6 +4493,10 @@
       <label class="ai-consent">
         <input id="aiInsightsConsent" type="checkbox"${aiInsightsUi.consentAccepted ? " checked" : ""}>
         <span>I understand that this report provides general educational information and scenario guidance only. It does not provide personal financial product advice or replace advice from a licensed financial adviser.</span>
+      </label>
+      <label class="ai-consent">
+        <input id="aiDataConsent" type="checkbox"${aiInsightsUi.dataConsentAccepted ? " checked" : ""}>
+        <span>TODO: AI data-transfer consent wording pending professional review.</span>
       </label>
       <div class="ai-actions">
         <button class="btn btn-primary" type="button" data-ai-insights-action="generate" ${canGenerate ? "" : "disabled"}>
@@ -4181,6 +4531,11 @@
     if (aiInsightsUi.isLoading) return;
     if (!aiInsightsConfig.enabled) {
       aiInsightsUi.error = aiInsightsConfig.message || "AI insights are currently unavailable. You can continue using the financial planning tools.";
+      renderAiInsightsModal();
+      return;
+    }
+    if (!aiInsightsUi.consentAccepted || !aiInsightsUi.dataConsentAccepted) {
+      aiInsightsUi.error = "Select both consent acknowledgements before generating AI Insights.";
       renderAiInsightsModal();
       return;
     }
@@ -5683,18 +6038,22 @@
       : `Projected Financial Freedom in about ${row.year} year${row.year === 1 ? "" : "s"}.`;
   }
 
-  function dashboardReadyState(result) {
-    const readiness = financialJourneyReadiness(plan, result);
-    const hasPlanData = !isBlankPlan(plan) && isEngagementPlanReady(result);
+  function personalisedResultsReadiness(planData, resultInput) {
+    const planCandidate = planData || plan;
+    const result = resultInput || CALC.calculatePlan(planCandidate);
+    const readiness = financialJourneyReadiness(planCandidate, result);
+    const hasPlanData = !isBlankPlan(planCandidate) && isEngagementPlanReady(result);
     return {
       hasPlanData,
-      readiness,
-      ready: hasPlanData && readiness.complete,
+      complete: readiness.complete,
+      missingSections: [...readiness.missingSections],
+      message: readiness.message,
+      readyForPersonalisedResults: hasPlanData && readiness.complete,
     };
   }
 
   function dashboardMissionHtml(result, readyState) {
-    if (!readyState.ready) {
+    if (!readyState.readyForPersonalisedResults) {
       return `
         <article class="dashboard-compact-card dashboard-mission-card">
           <span class="metric-label">Weekly Mission</span>
@@ -5782,7 +6141,7 @@
     const labelId = `${idPrefix}FutureAgeLabel`;
     const inputId = `${idPrefix}FutureAgeInput`;
     const resultsId = `${idPrefix}FutureYouResults`;
-    if (!readyState.ready) {
+    if (!readyState.readyForPersonalisedResults) {
       return `
         <article class="dashboard-compact-card dashboard-future-card">
           <span class="metric-label">Future You</span>
@@ -5815,7 +6174,7 @@
   }
 
   function dashboardSnapshotHtml(result, readyState, percent, annualSurplus, passiveIncome) {
-    if (!readyState.ready) {
+    if (!readyState.readyForPersonalisedResults) {
       return `
         <article class="dashboard-compact-card dashboard-snapshot-card">
           <span class="metric-label">Snapshot</span>
@@ -5844,7 +6203,7 @@
   }
 
   function dashboardAiCoachHtml(readyState) {
-    if (!readyState.ready) {
+    if (!readyState.readyForPersonalisedResults) {
       return `
         <article class="dashboard-compact-card dashboard-ai-card">
           <span class="metric-label">AI Coach</span>
@@ -5909,8 +6268,8 @@
     const monthlySurplus = estimatedCashflow(result) / 12;
     const milestone = nextMilestone(result, percent);
     const progressWidth = Math.min(100, Math.max(0, percent));
-    const readyState = dashboardReadyState(result);
-    const dashboardReady = readyState.ready;
+    const readyState = personalisedResultsReadiness(plan, result);
+    const dashboardReady = readyState.readyForPersonalisedResults;
     const greetingName = engagementGreetingName();
     const dashboardTitle = document.getElementById("dashboardTitle");
     const dashboardSubtitle = document.getElementById("dashboardSubtitle");
@@ -5918,6 +6277,7 @@
     const scoreRing = document.querySelector(".score-ring");
     const scoreRingLabel = document.querySelector(".score-ring span");
     const progressSection = document.querySelector(".freedom-progress-section");
+    const dashboardStageCard = progressSection?.querySelector(".freedom-stage-card");
     const nextMilestoneCard = document.querySelector(".next-milestone-card");
 
     progressSection?.classList.toggle("dashboard-journey-simple", true);
@@ -5928,9 +6288,9 @@
       heroScore.textContent = plainPercent(percent);
       if (scoreRingLabel) scoreRingLabel.textContent = "Financial Freedom";
       if (scoreRing) scoreRing.style.borderColor = percent >= 100 ? "#bdebd7" : percent >= 75 ? "#f3d08c" : "#dbe4ee";
-      document.querySelector(".freedom-stage-card").innerHTML = `
+      if (dashboardStageCard) dashboardStageCard.innerHTML = `
         <div class="stage-heading-row">
-          <span class="metric-label">Financial Freedom Journey</span>
+          <span class="metric-label">Financial Stage</span>
           ${infoButtonHtml("financialStage", "financial stages")}
         </div>
         <div class="dashboard-stage-summary">
@@ -5952,21 +6312,21 @@
         </div>
       `;
     } else {
-      const missing = readyState.readiness.missingSections.slice(0, 4).join(", ");
+      const missing = readyState.missingSections.slice(0, 4).join(", ");
       dashboardTitle.textContent = names ? `${engagementGreeting()}, ${greetingName}. Complete your financial plan to calculate your Dashboard.` : "Complete your financial setup to see your Dashboard.";
-      dashboardSubtitle.textContent = missing ? `Still needed: ${missing}${readyState.readiness.missingSections.length > 4 ? " and more" : ""}.` : "Enter your own details or load the sample to see the dashboard come alive.";
+      dashboardSubtitle.textContent = missing ? `Still needed: ${missing}${readyState.missingSections.length > 4 ? " and more" : ""}.` : "Enter your own details or load the sample to see the dashboard come alive.";
       heroScore.textContent = "--";
       if (scoreRingLabel) scoreRingLabel.textContent = "Setup needed";
       if (scoreRing) scoreRing.style.borderColor = "#dbe4ee";
-      document.querySelector(".freedom-stage-card").innerHTML = `
+      if (dashboardStageCard) dashboardStageCard.innerHTML = `
         <div class="stage-heading-row">
-          <span class="metric-label">Financial Freedom Journey</span>
+          <span class="metric-label">Financial Stage</span>
           ${infoButtonHtml("financialStage", "financial stages")}
         </div>
         <strong id="freedomStageLabel">Complete setup</strong>
         <p id="freedomStageText">Complete your Financial Plan to calculate your stage, Financial Freedom progress and next weekly actions.</p>
         <div class="progress-track progress-track-large" aria-label="Financial Freedom progress unavailable"><span id="freedomProgressBar" style="width:0%"></span></div>
-        <p id="freedomPassiveText" class="progress-caption">${escapeHtml(readyState.readiness.message)}</p>
+        <p id="freedomPassiveText" class="progress-caption">${escapeHtml(readyState.message)}</p>
         <button class="btn btn-primary" type="button" data-engagement-action="setup">Continue Setup</button>
       `;
     }
@@ -6624,7 +6984,7 @@
 
     const progress = engagementProgress(result);
     const stageInfo = engagementStageInfo(result);
-    const journeyReadiness = financialJourneyReadiness(plan, result);
+    const readinessState = personalisedResultsReadiness(plan, result);
     const goal = primaryShortTermGoal(result);
     const mission = currentWeeklyMission(result);
     const todayWin = engagementTodayWin(result, goal, mission);
@@ -6636,7 +6996,7 @@
       ? Math.max(0, goalRemaining(goal) / Math.max(1, Math.ceil((new Date(`${goal.targetDate}T00:00:00`).getTime() - Date.now()) / (7 * 24 * 60 * 60 * 1000))))
       : Number(goal?.recurringAmount) || 0;
     const displayName = engagementGreetingName();
-    const hasPlanData = isEngagementPlanReady(result);
+    const hasPlanData = readinessState.hasPlanData;
     const previousStage = stageInfo.index > 0 ? engagementJourneyStages[stageInfo.index - 1] : null;
     const nextStage = engagementJourneyStages[stageInfo.index + 1] || null;
     const nextStageProgress = nextStage ? Math.max(0, Math.min(100, progress.financialIndependence)) : 100;
@@ -6645,8 +7005,8 @@
       : goal && goalRequiredWeekly > 0
         ? `Projected completion: about ${Math.ceil(goalRemaining(goal) / Math.max(1, goalRequiredWeekly))} week${Math.ceil(goalRemaining(goal) / Math.max(1, goalRequiredWeekly)) === 1 ? "" : "s"}`
         : "Projected completion: add a contribution plan";
-    const homeMode = !hasPlanData || !journeyReadiness.complete ? "placeholder" : "personalised";
-    const homeReadyState = { hasPlanData, readiness: journeyReadiness, ready: journeyReadiness.complete };
+    const homeMode = readinessState.readyForPersonalisedResults ? "personalised" : "placeholder";
+    const homeReadyState = readinessState;
     const shouldAnimateModeChange = container.dataset.engagementMode && container.dataset.engagementMode !== homeMode;
     container.dataset.engagementMode = homeMode;
     if (shouldAnimateModeChange) {
@@ -6680,14 +7040,14 @@
       return;
     }
 
-    if (!journeyReadiness.complete) {
+    if (!readinessState.complete) {
       container.innerHTML = `
         <section class="engagement-hero engagement-empty-hero">
           <div class="engagement-hero-copy">
             <span class="metric-label">Financial journey</span>
             <h2>${escapeHtml(engagementGreeting())}, ${escapeHtml(displayName)}</h2>
             <p>Complete your financial plan to calculate your journey.</p>
-            <small>${escapeHtml(journeyReadiness.missingSections.slice(0, 4).join(", "))}${journeyReadiness.missingSections.length > 4 ? " and more" : ""}</small>
+            <small>${escapeHtml(readinessState.missingSections.slice(0, 4).join(", "))}${readinessState.missingSections.length > 4 ? " and more" : ""}</small>
             <div class="engagement-button-row">
               <button class="btn btn-primary" type="button" data-engagement-action="setup">Continue Setup</button>
             </div>
@@ -6714,7 +7074,7 @@
             <div class="engagement-progress-track"><span style="width:${progress.financialFreedom}%"></span></div>
           </div>
           <div class="engagement-hero-facts">
-            <div><span>Current stage</span><strong>${escapeHtml(stageInfo.stage.name)}</strong></div>
+            <div><span>Current journey step</span><strong>${escapeHtml(stageInfo.stage.name)}</strong></div>
             <div><span>Estimated Financial Independence</span><strong>${escapeHtml(estimatedFinancialIndependenceLabel(result))}</strong></div>
             <div><span>This week</span><strong>${weeklyAmount > 0 ? `${money(weeklyAmount)} recorded toward goals` : "No progress recorded this week yet."}</strong></div>
           </div>
@@ -6758,7 +7118,7 @@
           <span class="metric-label">Your Journey</span>
           <div class="engagement-compact-stage-row">
             ${previousStage ? `<div><span>Previous</span><strong>${escapeHtml(previousStage.name)}</strong></div>` : ""}
-            <div class="current"><span>Current stage</span><strong>${escapeHtml(stageInfo.stage.name)}</strong></div>
+            <div class="current"><span>Current journey step</span><strong>${escapeHtml(stageInfo.stage.name)}</strong></div>
             ${nextStage ? `<div><span>Next</span><strong>${escapeHtml(nextStage.name)}</strong></div>` : `<div><span>Status</span><strong>Financial Freedom</strong></div>`}
           </div>
           <div class="engagement-progress-track" aria-label="${nextStage ? `Progress toward ${nextStage.name} ${plainPercent(nextStageProgress)}` : "Financial Freedom stage reached"}"><span style="width:${nextStage ? Math.max(12, nextStageProgress) : 100}%"></span></div>
@@ -6803,8 +7163,12 @@
   function renderAssumptions(result) {
     const container = document.getElementById("assumptionsList");
     if (!container) return;
+    const governance = CALC.getRuleGovernance({ calculationYear: result.taxEstimate.taxYear });
     const rows = [
-      ["Tax year", result.taxEstimate.taxYear],
+      ["Rates and rules", result.taxEstimate.taxYear],
+      ["Calculation version", governance.calculationVersion],
+      ["Rules last reviewed", governance.rulesLastReviewed],
+      ["Future tax rules", governance.futureRuleAssumption],
       ["Investment return", `${Number(plan.investing.expectedInvestmentReturnPct || 0).toFixed(1)}% per year estimate`],
       ["Super return", `${Number(plan.investing.expectedSuperReturnPct || 0).toFixed(1)}% per year estimate`],
       ["Inflation", `${Number(plan.investing.inflationPct || 0).toFixed(1)}% per year estimate`],
@@ -6816,8 +7180,9 @@
       ["Concessional contributions tax", "15% applied before money is invested in super"],
       ["Safe withdrawal rate", `${Number(plan.investing.safeWithdrawalRatePct || 0).toFixed(1)}% estimate`],
       ["Super access age", `Age ${result.superAccessAge} in this model`],
+      ["Important limitations", governance.deferredLimitations.join(" ")],
     ];
-    container.innerHTML = rows.map(([label, value]) => summaryTile(label, value)).join("");
+    container.innerHTML = `${governance.warning ? `<p class="tax-note status-amber">${escapeHtml(governance.warning)}</p>` : ""}${rows.map(([label, value]) => summaryTile(label, value)).join("")}`;
   }
 
   function renderHelpReview(result) {
@@ -7116,11 +7481,11 @@
     container.innerHTML = `
       <div class="card-subheading">
         <h3>Full Financial Journey</h3>
-        <p>Review the wider journey here while Home stays focused on your current stage and next step.</p>
+        <p>Review the wider journey here while Home stays focused on your current journey step and next step.</p>
       </div>
       <details class="engagement-full-journey-details">
         <summary>
-          <span>${escapeHtml(stageInfo.stage.name)} is your current stage</span>
+          <span>${escapeHtml(stageInfo.stage.name)} is your current Financial Journey Step</span>
           <strong>${nextStage ? `Next: ${escapeHtml(nextStage.name)}` : "Financial Freedom reached"}</strong>
         </summary>
         ${engagementJourneyMapHtml(stageInfo)}
@@ -8019,8 +8384,15 @@
   function renderSemiRetirementSnapshotHtml(viewModel) {
     const key = viewModel.keyResults || {};
     const outlook = semiRetirementOutlookCopy(viewModel);
-    const fullyRetire = semiRetirementPersonTimingLabel(viewModel.people, "fullRetirementAge", "Not modelled");
-    const semiRetire = semiRetirementPersonTimingLabel(viewModel.people, "semiRetirementAge", "No semi-retirement phase");
+    const timing = viewModel.retirementTiming || {};
+    const fullyRetire = timing.fullRetirementValue
+      || semiRetirementPersonTimingLabel(viewModel.people, "fullRetirementAge", "Not modelled");
+    const semiRetirementCards = timing.hasElectedPersonalSemiRetirement
+      ? semiRetirementMetricCard("Semi-retire", timing.personalSemiRetirementValue || "Not modelled", "Personal scenario choice.")
+      : timing.hasHouseholdTransition
+        ? `${semiRetirementMetricCard("Semi-retirement choice", "None selected", "No person elected a personal semi-retirement phase.")}
+           ${semiRetirementMetricCard("Household retirement transition", timing.householdTransition?.value || "Transition modelled", timing.householdTransition?.note || "One person is retired while another is still working.")}`
+        : semiRetirementMetricCard("Semi-retire", "No semi-retirement phase", "The household moves directly from working to full retirement.");
     const debtFree = semiRetirementDebtFreeLabel(viewModel.debtProperty || {});
     const accessibleLast = semiRetirementAccessibleLastLabel(viewModel);
     const lifestyleFundedTo = viewModel.status?.type === "shortfall"
@@ -8038,7 +8410,7 @@
           <button class="btn" type="button" data-semi-action="edit-inputs">Edit Scenario</button>
         </div>
         <div class="semi-retirement-snapshot-grid mt-4">
-          ${semiRetirementMetricCard("Semi-retire", semiRetire, "Scenario-only timing.")}
+          ${semiRetirementCards}
           ${semiRetirementMetricCard("Fully retire", fullyRetire, "Employment income stops at the selected ages.")}
           ${semiRetirementMetricCard("Debt-free", debtFree.value, debtFree.note)}
           ${semiRetirementMetricCard("Investments before super last to", accessibleLast.value, accessibleLast.note, viewModel.status?.type === "shortfall" ? "is-warning" : "")}
@@ -8544,6 +8916,8 @@
           <div>Generated ${escapeHtml(generated)}</div>
           <div>Plan: ${escapeHtml(planName)}</div>
           <div>Scenarios: ${scenarioSet.map((scenario) => escapeHtml(scenario.name)).join(", ")}</div>
+          <div>Calculation version: ${escapeHtml(CALC.CALCULATION_VERSION)}</div>
+          <div>Rates/rules: supported Australian financial-year configurations</div>
         </header>
         <section>
           <h2>Main differences</h2>
@@ -8602,6 +8976,7 @@
           <p>Currency note: lifestyle inputs are entered in today's dollars. Future balances and projected spending outputs are nominal future values where the existing projection engine inflates them.</p>
           <p>Property equity contributes to projected net worth but is not automatically available to fund retirement spending unless a specific strategy releases it.</p>
           <p>Super access ages used in this report are scenario assumptions and are not a legal determination of eligibility to access super.</p>
+          <p>${escapeHtml(CALC.getRuleGovernance().futureRuleAssumption)}</p>
         </section>
       </article>
     `;
@@ -8699,8 +9074,8 @@
     return `
       <section class="semi-retirement-results-section">
         <div class="card-subheading">
-          <h4>Semi-Retirement Funding</h4>
-          <p>These figures include only years where the household is in the semi-retirement phase.</p>
+          <h4>Transition / Semi-Retirement Funding</h4>
+          <p>These figures include every year between fully working and full household retirement, including elected semi-retirement and staggered retirement dates.</p>
         </div>
         <div class="semi-retirement-results-grid compact">
           ${semiRetirementMetricCard("Amount needed from investments", `${money(totalNeeded)} total`, "Projected amount needed from investments and, where available, super to cover the gap between income and spending during semi-retirement.")}
@@ -9395,6 +9770,7 @@
         <details class="semi-retirement-disclaimer">
           <summary>About this projection</summary>
           <p>This projection uses the information and assumptions entered in the app to illustrate possible future outcomes. Results are estimates, not predictions.</p>
+          <p>Supported enacted tax rules are applied for each financial year, then the last supported rule set is held for later years. Future thresholds are not indexed unless enacted.</p>
         </details>
         ${semiRetirementErrorSummaryHtml()}
         <section class="semi-retirement-input-section mt-4" data-semi-retirement-inputs>
@@ -10681,7 +11057,7 @@
     }
     const blob = window.FFSWeeklyPlannerExport.createWorkbookBlob(generatedWeeklyPlanner);
     downloadBlob(blob, safeFilename(`Financial-Freedom-Weekly-Planner-${generatedWeeklyPlanner.planName}`, "xlsx"));
-    updateSaveStatus("Weekly planner Excel downloaded.");
+    updateSaveStatus("Weekly planner Excel download initiated.");
   }
 
   function printWithMode(mode) {
@@ -10841,12 +11217,86 @@
       advance();
       guard += 1;
     }
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    const nextDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    if (item.endDate) {
+      const endDate = new Date(`${item.endDate}T00:00:00`);
+      if (!Number.isNaN(endDate.getTime()) && date > endDate) return "";
+    }
+    return nextDate;
+  }
+
+  function weeklyTimingFutureCustomOverrides(item) {
+    if (!weeklyPlan || item?.active === false) return [];
+    const currentWeek = weeklyPlan.weeks?.[(weeklyPlan.currentWeekNumber || 1) - 1];
+    const startIso = currentWeek?.startDate || weeklyPlan.startDate || item.firstDate || "";
+    const start = new Date(`${startIso}T00:00:00`);
+    const plannerEndIso = weeklyPlan.weeks?.at(-1)?.endDate || "";
+    const plannerEnd = new Date(`${plannerEndIso}T00:00:00`);
+    if (Number.isNaN(start.getTime())) return [];
+    return (weeklyPlan.settings?.occurrenceOverrides || [])
+      .filter((override) => override?.itemId === item.id && override.active !== false)
+      .map((override) => {
+        const dateIso = override.date || override.occurrenceDate || "";
+        const date = new Date(`${dateIso}T00:00:00`);
+        return {
+          dateIso,
+          date,
+          amount: override.amount === undefined ? item.amount : Number(override.amount),
+        };
+      })
+      .filter((override) => !Number.isNaN(override.date.getTime()) && override.date >= start)
+      .filter((override) => Number.isNaN(plannerEnd.getTime()) || override.date <= plannerEnd)
+      .sort((a, b) => a.date - b.date);
+  }
+
+  function weeklyTimingNextDateText(item) {
+    const nextDate = weeklyTimingNextDate(item);
+    if (nextDate) return `Next ${plannerShortDate(nextDate)}`;
+    const customOverrides = weeklyTimingFutureCustomOverrides(item);
+    if (customOverrides.length) {
+      const nextCustom = customOverrides[0];
+      const prefix = item.paidOffLoanTimingStatus?.startsWith("auto-stopped") ? "Regular payments stopped; next custom payment" : "Next custom payment";
+      return `${prefix} ${plannerShortDate(nextCustom.dateIso)}`;
+    }
+    return "No further scheduled payments";
   }
 
   function weeklyTimingFrequencyText(item) {
     const frequency = item.type === "money-in" && item.frequency === "weeklyProvision" ? "weekly" : item.frequency;
     return (weeklyTimingFrequencyOptions.find(([value]) => value === frequency)?.[1] || frequency || "Weekly").toLowerCase();
+  }
+
+  function weeklyTimingReviewNoticeHtml(item) {
+    if (!item.reviewRequired && !item.paidOffLoanTimingStatus) return "";
+    const status = item.paidOffLoanTimingStatus || "review-required";
+    const boundary = item.paidOffLoanTimingEffectiveEndDate || item.endDate || "";
+    const customOverrides = weeklyTimingFutureCustomOverrides(item);
+    const details = [];
+    if (boundary && status.startsWith("auto-stopped")) details.push(`Automatic payments are stopped after ${plannerShortDate(boundary)}.`);
+    if (status === "manual-review" || status === "classifier-unavailable") {
+      details.push(item.reviewRequired
+        ? "This item remains included until you edit or deactivate it."
+        : "This item remains included under your reviewed timing decision.");
+    }
+    if (!item.reviewRequired && item.reviewResolution === "deactivated") details.push("This item is inactive under your reviewed timing decision.");
+    if (item.paidOffLoanTimingHasCustomOverrides || customOverrides.length) {
+      details.push(item.reviewRequired
+        ? "Custom occurrence changes remain included until you review this item."
+        : "Custom occurrence changes remain included under your reviewed timing decision.");
+    }
+    if (customOverrides.length) {
+      const nextCustom = customOverrides[0];
+      const amount = Number.isFinite(nextCustom.amount) ? ` for ${money(nextCustom.amount)}` : "";
+      details.push(`Next custom payment is ${plannerShortDate(nextCustom.dateIso)}${amount}.`);
+    }
+    details.push("Past completed weeks and actuals remain preserved.");
+    return `
+      <div class="weekly-warning weekly-review-notice mt-3" role="status">
+        <strong>${item.reviewRequired ? "Review required" : "Review recorded"}</strong>
+        <span>${escapeHtml(item.reviewRequired ? (item.reviewReason || "Review this timing item before relying on the schedule.") : `Decision recorded${item.reviewResolution ? `: ${item.reviewResolution.replaceAll("-", " ")}` : ""}.`)}</span>
+        <small>${escapeHtml(details.join(" "))}</small>
+      </div>
+    `;
   }
 
   function beginWeeklyTimingEdit(itemId) {
@@ -10868,6 +11318,7 @@
   function weeklyTimingEditorHtml(item) {
     const draft = editingTimingItemId === item.id && timingEditDraft ? timingEditDraft : { ...item, amountInput: weeklyInputValue(item.amount) };
     const amountValue = draft.amountInput ?? weeklyInputValue(draft.amount);
+    const isReviewing = Boolean(item.reviewRequired);
     return `
       <div class="weekly-timing-editor" data-timing-editor data-weekly-timing-id="${escapeHtml(item.id)}">
         <div class="weekly-setup-grid mt-3">
@@ -10914,8 +11365,9 @@
             <input type="checkbox" data-weekly-timing-draft="${escapeHtml(item.id)}" data-key="active" data-type="boolean"${draft.active !== false ? " checked" : ""}>
           </label>
         </div>
+        ${isReviewing ? `<p class="weekly-muted mt-3">Saving this item confirms your review decision. Select Cancel if you only want to inspect it and keep the review pending.</p>` : ""}
         <div class="weekly-action-row mt-3">
-          <button class="btn btn-primary" type="button" data-weekly-action="save-timing-item" data-weekly-timing-id="${escapeHtml(item.id)}">Save Changes</button>
+          <button class="btn btn-primary" type="button" data-weekly-action="save-timing-item" data-weekly-timing-id="${escapeHtml(item.id)}">${isReviewing ? "Save and mark reviewed" : "Save Changes"}</button>
           <button class="btn" type="button" data-weekly-action="cancel-timing-item" data-weekly-timing-id="${escapeHtml(item.id)}">Cancel</button>
         </div>
         <div class="weekly-occurrence-editor mt-4">
@@ -10980,15 +11432,17 @@
                   <div class="weekly-timing-summary">
                     <div>
                       <strong>${escapeHtml(item.description || "Cashflow item")}</strong>
-                      <span>${money(item.amount)} ${escapeHtml(weeklyTimingFrequencyText(item))} · Next ${plannerShortDate(weeklyTimingNextDate(item))}</span>
+                      <span>${money(item.amount)} ${escapeHtml(weeklyTimingFrequencyText(item))} · ${escapeHtml(weeklyTimingNextDateText(item))}</span>
                       ${item.isNetPay ? `<small>Estimated net pay</small>` : ""}
                     </div>
                     <div class="weekly-timing-summary-meta">
+                      ${item.reviewRequired ? `<span>Review required</span>` : ""}
                       ${item.active === false ? `<span>Inactive</span>` : ""}
                       ${isEditing ? `<span>Editing draft</span>` : ""}
                       <button class="btn btn-small" type="button" data-weekly-action="begin-timing-edit" data-weekly-timing-id="${escapeHtml(item.id)}">${isEditing ? "Editing" : "Edit"}</button>
                     </div>
                   </div>
+                  ${weeklyTimingReviewNoticeHtml(item)}
                   ${isEditing ? weeklyTimingEditorHtml(item) : ""}
                 </article>
               `;
@@ -11050,6 +11504,7 @@
       const duplicateKey = [item.type, item.description, item.amount, item.frequency, item.firstDate].join("|").toLowerCase();
       if (seen.has(duplicateKey)) warnings.push(`${label} appears to duplicate another active timing item.`);
       seen.add(duplicateKey);
+      if (item.reviewRequired) blocking.push(`${label} needs review. ${item.reviewReason || "Edit or deactivate this item before finishing timing review."}`);
     });
     if (!activeItems.some((item) => item.type === "money-in")) warnings.push("No active income item is currently included.");
     return {
@@ -11689,8 +12144,9 @@
 
   function weeklyOpeningBalanceHtml(week, canAdjust) {
     const planned = week.planned || {};
+    const actual = weeklyActualWithDraft(week);
     const expectedOpening = Number(planned.expectedOpeningBalance ?? planned.openingBalance) || 0;
-    const actualOpening = Number(week.actual?.openingBalance ?? planned.actualOpeningBalance ?? planned.openingBalance) || 0;
+    const actualOpening = Number(actual.openingBalance ?? planned.actualOpeningBalance ?? planned.openingBalance) || 0;
     const difference = actualOpening - expectedOpening;
     const differenceClass = weeklyDifferenceClass(difference);
     const helper = canAdjust
@@ -11779,7 +12235,7 @@
   }
 
   function weeklyActualField(week, key, label, defaultValue, options = {}) {
-    const actual = week.actual || {};
+    const actual = weeklyActualWithDraft(week);
     const hasValue = weeklyHasActualAmount(actual, key);
     const value = hasValue ? actual[key] : "";
     const placeholder = options.type === "text" || defaultValue === "" || defaultValue === undefined
@@ -11942,7 +12398,8 @@
   }
 
   function weeklyCheckbox(week, key, label) {
-    const checked = week.actual?.checks?.[key] ? " checked" : "";
+    const actual = weeklyActualWithDraft(week);
+    const checked = actual.checks?.[key] ? " checked" : "";
     return `
       <label class="weekly-check">
         <input type="checkbox" data-weekly-actual-check="${escapeHtml(key)}" data-weekly-week="${week.weekNumber}"${checked}>
@@ -11972,8 +12429,8 @@
     const statusClass = weeklyStatusClass(planned.status);
     const isFutureWeek = !weeklyWeekHasStarted(week);
     const isEditableCompleted = week.isCompleted && weeklyEditingWeek === week.weekNumber;
-    const canEdit = true;
-    const completedReadOnly = false;
+    const completedReadOnly = week.isCompleted && !isEditableCompleted;
+    const canEdit = !completedReadOnly;
     return `
       ${weeklyNavigationHtml(week)}
       <article class="weekly-hero card ${statusClass}">
@@ -11981,7 +12438,11 @@
           <span class="metric-label">${week.weekNumber === weeklyPlanCurrentCalendarWeekNumber() ? "This Week's Money Plan" : "Weekly Money Plan"}</span>
           <h3>${escapeHtml(weeklyDateLabel(week.startDate, week.endDate))}</h3>
           <p><strong>${escapeHtml(weeklyCalendarStatusText(week))}</strong></p>
-          <p>${escapeHtml(week.isCompleted ? "This completed week is saved. Open a step to review details or edit if needed." : planned.statusMessage)}</p>
+          <p>${escapeHtml(isEditableCompleted
+            ? "Editing this completed week. Saving changes may update later balances."
+            : week.isCompleted
+              ? "This completed week is saved. Review its recorded results or choose Edit Completed Week to make changes."
+              : planned.statusMessage)}</p>
         </div>
         <div class="weekly-status-badge">
           <span>Current status</span>
@@ -11991,11 +12452,10 @@
 
       ${weeklyWarningPanelHtml(week)}
 
-      ${completedReadOnly ? weeklyCompletedWeekHtml(week) : ""}
-
-      ${weeklyWorkflowHtml(week)}
-
-      ${weeklyActiveStepSectionHtml(week, canEdit, isEditableCompleted, completedReadOnly, isFutureWeek)}
+      ${completedReadOnly
+        ? weeklyCompletedWeekHtml(week)
+        : `${weeklyWorkflowHtml(week)}
+           ${weeklyActiveStepSectionHtml(week, canEdit, isEditableCompleted, completedReadOnly, isFutureWeek)}`}
     `;
   }
 
@@ -12345,6 +12805,7 @@
     if (!weeklyPlan || !weeklyActualDrafts.has(Number(weekNumber))) return;
     const week = weeklyPlan.weeks.find((item) => item.weekNumber === Number(weekNumber));
     if (!week) return;
+    if (week.isCompleted && weeklyEditingWeek === week.weekNumber) return;
     weeklyPlan = window.FFSWeeklyPlan.updateActual(weeklyPlan, weekNumber, {
       ...(week.actual || {}),
       ...weeklyActualDrafts.get(Number(weekNumber)),
@@ -12361,6 +12822,10 @@
     const result = CALC.calculatePlan(plan);
     const week = weeklyPlan.weeks.find((item) => item.weekNumber === Number(weekNumber));
     if (!week) return;
+    if (week.isCompleted && weeklyEditingWeek !== week.weekNumber) {
+      updateSaveStatus("Select Edit Completed Week before changing saved results.");
+      return;
+    }
     if (complete && !weeklyWeekHasStarted(week)) {
       updateSaveStatus("This week has not started yet.");
       return;
@@ -12425,10 +12890,21 @@
   }
 
   function cancelCompletedWeekEdit(weekNumber) {
+    weeklyActualDrafts.delete(Number(weekNumber));
     weeklyEditingWeek = null;
     weeklyViewedWeekNumber = weekNumber;
     updateSaveStatus("Completed week edit cancelled.");
     renderOutputs();
+  }
+
+  function beginCompletedWeekEdit(weekNumber) {
+    const week = weeklyPlan?.weeks?.find((item) => item.weekNumber === Number(weekNumber));
+    if (!week?.isCompleted) return false;
+    if (!window.confirm("Editing a completed week may change the balances shown in later weeks.")) return false;
+    weeklyEditingWeek = week.weekNumber;
+    weeklyViewedWeekNumber = week.weekNumber;
+    renderOutputs();
+    return true;
   }
 
   function markWeeklyWeekIncomplete(weekNumber) {
@@ -12504,7 +12980,7 @@
     const itemId = target.dataset.weeklyTiming;
     const key = target.dataset.key;
     const value = target.dataset.type === "boolean" ? target.checked : target.dataset.type === "text" ? target.value : Number(target.value) || 0;
-    weeklyPlan = window.FFSWeeklyPlan.updateTimingItem(plan, CALC.calculatePlan(plan), weeklyPlan, itemId, { [key]: value });
+    weeklyPlan = window.FFSWeeklyPlan.updateTimingItem(plan, CALC.calculatePlan(plan), weeklyPlan, itemId, { [key]: value, resolveReview: false });
     generatedWeeklyPlanner = null;
     syncWeeklyPlanExportSettings();
     saveWeeklyPlan("Weekly timing saved.");
@@ -12546,9 +13022,14 @@
     }
     const patch = { ...timingEditDraft, amount };
     delete patch.amountInput;
+    const existingItem = (weeklyPlan.settings?.timingItems || []).find((item) => item.id === itemId);
     if (patch.type === "money-in") {
       patch.treatment = "pay-on-date";
       if (patch.frequency === "weeklyProvision") patch.frequency = "weekly";
+    }
+    if (existingItem?.reviewRequired) {
+      patch.resolveReview = true;
+      patch.reviewResolution = patch.active === false ? "deactivated" : "timing-reviewed";
     }
     weeklyPlan = window.FFSWeeklyPlan.updateTimingItem(plan, CALC.calculatePlan(plan), weeklyPlan, itemId, patch);
     markWeeklyTimingReviewRequired();
@@ -12583,6 +13064,7 @@
       patch.treatment = "pay-on-date";
       if (patch.frequency === "weeklyProvision") patch.frequency = "weekly";
     }
+    patch.resolveReview = false;
     weeklyPlan = window.FFSWeeklyPlan.updateTimingItem(plan, CALC.calculatePlan(plan), weeklyPlan, editingTimingItemId, patch);
     editingTimingItemId = null;
     timingEditDraft = null;
@@ -12679,10 +13161,17 @@
       updateSaveStatus("Create a Weekly Plan before exporting a backup.");
       return;
     }
-    const payload = window.FFSWeeklyPlan.exportPayload(weeklyPlan);
+    const payload = {
+      ...window.FFSWeeklyPlan.exportPayload(weeklyPlan),
+      sourceApp: "Financial Freedom",
+      backupType: "weekly-plan-only",
+      appVersion: APP_VERSION,
+      calculationVersion: CALCULATION_VERSION,
+    };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     downloadBlob(blob, safeFilename(`Financial-Freedom-Weekly-Plan-${householdNameForFile()}`, "json"));
-    updateSaveStatus("Weekly Plan backup exported.");
+    recordBackupExportInitiated("weekly-plan");
+    updateSaveStatus("Weekly Plan backup download initiated. This file contains the Weekly Plan only.");
   }
 
   function triggerWeeklyPlanImport() {
@@ -12692,27 +13181,53 @@
     input.click();
   }
 
+  function restoreWeeklyPlanPayload(payload) {
+    const imported = window.FFSWeeklyPlan.importPayload(payload);
+    if (!window.confirm("Import this Weekly Plan backup? This will replace the current Weekly Plan history on this device, but not your full Financial Freedom plan.")) {
+      updateSaveStatus("Weekly Plan import cancelled.");
+      return false;
+    }
+    const importedWeekly = window.FFSWeeklyPlan.migrate({ ...imported, planId: normalisePlanId(activePlanId) });
+    const previousDeletionState = dataDeletionActive;
+    dataDeletionActive = false;
+    STORAGE?.resumeWrites();
+    const writeResult = storageWriteBatch([
+      { key: currentPersonalWeeklyPlanKey(), value: importedWeekly },
+      { key: WEEKLY_PLAN_KEY, value: importedWeekly },
+    ]);
+    if (!writeResult.ok) {
+      dataDeletionActive = previousDeletionState;
+      updateSaveStatus(storageFailureMessage(writeResult));
+      showStorageFailureNotice(writeResult);
+      return false;
+    }
+    weeklyPlan = importedWeekly;
+    generatedWeeklyPlanner = null;
+    activeWeeklyPlanTab = "thisWeek";
+    weeklyEditingWeek = null;
+    weeklyViewedWeekNumber = null;
+    weeklyPlanUiState.isTimingSetupExpanded = null;
+    editingTimingItemId = null;
+    timingEditDraft = null;
+    renderAll();
+    showWorkspace("weeklyplan");
+    updateSaveStatus("Weekly Plan backup imported.");
+    return true;
+  }
+
   function importWeeklyPlanBackup(file) {
     if (!file) return;
+    if (Number(file.size) > MAX_IMPORT_BYTES) {
+      updateSaveStatus(`Weekly Plan import failed. Choose a backup smaller than ${Math.floor(MAX_IMPORT_BYTES / 1024 / 1024)} MB.`);
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        const imported = window.FFSWeeklyPlan.importPayload(JSON.parse(String(reader.result || "")));
-        if (!window.confirm("Import this Weekly Plan backup? This will replace the current Weekly Plan history on this device, but not your full Financial Freedom plan.")) {
-          updateSaveStatus("Weekly Plan import cancelled.");
-          return;
-        }
-        weeklyPlan = imported;
-        generatedWeeklyPlanner = null;
-        activeWeeklyPlanTab = "thisWeek";
-        weeklyEditingWeek = null;
-        weeklyViewedWeekNumber = null;
-        weeklyPlanUiState.isTimingSetupExpanded = null;
-        editingTimingItemId = null;
-        timingEditDraft = null;
-        saveWeeklyPlan("Weekly Plan backup imported.");
-        renderAll();
-        showWorkspace("weeklyplan");
+        const payload = SECURITY?.parseJsonImport
+          ? SECURITY.parseJsonImport(String(reader.result || ""), { maxBytes: MAX_IMPORT_BYTES })
+          : JSON.parse(String(reader.result || ""));
+        restoreWeeklyPlanPayload(payload);
       } catch (error) {
         updateSaveStatus(error.message || "Weekly Plan import failed.");
       }
@@ -13303,7 +13818,7 @@
         </div>
       `, "report-page-break")}
 
-      ${reportSection("Milestones", "Compact milestones showing target age, estimated timing and what each stage means.", `
+      ${reportSection("Milestones", "Compact milestones showing target age, estimated timing and what each milestone represents.", `
         <div class="report-milestone-grid">${reportMilestoneRows(result)}</div>
       `, "report-page-break report-compact-section")}
 
@@ -13572,7 +14087,7 @@
   function currentBasePlanReference() {
     return {
       planId: normalisePlanId(activePlanId),
-      savedAt: localStorage.getItem(LAST_SAVED_KEY) || "",
+      savedAt: storageGetItem(LAST_SAVED_KEY) || "",
       calculationVersion: CALCULATION_VERSION,
       financialYear: FINANCIAL_YEAR,
       planHash: simpleHash(plan),
@@ -13937,7 +14452,7 @@
     };
     scenario.scenarioId = scenario.id;
     scenarios.unshift(scenario);
-    saveScenarios(scenarios);
+    if (!saveScenarios(scenarios)) return;
     closeScenarioSaveDialog();
     savedScenarioFilter = scenario.scenarioType;
     renderScenarios();
@@ -14232,8 +14747,8 @@
       scenarios.unshift(scenario);
     }
 
-    saveScenarios(scenarios);
-    saveDraft();
+    if (!saveScenarios(scenarios)) return;
+    if (!saveDraft()) return;
     renderAll();
     showWorkspace("scenarios");
     updateSaveStatus("Plan saved to Saved Scenarios.");
@@ -14624,6 +15139,10 @@
   }
 
   function startMyPlan() {
+    if (dataDeletionActive || STORAGE?.isWriteSuppressed()) {
+      dataDeletionActive = false;
+      STORAGE?.resumeWrites();
+    }
     if (isDemoActive()) {
       activeWizardStep = 0;
       returnToPersonalPlan("setup");
@@ -14653,16 +15172,32 @@
 
   function resetPlan() {
     if (!window.confirm("Clear the current plan and start again?")) return;
+    const removal = storageWriteBatch([
+      { key: currentPersonalPlanKey(), remove: true },
+      { key: currentPersonalWeeklyPlanKey(), remove: true },
+      { key: DRAFT_KEY, remove: true },
+      { key: LAST_SAVED_KEY, remove: true },
+      { key: WEEKLY_PLAN_KEY, remove: true },
+    ]);
+    if (!removal.ok) {
+      updateSaveStatus(storageFailureMessage(removal));
+      showStorageFailureNotice(removal);
+      return;
+    }
+    dataDeletionActive = false;
+    STORAGE?.resumeWrites();
     isSwitchingPlans = true;
     isDemoMode = false;
     const context = loadPlanContext();
     activePlanId = normalisePlanId(context.lastPersonalPlanId || DEFAULT_PERSONAL_PLAN_ID);
     plan = ensurePlanIdentity(blankUserPlan(), { source: "personal", planId: activePlanId });
     generatedWeeklyPlanner = null;
-    resetWeeklyPlanStorage("");
-    localStorage.removeItem(currentPersonalPlanKey());
-    localStorage.removeItem(DRAFT_KEY);
-    localStorage.removeItem(LAST_SAVED_KEY);
+    weeklyPlan = null;
+    weeklyEditingWeek = null;
+    weeklyViewedWeekNumber = null;
+    weeklyPlanUiState.isTimingSetupExpanded = null;
+    editingTimingItemId = null;
+    timingEditDraft = null;
     document.getElementById("scenarioName").value = "";
     document.getElementById("scenarioNotes").value = "";
     activeWizardStep = 0;
@@ -14675,14 +15210,26 @@
     if (!window.confirm("Clear the saved plan and all current entries? This cannot be undone.")) return;
     isDemoMode = false;
     activePlanId = normalisePlanId(activePlanId || DEFAULT_PERSONAL_PLAN_ID);
-    localStorage.removeItem(currentPersonalPlanKey());
-    localStorage.removeItem(currentPersonalWeeklyPlanKey());
-    localStorage.removeItem(DRAFT_KEY);
-    localStorage.removeItem(LAST_SAVED_KEY);
+    const removal = storageWriteBatch([
+      { key: currentPersonalPlanKey(), remove: true },
+      { key: currentPersonalWeeklyPlanKey(), remove: true },
+      { key: DRAFT_KEY, remove: true },
+      { key: LAST_SAVED_KEY, remove: true },
+      { key: WEEKLY_PLAN_KEY, remove: true },
+    ]);
+    if (!removal.ok) {
+      updateSaveStatus(storageFailureMessage(removal));
+      showStorageFailureNotice(removal);
+      return;
+    }
     restoredDraftUi = {};
     plan = ensurePlanIdentity(blankUserPlan(), { source: "personal", planId: activePlanId });
     generatedWeeklyPlanner = null;
-    resetWeeklyPlanStorage("");
+    weeklyPlan = null;
+    weeklyEditingWeek = null;
+    weeklyViewedWeekNumber = null;
+    editingTimingItemId = null;
+    timingEditDraft = null;
     activeWizardStep = 0;
     const nameInput = document.getElementById("scenarioName");
     const notesInput = document.getElementById("scenarioNotes");
@@ -14691,6 +15238,71 @@
     renderAll();
     showWorkspace("setup");
     updateSaveStatus("Saved plan cleared.");
+  }
+
+  function openDeleteAllDataConfirmation() {
+    openDurabilityDialog({
+      title: "Delete all Financial Freedom data on this device?",
+      body: "This removes local Financial Freedom plans, scenarios, Weekly Plan history, drafts, snapshots and preferences from this browser. Downloaded backup files are not deleted, and this does not remove records that may exist in external hosting or provider logs.",
+      actions: [
+        { label: "Cancel", action: "close" },
+        { label: "Delete all local data", action: "confirm-delete-all", primary: true },
+      ],
+    });
+  }
+
+  function deleteAllFinancialFreedomData() {
+    window.clearTimeout(saveStatusTimer);
+    saveStatusTimer = null;
+    clearSemiRetirementAdjustmentDebounce();
+    const previousDeletionState = dataDeletionActive;
+    const previousUnsavedState = planHasUnsavedChanges;
+    const previousBackupPromptPending = backupPromptPending;
+    const previousBackupReminderShown = backupReminderShownThisSession;
+    dataDeletionActive = true;
+    planHasUnsavedChanges = false;
+    backupPromptPending = false;
+    backupReminderShownThisSession = true;
+    const result = STORAGE ? STORAGE.deleteAllOwned() : storageCoordinatorUnavailable();
+    if (!result.ok) {
+      dataDeletionActive = previousDeletionState;
+      planHasUnsavedChanges = previousUnsavedState;
+      backupPromptPending = previousBackupPromptPending;
+      backupReminderShownThisSession = previousBackupReminderShown;
+      STORAGE?.resumeWrites();
+      closeDurabilityDialog();
+      showDurabilityNotice(result.message || "Financial Freedom data could not be deleted from this browser.", [
+        { label: "Try again", action: "delete-all" },
+        { label: "Close", action: "close-notice" },
+      ]);
+      return false;
+    }
+    isSwitchingPlans = true;
+    isDemoMode = false;
+    activePlanId = DEFAULT_PERSONAL_PLAN_ID;
+    plan = ensurePlanIdentity(blankUserPlan(), { source: "personal", planId: activePlanId });
+    weeklyPlan = null;
+    generatedWeeklyPlanner = null;
+    weeklyEditingWeek = null;
+    weeklyViewedWeekNumber = null;
+    editingTimingItemId = null;
+    timingEditDraft = null;
+    restoredDraftUi = {};
+    userState = { version: 1, hasCreatedPersonalPlan: false };
+    selectedProgressSnapshotId = "";
+    activeWizardStep = 0;
+    activeView = "dashboard";
+    hasOpenedWorkspace = false;
+    isSwitchingPlans = false;
+    closeDurabilityDialog();
+    document.getElementById("appWorkspace")?.classList.add("hidden");
+    renderAll();
+    showDurabilityNotice("All Financial Freedom data stored by this app in this browser has been deleted. Saving remains paused until you start a new plan or import a backup.", [
+      { label: "Start new plan", action: "new-plan" },
+      { label: "Import backup", action: "import" },
+      { label: "Close", action: "close-notice" },
+    ]);
+    return true;
   }
 
   function closeMobileActionMenu() {
@@ -14889,7 +15501,7 @@
     };
     copy.scenarioId = copy.id;
     scenarios.unshift(copy);
-    saveScenarios(scenarios);
+    if (!saveScenarios(scenarios)) return;
     renderScenarios();
     updateSaveStatus("Scenario duplicated. Financial Plan unchanged.");
   }
@@ -14900,7 +15512,7 @@
       return;
     }
     if (!window.confirm("Delete this saved scenario? Your Financial Plan will not be changed.")) return;
-    saveScenarios(loadScenarios().filter((item) => item.id !== id));
+    if (!saveScenarios(loadScenarios().filter((item) => item.id !== id))) return;
     if (savedScenarioComparisonAnchorId === id) savedScenarioComparisonAnchorId = "";
     if (savedScenarioComparisonTargetId === id) savedScenarioComparisonTargetId = "";
     renderScenarios();
@@ -14941,7 +15553,7 @@
     };
     scenario.scenarioId = scenario.id;
     scenarios.unshift(scenario);
-    saveScenarios(scenarios);
+    if (!saveScenarios(scenarios)) return;
     renderScenarios();
     showWorkspace("scenarios");
   }
@@ -14964,7 +15576,7 @@
       return;
     }
     scenarios[index] = { ...scenarios[index], name };
-    saveScenarios(scenarios);
+    if (!saveScenarios(scenarios)) return;
     renderScenarios();
     updateSaveStatus("Scenario renamed.");
   }
@@ -15211,6 +15823,11 @@
         renderAiInsightsModal();
         return;
       }
+      if (target.id === "aiDataConsent") {
+        aiInsightsUi.dataConsentAccepted = Boolean(target.checked);
+        renderAiInsightsModal();
+        return;
+      }
       if (target.dataset.semiComparisonInput !== undefined) {
         updateSemiRetirementComparisonDraftFromInput(target);
         runSemiRetirementComparison({ render: true });
@@ -15259,6 +15876,56 @@
     });
 
     document.addEventListener("click", (event) => {
+      const durabilityAction = event.target.closest("[data-durability-action]");
+      if (durabilityAction) {
+        event.preventDefault();
+        const action = durabilityAction.dataset.durabilityAction;
+        if (action === "close") closeDurabilityDialog();
+        if (action === "close-notice") hideDurabilityNotice();
+        if (action === "export") {
+          closeDurabilityDialog();
+          hideDurabilityNotice();
+          exportPlanJson();
+        }
+        if (action === "retry-save") {
+          hideDurabilityNotice();
+          saveDraft("Plan saved on this device.");
+        }
+        if (action === "import") {
+          closeDurabilityDialog();
+          hideDurabilityNotice();
+          triggerImportPlanJson();
+        }
+        if (action === "new-plan") {
+          closeDurabilityDialog();
+          hideDurabilityNotice();
+          if (dataDeletionActive) startMyPlan();
+          else resetPlan();
+        }
+        if (action === "remind-later" || action === "dismiss-prompt" || action === "dismiss-reminder") {
+          const now = new Date().toISOString();
+          const delay = action === "remind-later" ? BACKUP_REMIND_LATER_DAYS : BACKUP_REMINDER_DAYS;
+          saveDurabilityState({ ...loadDurabilityState(), nextReminderAt: addDaysIso(now, delay) });
+          closeDurabilityDialog();
+          hideDurabilityNotice();
+        }
+        if (action === "delete-all") openDeleteAllDataConfirmation();
+        if (action === "confirm-delete-all") deleteAllFinancialFreedomData();
+        return;
+      }
+
+      const policyLink = event.target.closest("[data-policy-page]");
+      if (policyLink) {
+        event.preventDefault();
+        openPolicyPage(policyLink.dataset.policyPage);
+        return;
+      }
+      if (event.target.closest("[data-policy-close]")) {
+        event.preventDefault();
+        closePolicyPage();
+        return;
+      }
+
       const infoButton = event.target.closest("[data-info-key]");
       if (infoButton) {
         event.preventDefault();
@@ -15422,6 +16089,7 @@
         if (action === "export-plan-json") exportPlanJson();
         if (action === "import-plan-json") triggerImportPlanJson();
         if (action === "clear-saved-plan") clearSavedPlan();
+        if (action === "delete-all-data") openDeleteAllDataConfirmation();
         if (action === "export") window.print();
         return;
       }
@@ -15495,12 +16163,7 @@
         if (action === "save-week") saveWeekProgress(weekNumber, false);
         if (action === "complete-week") saveWeekProgress(weekNumber, true);
         if (action === "save-opening-balance") saveWeeklyOpeningBalance(weekNumber);
-        if (action === "edit-week") {
-          if (!window.confirm("Editing a completed week may change the balances shown in later weeks.")) return;
-          weeklyEditingWeek = weekNumber;
-          weeklyViewedWeekNumber = weekNumber;
-          renderOutputs();
-        }
+        if (action === "edit-week") beginCompletedWeekEdit(weekNumber);
         if (action === "cancel-week-edit") cancelCompletedWeekEdit(weekNumber);
         if (action === "mark-week-incomplete") markWeeklyWeekIncomplete(weekNumber);
         if (action === "toggle-upcoming" && weeklyPlan) {
@@ -15638,6 +16301,8 @@
         closeGoalInfo();
         closeAiInsightsModal();
         closeScenarioSaveDialog();
+        closeDurabilityDialog();
+        closePolicyPage();
       }
 
       const aiCard = event.target.closest?.("[data-ai-insights-card]");
@@ -15681,6 +16346,7 @@
     document.getElementById("planImportJsonButton").addEventListener("click", triggerImportPlanJson);
     document.getElementById("planImportJsonInput").addEventListener("change", (event) => importPlanJsonFile(event.target.files?.[0]));
     document.getElementById("planClearSavedButton").addEventListener("click", clearSavedPlan);
+    document.getElementById("deleteAllDataButton").addEventListener("click", openDeleteAllDataConfirmation);
     document.getElementById("wizardPrevButton").addEventListener("click", () => {
       activeWizardStep = Math.max(0, activeWizardStep - 1);
       saveDraft();
@@ -15712,8 +16378,81 @@
     document.getElementById("weeklyPlanImportInput").addEventListener("change", (event) => importWeeklyPlanBackup(event.target.files?.[0]));
   }
 
+  if (window.FFS_TEST_HOOKS_ENABLED === true) {
+    window.FFSWeeklyPlanUiTestHooks = {
+      setPlan(nextPlan) {
+        plan = CALC.clonePlan ? CALC.clonePlan(nextPlan) : JSON.parse(JSON.stringify(nextPlan || {}));
+        return plan;
+      },
+      setWeeklyPlan(nextWeeklyPlan) {
+        weeklyPlan = window.FFSWeeklyPlan?.migrate ? window.FFSWeeklyPlan.migrate(nextWeeklyPlan) : nextWeeklyPlan;
+        editingTimingItemId = null;
+        timingEditDraft = null;
+        return weeklyPlan;
+      },
+      getWeeklyPlan() {
+        return weeklyPlan;
+      },
+      getTimingDraft() {
+        return timingEditDraft;
+      },
+      getEditingTimingItemId() {
+        return editingTimingItemId;
+      },
+      beginWeeklyTimingEdit,
+      updateWeeklyTimingDraft(patch = {}) {
+        if (!timingEditDraft) return null;
+        timingEditDraft = { ...timingEditDraft, ...patch };
+        return timingEditDraft;
+      },
+      saveWeeklyTimingDraft,
+      savePendingWeeklyTimingDrafts,
+      cancelWeeklyTimingDraft,
+      completeWeeklyTimingReview,
+      weeklyTimingValidation,
+      weeklyTimingNextDateText,
+      weeklyTimingReviewNoticeHtml,
+      weeklyTimingRowsHtml,
+      buildCompletePlanBackupPayload,
+      validateImportedPlanPayload,
+      getPlan() {
+        return plan;
+      },
+      getPlanHasUnsavedChanges() {
+        return planHasUnsavedChanges;
+      },
+      setPlanHasUnsavedChanges(value) {
+        planHasUnsavedChanges = Boolean(value);
+      },
+      autosavePlan,
+      saveDraft,
+      saveScenarios,
+      saveWeeklyPlan,
+      importPlanPayload,
+      restoreWeeklyPlanPayload,
+      deleteAllFinancialFreedomData,
+    };
+    return;
+  }
+
   bindEvents();
   renderAll();
+  window.addEventListener("storage", (event) => {
+    if (!STORAGE?.handleStorageEvent(event)) return;
+    dataDeletionActive = true;
+    window.clearTimeout(saveStatusTimer);
+    saveStatusTimer = null;
+    clearSemiRetirementAdjustmentDebounce();
+    showDurabilityNotice("Financial Freedom data was deleted in another tab. Saving is paused here to prevent older data being restored. Start a new plan or import a backup to continue.", [
+      { label: "Start new plan", action: "new-plan" },
+      { label: "Import backup", action: "import" },
+      { label: "Close", action: "close-notice" },
+    ]);
+  });
+  if (window.location.hash === "#privacy") openPolicyPage("privacy");
+  if (window.location.hash === "#terms") openPolicyPage("terms");
+  showPendingStorageIssues();
+  maybeShowBackupReminder();
   loadAiInsightsConfig();
   if (hasOpenedWorkspace) showWorkspace(activeView);
 })();

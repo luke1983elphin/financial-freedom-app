@@ -6471,6 +6471,16 @@ textarea.field-input {
   line-height: 1.55;
 }
 
+.weekly-review-notice {
+  display: grid;
+  gap: 4px;
+}
+
+.weekly-review-notice span,
+.weekly-review-notice small {
+  display: block;
+}
+
 .weekly-summary-grid,
 .weekly-week-detail-grid,
 .weekly-actual-grid,
@@ -8268,7 +8278,83 @@ body.scenario-save-modal-open {
   }
 }
 
+.durability-notice {
+  margin: 0 auto;
+  max-width: 1280px;
+  padding: 0.85rem 1rem;
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  color: #7c2d12;
+  font-weight: 650;
+}
+
+.durability-notice button {
+  margin-left: 0.75rem;
+}
+
+.durability-dialog-card,
+.policy-dialog-card {
+  width: min(92vw, 620px);
+  max-height: min(82vh, 720px);
+  overflow: auto;
+}
+
+.durability-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+.app-legal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 1.25rem 1rem calc(1.25rem + env(safe-area-inset-bottom));
+  color: #475569;
+  font-size: 0.875rem;
+}
+
+.app-legal-footer nav {
+  display: flex;
+  gap: 1rem;
+  flex: 0 0 auto;
+}
+
+.app-legal-footer a {
+  color: #0f5273;
+  font-weight: 700;
+}
+
+@media (max-width: 600px) {
+  .durability-notice {
+    margin: 0 0.75rem;
+  }
+
+  .durability-notice button,
+  .durability-dialog-actions .btn {
+    width: 100%;
+    margin: 0.5rem 0 0;
+  }
+
+  .durability-dialog-actions,
+  .app-legal-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
 @media print {
+  .durability-notice,
+  .app-legal-footer,
+  #durabilityDialog,
+  #policyDialog {
+    display: none !important;
+  }
   @page {
     margin: 14mm 12mm 18mm;
     @bottom-left {

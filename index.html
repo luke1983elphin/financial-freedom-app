@@ -4,27 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Financial Freedom</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            colors: {
-              navy: "#0f2742",
-              ink: "#172033",
-              mist: "#f5f8fb",
-              line: "#e2e8f0",
-              success: "#0f9f6e",
-              caution: "#d99121",
-              danger: "#dc4c3e"
-            },
-            boxShadow: {
-              soft: "0 18px 50px rgba(15, 39, 66, 0.08)"
-            }
-          }
-        }
-      };
-    </script>
+    <link rel="stylesheet" href="tailwind-static.css">
     <link rel="stylesheet" href="styles.css">
   </head>
   <body class="bg-white text-ink antialiased">
@@ -50,9 +30,10 @@
                 <button type="button" id="planSaveButton">Save Plan</button>
                 <button type="button" id="planLoadButton">Load Plan</button>
                 <button type="button" id="planDuplicateButton">Duplicate Plan</button>
-                <button type="button" id="planExportJsonButton">Export Plan</button>
+                <button type="button" id="planExportJsonButton">Export complete backup</button>
                 <button type="button" id="planImportJsonButton">Import Plan</button>
                 <button type="button" id="planClearSavedButton">Clear Saved Plan</button>
+                <button type="button" id="deleteAllDataButton">Delete all Financial Freedom data on this device</button>
               </div>
             </details>
             <button class="btn" type="button" id="exportButton">Print / Export</button>
@@ -72,9 +53,10 @@
                   <button type="button" role="menuitem" data-mobile-action="save-plan">Save Plan</button>
                   <button type="button" role="menuitem" data-mobile-action="load-plan">Load Plan</button>
                   <button type="button" role="menuitem" data-mobile-action="duplicate-plan">Duplicate Plan</button>
-                  <button type="button" role="menuitem" data-mobile-action="export-plan-json">Export Plan</button>
+                  <button type="button" role="menuitem" data-mobile-action="export-plan-json">Export complete backup</button>
                   <button type="button" role="menuitem" data-mobile-action="import-plan-json">Import Plan</button>
                   <button type="button" role="menuitem" data-mobile-action="clear-saved-plan">Clear Saved Plan</button>
+                  <button type="button" role="menuitem" data-mobile-action="delete-all-data">Delete all Financial Freedom data</button>
                 </div>
               </details>
               <button type="button" role="menuitem" data-mobile-action="export">Print / Export</button>
@@ -83,6 +65,8 @@
           <input class="hidden" id="planImportJsonInput" type="file" accept="application/json,.json">
         </div>
       </header>
+
+      <div class="durability-notice hidden" id="durabilityNotice" role="alert" aria-live="assertive"></div>
 
       <main>
         <section id="homeView" class="homepage mx-auto max-w-7xl px-4 py-8 lg:py-14">
@@ -748,8 +732,36 @@
           </div>
         </section>
       </main>
+      <footer class="app-legal-footer">
+        <p>Your plan is stored in this browser on this device. It is not automatically available on another device.</p>
+        <nav aria-label="Legal information">
+          <a href="#privacy" data-policy-page="privacy">Privacy</a>
+          <a href="#terms" data-policy-page="terms">Terms of Use</a>
+        </nav>
+      </footer>
     </div>
 
+    <div class="goal-info-modal hidden" id="durabilityDialog" role="dialog" aria-modal="true" aria-labelledby="durabilityDialogTitle">
+      <div class="goal-info-backdrop" data-durability-action="close"></div>
+      <article class="goal-info-card durability-dialog-card">
+        <h2 id="durabilityDialogTitle">Back up your Financial Freedom plan</h2>
+        <div id="durabilityDialogBody"></div>
+        <div class="durability-dialog-actions" id="durabilityDialogActions"></div>
+      </article>
+    </div>
+
+    <div class="goal-info-modal hidden" id="policyDialog" role="dialog" aria-modal="true" aria-labelledby="policyDialogTitle">
+      <div class="goal-info-backdrop" data-policy-close></div>
+      <article class="goal-info-card policy-dialog-card">
+        <button class="goal-info-close" type="button" data-policy-close aria-label="Close">X</button>
+        <h2 id="policyDialogTitle"></h2>
+        <p><strong>TODO: legal copy pending professional review.</strong></p>
+        <p>This placeholder is not an approved privacy policy or set of terms.</p>
+      </article>
+    </div>
+
+    <script src="security.js"></script>
+    <script src="storage.js"></script>
     <script src="v2-data.js"></script>
     <script src="calculator.js"></script>
     <script src="semiRetirementProjection.js"></script>

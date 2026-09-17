@@ -189,7 +189,7 @@ test("Integration V1I current clear/reset functions remain outside semi-retireme
   const resetStart = appSource.indexOf("function resetPlan");
   const resetEnd = appSource.indexOf("function clearSavedPlan", resetStart);
   const resetSnippet = appSource.slice(resetStart, resetEnd);
-  assert.ok(resetSnippet.includes("localStorage.removeItem(currentPersonalPlanKey())"));
+  assert.ok(resetSnippet.includes("{ key: currentPersonalPlanKey(), remove: true }"));
   assert.ok(!resetSnippet.includes("semiRetirement"));
 });
 

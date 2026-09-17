@@ -2,6 +2,9 @@ const MAX_REQUEST_BYTES = 90 * 1024;
 const DEFAULT_MODEL = process.env.OPENAI_AI_INSIGHTS_MODEL || "gpt-4o-mini";
 const DEFAULT_MAX_GENERATIONS = Number(process.env.AI_INSIGHTS_MAX_GENERATIONS || 5);
 const DEFAULT_COOLDOWN_MS = Number(process.env.AI_INSIGHTS_COOLDOWN_MS || 60000);
+const SERVER_ENABLEMENT_ENV = "AI_INSIGHTS_SERVER_ENABLED";
+const ENABLED_VALUE = "true";
+const DISABLED_MESSAGE = "AI insights are currently unavailable. You can continue using the financial planning tools.";
 const DISCLAIMER = "This report provides general educational information and scenario guidance based on the information and assumptions entered into the app. It does not take into account all matters that may be relevant to your circumstances and does not constitute personal financial product, taxation, legal or credit advice. Projections are estimates only and actual outcomes may vary. Consider obtaining advice from an appropriately licensed professional before acting on financial decisions.";
 
 function sendJson(res, status, payload) {
@@ -11,8 +14,28 @@ function sendJson(res, status, payload) {
   res.end(JSON.stringify(payload));
 }
 
+function isExplicitlyEnabled(value) {
+  return value === ENABLED_VALUE;
+}
+
+function aiEnablementStatus() {
+  const enabled = isExplicitlyEnabled(process.env[SERVER_ENABLEMENT_ENV]);
+  return {
+    enabled,
+    source: SERVER_ENABLEMENT_ENV,
+    message: enabled ? "" : DISABLED_MESSAGE,
+  };
+}
+
+function disabledPayload() {
+  return {
+    code: "AI_INSIGHTS_DISABLED",
+    error: DISABLED_MESSAGE,
+  };
+}
+
 function isEnabled() {
-  return String(process.env.NEXT_PUBLIC_ENABLE_AI_INSIGHTS || "").toLowerCase() === "true";
+  return aiEnablementStatus().enabled;
 }
 
 function readBody(req) {
@@ -171,7 +194,6 @@ function systemPrompt() {
     "You are generating private beta Financial Freedom Insights for an Australian household financial modelling app.",
     "Use clear Australian English. Be supportive, practical and plain-spoken.",
     "Interpret only the calculations and figures supplied by the app. Do not invent retirement ages, projections, probabilities, tax savings, products or investment returns.",
-    "Treat planSummary.expenses.calculatedFinalAnnualSurplus, calculatedWeeklySurplus and cashflowPosition as authoritative for cashflow. Do not describe expenses as exceeding income when cashflowPosition is positive; use neutral wording when cashflowPosition is near-zero.",
     "Do not recommend specific shares, ETFs, managed funds, super funds, lenders, insurance products or credit products.",
     "Do not present yourself as a licensed financial adviser. This is educational scenario guidance only.",
     "Use cautious wording such as 'based on the figures entered', 'the app's current projection indicates', 'you may wish to explore', and 'a scenario worth modelling is'.",
@@ -182,7 +204,7 @@ function systemPrompt() {
 
 function userPrompt(planSummary) {
   return JSON.stringify({
-    task: "Generate structured Financial Freedom Insights from this anonymous app-calculated plan summary.",
+    task: "Generate structured Financial Freedom Insights from this reduced app-calculated plan summary with direct identifiers excluded.",
     responseSchema: {
       generatedAt: "ISO date string",
       overallPosition: { rating: "Strong | Stable | Needs Attention | Insufficient Information", summary: "string" },
@@ -306,17 +328,19 @@ async function callOpenAiProgress(progressComparison) {
 
 export default async function aiInsightsHandler(req, res) {
   if (req.method === "GET") {
+    const status = aiEnablementStatus();
     return sendJson(res, 200, {
-      enabled: isEnabled(),
+      enabled: status.enabled,
       maxGenerations: DEFAULT_MAX_GENERATIONS,
       cooldownMs: DEFAULT_COOLDOWN_MS,
+      message: status.message,
     });
   }
   if (req.method !== "POST") {
     res.setHeader("Allow", "GET, POST");
     return sendJson(res, 405, { error: "Method not allowed." });
   }
-  if (!isEnabled()) return sendJson(res, 404, { error: "AI Insights is not enabled for this beta." });
+  if (!isEnabled()) return sendJson(res, 503, disabledPayload());
   if (!process.env.OPENAI_API_KEY) return sendJson(res, 500, { error: "AI Insights is not configured yet." });
 
   let body;
