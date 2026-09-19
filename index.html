@@ -189,18 +189,24 @@
                 <div class="wizard-shell">
                   <div class="wizard-progress">
                     <div>
-                      <span id="wizardStepLabel">Step 1 of 7</span>
+                      <span id="wizardStepLabel">Step 1 of 9</span>
                       <strong id="wizardStepTitle">About You</strong>
                     </div>
                     <span id="wizardPercent">14% Complete</span>
                   </div>
                   <div class="progress-track" aria-hidden="true"><span id="wizardProgressBar"></span></div>
+                  <label class="wizard-mobile-selector" for="wizardStepSelect">
+                    <span>Jump to a step</span>
+                    <select class="field-input" id="wizardStepSelect"></select>
+                  </label>
                   <div class="wizard-step-chips" id="wizardStepChips"></div>
+
+                  <button class="btn wizard-exit-button" type="button" data-view="dashboard">Exit setup</button>
 
                   <div class="wizard-content-grid">
                     <div class="wizard-card">
                       <div class="section-heading">
-                        <h2 id="wizardHeading">About You</h2>
+                        <h2 id="wizardHeading" tabindex="-1">Your household</h2>
                         <p id="wizardInstruction">Start with the household names, ages and basic context for the plan.</p>
                       </div>
 
@@ -220,17 +226,21 @@
                         <div id="wizardExpensesForm" class="setup-list"></div>
                       </div>
                       <div class="wizard-panel hidden" data-wizard-panel="5">
+                        <div id="wizardSuperCheckpoint" class="setup-list"></div>
+                      </div>
+                      <div class="wizard-panel hidden" data-wizard-panel="6">
                         <div id="wizardGoalsForm" class="input-grid"></div>
                         <div id="wizardGoalExamples" class="setup-list mt-6"></div>
-                        <div class="mt-6">
+                        <details class="setup-advanced-section mt-6">
+                          <summary>Optional downsizing strategy</summary>
                           <div class="card-subheading">
                             <h3>Downsizing Strategy</h3>
                             <p>Explore what could happen if you sell your current home later, buy a lower-value replacement home and invest the equity released after transaction costs. This strategy is optional and is not included in the projection unless you turn it on.</p>
                           </div>
                           <div id="wizardDownsizingForm" class="input-grid mt-4"></div>
-                        </div>
+                        </details>
                       </div>
-                      <div class="wizard-panel hidden" data-wizard-panel="6">
+                      <div class="wizard-panel hidden" data-wizard-panel="7">
                         <div class="card-subheading">
                           <h3>Assumptions Review</h3>
                           <p>Review these editable assumptions before reports or results generate.</p>
@@ -238,7 +248,7 @@
                         <div id="wizardAssumptionsReview" class="input-grid mt-4"></div>
                         <div id="wizardHelpReview" class="summary-grid mt-4"></div>
                       </div>
-                      <div class="wizard-panel hidden" data-wizard-panel="7">
+                      <div class="wizard-panel hidden" data-wizard-panel="8">
                         <div id="wizardResultsSummary" class="wizard-results"></div>
                       </div>
                     </div>
@@ -416,6 +426,7 @@
                     <svg id="investmentChart" class="chart mt-4" viewBox="0 0 760 260" role="img" aria-label="Investment growth"></svg>
                   </div>
                 </div>
+                <div id="linkedInvestmentSetup" class="mt-6"></div>
               </section>
 
               <section class="view-section hidden" data-view-panel="super">
@@ -742,7 +753,7 @@
     </div>
 
     <div class="goal-info-modal hidden" id="durabilityDialog" role="dialog" aria-modal="true" aria-labelledby="durabilityDialogTitle">
-      <div class="goal-info-backdrop" data-durability-action="close"></div>
+      <div class="goal-info-backdrop" data-dialog-backdrop data-durability-action="close"></div>
       <article class="goal-info-card durability-dialog-card">
         <h2 id="durabilityDialogTitle">Back up your Financial Freedom plan</h2>
         <div id="durabilityDialogBody"></div>
@@ -751,12 +762,20 @@
     </div>
 
     <div class="goal-info-modal hidden" id="policyDialog" role="dialog" aria-modal="true" aria-labelledby="policyDialogTitle">
-      <div class="goal-info-backdrop" data-policy-close></div>
+      <div class="goal-info-backdrop" data-dialog-backdrop data-policy-close></div>
       <article class="goal-info-card policy-dialog-card">
         <button class="goal-info-close" type="button" data-policy-close aria-label="Close">X</button>
         <h2 id="policyDialogTitle"></h2>
-        <p><strong>TODO: legal copy pending professional review.</strong></p>
-        <p>This placeholder is not an approved privacy policy or set of terms.</p>
+        <div id="policyDialogBody" class="policy-content"></div>
+      </article>
+    </div>
+
+    <div class="goal-info-modal hidden" id="linkedSetupDialog" role="dialog" aria-modal="true" aria-labelledby="linkedSetupTitle">
+      <div class="goal-info-backdrop" data-dialog-backdrop data-linked-setup-action="close"></div>
+      <article class="goal-info-card linked-setup-dialog-card">
+        <button class="goal-info-close" type="button" data-linked-setup-action="close" aria-label="Close">X</button>
+        <h2 id="linkedSetupTitle"></h2>
+        <div id="linkedSetupBody"></div>
       </article>
     </div>
 
@@ -768,6 +787,15 @@
     <script src="semiRetirementUi.js"></script>
     <script src="weekly-plan.js"></script>
     <script src="weekly-planner-export.js"></script>
+    <script src="trust-readiness.js"></script>
+    <script src="dialog-controller.js"></script>
+    <script src="linked-setup.js"></script>
+    <script src="consumer-setup.js"></script>
+    <script src="plan-schema.js"></script>
+    <script src="legacy-plan-adapter.js"></script>
+    <script src="plan-selectors.js"></script>
+    <script src="plan-mutations.js"></script>
+    <script src="scenario-overlay.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

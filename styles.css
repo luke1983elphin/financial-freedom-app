@@ -2061,6 +2061,44 @@ main {
   padding-bottom: 0;
 }
 
+.wizard-mobile-selector {
+  display: none;
+}
+
+.consumer-action-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+.consumer-action-grid .btn {
+  min-height: 46px;
+  justify-content: center;
+  white-space: normal;
+}
+
+.setup-advanced-section,
+.weekly-first-run-defaults {
+  border: 1px solid #dbe4ee;
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 14px;
+}
+
+.setup-advanced-section > summary {
+  min-height: 44px;
+  color: #0f2742;
+  cursor: pointer;
+  font-weight: 850;
+}
+
+.weekly-first-run-defaults p {
+  margin-top: 5px;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
 .wizard-step-chip {
   display: inline-flex;
   min-height: 42px;
@@ -8299,6 +8337,233 @@ body.scenario-save-modal-open {
   overflow: auto;
 }
 
+.policy-dialog-card {
+  width: min(94vw, 760px);
+}
+
+.policy-content {
+  color: #334155;
+  line-height: 1.6;
+}
+
+.policy-content h3 {
+  color: #0f2742;
+  font-size: 1rem;
+  margin: 1.25rem 0 0.35rem;
+}
+
+.policy-content p {
+  margin: 0.5rem 0;
+}
+
+.policy-draft-label {
+  display: inline-flex;
+  padding: 0.4rem 0.65rem;
+  border: 1px solid #f59e0b;
+  border-radius: 6px;
+  background: #fffbeb;
+  color: #92400e;
+  font-weight: 800;
+}
+
+.linked-setup-dialog-card {
+  width: min(94vw, 820px);
+  max-height: min(90vh, 860px);
+  overflow: auto;
+}
+
+.linked-setup-dialog-card > h2 {
+  padding-right: 2.75rem;
+  overflow-wrap: anywhere;
+}
+
+.linked-setup-section {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #dbe4ec;
+}
+
+.linked-setup-section h3 {
+  margin: 0 0 0.75rem;
+  color: #0f2742;
+  font-size: 1.05rem;
+}
+
+.linked-setup-conditional {
+  margin-top: 0.9rem;
+  padding: 1rem;
+  border-left: 3px solid #0f9f6e;
+  background: #f0fdf4;
+}
+
+.linked-setup-advanced {
+  margin-top: 1rem;
+  border: 1px solid #dbe4ec;
+  border-radius: 8px;
+  padding: 0.85rem;
+}
+
+.linked-setup-advanced summary {
+  cursor: pointer;
+  color: #0f5273;
+  font-weight: 750;
+}
+
+.linked-setup-warning,
+.linked-setup-errors {
+  margin-top: 0.85rem;
+  padding: 0.85rem;
+  border: 1px solid #f59e0b;
+  border-radius: 8px;
+  background: #fffbeb;
+  color: #78350f;
+}
+
+.linked-setup-warning label {
+  display: block;
+  margin-top: 0.65rem;
+}
+
+.linked-setup-actions,
+.linked-property-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.65rem;
+}
+
+.linked-setup-actions {
+  position: sticky;
+  bottom: -1px;
+  margin-top: 1.25rem;
+  padding-top: 0.9rem;
+  background: #fff;
+  border-top: 1px solid #dbe4ec;
+}
+
+.salary-annual-equivalent {
+  align-self: end;
+  margin: 0;
+  padding: 0.7rem 0.85rem;
+  border-left: 3px solid #2f74c0;
+  background: #f3f8fd;
+}
+
+.linked-primary-summary {
+  border-color: #c9dceb;
+  background: #f8fbfd;
+}
+
+.setup-confirmation-field,
+.super-checkpoint {
+  margin-top: 1rem;
+  border: 1px solid #dbe4ee;
+  border-radius: 8px;
+  background: #fff;
+  padding: 1rem;
+}
+
+.wizard-exit-button {
+  justify-self: end;
+  margin-top: 0.75rem;
+}
+
+.linked-setup-plain-explanation {
+  margin: 0.45rem 0 0;
+  color: #526274;
+  line-height: 1.55;
+}
+
+@media (max-width: 600px) {
+  body[data-active-view="setup"] #homeView {
+    display: none;
+  }
+
+  body[data-active-view="setup"] #appWorkspace {
+    border-top: 0;
+  }
+
+  body[data-active-view="setup"] #appWorkspace > div {
+    display: block;
+    padding-top: 0.75rem;
+  }
+
+  body[data-active-view="setup"] .workspace-nav {
+    display: none;
+  }
+
+  body[data-active-view="setup"] .wizard-shell,
+  body[data-active-view="setup"] .wizard-card {
+    min-width: 0;
+  }
+
+  .wizard-exit-button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .salary-annual-equivalent {
+    width: 100%;
+  }
+}
+
+.linked-investment-section {
+  margin-top: 1.5rem;
+}
+
+.linked-setup-shortcuts {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 1rem;
+  border: 1px solid #b9d8d0;
+  border-radius: 8px;
+  background: #f0fdf9;
+}
+
+.linked-setup-shortcuts p {
+  margin: 0.25rem 0 0;
+  color: #475569;
+  font-size: 0.875rem;
+}
+
+.linked-setup-shortcut-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  flex: 0 0 auto;
+}
+
+.linked-investment-list {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.linked-investment-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem;
+  border: 1px solid #dbe4ec;
+  border-radius: 8px;
+}
+
+.linked-investment-row div,
+.linked-investment-row span {
+  min-width: 0;
+}
+
+.linked-investment-row span {
+  display: block;
+  margin-top: 0.2rem;
+  color: #64748b;
+  overflow-wrap: anywhere;
+}
+
 .durability-dialog-actions {
   display: flex;
   flex-wrap: wrap;
@@ -8331,6 +8596,30 @@ body.scenario-save-modal-open {
 }
 
 @media (max-width: 600px) {
+  .wizard-step-chips {
+    display: none;
+  }
+
+  .wizard-mobile-selector {
+    display: grid;
+    gap: 6px;
+  }
+
+  .wizard-mobile-selector > span {
+    color: #475569;
+    font-size: 13px;
+    font-weight: 800;
+  }
+
+  .consumer-action-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .consumer-action-grid .btn {
+    width: 100%;
+    min-height: 48px;
+  }
+
   .durability-notice {
     margin: 0 0.75rem;
   }
@@ -8345,6 +8634,58 @@ body.scenario-save-modal-open {
   .app-legal-footer {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .linked-setup-dialog-card {
+    width: calc(100vw - 1rem);
+    max-height: calc(100dvh - 1rem);
+    padding: 1rem;
+  }
+
+  .linked-setup-dialog-card > h2 {
+    font-size: 1.35rem;
+    line-height: 1.2;
+  }
+
+  .linked-setup-dialog-card .input-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .linked-setup-actions,
+  .linked-property-card-actions,
+  .linked-investment-row,
+  .linked-property-section .collection-heading,
+  .linked-investment-section .collection-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .linked-setup-actions {
+    position: static;
+  }
+
+  .linked-setup-shortcuts,
+  .linked-setup-shortcut-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .linked-setup-actions .btn,
+  .linked-property-card-actions .btn,
+  .linked-property-section .btn,
+  .linked-investment-section .btn {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .linked-setup-shortcuts .btn {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .policy-content,
+  .linked-setup-dialog-card {
+    overflow-wrap: anywhere;
   }
 }
 

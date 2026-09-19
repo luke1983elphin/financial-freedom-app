@@ -192,7 +192,7 @@ test("R5-H Weekly Plan backup round trip preserves history and timing metadata",
 });
 
 test("R5-I backup coverage matrix reflects both export types", () => {
-  const matrix = read("docs/assurance/R5-BACKUP-COVERAGE-MATRIX.md");
+  const matrix = read("docs/BACKUP-COVERAGE.md");
   assert.match(matrix, /complete local plan/i);
   assert.match(matrix, /Weekly Plan/i);
   assert.match(matrix, /Saved Scenarios/i);
@@ -262,12 +262,15 @@ test("R5-P downloads record initiation rather than guaranteed retention", () => 
   assert.doesNotMatch(source, /backup (?:successfully )?(?:stored|retained)/i);
 });
 
-test("R5-Q Privacy and Terms placeholders are visibly marked unapproved", () => {
+test("R5-Q Privacy and Terms drafts remain visibly subject to legal review", () => {
   const html = read("index.html");
+  const source = read("app.js");
   assert.match(html, /data-policy-page="privacy"/);
   assert.match(html, /data-policy-page="terms"/);
-  assert.match(html, /TODO: legal copy pending professional review/);
-  assert.match(html, /not an approved privacy policy or set of terms/i);
+  assert.match(source, /DRAFT — subject to legal review/);
+  assert.match(source, /Final legal wording requires Australian legal\/regulatory review/);
+  assert.doesNotMatch(html, /TODO: legal copy pending professional review/);
+  assert.doesNotMatch(html, /not an approved privacy policy or set of terms/i);
 });
 
 test("R5-R AI requires both consent states and remains server-contained", () => {
@@ -284,7 +287,7 @@ test("R5-S application logging does not emit plan payloads or sensitive fields",
 });
 
 test("R5 storage inventory covers exact keys and prefixes", () => {
-  const inventory = read("docs/assurance/R5-STORAGE-INVENTORY.md");
+  const inventory = read("docs/STORAGE-INVENTORY.md");
   for (const key of API.EXACT_KEYS) assert.ok(inventory.includes(key), `missing ${key}`);
   for (const prefix of API.KEY_PREFIXES) assert.ok(inventory.includes(prefix), `missing ${prefix}`);
 });
@@ -311,7 +314,7 @@ test("R5 deletion UI is deliberate and does not use localStorage.clear", () => {
 });
 
 test("R5 local security boundary is stated factually", () => {
-  const report = read("docs/assurance/R5-PRIVACY-CLAIMS-AUDIT.md");
+  const report = read("docs/PRIVACY-BOUNDARY.md");
   assert.match(report, /same-origin/i);
   assert.match(report, /not.*encrypt/i);
   assert.match(report, /clearing.*browser/i);
