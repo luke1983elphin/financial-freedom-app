@@ -1,0 +1,509 @@
+diff --git a/app.js b/app.js
+--- a/app.js
++++ b/app.js
+@@ -346,6 +346,14 @@
+       title: "Combined Wealth Creation",
+       body: "Combined Wealth Creation shows the estimated annual contribution from passive cash income, financial investment growth and investment property growth. Only the Passive Cash Income component represents income that may currently be available to spend.",
+     },
++    annualLoanRepayments: {
++      title: "Annual Loan Repayments",
++      body: "This includes the modelled annual home, rental-property, investment, personal and vehicle loan payments, credit-card payments and other debt repayments, including principal and interest. Rental interest already included in net rental income is not deducted again when calculating your surplus. Rental loans with unconfirmed cashflow treatment are included in this repayment total; confirm their rental income links and interest treatment to include them correctly in cashflow.",
++    },
++    currentSuperBalance: {
++      title: "Super balance today",
++      body: "This is your current combined super balance entered in the plan, not the projected balance at age 60. The model assumes super becomes available from age 60. Actual access depends on applicable conditions of release; retiring before age 60 does not automatically make super accessible. Check the rules that apply to you with your super fund.",
++    },
+     accessibleInvestments: {
+       title: "Accessible Investments",
+       body: "Accessible Investments include cash, offset balances, shares, ETFs, managed funds, cryptocurrency and other financial investments that can generally be accessed before superannuation preservation age. Investment property equity, your family home, personal-use assets and superannuation are assessed separately.",
+@@ -1219,7 +1227,7 @@
+ 
+   function mortgageBalanceAtAge(result, age) {
+     const years = projectionYearForAge(age);
+-    if (years <= 0) return Number(result.effectiveMortgageBalance) || 0;
++    if (years <= 0) return Number(result.loan?.offsetBenefit?.grossLoanBalance ?? result.plan?.liabilities?.homeLoanBalance ?? 0);
+     const month = years * 12;
+     const row = result.loan?.schedule?.find((item) => Number(item.month) >= month) || result.loan?.schedule?.at(-1);
+     return Math.max(0, Number(row?.closingBalance ?? result.loan?.finalBalance ?? 0));
+@@ -1240,21 +1248,21 @@
+     const progressRow = useCurrentPosition ? null : projectionRowAtAge(result.financialFreedomProgressProjection, projectedAge);
+     const netWorthRow = useCurrentPosition ? null : projectionRowAtAge(result.netWorthProjection, projectedAge);
+     const mortgageBalance = mortgageBalanceAtAge(result, projectedAge);
+-    const superAccessible = projectedAge >= Number(result.superAccessAge || 60) ? Number(superRow?.closingBalance) || 0 : 0;
+-    const projectedFiAssets = (Number(investment?.closingBalance) || result.investmentBalance || 0) + (Number(plan.assets.offsetBalance) || 0) + superAccessible;
+-    const effectiveProjectedFiAssets = Number(progressRow?.netFiAssets) || projectedFiAssets;
++    // The calculator owns FI eligibility and canonical-to-legacy projection.
++    // Never rebuild today's FI assets from potentially stale live-plan scalars.
++    const effectiveProjectedFiAssets = Number(progressRow?.netFiAssets ?? result.financialIndependenceAssets ?? 0);
+     return {
+       age: projectedAge,
+       requestedAge,
+       year,
+       currentAge,
+-      investmentBalance: Number(investment?.closingBalance) || result.investmentBalance || 0,
+-      superBalance: Number(superRow?.closingBalance) || result.superannuationBalance || 0,
+-      mortgageBalance,
+-      netWorth: year <= 0 ? result.currentNetWorth : Number(netWorthRow?.closingBalance) || result.currentNetWorth || 0,
+-      projectedFiAssets: effectiveProjectedFiAssets,
+-      passiveIncome: effectiveProjectedFiAssets * safeWithdrawalRate(),
+-      progress: Number(progressRow?.progress) || engagementProgress(result).financialFreedomRaw || 0,
++      investmentBalance: Number(investment?.closingBalance ?? result.investmentBalance ?? 0),
++      superBalance: Number(superRow?.closingBalance ?? result.superannuationBalance ?? 0),
++      mortgageBalance,
++      netWorth: Number(netWorthRow?.closingBalance ?? result.currentNetWorth ?? 0),
++      projectedFiAssets: effectiveProjectedFiAssets,
++      passiveIncome: effectiveProjectedFiAssets * safeWithdrawalRate(),
++      progress: Number(progressRow?.progress ?? result.financialFreedomProgressRaw ?? engagementProgress(result).financialFreedomRaw ?? 0),
+     };
+   }
+ 
+@@ -7993,6 +8001,7 @@
+   function renderLoan(result) {
+     const loan = result.loan;
+     const warning = loan.warnings.find((item) => item.code === "REPAYMENT_TOO_LOW");
++    const termWarning = loan.warnings.find((item) => item.code === "LOAN_TERM_MISSING");
+     document.getElementById("loanSummary").innerHTML = [
+       summaryTile("Gross loan balance", money(loan.offsetBenefit.grossLoanBalance)),
+       summaryTile("Offset balance", money(loan.offsetBenefit.offsetBalance)),
+@@ -8004,6 +8013,7 @@
+       summaryTile("Total principal repaid", money(loan.totalPrincipalRepaid)),
+       ...[5, 10, 20, 30].map((year) => summaryTile(`Balance at ${year} years`, money(loan.balanceAtYears[year]))),
+     ].join("");
++    if (termWarning) document.getElementById("loanSummary").innerHTML += `<p class="tax-note">${escapeHtml(termWarning.message)}</p>`;
+     const help = result.stslRepaymentEstimate || result.helpRepaymentEstimate;
+     document.getElementById("helpEstimateSummary").innerHTML = `
+       <strong>STSL estimate:</strong> ${money(help.annualRepayment)} per year from estimated repayment income of ${money(help.repaymentIncome)}.
+@@ -14515,11 +14525,11 @@
+       { label: "Financial Freedom progress", value: plainPercent(percent) },
+       { label: "Current stage", value: stage.name },
+       { label: "Accessible investments", value: money(result.accessibleInvestmentAssets) },
+-      { label: "Super from age 60", value: money(result.superannuationBalance) },
++      { label: "Super balance today", value: money(result.superannuationBalance), infoKey: "currentSuperBalance" },
+       { label: "Annual Income", value: money(result.annualGrossIncome) },
+       { label: "Net income after tax, Medicare and STSL", value: money(result.netIncomeAfterTaxHelp) },
+       { label: "Annual Living Expenses", value: money(result.annualLivingExpenses) },
+-      { label: "Annual Loan Repayments", value: money(result.annualDebtRepayments) },
++      { label: "Annual Loan Repayments", value: money(result.annualLoanRepayments), infoKey: "annualLoanRepayments" },
+       { label: "Annual Surplus", value: money(result.cashSurplusBeforeInvesting) },
+       {
+         label: "Spare cashflow used to invest",
+@@ -14543,7 +14553,7 @@
+       { label: "Annual income entered", value: money(result.annualGrossIncome) },
+       { label: "Annual living expenses", value: money(result.annualLivingExpenses) },
+       { label: "Current net worth", value: money(result.currentNetWorth) },
+-      { label: "Super entered", value: money(result.superannuationBalance) },
++      { label: "Super entered", value: money(result.superannuationBalance), infoKey: "currentSuperBalance" },
+     ];
+     container.classList.toggle("setup-summary-preliminary", !readiness.readyForPersonalisedResults);
+     container.innerHTML = rows.map((row) => {
+@@ -14558,6 +14568,8 @@
+         </div>
+       `;
+     }).join("");
++    const termWarning = result.loan?.warnings?.find((item) => item.code === "LOAN_TERM_MISSING");
++    if (termWarning) container.innerHTML += `<p class="field-help">${escapeHtml(termWarning.message)}</p>`;
+   }
+ 
+   function jumpToSummaryTarget(trigger) {
+diff --git a/calculator.js b/calculator.js
+--- a/calculator.js
++++ b/calculator.js
+@@ -1443,7 +1443,16 @@
+     const monthlyRepayment = nonNegative(plan.liabilities.monthlyRepayment || plan.expenses.mortgageRepayments);
+     const termYears = nonNegative(plan.liabilities.remainingLoanTermYears);
+     const offsetBalance = nonNegative(plan.assets.offsetBalance);
+-    const amortisation = amortiseLoan({ principal, annualInterestRate, monthlyRepayment, termYears, offsetBalance });
++    // A missing maturity date must not erase known repayments or outstanding debt.
++    // Use the existing projection horizon, without asserting a contractual term.
++    const projectionTermYears = termYears > 0 ? termYears : 30;
++    const amortisation = amortiseLoan({ principal, annualInterestRate, monthlyRepayment, termYears: projectionTermYears, offsetBalance });
++    if (principal > 0 && termYears <= 0) {
++      amortisation.warnings.push({
++        code: "LOAN_TERM_MISSING",
++        message: "Remaining loan term not entered. Repayments are projected for up to 30 years using the entered balance, rate and repayment; this is not an assumed loan maturity date.",
++      });
++    }
+     const finalBalance = amortisation.schedule.at(-1)?.closingBalance ?? principal;
+     const totalInterestPaid = roundCurrency(amortisation.schedule.reduce((total, row) => total + row.interestCharged, 0));
+     const totalPrincipalRepaid = roundCurrency(amortisation.schedule.reduce((total, row) => total + Math.max(0, row.principalRepaid), 0));
+@@ -2029,11 +2038,24 @@
+       + nonNegative(plan.assets.vehiclesPersonalAssets),
+     );
+     const creditCardBalance = nonNegative(plan.liabilities.creditCardBalance);
++    const additionalLoanTypes = ["investmentLoan", "shareInvestmentLoan", "managedFundLoan", "personalLoan", "vehicleLoan", "otherDebt"];
++    const additionalLoans = (Array.isArray(plan.liabilityItems) ? plan.liabilityItems : [])
++      .filter((item) => additionalLoanTypes.includes(item.type));
++    // Canonical other-debt records replace their legacy aggregate, including zero.
++    const otherDebtRecords = additionalLoans.filter((item) => item.type === "otherDebt");
++    const otherDebtBalance = otherDebtRecords.length
++      ? roundCurrency(otherDebtRecords.reduce((total, item) => total + nonNegative(item.balance), 0))
++      : nonNegative(plan.liabilities.otherDebts);
++    const additionalLoanBalance = roundCurrency(otherDebtBalance + additionalLoans
++      .filter((item) => item.type !== "otherDebt")
++      .reduce((total, item) => total + nonNegative(item.balance), 0));
++    const annualAdditionalLoanRepayments = roundCurrency(additionalLoans
++      .reduce((total, item) => total + getAnnualLoanBreakdown(item).annualRepayments, 0));
+     const totalLiabilities = roundCurrency(
+       nonNegative(plan.liabilities.homeLoanBalance)
+       + totalStudyLoanBalance
+       + rentalPropertyLoanBalance
+-      + nonNegative(plan.liabilities.otherDebts)
++      + additionalLoanBalance
+       + creditCardBalance,
+     );
+     const currentNetWorth = roundCurrency(totalAssets - totalLiabilities);
+@@ -2220,7 +2242,14 @@
+         : roundCurrency(nonNegative(plan.liabilities.monthlyRepayment || plan.expenses.mortgageRepayments) * MONTHS_PER_YEAR);
+     const annualCreditCardRepayments = roundCurrency(nonNegative(plan.liabilities.creditCardMonthlyRepayment) * MONTHS_PER_YEAR);
+     const annualRentalLoanCashflowRepayments = roundCurrency(rentalPropertyCashflow.annualHouseholdDebtDeduction);
+-    const annualDebtRepayments = roundCurrency(annualMortgageRepayments + annualCreditCardRepayments + annualRentalLoanCashflowRepayments);
++    // Cashflow deductions exclude rental interest already included in net rental income.
++    const annualDebtRepayments = roundCurrency(annualMortgageRepayments + annualCreditCardRepayments + annualRentalLoanCashflowRepayments + annualAdditionalLoanRepayments);
++    // Report actual rental payments independently of income links/treatment. Walk each
++    // canonical loan once, including loans whose cashflow treatment is unconfirmed.
++    const annualRentalLoanRepayments = roundCurrency((Array.isArray(plan.liabilityItems) ? plan.liabilityItems : [])
++      .filter((item) => item.type === "rentalPropertyLoan")
++      .reduce((total, item) => total + getAnnualLoanBreakdown(item).annualRepayments, 0));
++    const annualLoanRepayments = roundCurrency(annualMortgageRepayments + annualCreditCardRepayments + annualRentalLoanRepayments + annualAdditionalLoanRepayments);
+     const medicareLevySurchargeForCashflow = nonNegative(taxEstimate.medicareLevySurcharge);
+     const estimatedTaxAndHelp = roundCurrency(taxEstimate.incomeTax + taxEstimate.medicareLevy + medicareLevySurchargeForCashflow + helpRepaymentEstimate.annualRepayment);
+     const netIncomeAfterTaxHelp = roundCurrency(annualGrossIncome - taxEstimate.incomeTax - taxEstimate.medicareLevy - medicareLevySurchargeForCashflow - helpRepaymentEstimate.annualRepayment);
+@@ -2385,7 +2414,7 @@
+       const investmentPropertyValue = projectedInvestmentPropertyGrossValue(plan, year);
+       const loanBalance = balanceAtMonth(loan.schedule, loan.finalBalance, year * MONTHS_PER_YEAR);
+       const projectedStudyLoanBalance = Math.max(0, totalStudyLoanBalance - helpRepaymentEstimate.annualRepayment * year);
+-      const closingBalance = roundCurrency(homeValue + investmentPropertyValue + nonNegative(plan.assets.vehiclesPersonalAssets) + nonNegative(plan.assets.offsetBalance) + row.closingBalance + superProjection[index].closingBalance - loanBalance - projectedStudyLoanBalance - nonNegative(plan.liabilities.otherDebts) - creditCardBalance);
++      const closingBalance = roundCurrency(homeValue + investmentPropertyValue + nonNegative(plan.assets.vehiclesPersonalAssets) + nonNegative(plan.assets.offsetBalance) + row.closingBalance + superProjection[index].closingBalance - loanBalance - rentalPropertyLoanBalance - projectedStudyLoanBalance - additionalLoanBalance - creditCardBalance);
+       return { year, age: currentAge + year, closingBalance };
+     });
+     const financialFreedomProgressProjection = investmentProjection.map((row, index) => {
+@@ -2551,6 +2580,10 @@
+       annualMortgageRepayments,
+       annualCreditCardRepayments,
+       annualRentalLoanCashflowRepayments,
++      annualRentalLoanRepayments,
++      annualLoanRepayments,
++      annualAdditionalLoanRepayments,
++      additionalLoanBalance,
+       annualDebtRepayments,
+       rentalPropertyLoanBalance,
+       rentalPropertyCashflow,
+diff --git a/scripts/test-suites.mjs b/scripts/test-suites.mjs
+--- a/scripts/test-suites.mjs
++++ b/scripts/test-suites.mjs
+@@ -1,6 +1,7 @@
+ export const DEFAULT_SUITE_TIMEOUT_MS = 120_000;
+ 
+ export const ACTIVE_TEST_SUITES = [
++  { id: "future-you-summary", file: "tests/future-you-summary.test.mjs", groups: ["all", "mjs", "future-you"] },
+   { id: "calculations", file: "tests/calculations.test.ts", nodeArgs: ["--experimental-strip-types"], groups: ["all"] },
+   { id: "engagement", file: "tests/engagement.test.ts", nodeArgs: ["--experimental-strip-types"], groups: ["all"] },
+   { id: "tax-integration", file: "tests/financial-freedom-tax-integration.test.mjs", groups: ["all", "mjs"] },
+diff --git a/tests/future-you-summary.test.mjs b/tests/future-you-summary.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/tests/future-you-summary.test.mjs
+@@ -0,0 +1,219 @@
++import assert from "node:assert/strict";
++import { readFileSync } from "node:fs";
++import test from "node:test";
++import vm from "node:vm";
++
++const read = (file) => readFileSync(new URL("../" + file, import.meta.url), "utf8");
++const context = { console };
++context.globalThis = context;
++vm.runInNewContext(read("calculator.js"), context);
++const CALC = context.FFSCalculator;
++const appSource = read("app.js");
++function appFunction(name) {
++  const start = appSource.indexOf("  function " + name + "(");
++  assert.ok(start >= 0);
++  const end = appSource.indexOf("\n  function ", start + 1);
++  return appSource.slice(start, end < 0 ? undefined : end);
++}
++function preview(result, age, currentAge = 43) {
++  const sandbox = {
++    plan: { personal: { person1Age: currentAge, fullRetirementAge: 60 }, assets: { offsetBalance: 0 } },
++    engagementData: () => ({ futureYouAge: age }),
++    engagementProgress: () => ({ financialFreedomRaw: result.financialFreedomProgressRaw }),
++    safeWithdrawalRate: () => 0.04,
++  };
++  vm.runInNewContext(["projectionRowAtAge", "projectionYearForAge", "mortgageBalanceAtAge", "futureYouPreview"].map(appFunction).join("\n"), sandbox);
++  return sandbox.futureYouPreview(result);
++}
++function planWithHomeLoan(termYears = 25) {
++  const plan = CALC.emptyPlan();
++  Object.assign(plan.personal, { person1Age: 43, targetAnnualSpending: 60000 });
++  Object.assign(plan.assets, { homeValue: 1000000, cash: 150000, offsetBalance: 200000, superPerson1: 200000 });
++  Object.assign(plan.liabilities, { homeLoanBalance: 600000, homeLoanInterestRatePct: 6, monthlyRepayment: 4000, remainingLoanTermYears: termYears });
++  return plan;
++}
++test("Future You current position uses canonical FI assets including offset exactly once", () => {
++  const result = CALC.calculatePlan(planWithHomeLoan());
++  const future = preview(result, 43);
++  assert.equal(future.projectedFiAssets, result.financialIndependenceAssets);
++  assert.equal(future.projectedFiAssets, 350000);
++  assert.equal(future.netWorth, result.currentNetWorth);
++  assert.equal(future.passiveIncome, 14000);
++});
++test("Future You current-age super inclusion follows the calculator result", () => {
++  const plan = planWithHomeLoan();
++  plan.personal.person1Age = 60;
++  const result = CALC.calculatePlan(plan);
++  assert.equal(preview(result, 60, 60).projectedFiAssets, 550000);
++});
++test("Future You preserves genuine zero projected values rather than reverting to today", () => {
++  const result = CALC.calculatePlan(planWithHomeLoan());
++  result.investmentProjection = [{ age: 44, year: 1, closingBalance: 0 }];
++  result.superProjection = [{ age: 44, closingBalance: 0 }];
++  result.netWorthProjection = [{ age: 44, closingBalance: 0 }];
++  result.financialFreedomProgressProjection = [{ age: 44, netFiAssets: 0, progress: 0 }];
++  const future = preview(result, 44);
++  for (const key of ["investmentBalance", "superBalance", "netWorth", "projectedFiAssets", "passiveIncome", "progress"]) assert.equal(future[key], 0, key);
++});
++test("Future You subsequent-year figures come from matching calculator projection rows", () => {
++  const result = CALC.calculatePlan(planWithHomeLoan());
++  const future = preview(result, 44);
++  assert.equal(future.netWorth, result.netWorthProjection[0].closingBalance);
++  assert.equal(future.projectedFiAssets, result.financialFreedomProgressProjection[0].netFiAssets);
++  assert.equal(future.progress, result.financialFreedomProgressProjection[0].progress);
++});
++test("Entered home-loan repayments remain visible when remaining term is missing", () => {
++  const result = CALC.calculatePlan(planWithHomeLoan(0));
++  assert.equal(result.annualMortgageRepayments, 48000);
++  assert.equal(result.annualDebtRepayments, 48000);
++});
++test("Paid-off home loans still have zero annual repayments", () => {
++  const plan = planWithHomeLoan(0);
++  plan.liabilities.homeLoanBalance = 0;
++  assert.equal(CALC.calculatePlan(plan).annualDebtRepayments, 0);
++});
++test("Rental debt does not disappear from projected net worth", () => {
++  const plan = CALC.emptyPlan();
++  plan.personal.person1Age = 43;
++  plan.assets.otherPropertyValue = 900000;
++  plan.assetItems = [{ id: "rental", category: "rentalInvestmentProperty", value: 900000 }];
++  plan.liabilityItems = [{ id: "rental-loan", type: "rentalPropertyLoan", balance: 600000, linkedAssetId: "rental", repayment: 0 }];
++  const withDebt = CALC.calculatePlan(plan);
++  const withoutDebt = CALC.calculatePlan({ ...plan, liabilityItems: [] });
++  assert.equal(withoutDebt.currentNetWorth - withDebt.currentNetWorth, 600000);
++  for (let i = 0; i < withDebt.netWorthProjection.length; i++) {
++    assert.equal(Math.round((withoutDebt.netWorthProjection[i].closingBalance - withDebt.netWorthProjection[i].closingBalance) * 100) / 100, 600000);
++  }
++});
++test("Live Summary identifies the super amount as current and offers an explanation", () => {
++  const container = { innerHTML: "", classList: { toggle() {} } };
++  const sandbox = {
++    document: { getElementById: () => container },
++    personalisedResultsReadiness: () => ({ readyForPersonalisedResults: true }),
++    plan: { investing: {} }, freedomPercent: () => 0, plainPercent: String,
++    financialStageInfo: () => ({ stage: { name: "Starting" } }), money: String,
++    netWorthAtYear: () => 0, escapeHtml: String,
++    infoButtonHtml: (key) => '<button data-info="' + key + '">Info</button>',
++  };
++  vm.runInNewContext(appFunction("renderSetupSummary"), sandbox);
++  sandbox.renderSetupSummary({ superannuationBalance: 200000, annualDebtRepayments: 0, annualLoanRepayments: 48000 });
++  assert.match(container.innerHTML, /Super balance today/);
++  assert.match(container.innerHTML, /data-info="currentSuperBalance"/);
++  assert.match(container.innerHTML, /Annual Loan Repayments[\s\S]*?48000/);
++  assert.match(appSource, /currentSuperBalance:[\s\S]*?current combined super balance[\s\S]*?conditions of release/);
++});
++
++test("Canonical offset records override stale legacy offsets without double counting", () => {
++  const plan = planWithHomeLoan();
++  plan.assets.offsetBalance = 0;
++  plan.assetItems = [{ id: "offset", category: "offset", value: 200000 }, { id: "cash", category: "cash", value: 150000 }];
++  const result = CALC.calculatePlan(plan);
++  assert.equal(preview(result, 43).projectedFiAssets, 350000);
++  plan.assets.offsetBalance = 200000;
++  assert.equal(preview(CALC.calculatePlan(plan), 43).projectedFiAssets, 350000);
++});
++test("Current FI keeps investment debt, property equity and accessible super policy", () => {
++  const plan = planWithHomeLoan();
++  plan.assets.otherPropertyValue = 900000;
++  plan.liabilityItems = [{ id: "rental-loan", type: "rentalPropertyLoan", balance: 600000 }, { id: "investment-loan", type: "investmentLoan", balance: 50000 }];
++  const result = CALC.calculatePlan(plan);
++  assert.equal(result.financialIndependenceAssets, 600000);
++  assert.equal(preview(result, 43).projectedFiAssets, 600000);
++});
++test("Missing-term projection caps payments at the amount actually owed", () => {
++  const plan = planWithHomeLoan(0);
++  plan.liabilities.homeLoanBalance = 1000;
++  plan.liabilities.homeLoanInterestRatePct = 0;
++  const result = CALC.calculatePlan(plan);
++  assert.equal(result.annualDebtRepayments, 1000);
++  assert.equal(result.loan.finalBalance, 0);
++  assert.equal(result.loan.warnings.some(w => w.code === "LOAN_TERM_MISSING"), true);
++});
++test("Missing-term mortgage retains debt, capitalises unpaid interest and uses offset only for interest", () => {
++  const plan = planWithHomeLoan(0);
++  plan.liabilities.monthlyRepayment = 1000;
++  const result = CALC.calculatePlan(plan);
++  const row = result.loan.schedule[11];
++  assert.ok(row.closingBalance > 600000);
++  assert.equal(result.loan.schedule[0].interestCharged, 2000);
++  assert.equal(preview(result, 43).mortgageBalance, 600000);
++  assert.equal(preview(result, 44).mortgageBalance, row.closingBalance);
++});
++
++function rentalPlan(repaymentType = "interestOnly", treatment = "afterInterest") {
++  const plan = CALC.emptyPlan();
++  plan.liabilityItems = [{ id: "rental-loan", type: "rentalPropertyLoan", balance: 600000, interestRatePct: 6, repayment: 3000, repaymentFrequency: "monthly", termYears: 25, repaymentType, linkedRentalIncomeId: "rent" }];
++  plan.incomeItems = [{ id: "rent", type: "rentalNetCashIncome", owner: "person1", rentalCashIncomeAnnual: 12000, rentalCashflowTreatment: treatment, linkedLoanIds: ["rental-loan"] }];
++  return plan;
++}
++test("Positive-term rental interest-only payments are reported without deducting interest twice", () => {
++  const plan = rentalPlan();
++  const result = CALC.calculatePlan(plan);
++  assert.equal(result.annualLoanRepayments, 36000);
++  assert.equal(result.annualDebtRepayments, 0);
++  assert.equal(result.rentalPropertyCashflow.annualHouseholdDebtDeduction, 0);
++  const before = structuredClone(plan);
++  before.incomeItems[0].rentalCashflowTreatment = "beforeInterest";
++  before.incomeItems[0].rentalCashIncomeAnnual = 48000;
++  const other = CALC.calculatePlan(before);
++  assert.equal(other.annualLoanRepayments, 36000);
++  assert.equal(other.annualDebtRepayments, 36000);
++  assert.equal(other.rentalPropertyCashflow.annualHouseholdCashflowContribution, result.rentalPropertyCashflow.annualHouseholdCashflowContribution);
++});
++test("Rental principal-and-interest summary reports full payments, preserving principal-only deduction", () => {
++  const plan = rentalPlan("principalAndInterest");
++  plan.liabilityItems[0].repayment = 4000;
++  const result = CALC.calculatePlan(plan);
++  assert.equal(result.annualLoanRepayments, 48000);
++  assert.equal(result.annualDebtRepayments, result.rentalPropertyCashflow.annualLoanPrincipal);
++  assert.ok(result.annualDebtRepayments > 0 && result.annualDebtRepayments < 48000);
++});
++test("Rental payment total handles frequencies, missing term, unlinked records and paid-off balances", () => {
++  for (const [frequency, repayment] of [["weekly",1000],["fortnightly",2000],["monthly",52000/12],["annually",52000]]) {
++    const plan = rentalPlan("principalAndInterest");
++    Object.assign(plan.liabilityItems[0], { repaymentFrequency: frequency, repayment, termYears: 0, linkedRentalIncomeId: "" });
++    plan.incomeItems = [];
++    const result = CALC.calculatePlan(plan);
++    assert.ok(Math.abs(result.annualLoanRepayments - 52000) < 0.1, frequency + " (monthly cents rounding)");
++    assert.equal(result.annualDebtRepayments, 0, "Unconfirmed rental cashflow remains excluded");
++    assert.ok(result.rentalPropertyCashflow.warnings.length);
++    plan.liabilityItems[0].balance = 0;
++    assert.equal(CALC.calculatePlan(plan).annualLoanRepayments, 0);
++  }
++});
++test("Rental payment total counts each canonical loan once despite multiple income links", () => {
++  const plan = rentalPlan();
++  plan.incomeItems.push({ ...plan.incomeItems[0], id: "rent2" });
++  assert.equal(CALC.calculatePlan(plan).annualLoanRepayments, 36000);
++});
++
++test("Every non-property loan reduces net worth and contributes repayments once", () => {
++  for (const type of ["investmentLoan", "personalLoan", "vehicleLoan", "otherDebt", "shareInvestmentLoan", "managedFundLoan"]) {
++    const plan = CALC.emptyPlan();
++    plan.assets.cash = 100000;
++    plan.liabilityItems = [{ id: "loan", type, balance: 20000, repayment: 200, repaymentFrequency: "monthly", interestRatePct: 6, termYears: 10 }];
++    if (type === "otherDebt") plan.liabilities.otherDebts = 20000;
++    const result = CALC.calculatePlan(plan);
++    const debtFree = CALC.calculatePlan({ ...plan, liabilities: { ...plan.liabilities, otherDebts: 0 }, liabilityItems: [] });
++    assert.equal(result.currentNetWorth, 80000, type);
++    assert.equal(result.annualLoanRepayments, 2400, type);
++    assert.equal(result.annualDebtRepayments, 2400, type);
++    assert.equal(debtFree.cashSurplusBeforeInvesting - result.cashSurplusBeforeInvesting, 2400, type);
++    assert.equal(debtFree.netWorthProjection[0].closingBalance - result.netWorthProjection[0].closingBalance, 20000, type);
++    plan.liabilityItems[0].balance = 0;
++    const paidOff = CALC.calculatePlan(plan);
++    assert.equal(paidOff.currentNetWorth, 100000, type + " paid off overrides legacy");
++    assert.equal(paidOff.annualLoanRepayments, 0, type);
++  }
++});
++test("Non-property loan frequency and missing term use the existing capped debt schedule", () => {
++  for (const type of ["investmentLoan", "personalLoan", "vehicleLoan", "otherDebt"]) {
++    for (const [frequency, repayment] of [["weekly",60],["fortnightly",120],["monthly",260],["annually",3120]]) {
++      const plan = CALC.emptyPlan();
++      plan.liabilityItems = [{ id: "loan", type, balance: 20000, repayment, repaymentFrequency: frequency, interestRatePct: 0, termYears: 0 }];
++      assert.equal(CALC.calculatePlan(plan).annualLoanRepayments, 3120);
++      plan.liabilityItems[0].balance = 1000;
++      assert.equal(CALC.calculatePlan(plan).annualLoanRepayments, 1000);
++    }
++  }
++});
+diff --git a/docs/FUTURE-YOU-SUMMARY-FIX.md b/docs/FUTURE-YOU-SUMMARY-FIX.md
+new file mode 100644
+--- /dev/null
++++ b/docs/FUTURE-YOU-SUMMARY-FIX.md
+@@ -0,0 +1,79 @@
++# Future You and Live Summary corrections
++
++## Scope and baseline
++
++Targeted fixes for offset-inclusive current FI assets, outstanding rental debt in net-worth projections, rental repayment reporting, missing-term mortgage repayments, and current-super help text. No deployment and no changes to device data. All examples below are synthetic.
++
++Baseline: financial-freedom-app-main.zip supplied by the owner, SHA-256 29aae9856d22668a1b1f15ab53463c9833a82fe926fee2c28f43ba8d4d25cc66. This workspace is an extracted archive, not a Git checkout. The supplied GitHub URL is https://github.com/luke1983elphin/financial-freedom-app. Latest remote revision and write access could not be verified: bundled Git is blocked by Windows Application Control and direct GitHub API access is denied. Apply this patch only after checking it against the intended repository revision.
++
++## Causes and fixes
++
++1. Future You rebuilt current FI assets from investmentBalance and the live legacy offset scalar. Under the canonical adapter, that scalar can be stale while result.financialIndependenceAssets is correct. Current-age values now use that authoritative total; future ages use the matching financialFreedomProgressProjection row. This retains the calculator's debt, investment-property equity and super-access policy. Numeric nullish fallbacks preserve actual zero balances/progress. The mortgage helper now returns gross debt today, rather than debt net of offset.
++2. calculator.js netWorthProjection included gross investment-property value but did not subtract rentalPropertyLoanBalance. It now retains that debt. The simple main projection continues to hold rental debt constant, consistent with its existing FI-equity assumptions; this fix does not introduce a new rental amortisation policy. Retirement Planning retains its separate detailed debt engine.
++3. The owner confirmed their affected loan is a rental-property loan with a positive remaining term. Live Summary incorrectly labelled annualDebtRepayments (the household cashflow deduction) as total loan repayments. For after-interest rental income this is principal only; interest-only loans correctly have zero additional cashflow deduction but incorrectly displayed zero total repayments. Unconfirmed rental links can also exclude cashflow deductions independently of term. A new calculator result, annualLoanRepayments, aggregates home/card payments and each canonical rental loan's full annual breakdown independently of income links. Live Summary uses this total and explains the difference in an accessible info dialog. Existing annualDebtRepayments and all cashflow/tax treatment remain unchanged, avoiding double deduction of rental interest. Paid-off loans remain zero. The exact household settings were not supplied, so the precise zero-producing branch remains unconfirmed.
++
++Separately, calculateLoanSummary passed zero/missing term to amortiseLoan, which returned no schedule. Annual repayments summed the empty schedule to zero despite a positive balance and entered payments. Missing-term loans now use the existing 30-year projection horizon with the entered balance/rate/payment/offset and an explicit LOAN_TERM_MISSING warning. This is a modelling horizon, not a contractual maturity assumption. Annual payments remain capped at actual debt service, paid-off loans stay at zero, and the warning is shown in the loan summary and Live Summary. Known positive terms retain their existing behavior.
++4. Live Summary now says Super balance today and uses the existing labelled, keyboard-accessible information dialog. The text distinguishes the current balance from a future age-60 value and explains that modelled access and legal conditions of release are different. Guidance checked against ASIC Moneysmart: https://moneysmart.gov.au/how-super-works/getting-your-super and ATO guidance on illegal early access: https://www.ato.gov.au/individuals-and-families/super-for-individuals-and-families/super/withdrawing-and-using-your-super/early-access-to-super/illegal-early-access-to-super . No tax or super-access calculation rule changed.
++
++## Synthetic before / after
++
++| Case | Before | After |
++| --- | ---: | ---: |
++| Current FI: $150,000 cash plus $200,000 canonical offset, legacy offset zero | $150,000 | $350,000 |
++| Corresponding 4% modelled annual income | $6,000 | $14,000 |
++| Rental: $900,000 property, $600,000 loan, next-year net worth at 3% property growth | $927,000 | $327,000 |
++| Same rental current net worth | $300,000 | $300,000 |
++| Home: $600,000 balance, 6%, $200,000 offset, $4,000/month, missing term — annual repayments | $0 | $48,000 |
++| Same home's debt after 12 months | $600,000 held unchanged | $575,328.89 |
++| Rental interest-only: $600,000, 6%, $3,000/month, 25-year term, after-interest income — Live Summary | $0 | $36,000 |
++| Rental principal-and-interest: same loan, $4,000/month — Live Summary | $12,335.57 | $48,000 |
++
++The fixes also change derived cash surplus and subsequent figures in affected missing-term cases, as expected. They are not display-only overrides.
++
++## Reconciliation and timing
++
++Browser fixture: age 43, $1m home, $200k offset, $150k cash, $200k super, $600k home loan, $4k monthly repayments, $100k salary and $30k annual living expenses. Dashboard and Future You current net worth both show $950,000; Live Summary and Future You current accessible/FI amounts show $350,000. Live Summary shows $48,000 annual loan repayments. Future You age 44 and Live Summary 1-year net worth both show $1,039,475.
++
++With a complete 25-year term and consistent starting inputs, Retirement Planning's first annual row is calendar 2026, age 43, but reports end-of-period balances. Main Future You age 44 is the end of the first projection year. The first-period loan balance reconciles at $575,329 displayed in both engines. Retirement's first-row net worth is $1,038,164, not $1,039,475: the detailed engine includes its existing cash-shortfall withdrawal and return/contribution timing, whereas the main projection uses its existing simple accumulation model. Neither engine was rewritten to force equal totals.
++
++Two existing boundaries remain: Retirement Planning treats an explicitly zero remaining term as an expired term with a balloon payment; main-plan missing-term behavior now carries a visible warning. Also, a deliberately stale legacy super/offset input can still affect Retirement Planning defaults, independently of the corrected Future You current summary. The consistent-input comparison above is not a claim that all cross-engine canonical-data handling has been repaired. Those retirement-engine/default behaviors were left unchanged under this task's scope.
++
++Current and future Financial Freedom percentages preserve the existing denominator policy: current progress uses the calculator's target capital; each future row uses its own inflation-adjusted required capital. No progress-policy change was made.
++
++## Verification
++
++- Before changes: new eight-case suite had six failures, reproducing offset omission, zero-value fallback, missing-term repayment, rental debt omission and missing super explanation.
++- Full post-fix run: 859 passed, zero failed/skipped/todo/cancelled, 41 suites. Includes R1, R4A, R5, R6A–E, legacy/canonical compatibility and release-parity fixtures.
++- Eighteen targeted regressions cover current/future figures, true zero values, canonical offset records, investment-debt/property-equity treatment, super at access age, missing-term capped repayments, unpaid-interest capitalisation and the rendered summary.
++- Real isolated Edge browser at 375px and 1366px: no page overflow or console errors after serving disabled-AI configuration; current/next-year figures and Live Summary checked. Local static files were intercepted by the test harness; no hosted deployment was used.
++- Keyboard: Enter opens super help; focus moves inside, Tab stays inside, Escape closes it and returns focus to the triggering button. Mobile screenshot visually inspected.
++- Canonical repayment frequencies: weekly $1,000, fortnightly $2,000, monthly $52,000/12 and annually $52,000 each display $52,000 annual repayments through the real application adapter.
++- Personal screenshot values were not used as fixtures and no household data was requested or modified.
++
++## Files
++
++- app.js
++- calculator.js
++- tests/future-you-summary.test.mjs
++- scripts/test-suites.mjs
++- docs/FUTURE-YOU-SUMMARY-FIX.md
++
++No changes to storage.js, security.js, weekly-plan.js, weekly-planner-export.js or semiRetirementProjection.js.
++
++## Positive-term rental follow-up verification
++
++Four new regressions first failed, then passed after separating repayment reporting from cashflow deductions. They cover positive-term interest-only and P&I loans, before/after-interest rental cashflow equivalence, weekly/fortnightly/monthly/annual frequencies (preserving existing monthly cents rounding), missing term, unconfirmed links, paid-off loans and multiple income links. The rendered summary test deliberately supplies zero annualDebtRepayments and positive annualLoanRepayments to prevent a regression to the old field.
++
++An isolated Edge browser exercised the actual canonical adapter with a positive 25-year rental term: Live Summary displayed $36,000. At 375px and 1366px, the new loan info dialog opened with Enter, closed with Escape and returned focus to its trigger; no overflow or page errors occurred. The mobile screenshot was visually checked. Evidence: bugfix-rental-browser-evidence.json and bugfix-rental-help-375.png in the parent workspace.
++
++The missing-home-term fix is a separate confirmed defect, not the explanation for the owner's rental loan. No personal data, GitHub changes or deployment were performed.
++
++## All loan categories follow-up
++
++Confirmed additional omissions: investmentLoan, personalLoan and vehicleLoan balances were absent from current and projected net worth; their payments and otherDebt payments were absent from annual repayments and household cashflow. These are missing category mappings, not intentional interest offsets. Added canonical category aggregation (including existing shareInvestmentLoan/managedFundLoan aliases), capped annual breakdowns and full repayment cashflow deductions for these non-rental loans. Canonical otherDebt balances replace their legacy scalar, including valid zero, to avoid double counting and stale-value fallback. Existing investment-debt FI treatment remains unchanged; subtracting debt from FI assets does not subtract it from gross net-worth assets a second time. No new tax deduction or assumption about net investment income was introduced.
++
++Synthetic example: $100,000 cash, $20,000 loan, 6%, $200/month and a 10-year term. Investment/personal/vehicle loans previously showed $100,000 net worth and $0 annual repayments; now $80,000 and $2,400. Other debt previously showed $80,000 and $0; now $80,000 and $2,400. The first projected net-worth row now also retains the omitted $20,000 liability. The main simple projection keeps these non-home balances constant, as it already does for rental/other debt; this is not a new amortisation model.
++
++Browser verification used the actual loan-type dropdown and canonical adapter for all seven selectable types: home, rental property, investment, personal, vehicle, credit card and other debt. Each showed $80,000 net worth and $2,400 repayments with the same synthetic inputs. Thus the claim that every non-home category failed net worth was not reproduced for rental, card or other debt in this source. Two added regressions failed before the fix and passed afterwards; they cover category totals, projected debt retention, cashflow impact, stale legacy otherDebt, zero balances, frequencies, missing term and payoff caps. All 859 tests passed across 41 suites including financial parity/security/durability suites. The loan-info dialog was checked at 375px and 1366px, with Enter/Escape/focus return, no overflow or page errors; mobile screenshot visually inspected. Evidence: all-loan-types-before.json and all-loan-types-browser.json.
++
++Files additionally changed in this follow-up: calculator.js, app.js (help copy), tests/future-you-summary.test.mjs, and this report. No GitHub update or deployment.
