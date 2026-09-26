@@ -77,6 +77,7 @@ function makeSamplePlan(config) {
     }));
   }
   (config.extraIncomeItems || []).forEach((item, index) => {
+    const isRentalIncome = (item.type || item.category) === "rentalNetCashIncome";
     incomeItems.push(sampleIncome(
       item.id || `income-extra-${index + 1}`,
       item.name,
@@ -89,6 +90,12 @@ function makeSamplePlan(config) {
         passiveIncome: Boolean(item.passiveIncome),
         person1AllocationPercentage: item.person1AllocationPercentage,
         person2AllocationPercentage: item.person2AllocationPercentage,
+        ...(isRentalIncome ? {
+          linkedAssetId: item.linkedAssetId || (config.otherPropertyValue > 0 ? "asset-rental-property" : ""),
+          linkedLoanIds: item.linkedLoanIds || (config.investmentLoanBalance ? ["liability-rental-loan"] : []),
+          rentalCashflowTreatment: item.rentalCashflowTreatment || "afterInterest",
+          rentalCashIncomeAnnual: item.rentalCashIncomeAnnual ?? item.amount ?? 0,
+        } : {}),
       },
     ));
   });
@@ -148,13 +155,15 @@ function makeSamplePlan(config) {
     }));
   }
   if (config.investmentLoanBalance) {
-    liabilityItems.push(sampleLiability("liability-rental-loan", "Rental property loan", "investmentLoan", config.investmentLoanBalance, config.investmentLoanRepayment || 0, {
+    const linkedRentalIncome = incomeItems.find((item) => item.type === "rentalNetCashIncome");
+    liabilityItems.push(sampleLiability("liability-rental-loan", "Rental property loan", "rentalPropertyLoan", config.investmentLoanBalance, config.investmentLoanRepayment || 0, {
       interestRatePct: config.investmentLoanInterestRatePct || 6.2,
       repaymentFrequency: "monthly",
       termYears: config.investmentLoanTermYears || 20,
       investmentLink: { assetCategory: "rental_property", linkedAssetId: "asset-rental-property" },
       linkedAssetId: "asset-rental-property",
       linkedRentalPropertyId: "asset-rental-property",
+      linkedRentalIncomeId: linkedRentalIncome?.id || "",
       principalRepayment: config.investmentLoanPrincipalRepayment || 0,
       interestOnlyRepayment: config.investmentLoanInterestRepayment || 0,
     }));

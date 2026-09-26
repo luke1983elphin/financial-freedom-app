@@ -2,6 +2,15 @@
   const DATA = window.FFS_DATA;
   const CALC = window.FFSCalculator;
   const SECURITY = window.FFSSecurity;
+  const LINKED_SETUP = window.FFSLinkedSetup;
+  const CONSUMER_SETUP = window.FFSConsumerSetup;
+  const TRUST = window.FFSTrustReadiness;
+  const DIALOGS = window.FFSDialogController;
+  const PLAN_SCHEMA = window.FFSPlanSchema;
+  const LEGACY_PLAN_ADAPTER = window.FFSLegacyPlanAdapter;
+  const PLAN_SELECTORS = window.FFSPlanSelectors;
+  const PLAN_MUTATIONS = window.FFSPlanMutations;
+  const SCENARIO_OVERLAY = window.FFSScenarioOverlay;
   const CALCULATION_VERSION = CALC?.CALCULATION_VERSION || "2026.27.1";
   const FINANCIAL_YEAR = CALC?.FINANCIAL_YEAR || "2026-27";
   const DRAFT_KEY = "ffs-current-plan-v3-mobile-dashboard-ux-test";
@@ -18,7 +27,7 @@
   const DURABILITY_STATE_KEY = "ffs-durability-state-v1";
   const APP_VERSION = "3.0-test-weekly-planner";
   const WEEKLY_EDITOR_BUILD_ID = "2026-07-17-02";
-  const EXPORT_SCHEMA_VERSION = 1;
+  const EXPORT_SCHEMA_VERSION = 3;
   const MAX_IMPORT_BYTES = SECURITY?.DEFAULT_MAX_IMPORT_BYTES || 5 * 1024 * 1024;
   const AI_INSIGHTS_ENDPOINT = "/api/ai-insights";
   const AI_INSIGHTS_DEFAULT_MAX_GENERATIONS = 5;
@@ -136,28 +145,32 @@
   ];
   const wizardSteps = [
     {
-      title: "About You",
-      instruction: "Start with the household names and ages so the plan has the right personal context.",
+      title: "Your household",
+      instruction: "Who are we planning for? Add the household names and ages used in your plan.",
     },
     {
       title: "Income",
-      instruction: "Add each income source as gross income before tax, with its own name, amount and frequency.",
+      instruction: "What do you earn? Start with salary or wages, then add other income only if it applies.",
     },
     {
       title: "Assets",
-      instruction: "Enter what the household owns today, including cash, investments, super and property.",
+      instruction: "What do you own? Add only the home, savings, property or investments you have.",
     },
     {
       title: "Liabilities / Loans",
-      instruction: "Add the home loan, offset balance and other debts so repayments and interest can be modelled.",
+      instruction: "What do you owe? Add only your current loans and debts.",
     },
     {
       title: "Expenses",
-      instruction: "Enter each spending item with its own amount and frequency.",
+      instruction: "What do you spend? Start with a simple household amount and add detail when useful.",
+    },
+    {
+      title: "Super",
+      instruction: "Confirm each person's current super balance, including when there is no balance to include yet.",
     },
     {
       title: "Goals",
-      instruction: "Set target spending and optional downsizing details.",
+      instruction: "What are you trying to achieve? Set your lifestyle target and add goals that matter to you.",
     },
     {
       title: "Assumptions Review",
@@ -175,6 +188,7 @@
     ["offset", "Offset account"],
     ["cash", "Cash"],
     ["shares", "Shares / ETFs"],
+    ["managedFund", "Managed fund"],
     ["crypto", "Crypto"],
     ["super", "Super"],
     ["vehicle", "Vehicles / personal assets"],
@@ -567,7 +581,7 @@
   let selectedSamplePlanId = DATA.samplePlans?.[1]?.id || DATA.samplePlans?.[0]?.id || "";
   const savedDraft = loadDraft();
   let userState = loadUserState(savedDraft);
-  let plan = ensureCurrentPlanIdentity(CALC.clonePlan(savedDraft || CALC.emptyPlan()));
+  let plan = ensureCurrentPlanIdentity(migratePlanData(savedDraft || CALC.emptyPlan()));
   let activeView = restoredDraftUi.activeView || "dashboard";
   let activeWizardStep = normaliseWizardStep(restoredDraftUi.activeWizardStep);
   let hasOpenedWorkspace = Boolean(savedDraft) || Boolean(restoredDraftUi.hasOpenedWorkspace);
@@ -583,6 +597,7 @@
   };
   let editingTimingItemId = null;
   let timingEditDraft = null;
+  let linkedSetupDraft = null;
   let weeklyPlanRenderCount = 0;
   let selectedProgressSnapshotId = restoredDraftUi.selectedProgressSnapshotId || "";
   let isHistoricalSnapshotEditorOpen = false;
@@ -1459,7 +1474,7 @@
     return { ...comparisonDefaults, ...(decisionScenarioDraft || plan.comparison || {}) };
   }
 
-  function buildComparisonPlan(baseResult = CALC.calculatePlan(plan)) {
+  function buildComparisonPlan(baseResult = calculatePlan(plan)) {
     return applyScenarioAdjustments(plan, comparisonAdjustmentsWithSurplus(baseResult, activeDecisionComparison()));
   }
 
@@ -2016,6 +2031,11 @@
   }
 
   function ensureCollectionData() {
+    if (CONSUMER_SETUP?.usesConsumerFirstSetup?.(plan)) {
+      CONSUMER_SETUP.COLLECTIONS.forEach((collection) => {
+        if (!Array.isArray(plan[collection])) plan[collection] = [];
+      });
+    }
     if (!Array.isArray(plan.incomeItems)) {
       plan.incomeItems = [
         { id: "income-person-1", name: plan.income.person1IncomeName || `${personDisplayName(1)} income`, type: "salaryWages", owner: "person1", amount: plan.income.person1Income || 0, frequency: plan.income.person1Frequency || "fortnightly" },
@@ -2094,7 +2114,22 @@
       .reduce((total, item) => total + (Number(item[amountKey]) || 0), 0);
   }
 
-  function syncCollectionsToLegacy() {
+  function setCanonicalSuperBalance(personNumber, value) {
+    ensureCollectionData();
+    const id = `asset-super-${personNumber}`;
+    let item = plan.assetItems.find((asset) => asset.id === id);
+    if (!item) {
+      item = { id, name: superDisplayName(personNumber), category: "super", value: 0 };
+      plan.assetItems.push(item);
+    }
+    item.value = Number(value) || 0;
+    item.name = superDisplayName(personNumber);
+  }
+
+  function syncCollectionsToLegacy(targetPlan = plan) {
+    const livePlan = plan;
+    plan = targetPlan;
+    try {
     ensureCollectionData();
     const incomes = plan.incomeItems;
     normaliseIncomeItems();
@@ -2134,7 +2169,8 @@
       .filter((item) => item !== superPerson1Item && item !== superPerson2Item)
       .reduce((total, item) => total + (Number(item.value) || 0), 0);
     plan.assets.homeValue = sumBy(assets, "home");
-    plan.assets.otherPropertyValue = propertyAssetCategories.reduce((total, category) => total + sumBy(assets, category), 0);
+    const propertyAssets = assets.filter((asset) => propertyAssetCategories.includes(asset.category));
+    plan.assets.otherPropertyValue = propertyAssets.reduce((total, asset) => total + (Number(asset.value) || 0), 0);
     plan.assets.offsetBalance = sumBy(assets, "offset");
     plan.assets.cash = sumBy(assets, "cash");
     plan.assets.sharesEtfs = sumBy(assets, "shares");
@@ -2194,6 +2230,22 @@
       .filter((item) => !coreExpenseCategories.has(item.category))
       .reduce((total, item) => total + annualValue(item.amount, item.frequency), 0);
     plan.expenses.otherFrequency = "annually";
+    return plan;
+    } finally {
+      plan = livePlan;
+    }
+  }
+
+  function legacyCalculationProjection(sourcePlan = plan) {
+    if (LEGACY_PLAN_ADAPTER?.toCalculationPlan) {
+      return LEGACY_PLAN_ADAPTER.toCalculationPlan(sourcePlan, (projection) => syncCollectionsToLegacy(projection));
+    }
+    const projection = migratePlanData(CALC.clonePlan(sourcePlan));
+    return syncCollectionsToLegacy(projection);
+  }
+
+  function calculatePlan(sourcePlan = plan) {
+    return CALC.calculatePlan(legacyCalculationProjection(sourcePlan));
   }
 
   function escapeHtml(value) {
@@ -2291,7 +2343,9 @@
   }
 
   function migratePlanData(planInput) {
-    const migrated = CALC.clonePlan(planInput || {});
+    const migrated = PLAN_SCHEMA?.migrate
+      ? PLAN_SCHEMA.migrate(planInput || {}).plan
+      : CALC.clonePlan(planInput || {});
     ensurePlanSettings(migrated);
     if (!migrated.comparison || typeof migrated.comparison !== "object") migrated.comparison = { ...comparisonDefaults };
     migrated.comparison = { ...comparisonDefaults, ...migrated.comparison };
@@ -2307,7 +2361,15 @@
     const scenarioPlan = migratePlanData(scenario.plan || scenario);
     const scenarioType = normaliseSavedScenarioType(scenario.scenarioType || scenario.type || (scenario.scenarioInputSnapshot?.mode ? scenario.scenarioInputSnapshot.mode : ""));
     const scenarioId = scenario.id || scenario.scenarioId || makeId("scenario");
-    return {
+    const inputSnapshot = scenario.scenarioInputSnapshot || null;
+    const overlay = scenarioType === "decision" && TRUST?.scenarioOverlayFromSnapshot
+      ? TRUST.scenarioOverlayFromSnapshot(inputSnapshot || {}, { label: scenario.name || "Legacy scenario" })
+      : null;
+    const derivedChanges = overlay?.changes?.map((change) => scenarioChange(change.label, change.before, change.after)) || [];
+    const changedInputs = Array.isArray(scenario.changedInputs) && scenario.changedInputs.length
+      ? scenario.changedInputs
+      : derivedChanges;
+    const migratedScenario = {
       ...scenario,
       id: scenarioId,
       scenarioId,
@@ -2320,11 +2382,14 @@
       calculationVersion: scenario.calculationVersion || scenario.plan?.calculationVersion || CALCULATION_VERSION,
       financialYear: scenario.financialYear || FINANCIAL_YEAR,
       plan: ensurePlanIdentity(scenarioPlan, { source: source === "sample" ? "sample" : "personal", planId }),
-      changedInputs: Array.isArray(scenario.changedInputs) ? scenario.changedInputs : [],
+      changedInputs,
       keyResultSnapshot: scenario.keyResultSnapshot || null,
-      scenarioInputSnapshot: scenario.scenarioInputSnapshot || null,
+      scenarioInputSnapshot: overlay ? { ...(inputSnapshot || {}), overlay } : inputSnapshot,
       basePlanReference: scenario.basePlanReference || null,
     };
+    return SCENARIO_OVERLAY?.migrateScenario
+      ? SCENARIO_OVERLAY.migrateScenario(migratedScenario, plan || scenarioPlan)
+      : migratedScenario;
   }
 
   function migrateScenarioList(scenarios) {
@@ -2483,7 +2548,7 @@
 
   function isFinancialPlanComplete(planData, resultInput) {
     const planCandidate = migratePlanData(planData || plan);
-    const result = resultInput || CALC.calculatePlan(planCandidate);
+    const result = resultInput || calculatePlan(planCandidate);
     const personal = planCandidate.personal || {};
     const investing = planCandidate.investing || {};
     const assets = planCandidate.assets || {};
@@ -2548,7 +2613,9 @@
 
   function financialJourneyReadiness(planData, resultInput) {
     const planCandidate = migratePlanData(planData || plan);
-    const result = resultInput || CALC.calculatePlan(planCandidate);
+    const result = resultInput || calculatePlan(planCandidate);
+    const sharedReadiness = typeof window !== "undefined" ? window.FFSTrustReadiness : globalThis.FFSTrustReadiness;
+    if (sharedReadiness?.evaluatePlanReadiness) return sharedReadiness.evaluatePlanReadiness(planCandidate, result);
     const personal = planCandidate.personal || {};
     const investing = planCandidate.investing || {};
     const assets = planCandidate.assets || {};
@@ -2581,8 +2648,13 @@
       { label: "Planning assumptions", complete: hasAssumptions },
     ];
     const missing = checks.filter((item) => !item.complete);
+    const hasPlanData = [hasAnyAge, hasIncome, hasLifestyleNeed, hasFinancialPosition].some(Boolean);
+    const state = !hasPlanData ? "empty" : missing.length ? "partial" : "ready";
     return {
-      complete: missing.length === 0,
+      state,
+      hasPlanData,
+      complete: state === "ready",
+      readyForPersonalisedResults: state === "ready",
       missingSections: missing.map((item) => item.label),
       message: missing.length
         ? `Complete these sections to calculate your Financial Journey: ${missing.map((item) => item.label).join(", ")}.`
@@ -2610,7 +2682,7 @@
       {
         icon: "AI",
         title: "AI Coaching",
-        description: "Once your plan is complete, AI will identify opportunities, answer questions and suggest strategies tailored to your financial situation.",
+        description: "AI coaching is unavailable in this beta. Your plan and calculations still work normally.",
       },
     ];
     return placeholders.map((card) => `
@@ -2626,7 +2698,7 @@
 
   function buildFinancialPlanSummary(planData) {
     const planCandidate = migratePlanData(planData || plan);
-    const result = CALC.calculatePlan(planCandidate);
+    const result = calculatePlan(planCandidate);
     const personal = planCandidate.personal || {};
     const incomeItems = Array.isArray(planCandidate.incomeItems) ? planCandidate.incomeItems : [];
     const expenseItems = Array.isArray(planCandidate.expenseItems) ? planCandidate.expenseItems : [];
@@ -2825,8 +2897,7 @@
     };
   }
 
-  function snapshotFromCurrentPlan(result = CALC.calculatePlan(plan), source = "automatic", overrides = {}) {
-    syncCollectionsToLegacy();
+  function snapshotFromCurrentPlan(result = calculatePlan(plan), source = "automatic", overrides = {}) {
     const sourcePlan = result.plan || plan;
     const assets = sourcePlan.assets || {};
     const liabilities = sourcePlan.liabilities || {};
@@ -3065,7 +3136,7 @@
     return metrics.some((key) => Math.abs(numberValue(next.calculated?.[key]) - numberValue(previous.calculated?.[key])) >= SNAPSHOT_MATERIAL_CHANGE_AMOUNT);
   }
 
-  function maybeCreateAutomaticFinancialSnapshot(result = CALC.calculatePlan(plan), trigger = "automatic") {
+  function maybeCreateAutomaticFinancialSnapshot(result = calculatePlan(plan), trigger = "automatic") {
     if (isDemoActive() || isBlankPlan(plan)) return null;
     const snapshots = loadFinancialSnapshots();
     const current = snapshotFromCurrentPlan(result, "automatic", { label: trigger === "report" ? "Report snapshot" : "Automatic snapshot" });
@@ -3081,7 +3152,7 @@
   }
 
   function saveCurrentPositionSnapshot() {
-    const result = CALC.calculatePlan(plan);
+    const result = calculatePlan(plan);
     const snapshot = snapshotFromCurrentPlan(result, "manual", {
       label: `Current position - ${new Date().toLocaleDateString("en-AU")}`,
       snapshotDate: isoDateOnly(),
@@ -3164,7 +3235,7 @@
     historicalSnapshotDraft = recalculateSnapshot(JSON.parse(JSON.stringify(snapshot)));
     editingHistoricalSnapshotId = snapshotId;
     isHistoricalSnapshotEditorOpen = true;
-    renderFinancialProgress(CALC.calculatePlan(plan));
+    renderFinancialProgress(calculatePlan(plan));
   }
 
   function changeFinancialSnapshotDate(snapshotId) {
@@ -3204,7 +3275,7 @@
     };
   }
 
-  function buildFinancialComparison(historicalSnapshot, result = CALC.calculatePlan(plan)) {
+  function buildFinancialComparison(historicalSnapshot, result = calculatePlan(plan)) {
     if (!historicalSnapshot) return null;
     const historical = recalculateSnapshot(historicalSnapshot);
     const current = snapshotFromCurrentPlan(result, "automatic", { id: "current-position", label: "Current position", snapshotDate: isoDateOnly() });
@@ -3576,7 +3647,15 @@
     if (isDemoActive() || isSwitchingPlans || dataDeletionActive || STORAGE?.isWriteSuppressed()) return "";
     const savedAt = new Date().toISOString();
     const ui = collectDraftUi();
+    PLAN_SCHEMA?.commitRevision?.(plan, savedAt);
     const planSnapshot = ensurePlanIdentity(migratePlanData(plan), { source: "personal", planId: activePlanId });
+    const canonicalValidation = PLAN_SCHEMA?.validate?.(planSnapshot);
+    if (canonicalValidation && !canonicalValidation.valid) {
+      planHasUnsavedChanges = true;
+      updateSaveStatus("Your plan is still open, but it could not be saved because linked plan data needs review.");
+      console.error("Canonical plan validation failed before save", canonicalValidation.errors);
+      return "";
+    }
     const payload = {
       version: 4,
       appVersion: APP_VERSION,
@@ -3724,8 +3803,7 @@
   }
 
   function manualSavePlan() {
-    syncCollectionsToLegacy();
-    maybeCreateAutomaticFinancialSnapshot(CALC.calculatePlan(plan), "manual-save");
+    maybeCreateAutomaticFinancialSnapshot(calculatePlan(plan), "manual-save");
     saveCurrentPlanAsScenario({ promptForName: true });
   }
 
@@ -3894,12 +3972,21 @@
         actionsElement.appendChild(button);
       });
     }
-    modal.classList.remove("hidden");
-    actionsElement?.querySelector("button")?.focus();
+    if (DIALOGS?.open) {
+      DIALOGS.open(modal, {
+        initialFocus: actionsElement?.querySelector("button"),
+        onRequestClose: closeDurabilityDialog,
+      });
+    } else {
+      modal.classList.remove("hidden");
+      actionsElement?.querySelector("button")?.focus();
+    }
   }
 
   function closeDurabilityDialog() {
-    document.getElementById("durabilityDialog")?.classList.add("hidden");
+    const modal = document.getElementById("durabilityDialog");
+    if (DIALOGS?.close) DIALOGS.close(modal);
+    else modal?.classList.add("hidden");
   }
 
   function recordBackupExportInitiated(type = "complete-plan") {
@@ -3915,6 +4002,7 @@
 
   function showDurabilityPromptIfNeeded() {
     if (!backupPromptPending || dataDeletionActive || isDemoActive()) return;
+    if (!(CONSUMER_SETUP?.hasMeaningfulFinancialRecord?.(plan) ?? hasMeaningfulPersonalPlanData(plan))) return;
     const state = loadDurabilityState();
     if (state.firstSavePromptShownAt) {
       backupPromptPending = false;
@@ -3959,18 +4047,81 @@
   function openPolicyPage(page) {
     const modal = document.getElementById("policyDialog");
     const title = document.getElementById("policyDialogTitle");
-    if (!modal || !title) return;
+    const body = document.getElementById("policyDialogBody");
+    if (!modal || !title || !body) return;
     title.textContent = page === "terms" ? "Terms of Use" : "Privacy";
-    modal.classList.remove("hidden");
-    modal.querySelector("[data-policy-close]")?.focus();
+    body.innerHTML = policyPageHtml(page);
+    if (DIALOGS?.open) {
+      DIALOGS.open(modal, {
+        initialFocus: ".goal-info-close",
+        onRequestClose: closePolicyPage,
+      });
+    } else {
+      modal.classList.remove("hidden");
+      modal.querySelector(".goal-info-close")?.focus();
+    }
   }
 
   function closePolicyPage() {
-    document.getElementById("policyDialog")?.classList.add("hidden");
+    const modal = document.getElementById("policyDialog");
+    if (DIALOGS?.close) DIALOGS.close(modal);
+    else modal?.classList.add("hidden");
+  }
+
+  // Final legal wording requires Australian legal/regulatory review, particularly
+  // financial-services licensing, advice classification, Australian Consumer Law
+  // and Privacy Act applicability.
+  function policyPageHtml(page) {
+    const draft = `<p class="policy-draft-label" role="status">DRAFT — subject to legal review</p>`;
+    if (page === "terms") {
+      return `${draft}
+        <p><strong>Version:</strong> Draft 1.0 &nbsp; <strong>Date:</strong> 18 September 2026</p>
+        <h3>1. About these terms</h3>
+        <p>These terms apply to your use of Financial Freedom, an Australian financial modelling web app. By using the app, you agree to use it lawfully and in accordance with these terms. You must be at least 18 years old, or use the app with the involvement of a parent or guardian.</p>
+        <h3>2. Educational modelling only</h3>
+        <p>The app helps you enter financial information, test assumptions and view modelled outcomes. It provides general educational information and scenario guidance. It does not provide personal financial product, taxation, legal or credit advice and is not a substitute for advice from an appropriately licensed or qualified professional.</p>
+        <h3>3. Estimates, assumptions and user information</h3>
+        <p>Projections are estimates, not promises. Actual investment returns, property values, interest rates, inflation, income, expenses and retirement outcomes may differ materially. Tax, superannuation and regulatory rules change. Outputs depend on the accuracy, completeness and timing of information you enter and the assumptions selected in the app. We do not guarantee that any output is accurate, complete or suitable for your circumstances.</p>
+        <h3>4. Financial risk</h3>
+        <p>Investments, property, borrowing and superannuation involve risk. Values and income can rise or fall, borrowing can magnify losses, and access to super is restricted by law. Consider obtaining professional advice before acting on a modelled scenario.</p>
+        <h3>5. Acceptable use</h3>
+        <p>Do not misuse the app, interfere with its security or operation, attempt unauthorised access, upload malicious material, use it unlawfully, or use automated methods that impose an unreasonable load. You are responsible for safeguarding your device and any exported backup.</p>
+        <h3>6. Intellectual property</h3>
+        <p>The app, its design, code and original content are protected by intellectual property laws. You retain responsibility for information you enter. These terms do not transfer ownership of the app or grant a right to copy, resell or commercially exploit it except as permitted by law or with written permission.</p>
+        <h3>7. Availability, changes and termination</h3>
+        <p>The app may be changed, suspended or discontinued. Features, assumptions and supported browsers may change. Access may be restricted where reasonably necessary for security, maintenance, legal compliance or misuse. You should keep your own current backup.</p>
+        <h3>8. Third-party services</h3>
+        <p>Hosting, browser, printing and other third-party services may be needed to use parts of the app. Their own terms and privacy practices apply. AI functionality is currently disabled; separate notice and consent would be required before plan data is sent to an AI provider.</p>
+        <h3>9. Liability and Australian Consumer Law</h3>
+        <p>To the extent permitted by law, we are not liable for loss arising from reliance on projections, unavailable or corrupted local data, third-party services, or use contrary to these terms. Nothing in these terms excludes, restricts or modifies any guarantee, right or remedy that cannot lawfully be excluded under the Australian Consumer Law or other applicable law. Any limitation must be read subject to those rights.</p>
+        <h3>10. Governing law and contact</h3>
+        <p>These terms are intended to be governed by the laws of <strong>[insert Australian State or Territory following legal review]</strong>. Contact: <strong>[insert business name and contact email before release]</strong>.</p>
+        <h3>11. Changes to these terms</h3>
+        <p>Updated terms may be published in the app with a new version and date. Material changes should be brought to users' attention where reasonably practical.</p>`;
+    }
+    return `${draft}
+      <p><strong>Version:</strong> Draft 1.0 &nbsp; <strong>Date:</strong> 18 September 2026</p>
+      <h3>1. About this policy</h3>
+      <p>Financial Freedom is an Australian financial modelling web app. This draft explains how information is handled by the current app and is intended for legal and regulatory review before public release.</p>
+      <h3>2. Information you enter</h3>
+      <p>You may enter household, income, expense, asset, liability, tax, superannuation, goal, scenario and Weekly Plan information. Avoid entering names, account numbers, tax file numbers or other identifying information into free-text fields unless genuinely needed for your own local records.</p>
+      <h3>3. Local browser storage</h3>
+      <p>Core plan data is stored locally in this browser on this device. It is not automatically available on another device. Clearing browser data, changing devices, using private browsing, removing the app or some browser/device failures may permanently remove saved information.</p>
+      <h3>4. Backups, imports and deletion</h3>
+      <p>You can export a backup and later import it on a supported device. Backup files contain the financial information included in the export, so store them securely. The app also provides a delete-all action for Financial Freedom data stored by the app in the current browser. It cannot delete downloaded backup files or records that may exist in ordinary hosting, security or provider logs.</p>
+      <h3>5. Hosting and technical information</h3>
+      <p>When you visit the app, hosting and security providers may process ordinary technical information such as IP address, request time, browser details, requested pages, diagnostic events and security logs. The exact records and retention depend on the configured providers. Core plan data is not intentionally sent to the hosting server by the local planning features.</p>
+      <h3>6. AI functionality</h3>
+      <p>AI functionality is currently disabled. If it is enabled in future, a separate notice and active consent process will be required before selected plan information is transmitted to an AI provider. This policy must be updated to identify the information, purpose, provider and applicable controls before that occurs.</p>
+      <h3>7. Security</h3>
+      <p>The app uses browser and application safeguards, but no device, browser, network or storage method is completely secure. Anyone with access to your browser profile, device or exported backup may be able to access your information. Keep your device and backup files protected and export a current backup before clearing browser data.</p>
+      <h3>8. Access, correction, questions and complaints</h3>
+      <p>You can review and correct information in the app, export a backup, or delete local app data. For privacy questions, access or correction requests relating to information held outside your browser, or complaints, contact <strong>[insert business name and privacy contact email before release]</strong>. We may need enough information to identify and respond to the request.</p>
+      <h3>9. Changes to this policy</h3>
+      <p>Updated versions may be published in the app with a new version and date. Material changes should be communicated where reasonably practical, and separate consent should be obtained where required.</p>`;
   }
 
   function buildCompletePlanBackupPayload() {
-    syncCollectionsToLegacy();
     return {
       app: "Financial Freedom",
       sourceApp: "Financial Freedom",
@@ -3980,6 +4131,7 @@
       calculationVersion: CALCULATION_VERSION,
       financialYear: FINANCIAL_YEAR,
       schemaVersion: EXPORT_SCHEMA_VERSION,
+      planSchemaVersion: PLAN_SCHEMA?.SCHEMA_VERSION || 1,
       exportedAt: new Date().toISOString(),
       planId: isDemoActive() ? DEMO_PLAN_ID : normalisePlanId(activePlanId),
       planSource: isDemoActive() ? "sample" : "personal",
@@ -4023,8 +4175,13 @@
     if (payload.snapshots !== undefined && !Array.isArray(payload.snapshots)) throw new Error("The backup contains an invalid financial history section.");
     if (payload.ui !== undefined && (!payload.ui || typeof payload.ui !== "object" || Array.isArray(payload.ui))) throw new Error("The backup contains invalid interface settings.");
     if (payload.userState !== undefined && (!payload.userState || typeof payload.userState !== "object" || Array.isArray(payload.userState))) throw new Error("The backup contains invalid user settings.");
+    const migratedPlan = migratePlanData(rawPlan);
+    const canonicalValidation = PLAN_SCHEMA?.validate?.(migratedPlan);
+    if (canonicalValidation && !canonicalValidation.valid) {
+      throw new Error(`The backup could not be migrated safely: ${canonicalValidation.errors[0]}`);
+    }
     return {
-      plan: migratePlanData(rawPlan),
+      plan: migratedPlan,
       scenarios: migrateScenarioList(payload.scenarios || []),
       weeklyPlan: payload.weeklyPlan ? window.FFSWeeklyPlan.migrate(payload.weeklyPlan) : null,
       snapshots: Array.isArray(payload.snapshots) ? payload.snapshots.map(recalculateSnapshot) : [],
@@ -4163,9 +4320,10 @@
     const demoBase = CALC.clonePlan(basePlan || selectedSamplePlan()?.plan || DATA.demoPlan || {});
     const decisionScenarios = DATA.demoScenarioAdjustments.map((item, index) => {
       const scenarioPlan = applyScenarioAdjustments(demoBase, item.adjustments || {});
-      const baseResult = CALC.calculatePlan(demoBase);
-      const scenarioResult = CALC.calculatePlan(scenarioPlan);
+      const baseResult = calculatePlan(demoBase);
+      const scenarioResult = calculatePlan(scenarioPlan);
       const savedAt = new Date().toISOString();
+      const overlay = TRUST?.createScenarioOverlay?.({ actionId: `sample-${index + 1}`, label: item.name, adjustments: item.adjustments || {} }) || null;
       return {
         id: `sample-scenario-${index + 1}`,
         scenarioId: `sample-scenario-${index + 1}`,
@@ -4184,6 +4342,7 @@
         scenarioInputSnapshot: {
           mode: "decision-sample",
           adjustments: { ...comparisonDefaults, ...(item.adjustments || {}) },
+          ...(overlay ? { overlay } : {}),
         },
         changedInputs: decisionChangeRowsFromAdjustments(item.adjustments || {}),
         keyResultSnapshot: decisionKeyResultSnapshot(baseResult, scenarioResult),
@@ -4198,7 +4357,7 @@
     if (!window.FFSSemiRetirementUi || !window.FFSSemiRetirementProjection) return [];
     try {
       const demoBase = ensurePlanIdentity(CALC.clonePlan(basePlan || selectedSamplePlan()?.plan || DATA.demoPlan || {}), { source: "sample", samplePlanId: selectedSamplePlanId });
-      const baseResult = CALC.calculatePlan(demoBase);
+      const baseResult = calculatePlan(demoBase);
       const defaults = window.FFSSemiRetirementUi.buildSemiRetirementScenarioDefaults(demoBase, baseResult);
       const baseDraft = cloneScenarioDraft(defaults.draft);
       const build = (name, notes, mutate, index) => {
@@ -4462,7 +4621,7 @@
     if (!aiInsightsUi.isOpen) return;
     const body = document.getElementById("aiInsightsModalBody");
     if (!body) return;
-    const result = CALC.calculatePlan(plan);
+    const result = calculatePlan(plan);
     const completion = isFinancialPlanComplete(plan, result);
     const settings = currentAiInsightsSettings();
     const report = validateAiInsightsReport(settings.report);
@@ -4511,10 +4670,10 @@
 
   function openAiInsights() {
     if (!aiInsightsConfig.enabled) return;
-    const completion = isFinancialPlanComplete(plan, CALC.calculatePlan(plan));
+    const completion = isFinancialPlanComplete(plan, calculatePlan(plan));
     if (!completion.complete) {
       updateSaveStatus(completion.message);
-      renderAiInsightsHomeCard(CALC.calculatePlan(plan));
+      renderAiInsightsHomeCard(calculatePlan(plan));
       return;
     }
     aiInsightsUi.isOpen = true;
@@ -4539,7 +4698,7 @@
       renderAiInsightsModal();
       return;
     }
-    const result = CALC.calculatePlan(plan);
+    const result = calculatePlan(plan);
     const completion = isFinancialPlanComplete(plan, result);
     if (!completion.complete) {
       aiInsightsUi.error = completion.message;
@@ -4602,6 +4761,7 @@
     blank.goalItems = [];
     blank.comparison = { ...comparisonDefaults };
     ensurePlanSettings(blank);
+    CONSUMER_SETUP?.markNewPlan?.(blank);
     return ensurePlanIdentity(blank, { source: "personal", planId: activePlanId || DEFAULT_PERSONAL_PLAN_ID });
   }
 
@@ -4824,7 +4984,7 @@
   }
 
   function employerSuperPanelHtml() {
-    const result = CALC.calculatePlan(plan);
+    const result = calculatePlan(plan);
     const employerSuper = result.employerSuperContributions || CALC.employerSuperSummary?.(plan) || {};
     const ratePercent = ((Number(employerSuper.rate) || 0.12) * 100).toFixed(0);
     const person1Name = personDisplayName(1);
@@ -4942,7 +5102,6 @@
       markWeeklyTimingReviewRequired();
       saveWeeklyPlan();
     }
-    syncCollectionsToLegacy();
     autosavePlan();
     renderAll();
   }
@@ -5023,7 +5182,10 @@
     `;
   }
 
-  function collectionShell({ title, description, addLabel, collection, body }) {
+  function collectionShell({ title, description, addLabel, collection, body, actionsHtml = "", emptyText = "" }) {
+    const addButton = addLabel
+      ? `<button class="btn btn-primary add-button" type="button" data-add-collection="${collection}">${escapeHtml(addLabel)}</button>`
+      : "";
     return `
       <section class="collection-section">
         <div class="collection-heading">
@@ -5031,14 +5193,58 @@
             <h3>${escapeHtml(title)}</h3>
             <p>${escapeHtml(description)}</p>
           </div>
-          <button class="btn btn-primary add-button" type="button" data-add-collection="${collection}">${escapeHtml(addLabel)}</button>
+          ${addButton}
         </div>
-        <div class="collection-list">${body || `<p class="empty-collection-note">No items added yet. Use ${escapeHtml(addLabel)} to start this section.</p>`}</div>
-        <div class="collection-footer">
-          <button class="btn btn-primary add-button" type="button" data-add-collection="${collection}">${escapeHtml(addLabel)}</button>
-        </div>
+        ${actionsHtml ? `<div class="consumer-action-grid" aria-label="${escapeHtml(title)} actions">${actionsHtml}</div>` : ""}
+        <div class="collection-list">${body || `<p class="empty-collection-note">${escapeHtml(emptyText || "Nothing added yet. Choose an option above when it applies to you.")}</p>`}</div>
+        ${addButton ? `<div class="collection-footer">${addButton}</div>` : ""}
       </section>
     `;
+  }
+
+  function consumerAction(action, label, primary = false) {
+    return `<button class="btn${primary ? " btn-primary" : ""}" type="button" data-consumer-add="${escapeHtml(action)}">${escapeHtml(label)}</button>`;
+  }
+
+  function incomeConsumerActionsHtml() {
+    return [
+      consumerAction("salary-person1", `Add salary or wages for ${personDisplayName(1)}`, true),
+      consumerAction("salary-person2", `Add salary or wages for ${personDisplayName(2)}`),
+      consumerAction("other-income", "Add other income"),
+      `<button class="btn" type="button" data-linked-setup-open="rental">Add rental property income</button>`,
+    ].join("");
+  }
+
+  function assetConsumerActionsHtml() {
+    return [
+      `<button class="btn btn-primary" type="button" data-linked-setup-open="home">Add home</button>`,
+      `<button class="btn" type="button" data-linked-setup-open="rental">Add rental / investment property</button>`,
+      `<button class="btn" type="button" data-linked-setup-open="investment">Add shares or investment</button>`,
+      consumerAction("cash", "Add cash / savings"),
+      consumerAction("other-asset", "Add another asset"),
+    ].join("");
+  }
+
+  function liabilityConsumerActionsHtml() {
+    return [
+      consumerAction("home-loan", "Add home loan", true),
+      consumerAction("investment-loan", "Add investment loan"),
+      consumerAction("personal-loan", "Add personal / car loan"),
+      consumerAction("other-debt", "Add other debt"),
+    ].join("");
+  }
+
+  function goalConsumerActionsHtml() {
+    return ["goal-retire", "goal-investments", "goal-home-loan", "goal-emergency", "goal-purchase", "goal-other"]
+      .map((action, index) => consumerAction(action, ({
+        "goal-retire": "Retire / reduce work",
+        "goal-investments": "Build investments",
+        "goal-home-loan": "Repay home loan",
+        "goal-emergency": "Emergency fund",
+        "goal-purchase": "Major purchase",
+        "goal-other": "Other goal",
+      })[action], index === 0))
+      .join("");
   }
 
   function removeButton(collection, id) {
@@ -5068,7 +5274,7 @@
     const assets = Array.isArray(plan.assetItems) ? plan.assetItems : [];
     const filtered = assets.filter((asset) => {
       if (!category) return true;
-      if (category === "rental_property") return propertyAssetCategories.includes(asset.category);
+      if (category === "rental_property") return rentalLinkEligible(asset);
       if (category === "shares") return ["shares", "crypto"].includes(asset.category);
       if (category === "business") return asset.category === "other";
       return true;
@@ -5100,6 +5306,25 @@
         ${escapeHtml(rentalCashHelpText(item))}
       </p>
     `;
+  }
+
+  function salaryAmountPresentation(item = {}) {
+    return CONSUMER_SETUP?.salaryPresentation?.(item) || {
+      label: item.frequency === "fortnightly" ? "Gross pay per fortnight" : item.frequency === "weekly" ? "Gross pay per week" : item.frequency === "monthly" ? "Gross pay per month" : "Gross annual salary",
+      annualEquivalent: annualValue(item.amount, item.frequency || "annually"),
+      showAnnualEquivalent: item.frequency !== "annually",
+    };
+  }
+
+  function salaryAnnualEquivalentHtml(item = {}) {
+    const presentation = salaryAmountPresentation(item);
+    if (!presentation.showAnnualEquivalent) return "";
+    return `<p class="field-help salary-annual-equivalent" data-salary-annual-equivalent="${escapeHtml(item.id)}">Annual equivalent: ${money(presentation.annualEquivalent)} per year.</p>`;
+  }
+
+  function refreshSalaryAnnualEquivalent(item = {}) {
+    const helper = document.querySelector(`[data-salary-annual-equivalent="${CSS.escape(String(item.id || ""))}"]`);
+    if (helper) helper.textContent = `Annual equivalent: ${money(salaryAmountPresentation(item).annualEquivalent)} per year.`;
   }
 
   function hasEnteredFinancialValue(value) {
@@ -5141,11 +5366,20 @@
     const owner = normaliseIncomeOwner(item.owner, type, index);
     item.type = type;
     item.owner = owner;
+    if (item.guidedSetup && item.linkedAssetId) {
+      const kind = type === "rentalNetCashIncome" ? "rental" : "investment";
+      return `
+        <article class="form-item-card dynamic-item-card linked-primary-summary">
+          <div class="item-card-title"><div><span>Linked ${kind === "rental" ? "rental income" : "investment income"}</span><h4>${escapeHtml(item.name || "Income")}</h4><small>${money(annualValue(item.amount, item.frequency || "annually"))} per year · managed with its ${kind === "rental" ? "property" : "investment"}</small></div></div>
+          <button class="btn mt-3" type="button" data-linked-setup-open="${kind}" data-linked-asset-id="${escapeHtml(item.linkedAssetId)}">Edit linked setup</button>
+        </article>`;
+    }
     const typeLabel = incomeTypeLabels[type] || "Income";
     const ownerLabel = owner === "joint" ? "Joint" : personDisplayName(owner === "person2" ? 2 : 1);
     const rentalCashInputNote = type === "rentalNetCashIncome"
       ? compactRentalCashWarningHtml(item)
       : "";
+    const salaryPresentation = type === "salaryWages" ? salaryAmountPresentation(item) : null;
     const incomeFields = type === "rentalNetCashIncome" ? `
           ${dynamicInput("incomeItems", item, "name", "Income description", { kind: "text", placeholder: "e.g. Rental property cashflow" })}
           ${dynamicInput("incomeItems", item, "type", "Income type", { type: "select", options: incomeTypeOptions, infoKey: "rentalNetCashIncome" })}
@@ -5169,7 +5403,8 @@
           ${dynamicInput("incomeItems", item, "type", "Income type", { type: "select", options: incomeTypeOptions })}
           ${dynamicInput("incomeItems", item, "owner", "Income owner", { type: "select", options: incomeOwnerOptions(type) })}
           ${incomeAllocationFields(item, owner)}
-          ${dynamicInput("incomeItems", item, "amount", "Gross amount", { step: "100", placeholder: "Amount for the selected frequency" })}
+          ${dynamicInput("incomeItems", item, "amount", salaryPresentation?.label || "Gross amount", { step: "100", placeholder: type === "salaryWages" ? salaryPresentation.label : "Amount for the selected frequency" })}
+          ${type === "salaryWages" ? salaryAnnualEquivalentHtml(item) : ""}
           ${dynamicInput("incomeItems", item, "frequency", "Frequency", { type: "select", options: frequencies })}
           ${dividendTaxFields(item, type)}
           ${type === "other" ? dynamicInput("incomeItems", item, "isPassiveIncome", "Passive income", { type: "checkbox", infoKey: "passiveIncome" }) : ""}
@@ -5193,8 +5428,28 @@
   }
 
   function assetCard(item, index) {
+    const linkedKind = item.category === "home" && item.guidedSetup
+      ? "home"
+      : item.guidedSetup && ["rentalInvestmentProperty", "rentalProperty", "investmentProperty"].includes(item.category)
+        ? "rental"
+        : item.guidedSetup && ["shares", "managedFund"].includes(item.category)
+          ? "investment"
+          : "";
+    if (linkedKind) {
+      return `
+        <article class="form-item-card dynamic-item-card linked-primary-summary">
+          <div class="item-card-title">
+            <div><span>Linked ${linkedKind === "home" ? "home" : linkedKind === "rental" ? "property" : "investment"}</span><h4>${escapeHtml(item.name || "Asset")}</h4><small>${money(item.value || 0)} · related records managed together</small></div>
+            ${removeButton("assetItems", item.id)}
+          </div>
+          <button class="btn mt-3" type="button" data-linked-setup-open="${linkedKind}" data-linked-asset-id="${escapeHtml(item.id)}">Edit linked setup</button>
+        </article>`;
+    }
     const rentalInvestmentNote = item.category === "rentalInvestmentProperty"
       ? `<p class="field-help mt-3">Use this for a property held to earn rent and/or for investment purposes.</p>`
+      : "";
+    const rentalConversionAction = item.category === "otherProperty" && !TRUST?.hasExplicitRentalRelationship?.(plan, item.id)
+      ? `<button class="btn mt-3" type="button" data-linked-setup-open="rental" data-linked-asset-id="${escapeHtml(item.id)}">Set up as rental property</button>`
       : "";
     return `
       <article class="form-item-card dynamic-item-card">
@@ -5211,13 +5466,20 @@
           ${dynamicInput("assetItems", item, "value", "Asset value", { step: "1000" })}
         </div>
         ${rentalInvestmentNote}
+        ${rentalConversionAction}
+        ${item.category === "home" ? `<button class="btn mt-3" type="button" data-linked-setup-open="home" data-linked-asset-id="${escapeHtml(item.id)}">Set up home and loan</button>` : ""}
       </article>
     `;
   }
 
+  function rentalLinkEligible(asset) {
+    if (TRUST?.isRentalLinkEligible) return TRUST.isRentalLinkEligible(plan, asset);
+    return ["rentalInvestmentProperty", "rentalProperty", "investmentProperty"].includes(asset?.category);
+  }
+
   function linkedPropertyRecords() {
     const assets = (Array.isArray(plan.assetItems) ? plan.assetItems : [])
-      .filter((asset) => propertyAssetCategories.includes(asset.category));
+      .filter((asset) => rentalLinkEligible(asset));
     const incomes = rentalIncomeItems();
     const loans = rentalPropertyLoanItems();
     return assets.map((asset) => {
@@ -5356,7 +5618,10 @@
             <h4>${safeTitle}</h4>
             <p>Linked records: ${linkedRecordParts.map(escapeHtml).join(" - ")}</p>
           </div>
-          <button class="btn btn-secondary linked-property-manage-button" type="button" data-linked-property-manage>Manage property</button>
+          <div class="linked-property-card-actions">
+            <button class="btn btn-primary" type="button" data-linked-setup-open="rental" data-linked-asset-id="${escapeHtml(asset.id)}">Edit guided setup</button>
+            <button class="btn btn-secondary linked-property-manage-button" type="button" data-linked-property-manage>Advanced details</button>
+          </div>
         </div>
         <div class="linked-property-summary-rows" data-headline-metric-count="4">
           ${linkedPropertySummaryRow("Current value", displayFinancialValue(asset.value))}
@@ -5400,25 +5665,277 @@
 
   function linkedPropertyManagementSectionHtml() {
     const records = linkedPropertyRecords();
-    if (!records.length) return "";
     return `
       <section class="linked-property-section">
         <div class="collection-heading">
           <div>
             <h3>Rental / Investment Property</h3>
-            <p>Review linked property, rental income, loans and offset balances without creating duplicate records.</p>
+            <p>Add or update the property, rental income and related loan together.</p>
           </div>
+          <button class="btn btn-primary" type="button" data-linked-setup-open="rental">Add rental property</button>
         </div>
         <div class="linked-property-list">
-          ${records.map(linkedPropertyCard).join("")}
+          ${records.length ? records.map(linkedPropertyCard).join("") : `<p class="empty-collection-note">No rental property has been added yet.</p>`}
         </div>
       </section>
     `;
   }
 
+  function linkedSetupInput(field, label, options = {}) {
+    const value = linkedSetupDraft?.[field];
+    const common = `data-linked-setup-field="${escapeHtml(field)}"`;
+    if (options.type === "select") {
+      return `<label><span class="field-label">${escapeHtml(label)}</span><select class="field-input" ${common}>${optionList(options.options, value)}</select></label>`;
+    }
+    if (options.type === "checkbox") {
+      return `<label class="toggle-field"><span class="field-label">${escapeHtml(label)}</span><input class="toggle-input" type="checkbox" ${common}${value ? " checked" : ""}></label>`;
+    }
+    return `<label><span class="field-label">${escapeHtml(label)}</span><input class="field-input" ${common} type="${options.kind === "text" ? "text" : "number"}" inputmode="${options.kind === "text" ? "text" : "decimal"}" step="${options.step || "1"}" value="${escapeHtml(value ?? "")}" placeholder="${escapeHtml(options.placeholder || "")}"></label>`;
+  }
+
+  function linkedSetupOwnershipFields() {
+    return `${linkedSetupInput("owner", "Owner", { type: "select", options: [["person1", personDisplayName(1)], ["person2", personDisplayName(2)], ["joint", "Joint"]] })}
+      ${linkedSetupDraft?.owner === "joint" ? `${linkedSetupInput("person1AllocationPercentage", `${personDisplayName(1)} ownership %`, { step: "1" })}${linkedSetupInput("person2AllocationPercentage", `${personDisplayName(2)} ownership %`, { step: "1" })}` : ""}`;
+  }
+
+  function linkedSetupLoanFields() {
+    if (!linkedSetupDraft?.hasLoan) return linkedSetupDraft?.loanId ? `
+      <div class="linked-setup-warning" role="alert">
+        <strong>This item currently has a linked loan.</strong>
+        <p>Removing the link will not delete the loan.</p>
+        <label><input type="radio" name="existingLoanChoice" value="keep" data-linked-setup-field="existingLoanChoice"${linkedSetupDraft.existingLoanChoice === "keep" ? " checked" : ""}> Keep the loan linked</label>
+        <label><input type="radio" name="existingLoanChoice" value="unlink" data-linked-setup-field="existingLoanChoice"${linkedSetupDraft.existingLoanChoice === "unlink" ? " checked" : ""}> Unlink it and keep the liability as a separate record</label>
+      </div>` : "";
+    return `<div class="input-grid linked-setup-conditional">
+      ${linkedSetupInput("loanBalance", "Current loan balance", { step: "1000" })}
+      ${linkedSetupInput("interestRatePct", "Interest rate (%)", { step: "0.1" })}
+      ${linkedSetupInput("repayment", "Repayment amount", { step: "100" })}
+      ${linkedSetupInput("repaymentFrequency", "Repayment frequency", { type: "select", options: frequencies })}
+      ${linkedSetupInput("termYears", "Remaining term (years)", { step: "1" })}
+      ${linkedSetupDraft.kind === "rental" ? linkedSetupInput("offsetBalance", "Offset balance", { step: "1000" }) : ""}
+    </div>`;
+  }
+
+  function linkedExistingLoanOptions() {
+    const typeByKind = { home: "homeLoan", rental: "rentalPropertyLoan", investment: "investmentLoan" };
+    const expectedType = typeByKind[linkedSetupDraft?.kind];
+    const currentAssetId = String(linkedSetupDraft?.assetId || "");
+    const currentLoanId = String(linkedSetupDraft?.loanId || "");
+    return [["", "Choose an existing loan"], ...(plan.liabilityItems || [])
+      .filter((loan) => loan.type === expectedType && String(loan.id || "") !== currentLoanId)
+      .filter((loan) => !String(loan.linkedAssetId || loan.investmentLink?.linkedAssetId || "") || String(loan.linkedAssetId || loan.investmentLink?.linkedAssetId || "") === currentAssetId)
+      .map((loan) => [loan.id, `${loan.name || "Existing loan"} · ${money(loan.balance || 0)}`])];
+  }
+
+  function linkedExistingLoanControlHtml() {
+    const options = linkedExistingLoanOptions();
+    if (linkedSetupDraft?.loanId || options.length <= 1) return "";
+    return `<div class="linked-existing-loan mt-3"><p class="field-help">Already entered this loan? Link the existing liability instead of creating another one.</p>${linkedSetupInput("linkExistingLoanId", "Link existing loan", { type: "select", options })}</div>`;
+  }
+
+  function linkedSetupDialogHtml() {
+    if (!linkedSetupDraft) return "";
+    const isRental = linkedSetupDraft.kind === "rental";
+    const isHome = linkedSetupDraft.kind === "home";
+    const errors = linkedSetupDraft.errors?.length
+      ? `<div class="linked-setup-errors" role="alert"><strong>Please review these details:</strong><ul>${linkedSetupDraft.errors.map((error) => `<li>${escapeHtml(error)}</li>`).join("")}</ul></div>`
+      : "";
+    if (isHome) {
+      return `${errors}<form data-linked-setup-form="home">
+        <section class="linked-setup-section"><h3>1. Your home</h3><div class="input-grid">
+          ${linkedSetupInput("name", "Home name / description", { kind: "text", placeholder: "e.g. Family home" })}
+          ${linkedSetupInput("value", "Current home value", { step: "1000" })}
+        </div></section>
+        <section class="linked-setup-section"><h3>2. Home loan</h3>
+          ${linkedSetupInput("hasLoan", "Does your home have a loan?", { type: "checkbox" })}
+          ${linkedExistingLoanControlHtml()}
+          ${linkedSetupLoanFields()}
+        </section>
+        <p class="field-help">The loan remains a normal liability record and uses the existing loan calculations.</p>
+        <div class="linked-setup-actions"><button class="btn" type="button" data-linked-setup-action="close">Cancel</button><button class="btn btn-primary" type="submit">Save home</button></div>
+      </form>`;
+    }
+    if (isRental) {
+      return `${errors}
+        <form data-linked-setup-form="rental">
+          <section class="linked-setup-section"><h3>1. Property</h3><div class="input-grid">
+            ${linkedSetupInput("name", "Property name / description", { kind: "text", placeholder: "e.g. Smith Street rental" })}
+            ${linkedSetupInput("value", "Current property value", { step: "1000" })}
+            ${linkedSetupOwnershipFields()}
+          </div></section>
+          <section class="linked-setup-section"><h3>2. Loan</h3>
+            ${linkedSetupInput("hasLoan", "Does this property have a mortgage or loan?", { type: "checkbox" })}
+            ${linkedExistingLoanControlHtml()}
+            ${linkedSetupLoanFields()}
+          </section>
+          <section class="linked-setup-section"><h3>3. Rental income</h3>
+          <p class="linked-setup-plain-explanation">Start with the rent received and normal property costs. Loan principal is kept separate because it reduces the loan rather than being a property expense. Advanced tax and cashflow treatment is available below when needed.</p>
+          <div class="input-grid mt-4">
+            ${linkedSetupInput("annualRentReceived", "Annual rent received", { step: "100" })}
+            ${linkedSetupInput("annualPropertyExpensesExcludingPrincipal", "Annual property expenses excluding loan principal repayments", { step: "100" })}
+          </div><p class="field-help">Include property operating costs and loan interest in expenses where applicable. Do not include loan principal repayments.</p>
+          <details class="linked-setup-advanced"><summary>Advanced tax &amp; cashflow details</summary><div class="input-grid mt-4">
+            ${linkedSetupInput("taxableRentalProfitProvided", "Enter annual net taxable rental profit", { type: "checkbox" })}
+            ${linkedSetupDraft.taxableRentalProfitProvided ? linkedSetupInput("taxableRentalProfit", "Annual net taxable rental profit after deductible interest", { step: "100" }) : ""}
+            ${linkedSetupInput("useAdvancedCashIncome", "Override calculated rental cash income", { type: "checkbox" })}
+            ${linkedSetupDraft.useAdvancedCashIncome ? linkedSetupInput("rentalCashIncomeAnnual", "Annual rental cash income for cashflow", { step: "100" }) : ""}
+            ${linkedSetupInput("rentalCashflowTreatment", "Rental cashflow treatment", { type: "select", options: rentalCashflowTreatmentOptions })}
+          </div><p class="field-help">Taxable profit and cash income are different. The app keeps loan interest and principal separate so they are not deducted twice.</p></details></section>
+          <div class="linked-setup-actions"><button class="btn" type="button" data-linked-setup-action="close">Cancel</button><button class="btn btn-primary" type="submit">Save rental property</button></div>
+        </form>`;
+    }
+    return `${errors}<form data-linked-setup-form="investment">
+      <section class="linked-setup-section"><h3>Shares / investment</h3><div class="input-grid">
+        ${linkedSetupInput("name", "Investment name / description", { kind: "text", placeholder: "e.g. ETF portfolio" })}
+        ${linkedSetupInput("investmentType", "Investment type", { type: "select", options: [["shares", "Shares"], ["etf", "ETF"], ["managedFund", "Managed fund"], ["otherInvestment", "Other investment"]] })}
+        ${linkedSetupInput("value", "Current value", { step: "1000" })}
+        ${linkedSetupOwnershipFields()}
+        ${linkedSetupInput("annualIncome", "Annual dividends / distributions", { step: "100" })}
+      </div></section>
+      <section class="linked-setup-section"><h3>Investment loan</h3>
+        ${linkedSetupInput("hasLoan", "Is there a loan associated with this investment?", { type: "checkbox" })}
+        ${linkedExistingLoanControlHtml()}
+        ${linkedSetupLoanFields()}
+      </section>
+      <details class="linked-setup-advanced"><summary>Advanced investment income details</summary><p>Ownership allocation and the income category are saved with the linked records. Existing manual tax and loan settings remain available in Financial Plan.</p></details>
+      <div class="linked-setup-actions"><button class="btn" type="button" data-linked-setup-action="close">Cancel</button><button class="btn btn-primary" type="submit">Save shares / investment</button></div>
+    </form>`;
+  }
+
+  function renderLinkedSetupDialog() {
+    const modal = document.getElementById("linkedSetupDialog");
+    const body = document.getElementById("linkedSetupBody");
+    const title = document.getElementById("linkedSetupTitle");
+    if (!modal || !body || !title || !linkedSetupDraft) return;
+    title.textContent = linkedSetupDraft.kind === "home"
+      ? (linkedSetupDraft.assetId ? "Edit home and loan" : "Add home")
+      : linkedSetupDraft.kind === "rental"
+        ? (linkedSetupDraft.assetId ? "Edit rental property" : "Add rental property")
+        : (linkedSetupDraft.assetId ? "Edit shares or investment" : "Add shares or investment");
+    body.innerHTML = linkedSetupDialogHtml();
+    if (!DIALOGS?.open) modal.classList.remove("hidden");
+  }
+
+  function openLinkedSetup(kind, assetId = "") {
+    ensureCollectionData();
+    const record = kind === "home"
+      ? LINKED_SETUP?.linkedHomeRecords(plan, assetId)
+      : kind === "rental"
+        ? LINKED_SETUP?.linkedRentalRecords(plan, assetId)
+        : LINKED_SETUP?.linkedInvestmentRecords(plan, assetId);
+    const asset = record?.asset || {};
+    const income = record?.income || {};
+    const loan = record?.loan || {};
+    linkedSetupDraft = {
+      kind,
+      assetId: asset.id || "",
+      incomeId: income.id || "",
+      loanId: loan.id || "",
+      linkExistingLoanId: "",
+      name: asset.name || "",
+      value: asset.value ?? 0,
+      owner: asset.owner || income.owner || "joint",
+      person1AllocationPercentage: asset.person1AllocationPercentage ?? income.person1AllocationPercentage ?? 50,
+      person2AllocationPercentage: asset.person2AllocationPercentage ?? income.person2AllocationPercentage ?? 50,
+      hasLoan: Boolean(loan.id),
+      existingLoanChoice: "",
+      loanBalance: loan.balance ?? 0,
+      interestRatePct: loan.interestRatePct ?? 0,
+      repayment: loan.repayment ?? 0,
+      repaymentFrequency: loan.repaymentFrequency || "monthly",
+      termYears: loan.termYears ?? 0,
+      offsetBalance: loan.openingOffsetBalance ?? 0,
+      annualRentReceived: income.annualRentReceived ?? 0,
+      annualPropertyExpensesExcludingPrincipal: income.annualPropertyExpensesExcludingPrincipal ?? 0,
+      taxableRentalProfitProvided: Boolean(income.taxableRentalProfitProvided || (income.id && Number(income.amount))),
+      taxableRentalProfit: income.amount ?? 0,
+      useAdvancedCashIncome: Boolean(income.id && income.rentalCashIncomeAnnual !== undefined && (income.annualRentReceived === undefined || income.annualPropertyExpensesExcludingPrincipal === undefined)),
+      rentalCashIncomeAnnual: income.rentalCashIncomeAnnual ?? 0,
+      rentalCashflowTreatment: income.rentalCashflowTreatment || "afterInterest",
+      investmentType: asset.investmentType || (asset.category === "managedFund" ? "managedFund" : "shares"),
+      annualIncome: income.amount ?? 0,
+      errors: [],
+    };
+    renderLinkedSetupDialog();
+    const modal = document.getElementById("linkedSetupDialog");
+    const firstField = document.getElementById("linkedSetupBody")?.querySelector("input, select");
+    if (DIALOGS?.open) DIALOGS.open(modal, { initialFocus: firstField, onRequestClose: closeLinkedSetup });
+    else firstField?.focus();
+  }
+
+  function closeLinkedSetup() {
+    linkedSetupDraft = null;
+    const modal = document.getElementById("linkedSetupDialog");
+    if (DIALOGS?.close) DIALOGS.close(modal);
+    else modal?.classList.add("hidden");
+  }
+
+  function applyExistingLoanToLinkedDraft(loanId) {
+    if (!linkedSetupDraft || !loanId) return;
+    const loan = (plan.liabilityItems || []).find((item) => String(item.id || "") === String(loanId));
+    if (!loan) return;
+    linkedSetupDraft.linkExistingLoanId = loan.id;
+    linkedSetupDraft.hasLoan = true;
+    linkedSetupDraft.loanBalance = loan.balance ?? 0;
+    linkedSetupDraft.interestRatePct = loan.interestRatePct ?? 0;
+    linkedSetupDraft.repayment = loan.repayment ?? 0;
+    linkedSetupDraft.repaymentFrequency = loan.repaymentFrequency || "monthly";
+    linkedSetupDraft.termYears = loan.termYears ?? 0;
+    linkedSetupDraft.offsetBalance = loan.openingOffsetBalance ?? 0;
+  }
+
+  function commitLinkedSetup() {
+    if (!linkedSetupDraft || !LINKED_SETUP) return false;
+    if (isDemoActive()) {
+      updateSaveStatus("Return to My Plan before saving linked investments.");
+      return false;
+    }
+    const previousPlan = CALC.clonePlan(plan);
+    const outcome = linkedSetupDraft.kind === "home"
+      ? LINKED_SETUP.upsertHome(plan, linkedSetupDraft, { makeId })
+      : linkedSetupDraft.kind === "rental"
+        ? LINKED_SETUP.upsertRentalProperty(plan, linkedSetupDraft, { makeId })
+        : LINKED_SETUP.upsertInvestment(plan, linkedSetupDraft, { makeId });
+    if (!outcome.ok) {
+      linkedSetupDraft.errors = outcome.errors || ["The linked records could not be saved."];
+      renderLinkedSetupDialog();
+      return false;
+    }
+    plan = ensureCurrentPlanIdentity(migratePlanData(outcome.plan));
+    normaliseRentalPropertyData();
+    planHasUnsavedChanges = true;
+    markPersonalPlanCreated();
+    updateSaveStatus("Saving linked records...");
+    if (!persistDraft()) {
+      plan = previousPlan;
+      renderAll();
+      return false;
+    }
+    if (weeklyPlan) {
+      markWeeklyTimingReviewRequired();
+      saveWeeklyPlan();
+    }
+    const savedKind = linkedSetupDraft.kind;
+    closeLinkedSetup();
+    renderAll();
+    updateSaveStatus(savedKind === "home" ? "Home and loan saved." : savedKind === "rental" ? "Rental property saved." : "Investment saved.");
+    return true;
+  }
+
+  function linkedInvestmentRecordsHtml() {
+    const assets = (plan.assetItems || []).filter((asset) => ["shares", "managedFund"].includes(asset.category) && asset.guidedSetup);
+    return `<section class="linked-investment-section card">
+      <div class="collection-heading"><div><h3>Shares / investments</h3><p>Add an investment, its income and any related loan together.</p></div><button class="btn btn-primary" type="button" data-linked-setup-open="investment">Add shares or investment</button></div>
+      ${assets.length ? `<div class="linked-investment-list">${assets.map((asset) => {
+        const record = LINKED_SETUP?.linkedInvestmentRecords(plan, asset.id) || {};
+        return `<article class="linked-investment-row"><div><strong>${escapeHtml(asset.name || "Investment")}</strong><span>${money(asset.value || 0)} · ${escapeHtml(record.income?.type === "distributions" ? "Distributions" : "Dividends")} ${money(record.income?.amount || 0)} pa</span></div><button class="btn" type="button" data-linked-setup-open="investment" data-linked-asset-id="${escapeHtml(asset.id)}">Edit</button></article>`;
+      }).join("")}</div>` : `<p class="empty-collection-note">No guided investment has been added yet. Existing manual records remain available in Financial Plan.</p>`}
+    </section>`;
+  }
+
   function liabilityCard(item, index) {
     if (item.type === "hecsHelp" || item.type === "stsl") {
-      const result = CALC.calculatePlan(plan);
+      const result = calculatePlan(plan);
       const stsl = result.stslRepaymentEstimate || result.helpRepaymentEstimate;
       const ownerKey = item.owner === "person2" ? "person2" : "person1";
       const personNumber = ownerKey === "person2" ? 2 : 1;
@@ -5468,6 +5985,14 @@
           <p class="field-help mt-3">Credit cards are tracked separately from loans. The limit is optional and only used as context.</p>
         </article>
       `;
+    }
+    if (item.guidedSetup && item.linkedAssetId && ["homeLoan", "rentalPropertyLoan", "investmentLoan"].includes(item.type)) {
+      const kind = item.type === "homeLoan" ? "home" : item.type === "rentalPropertyLoan" ? "rental" : "investment";
+      return `
+        <article class="form-item-card dynamic-item-card linked-primary-summary">
+          <div class="item-card-title"><div><span>Linked loan</span><h4>${escapeHtml(item.name || "Loan")}</h4><small>${money(item.balance || 0)} balance · managed with its ${kind === "home" ? "home" : kind === "rental" ? "property" : "investment"}</small></div></div>
+          <button class="btn mt-3" type="button" data-linked-setup-open="${kind}" data-linked-asset-id="${escapeHtml(item.linkedAssetId)}">Edit linked setup</button>
+        </article>`;
     }
     const isRentalLoan = item.type === "rentalPropertyLoan";
     const isInvestmentLoan = item.type === "investmentLoan";
@@ -5520,6 +6045,28 @@
   }
 
   function goalCard(item, index) {
+    if (item.goalType === "retirementIntent") {
+      return `
+        <article class="form-item-card dynamic-item-card goal-intent-card">
+          <div class="item-card-title"><div><span>Retirement intent</span><h4>${escapeHtml(item.name || "Retire or reduce work")}</h4></div>${removeButton("goalItems", item.id)}</div>
+          <p class="field-help mt-3">Set work-reduction ages, retirement ages and lifestyle spending in Retirement Planning so the authoritative projection remains in one place.</p>
+          <button class="btn btn-primary mt-3" type="button" data-view="semiretirement">Open Retirement Planning</button>
+        </article>`;
+    }
+    if (item.goalType === "homeLoanPayoff") {
+      const loans = (plan.liabilityItems || []).filter((loan) => loan.type === "homeLoan");
+      const selectedLoan = loans.find((loan) => String(loan.id || "") === String(item.linkedLiabilityId || ""));
+      const options = [["", "Choose a home loan"], ...loans.map((loan) => [loan.id, `${loan.name || "Home loan"} · ${money(loan.balance || 0)}`])];
+      return `
+        <article class="form-item-card dynamic-item-card goal-intent-card">
+          <div class="item-card-title"><div><span>Home-loan goal</span><h4>${escapeHtml(item.name || "Repay home loan")}</h4></div>${removeButton("goalItems", item.id)}</div>
+          <div class="input-grid mt-4">
+            ${dynamicInput("goalItems", item, "linkedLiabilityId", "Home loan", { type: "select", options })}
+            ${dynamicInput("goalItems", item, "targetYear", "Desired payoff year (optional)", { step: "1" })}
+          </div>
+          <p class="field-help mt-3">${selectedLoan ? `Current balance comes from ${escapeHtml(selectedLoan.name || "the selected loan")}: ${money(selectedLoan.balance || 0)}.` : "Select the home loan already recorded under Liabilities. No loan balance is duplicated in this goal."}</p>
+        </article>`;
+    }
     return `
       <article class="form-item-card dynamic-item-card">
         <div class="item-card-title">
@@ -5610,11 +6157,13 @@
     const container = document.getElementById(containerId);
     if (!container) return;
     container.innerHTML = collectionShell({
-      title: "Income",
+      title: "Your income",
       description: incomeHelperText,
-      addLabel: "Add income",
+      addLabel: "",
       collection: "incomeItems",
       body: plan.incomeItems.map(incomeCard).join(""),
+      actionsHtml: incomeConsumerActionsHtml(),
+      emptyText: "No income added yet. Salary or wages is the quickest place to start.",
     }) + taxSettingsCardHtml();
   }
 
@@ -5623,10 +6172,12 @@
     if (!container) return;
     container.innerHTML = collectionShell({
       title: "Assets",
-      description: "List each asset and choose the category that best describes it.",
-      addLabel: "Add asset",
+      description: "Add only what your household owns. Property and investments use a guided setup that keeps related income and loans together.",
+      addLabel: "",
       collection: "assetItems",
       body: plan.assetItems.map(assetCard).join(""),
+      actionsHtml: assetConsumerActionsHtml(),
+      emptyText: "No assets added yet. Start with your home or cash and savings if they apply.",
     }) + linkedPropertyManagementSectionHtml();
   }
 
@@ -5639,9 +6190,11 @@
     container.innerHTML = collectionShell({
       title: "Liabilities / Loans",
       description: "Add each loan or liability. Study and Training Support Loan balances appear separately for each person who has selected an STSL debt in Income.",
-      addLabel: "Add liability",
+      addLabel: "",
       collection: "liabilityItems",
       body: stslWarning + plan.liabilityItems.map(liabilityCard).join(""),
+      actionsHtml: liabilityConsumerActionsHtml(),
+      emptyText: "No loans or debts added yet.",
     });
   }
 
@@ -5650,22 +6203,64 @@
     if (!container) return;
     container.innerHTML = collectionShell({
       title: "Expenses",
-      description: "Add each recurring expense with its own category and frequency.",
-      addLabel: "Add expense",
+      description: "Start with one household spending amount. Add more detail later if it helps your plan.",
+      addLabel: "",
       collection: "expenseItems",
       body: plan.expenseItems.map(expenseCard).join(""),
-    });
+      actionsHtml: `${consumerAction("household-spending", "Add household spending", true)}${consumerAction("another-expense", "Add another expense")}`,
+      emptyText: "No spending added yet. A single monthly household amount is enough to begin.",
+    }) + `
+      <label class="toggle-field setup-confirmation-field">
+        <span><span class="field-label">I have reviewed our current household spending</span><small class="field-help">Select this even if the current amount is genuinely zero or negligible.</small></span>
+        <input class="toggle-input" type="checkbox" data-path="meta.setupConfirmations.spendingReviewed" data-type="boolean"${plan.meta?.setupConfirmations?.spendingReviewed ? " checked" : ""}>
+      </label>`;
+  }
+
+  function superCheckpointHtml() {
+    const state = CONSUMER_SETUP?.setupConfirmationState?.(plan) || { people: ["person1"] };
+    const personCard = (person, number) => {
+      const noSuperPath = `meta.setupConfirmations.${person}NoSuper`;
+      const balancePath = `assets.superPerson${number}`;
+      const noSuper = Boolean(getPath(plan, noSuperPath));
+      return `
+        <article class="form-item-card super-checkpoint-card">
+          <div class="card-subheading"><h3>${escapeHtml(personDisplayName(number))}'s super</h3><p>Enter the current balance, or confirm that there is no balance to include yet.</p></div>
+          <div class="input-grid mt-4">
+            ${field({ label: "Current super balance", path: balancePath, step: "1000" })}
+            ${field({ label: "No current super balance to include", path: noSuperPath, type: "checkbox", help: "Use this when the balance is genuinely zero or negligible for this plan." })}
+          </div>
+          ${noSuper && Number(getPath(plan, balancePath)) > 0 ? `<p class="tax-note mt-3">A balance is entered, so the no-super confirmation is not needed.</p>` : ""}
+        </article>`;
+    };
+    return `
+      <section class="super-checkpoint">
+        <div class="card-subheading"><h3>Current super balances</h3><p>This checkpoint is enough for setup. Employer contributions and other advanced settings remain in the full Super area.</p></div>
+        <div class="setup-list mt-4">${state.people.map((person, index) => personCard(person, index + 1)).join("")}</div>
+        <button class="btn mt-4" type="button" data-view="super">Open full Super settings</button>
+      </section>`;
+  }
+
+  function renderAssumptionReview(containerId, fields) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const visible = fields.filter((item) => ["investing.expectedInvestmentReturnPct", "investing.expectedSuperReturnPct", "investing.inflationPct"].includes(item.path));
+    const advanced = fields.filter((item) => !visible.includes(item));
+    container.innerHTML = `
+      <div class="input-grid">${visible.map(field).join("")}</div>
+      <details class="setup-advanced-section mt-4"><summary>Advanced assumptions</summary><div class="input-grid mt-4">${advanced.map(field).join("")}</div></details>`;
   }
 
   function renderGoalCollection(containerId) {
     const container = document.getElementById(containerId);
     if (!container) return;
     container.innerHTML = collectionShell({
-      title: "Example Goals",
-      description: "Use these simple editable examples to show what the plan is aiming for.",
-      addLabel: "Add goal",
+      title: "Your goals",
+      description: "Choose only the goals that matter to your household.",
+      addLabel: "",
       collection: "goalItems",
       body: plan.goalItems.map(goalCard).join(""),
+      actionsHtml: goalConsumerActionsHtml(),
+      emptyText: "No optional goals added yet. Your Financial Freedom lifestyle target above still guides the main projection.",
     });
   }
 
@@ -5674,21 +6269,32 @@
     if (!container) return;
     container.innerHTML = `
       ${collectionShell({
-        title: "Income",
-        description: `Income items can include salary, Other Income, dividends, rent, interest or side payments. ${incomeHelperText}`,
-        addLabel: "Add income",
+        title: "Your income",
+        description: incomeHelperText,
+        addLabel: "",
         collection: "incomeItems",
         body: plan.incomeItems.map(incomeCard).join(""),
+        actionsHtml: incomeConsumerActionsHtml(),
+        emptyText: "No income added yet. Salary or wages is the quickest place to start.",
       })}
       ${collectionShell({
         title: "Expenses",
-        description: "Expense items stack cleanly on mobile and each one keeps its own frequency.",
-        addLabel: "Add expense",
+        description: "Start with one household spending amount and add detail only when useful.",
+        addLabel: "",
         collection: "expenseItems",
         body: plan.expenseItems.map(expenseCard).join(""),
+        actionsHtml: `${consumerAction("household-spending", "Add household spending", true)}${consumerAction("another-expense", "Add another expense")}`,
+        emptyText: "No spending added yet.",
       })}
       ${taxSettingsCardHtml()}
     `;
+  }
+
+  function linkedIncomeSetupShortcutsHtml() {
+    return `<section class="linked-setup-shortcuts">
+      <div><strong>Add linked income and assets together</strong><p>Use a guided setup to avoid entering and linking the same investment in several places.</p></div>
+      <div class="linked-setup-shortcut-actions"><button class="btn btn-primary" type="button" data-linked-setup-open="rental">Add rental property</button><button class="btn" type="button" data-linked-setup-open="investment">Add shares or investment</button></div>
+    </section>`;
   }
 
   function renderForms() {
@@ -5780,6 +6386,8 @@
       { label: "Wage growth (%)", path: "investing.wageGrowthPct", step: "0.1" },
       { label: "Safe withdrawal rate (%)", path: "investing.safeWithdrawalRatePct", step: "0.1" },
     ]);
+    const linkedInvestmentSetup = document.getElementById("linkedInvestmentSetup");
+    if (linkedInvestmentSetup) linkedInvestmentSetup.innerHTML = linkedInvestmentRecordsHtml();
     renderForm("superForm", [
       { label: superDisplayName(1), path: "assets.superPerson1", step: "1000" },
       { label: superDisplayName(2), path: "assets.superPerson2", step: "1000" },
@@ -5792,11 +6400,13 @@
     renderAssetCollection("wizardAssetsForm");
     renderLiabilityCollection("wizardLoansForm");
     renderExpenseCollection("wizardExpensesForm");
+    const superCheckpoint = document.getElementById("wizardSuperCheckpoint");
+    if (superCheckpoint) superCheckpoint.innerHTML = superCheckpointHtml();
     renderForm("wizardGoalsForm", goalFields);
     appendEmployerSuperPanel("wizardGoalsForm");
     renderGoalCollection("wizardGoalExamples");
     renderDownsizingForm("wizardDownsizingForm", downsizingFields);
-    renderForm("wizardAssumptionsReview", assumptionFields);
+    renderAssumptionReview("wizardAssumptionsReview", assumptionFields);
     renderForm("reportAssumptionsForm", assumptionFields);
     renderDownsizingForm("downsizingForm", downsizingFields);
     renderGoalCollection("goalExamples");
@@ -6022,6 +6632,10 @@
         </button>
       `).join("");
     }
+    const select = document.getElementById("wizardStepSelect");
+    if (select) {
+      select.innerHTML = wizardSteps.map((item, index) => `<option value="${index}"${index === activeWizardStep ? " selected" : ""}>Step ${index + 1} of ${wizardSteps.length} · ${escapeHtml(item.title)}</option>`).join("");
+    }
   }
 
   function dashboardFinancialFreedomLabel(result) {
@@ -6040,16 +6654,27 @@
 
   function personalisedResultsReadiness(planData, resultInput) {
     const planCandidate = planData || plan;
-    const result = resultInput || CALC.calculatePlan(planCandidate);
+    const result = resultInput || calculatePlan(planCandidate);
     const readiness = financialJourneyReadiness(planCandidate, result);
-    const hasPlanData = !isBlankPlan(planCandidate) && isEngagementPlanReady(result);
     return {
-      hasPlanData,
+      state: readiness.state || (readiness.complete ? "ready" : isBlankPlan(planCandidate) ? "empty" : "partial"),
+      hasPlanData: readiness.hasPlanData ?? !isBlankPlan(planCandidate),
       complete: readiness.complete,
       missingSections: [...readiness.missingSections],
       message: readiness.message,
-      readyForPersonalisedResults: hasPlanData && readiness.complete,
+      readyForPersonalisedResults: readiness.readyForPersonalisedResults ?? readiness.complete,
     };
+  }
+
+  function readinessGateHtml(readiness, label = "personalised projections and comparisons") {
+    const missing = (readiness?.missingSections || []).slice(0, 4);
+    return `
+      <div class="planner-empty-state readiness-gate" role="status" data-readiness-state="${escapeHtml(readiness?.state || "partial")}">
+        <strong>Complete your Financial Plan before ${escapeHtml(label)} are available.</strong>
+        <p>${missing.length ? `Still needed: ${escapeHtml(missing.join(", "))}${readiness.missingSections.length > 4 ? " and more" : ""}.` : "Add the core household, income, spending and financial-position details first."}</p>
+        <button class="btn btn-primary" type="button" data-engagement-action="setup">Continue Financial Plan</button>
+      </div>
+    `;
   }
 
   function dashboardMissionHtml(result, readyState) {
@@ -6207,8 +6832,8 @@
       return `
         <article class="dashboard-compact-card dashboard-ai-card">
           <span class="metric-label">AI Coach</span>
-          <h3>AI coaching unlocks after setup</h3>
-          <p>Once your plan is complete, AI can explain opportunities and scenarios using your existing app calculations.</p>
+          <h3>AI coaching is unavailable in this beta</h3>
+          <p>Your plan and calculations still work normally without sending financial information to an AI provider.</p>
           <button class="btn" type="button" data-engagement-action="setup">Continue Setup</button>
         </article>
       `;
@@ -6239,7 +6864,7 @@
     const age = Math.max(0, Math.round(Number(value)));
     if (!Number.isFinite(age) || age <= 0) return;
     engagementData().futureYouAge = age;
-    const result = CALC.calculatePlan(plan);
+    const result = calculatePlan(plan);
     const future = futureYouPreview(result);
     document.querySelectorAll("[data-dashboard-future-age-label]").forEach((label) => {
       label.textContent = `Age ${future.age}`;
@@ -6818,7 +7443,7 @@
       if (!months) historicalSnapshotDraft.snapshotDate = isoDateOnly();
       editingHistoricalSnapshotId = "";
       isHistoricalSnapshotEditorOpen = true;
-      renderFinancialProgress(CALC.calculatePlan(plan));
+      renderFinancialProgress(calculatePlan(plan));
       return;
     }
     if (action === "save-current") {
@@ -6833,7 +7458,7 @@
       isHistoricalSnapshotEditorOpen = false;
       editingHistoricalSnapshotId = "";
       historicalSnapshotDraft = null;
-      renderFinancialProgress(CALC.calculatePlan(plan));
+      renderFinancialProgress(calculatePlan(plan));
       return;
     }
     if (action === "select-snapshot") {
@@ -6881,15 +7506,15 @@
 
   async function generateProgressAiInsight() {
     const snapshot = selectedProgressSnapshot();
-    const comparison = snapshot ? buildFinancialComparison(snapshot, CALC.calculatePlan(plan)) : null;
+    const comparison = snapshot ? buildFinancialComparison(snapshot, calculatePlan(plan)) : null;
     if (!comparison) return;
     if (!aiInsightsConfig.enabled) {
       progressAiState.error = "AI Insights is not enabled in this environment. The rules-based progress summary remains available.";
-      renderFinancialProgress(CALC.calculatePlan(plan));
+      renderFinancialProgress(calculatePlan(plan));
       return;
     }
     progressAiState = { isLoading: true, error: "" };
-    renderFinancialProgress(CALC.calculatePlan(plan));
+    renderFinancialProgress(calculatePlan(plan));
     try {
       const response = await fetch(AI_INSIGHTS_ENDPOINT, {
         method: "POST",
@@ -6917,7 +7542,7 @@
         isLoading: false,
         error: error.message || "AI progress insight was unavailable. The rules-based summary is still shown.",
       };
-      renderFinancialProgress(CALC.calculatePlan(plan));
+      renderFinancialProgress(calculatePlan(plan));
     }
   }
 
@@ -7396,6 +8021,8 @@
   }
 
   function renderInvestments(result) {
+    const linkedInvestmentSetup = document.getElementById("linkedInvestmentSetup");
+    if (linkedInvestmentSetup) linkedInvestmentSetup.innerHTML = linkedInvestmentRecordsHtml();
     document.getElementById("investmentCards").innerHTML = [5, 10, 20, 30].map((year) => {
       const row = result.investmentProjection.find((item) => item.year === year) || result.investmentProjection.at(-1);
       return `<div class="mini-card"><span>${year} years</span><strong>${money(row?.closingBalance || 0)}</strong><small>${money(row?.passiveIncome || 0)} pa passive income</small></div>`;
@@ -7540,7 +8167,7 @@
     return (semiRetirementScenarioErrors || []).find((error) => error.path === path)?.message || "";
   }
 
-  function financialPlanLivingExpensesAmount(result = CALC.calculatePlan(plan)) {
+  function financialPlanLivingExpensesAmount(result = calculatePlan(plan)) {
     const value = Number(result?.annualLivingExpenses);
     return Number.isFinite(value) ? Math.max(0, value) : 0;
   }
@@ -9239,7 +9866,7 @@
           <p>Headline debt and property position from this scenario.</p>
         </div>
         <div class="semi-retirement-results-grid compact">
-          ${semiRetirementMetricCard("Current debt", semiRetirementMoney(debtNow), debtProperty.hasDebt ? "Debt included at the start of the projection." : "No current debt included in the projection.", debtProperty.hasDebt ? "" : "is-positive")}
+          ${semiRetirementMetricCard("Debt after first projection year", semiRetirementMoney(debtNow), debtProperty.hasDebt ? "Projected debt at the end of the first annual projection period." : "No debt is projected after the first annual projection period.", debtProperty.hasDebt ? "" : "is-positive")}
           ${semiRetirementMetricCard("Debt-free by", debtFree.value, debtFree.note, debtFreeBeforeRetirement || !debtProperty.hasDebt ? "is-positive" : "")}
           ${semiRetirementMetricCard("Property equity when you retire", semiRetirementMoney(netWorth.totalPropertyEquity), "Property is not automatically treated as retirement spending money in this scenario.")}
           ${semiRetirementMetricCard(netWorthLabel, semiRetirementMoney(netWorth.projectedNetWorth), `${netWorth.calendarYear || "Projection year"}${netWorth.ages?.length ? ` - ${semiRetirementAgeList(netWorth.ages)}` : ""}. Future value based on the assumptions entered.`)}
@@ -9247,7 +9874,7 @@
         ${debtFreeBeforeRetirement ? `<p class="semi-retirement-row-positive mt-4"><strong>Projected to be debt-free before retirement.</strong></p>` : ""}
         ${debtProperty.hasDebt ? `
           <div class="semi-retirement-debt-progression mt-4" aria-label="Debt progression">
-            <div><span>Now</span><strong>${semiRetirementMoney(debtNow)}</strong></div>
+            <div><span>After first year</span><strong>${semiRetirementMoney(debtNow)}</strong></div>
             <div><span>Both retired</span><strong>${semiRetirementMoney(debtAtBoth)}</strong></div>
             <div><span>Projection end</span><strong>${semiRetirementMoney(debtAtEnd)}</strong></div>
           </div>
@@ -9838,7 +10465,21 @@
   }
 
   function renderDecision(result) {
-    document.getElementById("decisionList").innerHTML = result.decisionOptions.map((option, index) => `
+    const decisionList = document.getElementById("decisionList");
+    const readiness = personalisedResultsReadiness(plan, result);
+    const saveButton = document.querySelector('[data-save-stage-g-scenario="decision-what-if"]');
+    const customDetails = document.getElementById("customScenarioDetails");
+    if (!readiness.readyForPersonalisedResults) {
+      if (decisionList) decisionList.innerHTML = readinessGateHtml(readiness, "personalised recommendations");
+      const passiveSummary = document.getElementById("decisionPassiveIncomeSummary");
+      if (passiveSummary) passiveSummary.innerHTML = "";
+      if (saveButton) saveButton.disabled = true;
+      customDetails?.classList.add("hidden");
+      return;
+    }
+    if (saveButton) saveButton.disabled = false;
+    customDetails?.classList.remove("hidden");
+    decisionList.innerHTML = result.decisionOptions.map((option, index) => `
       <article class="card decision-coach-card">
         <div class="flex items-start justify-between gap-4">
           <div>
@@ -9849,8 +10490,9 @@
         </div>
         <div class="decision-benefit-grid">
           ${summaryTile("Potential tax benefit", option.taxSaving > 0 ? `~${percentFromRatio(option.taxSaving)}` : "No direct tax effect modelled", "", "decisionTaxBenefit")}
-          ${summaryTile("Potential wealth benefit", `~${percentFromRatio(option.afterTaxBenefit)}`, "", "decisionWealthBenefit")}
+          ${summaryTile("Estimated annual wealth benefit", `~${percentFromRatio(option.afterTaxBenefit)}`, "", "decisionWealthBenefit")}
         </div>
+        <p class="field-help">Annual comparison using the current rates and tax assumptions. Longer-term outcomes are shown in the scenario results below.</p>
         <div class="coach-section">
           <span>Why it matters</span>
           <p>${escapeHtml(option.explanation)}</p>
@@ -9875,7 +10517,7 @@
 
   function updateSemiRetirementDraftFromInput(target) {
     if (!window.FFSSemiRetirementUi || !target?.dataset?.semiInput) return;
-    ensureSemiRetirementScenarioDraft(CALC.calculatePlan(plan));
+    ensureSemiRetirementScenarioDraft(calculatePlan(plan));
     const path = target.dataset.semiInput;
     const type = target.dataset.semiType || "number";
     const value = type === "boolean"
@@ -9901,7 +10543,7 @@
       semiRetirementScenarioInputs = null;
       semiRetirementScenarioResultDraft = null;
       semiRetirementScenarioDirty = true;
-      renderSemiRetirementScenario(CALC.calculatePlan(plan));
+      renderSemiRetirementScenario(calculatePlan(plan));
       return;
     }
     if (path === "scenario.downsizeHomeEvent.enabled" || path === "scenario.downsizeHomeEvent.allocation") {
@@ -9913,7 +10555,7 @@
       semiRetirementScenarioInputs = null;
       semiRetirementScenarioResultDraft = null;
       semiRetirementScenarioDirty = true;
-      renderSemiRetirementScenario(CALC.calculatePlan(plan));
+      renderSemiRetirementScenario(calculatePlan(plan));
       return;
     }
     clearSemiRetirementAdjustmentState();
@@ -9971,7 +10613,7 @@
     if (existingIndex >= 0) {
       semiRetirementActiveComparisonId = semiRetirementComparisonScenarios[existingIndex].id;
       syncLegacySemiRetirementComparisonState(semiRetirementComparisonScenarios[existingIndex]);
-      if (options.render !== false) renderSemiRetirementScenario(CALC.calculatePlan(plan));
+      if (options.render !== false) renderSemiRetirementScenario(calculatePlan(plan));
       updateSaveStatus("That Retirement Planning scenario is already in the comparison.");
       return true;
     }
@@ -9995,13 +10637,13 @@
     else semiRetirementComparisonScenarios.push(prepared);
     semiRetirementActiveComparisonId = prepared.id;
     syncLegacySemiRetirementComparisonState(prepared);
-    if (options.render !== false) renderSemiRetirementScenario(CALC.calculatePlan(plan));
+    if (options.render !== false) renderSemiRetirementScenario(calculatePlan(plan));
     return true;
   }
 
   function ensureSemiRetirementBaseResult() {
     if (!window.FFSSemiRetirementUi || !window.FFSSemiRetirementProjection) return false;
-    const result = CALC.calculatePlan(plan);
+    const result = calculatePlan(plan);
     ensureSemiRetirementScenarioDraft(result);
     if (semiRetirementScenarioResult) return true;
     const outcome = window.FFSSemiRetirementUi.runSemiRetirementProjection(window.FFSSemiRetirementProjection, semiRetirementScenarioDraft);
@@ -10070,12 +10712,12 @@
       activeScenario.result = semiRetirementComparisonResult;
       syncLegacySemiRetirementComparisonState(activeScenario);
     }
-    if (options.render) renderSemiRetirementScenario(CALC.calculatePlan(plan));
+    if (options.render) renderSemiRetirementScenario(calculatePlan(plan));
   }
 
   function resetSemiRetirementComparison() {
     clearSemiRetirementComparisonState();
-    renderSemiRetirementScenario(CALC.calculatePlan(plan));
+    renderSemiRetirementScenario(calculatePlan(plan));
     updateSaveStatus("Comparison removed. Current scenario and Financial Plan unchanged.");
   }
 
@@ -10086,7 +10728,7 @@
       semiRetirementActiveComparisonId = semiRetirementComparisonScenarios[0]?.id || "";
     }
     syncLegacySemiRetirementComparisonState(activeSemiRetirementComparisonScenario());
-    renderSemiRetirementScenario(CALC.calculatePlan(plan));
+    renderSemiRetirementScenario(calculatePlan(plan));
     updateSaveStatus(`${scenario?.name || "Comparison scenario"} removed. Saved scenarios and Financial Plan unchanged.`);
   }
 
@@ -10095,7 +10737,7 @@
     if (!scenario) return;
     semiRetirementActiveComparisonId = scenario.id;
     syncLegacySemiRetirementComparisonState(scenario);
-    renderSemiRetirementScenario(CALC.calculatePlan(plan));
+    renderSemiRetirementScenario(calculatePlan(plan));
   }
 
   function addSavedRetirementScenarioToComparison(scenario) {
@@ -10138,7 +10780,7 @@
 
   function useFinancialPlanLivingExpensesForSemiRetirementScenario() {
     if (!window.FFSSemiRetirementUi) return;
-    const result = CALC.calculatePlan(plan);
+    const result = calculatePlan(plan);
     ensureSemiRetirementScenarioDraft(result);
     window.FFSSemiRetirementUi.setDraftPath(semiRetirementScenarioDraft, "household.currentLifestyleSpending", financialPlanLivingExpensesAmount(result));
     clearSemiRetirementAdjustmentState();
@@ -10155,7 +10797,7 @@
 
   function addSemiRetirementOneOffLifestyleEvent() {
     if (!window.FFSSemiRetirementUi) return;
-    ensureSemiRetirementScenarioDraft(CALC.calculatePlan(plan));
+    ensureSemiRetirementScenarioDraft(calculatePlan(plan));
     const events = window.FFSSemiRetirementUi.normaliseOneOffLifestyleEvents(semiRetirementScenarioDraft.scenario?.oneOffLifestyleEvents);
     const range = window.FFSSemiRetirementUi.projectionYearRange(semiRetirementScenarioDraft);
     const year = Number.isFinite(Number(range.startYear)) ? Number(range.startYear) : currentYear();
@@ -10173,7 +10815,7 @@
     semiRetirementScenarioInputs = null;
     semiRetirementScenarioResultDraft = null;
     semiRetirementScenarioDirty = true;
-    renderSemiRetirementScenario(CALC.calculatePlan(plan));
+    renderSemiRetirementScenario(calculatePlan(plan));
     window.requestAnimationFrame(() => {
       const target = document.querySelector(`[data-semi-input="scenario.oneOffLifestyleEvents.${nextIndex}.description"]`);
       target?.focus({ preventScroll: true });
@@ -10184,7 +10826,7 @@
 
   function removeSemiRetirementOneOffLifestyleEvent(eventId) {
     if (!window.FFSSemiRetirementUi || !eventId) return;
-    ensureSemiRetirementScenarioDraft(CALC.calculatePlan(plan));
+    ensureSemiRetirementScenarioDraft(calculatePlan(plan));
     const events = window.FFSSemiRetirementUi
       .normaliseOneOffLifestyleEvents(semiRetirementScenarioDraft.scenario?.oneOffLifestyleEvents)
       .filter((event) => event.id !== eventId);
@@ -10196,14 +10838,14 @@
     semiRetirementScenarioResultDraft = null;
     semiRetirementScenarioDirty = true;
     semiRetirementScenarioErrors = semiRetirementScenarioErrors.filter((error) => !String(error.path || "").startsWith("scenario.oneOffLifestyleEvents"));
-    renderSemiRetirementScenario(CALC.calculatePlan(plan));
+    renderSemiRetirementScenario(calculatePlan(plan));
     document.querySelector("[data-one-off-lifestyle-spending]")?.scrollIntoView({ behavior: "smooth", block: "center" });
     updateSaveStatus("Planned big expense removed. Calculate the Retirement Plan to update results.");
   }
 
   function addSemiRetirementOneOffIncomeEvent() {
     if (!window.FFSSemiRetirementUi) return;
-    ensureSemiRetirementScenarioDraft(CALC.calculatePlan(plan));
+    ensureSemiRetirementScenarioDraft(calculatePlan(plan));
     const events = window.FFSSemiRetirementUi.normaliseOneOffIncomeEvents(semiRetirementScenarioDraft.scenario?.oneOffIncomeEvents);
     const range = window.FFSSemiRetirementUi.projectionYearRange(semiRetirementScenarioDraft);
     const year = Number.isFinite(Number(range.startYear)) ? Number(range.startYear) : currentYear();
@@ -10221,7 +10863,7 @@
     semiRetirementScenarioInputs = null;
     semiRetirementScenarioResultDraft = null;
     semiRetirementScenarioDirty = true;
-    renderSemiRetirementScenario(CALC.calculatePlan(plan));
+    renderSemiRetirementScenario(calculatePlan(plan));
     window.requestAnimationFrame(() => {
       const target = document.querySelector(`[data-semi-input="scenario.oneOffIncomeEvents.${nextIndex}.description"]`);
       target?.focus({ preventScroll: true });
@@ -10232,7 +10874,7 @@
 
   function removeSemiRetirementOneOffIncomeEvent(eventId) {
     if (!window.FFSSemiRetirementUi || !eventId) return;
-    ensureSemiRetirementScenarioDraft(CALC.calculatePlan(plan));
+    ensureSemiRetirementScenarioDraft(calculatePlan(plan));
     const events = window.FFSSemiRetirementUi
       .normaliseOneOffIncomeEvents(semiRetirementScenarioDraft.scenario?.oneOffIncomeEvents)
       .filter((event) => event.id !== eventId);
@@ -10244,14 +10886,14 @@
     semiRetirementScenarioResultDraft = null;
     semiRetirementScenarioDirty = true;
     semiRetirementScenarioErrors = semiRetirementScenarioErrors.filter((error) => !String(error.path || "").startsWith("scenario.oneOffIncomeEvents"));
-    renderSemiRetirementScenario(CALC.calculatePlan(plan));
+    renderSemiRetirementScenario(calculatePlan(plan));
     document.querySelector("[data-one-off-income]")?.scrollIntoView({ behavior: "smooth", block: "center" });
     updateSaveStatus("One-off income removed. Calculate the Retirement Plan to update results.");
   }
 
   function addSemiRetirementPlannedConcessionalContribution() {
     if (!window.FFSSemiRetirementUi) return;
-    ensureSemiRetirementScenarioDraft(CALC.calculatePlan(plan));
+    ensureSemiRetirementScenarioDraft(calculatePlan(plan));
     const events = window.FFSSemiRetirementUi.normalisePlannedConcessionalContributions(semiRetirementScenarioDraft.scenario?.plannedConcessionalContributions);
     const peopleOptions = semiRetirementPersonOptions(semiRetirementScenarioDraft);
     const range = window.FFSSemiRetirementUi.projectionYearRange(semiRetirementScenarioDraft);
@@ -10286,7 +10928,7 @@
     semiRetirementScenarioInputs = null;
     semiRetirementScenarioResultDraft = null;
     semiRetirementScenarioDirty = true;
-    renderSemiRetirementScenario(CALC.calculatePlan(plan));
+    renderSemiRetirementScenario(calculatePlan(plan));
     window.requestAnimationFrame(() => {
       const target = document.querySelector(`[data-semi-input="scenario.plannedConcessionalContributions.${nextIndex}.amount"]`);
       target?.focus({ preventScroll: true });
@@ -10297,7 +10939,7 @@
 
   function removeSemiRetirementPlannedConcessionalContribution(eventId) {
     if (!window.FFSSemiRetirementUi || !eventId) return;
-    ensureSemiRetirementScenarioDraft(CALC.calculatePlan(plan));
+    ensureSemiRetirementScenarioDraft(calculatePlan(plan));
     const events = window.FFSSemiRetirementUi
       .normalisePlannedConcessionalContributions(semiRetirementScenarioDraft.scenario?.plannedConcessionalContributions)
       .filter((event) => event.id !== eventId);
@@ -10310,7 +10952,7 @@
     semiRetirementScenarioResultDraft = null;
     semiRetirementScenarioDirty = true;
     semiRetirementScenarioErrors = semiRetirementScenarioErrors.filter((error) => !String(error.path || "").startsWith("scenario.plannedConcessionalContributions"));
-    renderSemiRetirementScenario(CALC.calculatePlan(plan));
+    renderSemiRetirementScenario(calculatePlan(plan));
     document.querySelector("[data-planned-concessional-contributions]")?.scrollIntoView({ behavior: "smooth", block: "center" });
     updateSaveStatus("Planned extra concessional contribution removed. Calculate the scenario to update results.");
   }
@@ -10413,7 +11055,7 @@
 
   function applySemiRetirementAdjustmentField(field, rawValue) {
     if (!window.FFSSemiRetirementUi || !field) return;
-    ensureSemiRetirementScenarioDraft(CALC.calculatePlan(plan));
+    ensureSemiRetirementScenarioDraft(calculatePlan(plan));
     window.FFSSemiRetirementUi.applyScenarioAdjustment(semiRetirementScenarioDraft, field, rawValue);
     const path = semiRetirementAdjustmentPath(field);
     semiRetirementScenarioDirty = true;
@@ -10434,7 +11076,7 @@
     if (errors.length) {
       semiRetirementAdjustmentErrors = errors;
       semiRetirementScenarioErrors = errors;
-      renderSemiRetirementScenario(CALC.calculatePlan(plan));
+      renderSemiRetirementScenario(calculatePlan(plan));
       restoreSemiRetirementAdjustmentFocus(focusState);
       updateSaveStatus("Semi-retirement adjustment needs review. Last valid projection remains visible.");
       return;
@@ -10444,7 +11086,7 @@
     semiRetirementScenarioInputs = outcome.inputs;
     semiRetirementScenarioResult = outcome.result;
     semiRetirementScenarioResultDraft = cloneScenarioDraft(semiRetirementScenarioDraft);
-    renderSemiRetirementScenario(CALC.calculatePlan(plan));
+    renderSemiRetirementScenario(calculatePlan(plan));
     restoreSemiRetirementAdjustmentFocus(focusState);
     updateSaveStatus("Semi-retirement projection updated. Financial Plan unchanged.");
   }
@@ -10470,7 +11112,7 @@
     const field = button?.dataset?.semiAdjustmentStep;
     const delta = Number(button?.dataset?.semiAdjustmentDelta) || 0;
     if (!field) return;
-    ensureSemiRetirementScenarioDraft(CALC.calculatePlan(plan));
+    ensureSemiRetirementScenarioDraft(calculatePlan(plan));
     const current = Number(window.FFSSemiRetirementUi.getDraftPath(semiRetirementScenarioDraft, semiRetirementAdjustmentPath(field))) || 0;
     const next = Math.max(0, current + delta);
     applySemiRetirementAdjustmentField(field, next);
@@ -10480,7 +11122,7 @@
   function resetSemiRetirementAdjustments() {
     if (!semiRetirementAdjustmentBaseline || !window.FFSSemiRetirementUi) return;
     clearSemiRetirementAdjustmentDebounce();
-    ensureSemiRetirementScenarioDraft(CALC.calculatePlan(plan));
+    ensureSemiRetirementScenarioDraft(calculatePlan(plan));
     window.FFSSemiRetirementUi.resetScenarioAdjustmentsToBaseline(semiRetirementScenarioDraft, semiRetirementAdjustmentBaseline);
     semiRetirementScenarioDirty = true;
     semiRetirementAdjustmentErrors = [];
@@ -10491,12 +11133,12 @@
   function calculateSemiRetirementScenario() {
     if (!window.FFSSemiRetirementUi || !window.FFSSemiRetirementProjection) {
       semiRetirementScenarioErrors = [{ path: "engine", message: "Semi-retirement projection engine is not available." }];
-      renderSemiRetirementScenario(CALC.calculatePlan(plan));
+      renderSemiRetirementScenario(calculatePlan(plan));
       return;
     }
     clearSemiRetirementAdjustmentState({ keepBaseline: false });
     clearSemiRetirementComparisonState();
-    ensureSemiRetirementScenarioDraft(CALC.calculatePlan(plan));
+    ensureSemiRetirementScenarioDraft(calculatePlan(plan));
     const outcome = window.FFSSemiRetirementUi.runSemiRetirementProjection(window.FFSSemiRetirementProjection, semiRetirementScenarioDraft);
     semiRetirementScenarioInputs = outcome.inputs;
     semiRetirementScenarioErrors = outcome.validation?.isValid ? [] : (outcome.validation?.errors || []);
@@ -10509,11 +11151,11 @@
     semiRetirementAdjustmentBaseline = semiRetirementScenarioResult
       ? window.FFSSemiRetirementUi.buildScenarioAdjustmentSnapshot(semiRetirementScenarioResult, semiRetirementScenarioInputs, semiRetirementScenarioDraft)
       : null;
-    renderSemiRetirementScenario(CALC.calculatePlan(plan));
+    renderSemiRetirementScenario(calculatePlan(plan));
     updateSaveStatus(semiRetirementScenarioErrors.length ? "Semi-retirement scenario needs review." : "Semi-retirement scenario calculated. Financial Plan unchanged.");
   }
 
-  function resetSemiRetirementScenario(result = CALC.calculatePlan(plan)) {
+  function resetSemiRetirementScenario(result = calculatePlan(plan)) {
     clearSemiRetirementAdjustmentState();
     clearSemiRetirementComparisonState();
     ensureSemiRetirementScenarioDraft(result, { force: true });
@@ -10830,7 +11472,6 @@
   }
 
   function buildWeeklyPlannerData(result) {
-    syncCollectionsToLegacy();
     const settings = readPlannerSettingsFromInputs();
     const startDate = new Date(`${settings.startDate}T00:00:00`);
     const weeks = Array.from({ length: settings.periodWeeks }, (_, index) => ({
@@ -11042,7 +11683,7 @@
   }
 
   function generateWeeklyPlanner() {
-    const result = CALC.calculatePlan(plan);
+    const result = calculatePlan(plan);
     generatedWeeklyPlanner = buildWeeklyPlannerData(result);
     saveDraft("Weekly planner settings saved.");
     renderWeeklyPlannerPreview(generatedWeeklyPlanner);
@@ -11061,11 +11702,20 @@
   }
 
   function printWithMode(mode) {
+    if (mode === "financial-report") {
+      const result = calculatePlan(plan);
+      const readiness = personalisedResultsReadiness(plan, result);
+      if (!readiness.readyForPersonalisedResults) {
+        updateSaveStatus("Complete your Financial Plan before exporting a personalised report.");
+        return false;
+      }
+    }
     document.body.dataset.printMode = mode;
     window.print();
     window.setTimeout(() => {
       if (document.body.dataset.printMode === mode) delete document.body.dataset.printMode;
     }, 1000);
+    return true;
   }
 
   function printWeeklyPlannerPdf() {
@@ -11090,7 +11740,7 @@
     if (target.id === "plannerPeriod") plan.reportSettings.weeklyPlanner.periodWeeks = Number(target.value) || 52;
     generatedWeeklyPlanner = null;
     autosavePlan();
-    renderWeeklyPlannerControls(CALC.calculatePlan(plan));
+    renderWeeklyPlannerControls(calculatePlan(plan));
   }
 
   function syncWeeklyPlanExportSettings() {
@@ -11606,7 +12256,7 @@
           <div>
             <span class="metric-label">First-time setup</span>
             <h3>Create your Weekly Plan</h3>
-            <span>Your Weekly Money Plan turns your financial strategy into practical weekly actions. Review the information below, confirm your opening balance and select when you want the plan to begin.</span>
+            <span>Choose when to begin and enter the balance in your main spending account. The app will create a useful first plan using its existing safe defaults.</span>
           </div>
         </div>
         <div class="weekly-setup-grid mt-4">
@@ -11619,61 +12269,11 @@
             <input class="field-input" type="number" step="100" data-weekly-setup="openingBankBalance" value="${weeklyInputValue(defaults.openingBankBalance)}">
             <small class="field-help">Main account used for income and normal spending.</small>
           </label>
-          <label>
-            <span class="field-label">Planner duration</span>
-            <select class="field-input" data-weekly-setup="durationWeeks" data-type="number">
-              <option value="12"${defaults.durationWeeks === 12 ? " selected" : ""}>12 weeks</option>
-              <option value="26"${defaults.durationWeeks === 26 ? " selected" : ""}>26 weeks</option>
-              <option value="52"${defaults.durationWeeks === 52 ? " selected" : ""}>52 weeks</option>
-            </select>
-          </label>
-          <label>
-            <span class="field-label">Minimum cash buffer</span>
-            <input class="field-input" type="number" step="100" data-weekly-setup="minimumCashBuffer" value="${weeklyInputValue(defaults.minimumCashBuffer)}">
-          </label>
-          <label>
-            <span class="field-label">Weekly spending limit</span>
-            <input class="field-input" type="number" step="25" data-weekly-setup="weeklyDiscretionaryLimit" value="${weeklyInputValue(defaults.weeklyDiscretionaryLimit)}">
-          </label>
-          <label>
-            <span class="field-label">Preferred surplus allocation</span>
-            <select class="field-input" data-weekly-setup="allocationMode" data-type="text">
-              <option value="priority"${defaults.allocationSettings.mode === "priority" ? " selected" : ""}>Use priority order</option>
-              <option value="split"${defaults.allocationSettings.mode === "split" ? " selected" : ""}>Split by percentage</option>
-              <option value="cash"${defaults.allocationSettings.mode === "cash" ? " selected" : ""}>Keep surplus as cash</option>
-            </select>
-          </label>
-          <label>
-            <span class="field-label">Optional transfer priority</span>
-            <select class="field-input" data-weekly-setup="priorityFirst" data-type="text">
-              <option value="extraDebt"${defaults.allocationSettings.priority[0] === "extraDebt" ? " selected" : ""}>Extra debt repayment first</option>
-              <option value="investment"${defaults.allocationSettings.priority[0] === "investment" ? " selected" : ""}>Invest first</option>
-              <option value="extraSuper"${defaults.allocationSettings.priority[0] === "extraSuper" ? " selected" : ""}>Extra super first</option>
-            </select>
-          </label>
-          <label>
-            <span class="field-label">Missed wealth transfers</span>
-            <select class="field-input" data-weekly-setup="missedTransferTreatment" data-type="text">
-              <option value="carry-forward"${defaults.missedTransferTreatment === "carry-forward" ? " selected" : ""}>Carry forward when affordable</option>
-              <option value="spread"${defaults.missedTransferTreatment === "spread" ? " selected" : ""}>Spread across remaining weeks</option>
-              <option value="none"${defaults.missedTransferTreatment === "none" ? " selected" : ""}>Do not carry forward</option>
-            </select>
-          </label>
         </div>
-        <details class="weekly-setup-details mt-4">
-          <summary>Optional pay dates and bill dates</summary>
-          <p class="weekly-muted mt-2">Add dates where you know them. If dates are not entered, the app uses the frequency and labels annual or irregular costs as amounts set aside.</p>
-          <div class="weekly-timing-grid mt-4">
-            <div>
-              <h4>Pay dates</h4>
-              ${weeklyTimingRows(plan.incomeItems || [], "payDates", defaults.payDates)}
-            </div>
-            <div>
-              <h4>Bill dates</h4>
-              ${weeklyTimingRows(weeklyBillTimingItems(), "billDates", defaults.billDates)}
-            </div>
-          </div>
-        </details>
+        <div class="weekly-first-run-defaults mt-4">
+          <strong>Planner settings use safe defaults</strong>
+          <p>The first plan uses ${defaults.durationWeeks} weeks, a ${money(defaults.minimumCashBuffer)} minimum buffer and the existing surplus-allocation rules. You can review duration, limits, transfer priorities, pay dates and bill dates under <strong>Settings</strong> after creating the plan.</p>
+        </div>
         <div class="weekly-setup-actions mt-4">
           <button class="btn btn-primary" type="button" data-weekly-action="create-plan">Create My Weekly Plan</button>
         </div>
@@ -11707,8 +12307,7 @@
   }
 
   function createWeeklyPlanFromSetup() {
-    syncCollectionsToLegacy();
-    const result = CALC.calculatePlan(plan);
+    const result = calculatePlan(plan);
     weeklyPlan = window.FFSWeeklyPlan.createFromPlan(plan, result, readWeeklySetupOptions(), null);
     weeklyPlan.planId = isDemoActive() ? DEMO_PLAN_ID : normalisePlanId(activePlanId);
     activeWeeklyPlanTab = "thisWeek";
@@ -12638,18 +13237,19 @@
               <option value="cash"${allocation.mode === "cash" ? " selected" : ""}>Keep as cash</option>
             </select>
           </label>
-          <label>
-            <span class="field-label">Investments split %</span>
-            <input class="field-input" type="number" step="1" data-weekly-setting="splitInvestment" value="${weeklyInputValue(allocation.split?.investment)}">
-          </label>
-          <label>
-            <span class="field-label">Extra debt split %</span>
-            <input class="field-input" type="number" step="1" data-weekly-setting="splitExtraDebt" value="${weeklyInputValue(allocation.split?.extraDebt)}">
-          </label>
-          <label>
-            <span class="field-label">Extra super split %</span>
-            <input class="field-input" type="number" step="1" data-weekly-setting="splitExtraSuper" value="${weeklyInputValue(allocation.split?.extraSuper)}">
-          </label>
+          ${allocation.mode === "split" ? `
+            <label>
+              <span class="field-label">Investments split %</span>
+              <input class="field-input" type="number" step="1" data-weekly-setting="splitInvestment" value="${weeklyInputValue(allocation.split?.investment)}">
+            </label>
+            <label>
+              <span class="field-label">Extra debt split %</span>
+              <input class="field-input" type="number" step="1" data-weekly-setting="splitExtraDebt" value="${weeklyInputValue(allocation.split?.extraDebt)}">
+            </label>
+            <label>
+              <span class="field-label">Extra super split %</span>
+              <input class="field-input" type="number" step="1" data-weekly-setting="splitExtraSuper" value="${weeklyInputValue(allocation.split?.extraSuper)}">
+            </label>` : ""}
           <label>
             <span class="field-label">Missed-transfer treatment</span>
             <select class="field-input" data-weekly-setting="missedTransferTreatment" data-type="text">
@@ -12810,7 +13410,7 @@
       ...(week.actual || {}),
       ...weeklyActualDrafts.get(Number(weekNumber)),
     });
-    weeklyPlan = window.FFSWeeklyPlan.reforecast(plan, CALC.calculatePlan(plan), weeklyPlan);
+    weeklyPlan = window.FFSWeeklyPlan.reforecast(plan, calculatePlan(plan), weeklyPlan);
     weeklyActualDrafts.delete(Number(weekNumber));
     generatedWeeklyPlanner = null;
     saveWeeklyPlan(status);
@@ -12819,13 +13419,13 @@
 
   function saveWeekProgress(weekNumber, complete = false) {
     if (!weeklyPlan) return;
-    const result = CALC.calculatePlan(plan);
     const week = weeklyPlan.weeks.find((item) => item.weekNumber === Number(weekNumber));
     if (!week) return;
     if (week.isCompleted && weeklyEditingWeek !== week.weekNumber) {
       updateSaveStatus("Select Edit Completed Week before changing saved results.");
       return;
     }
+    const result = calculatePlan(plan);
     if (complete && !weeklyWeekHasStarted(week)) {
       updateSaveStatus("This week has not started yet.");
       return;
@@ -12870,7 +13470,7 @@
 
   function saveWeeklyOpeningBalance(weekNumber) {
     if (!weeklyPlan || !window.FFSWeeklyPlan?.updateOpeningBalance) return;
-    const result = CALC.calculatePlan(plan);
+    const result = calculatePlan(plan);
     const week = weeklyPlan.weeks.find((item) => item.weekNumber === Number(weekNumber));
     if (!week) return;
     const input = document.querySelector(`[data-weekly-opening-balance="${weekNumber}"]`);
@@ -12910,7 +13510,7 @@
   function markWeeklyWeekIncomplete(weekNumber) {
     if (!weeklyPlan || !window.FFSWeeklyPlan?.markWeekIncomplete) return;
     if (!window.confirm("Mark this week as incomplete? Existing actual values will be kept unless you edit or reset them separately.")) return;
-    weeklyPlan = window.FFSWeeklyPlan.markWeekIncomplete(plan, CALC.calculatePlan(plan), weeklyPlan, weekNumber);
+    weeklyPlan = window.FFSWeeklyPlan.markWeekIncomplete(plan, calculatePlan(plan), weeklyPlan, weekNumber);
     weeklyEditingWeek = null;
     weeklyViewedWeekNumber = weekNumber;
     generatedWeeklyPlanner = null;
@@ -12951,13 +13551,14 @@
     } else {
       settings[key] = value;
     }
-    weeklyPlan = window.FFSWeeklyPlan.updateSettings(plan, CALC.calculatePlan(plan), weeklyPlan, settings);
+    weeklyPlan = window.FFSWeeklyPlan.updateSettings(plan, calculatePlan(plan), weeklyPlan, settings);
     if (["startDate", "durationWeeks", "openingBankBalance", "minimumCashBuffer", "weeklyDiscretionaryLimit", "investmentTarget", "extraSuperTarget", "extraDebtRepaymentTarget"].includes(key)) {
       markWeeklyTimingReviewRequired();
     }
     generatedWeeklyPlanner = null;
     syncWeeklyPlanExportSettings();
     saveWeeklyPlan("Weekly Plan settings saved.");
+    if (key === "allocationMode") renderOutputs();
   }
 
   function updateWeeklyDateFromInput(target) {
@@ -12968,7 +13569,7 @@
     settings[type] = { ...(settings[type] || {}) };
     if (target.value) settings[type][id] = target.value;
     else delete settings[type][id];
-    weeklyPlan = window.FFSWeeklyPlan.updateSettings(plan, CALC.calculatePlan(plan), weeklyPlan, settings);
+    weeklyPlan = window.FFSWeeklyPlan.updateSettings(plan, calculatePlan(plan), weeklyPlan, settings);
     markWeeklyTimingReviewRequired();
     generatedWeeklyPlanner = null;
     syncWeeklyPlanExportSettings();
@@ -12980,7 +13581,7 @@
     const itemId = target.dataset.weeklyTiming;
     const key = target.dataset.key;
     const value = target.dataset.type === "boolean" ? target.checked : target.dataset.type === "text" ? target.value : Number(target.value) || 0;
-    weeklyPlan = window.FFSWeeklyPlan.updateTimingItem(plan, CALC.calculatePlan(plan), weeklyPlan, itemId, { [key]: value, resolveReview: false });
+    weeklyPlan = window.FFSWeeklyPlan.updateTimingItem(plan, calculatePlan(plan), weeklyPlan, itemId, { [key]: value, resolveReview: false });
     generatedWeeklyPlanner = null;
     syncWeeklyPlanExportSettings();
     saveWeeklyPlan("Weekly timing saved.");
@@ -13031,7 +13632,7 @@
       patch.resolveReview = true;
       patch.reviewResolution = patch.active === false ? "deactivated" : "timing-reviewed";
     }
-    weeklyPlan = window.FFSWeeklyPlan.updateTimingItem(plan, CALC.calculatePlan(plan), weeklyPlan, itemId, patch);
+    weeklyPlan = window.FFSWeeklyPlan.updateTimingItem(plan, calculatePlan(plan), weeklyPlan, itemId, patch);
     markWeeklyTimingReviewRequired();
     weeklyPlanUiState.isTimingSetupExpanded = true;
     editingTimingItemId = null;
@@ -13065,7 +13666,7 @@
       if (patch.frequency === "weeklyProvision") patch.frequency = "weekly";
     }
     patch.resolveReview = false;
-    weeklyPlan = window.FFSWeeklyPlan.updateTimingItem(plan, CALC.calculatePlan(plan), weeklyPlan, editingTimingItemId, patch);
+    weeklyPlan = window.FFSWeeklyPlan.updateTimingItem(plan, calculatePlan(plan), weeklyPlan, editingTimingItemId, patch);
     editingTimingItemId = null;
     timingEditDraft = null;
     generatedWeeklyPlanner = null;
@@ -13113,7 +13714,7 @@
       updateSaveStatus("Enter an amount before adding a one-off item.");
       return;
     }
-    weeklyPlan = window.FFSWeeklyPlan.addOneOffItem(plan, CALC.calculatePlan(plan), weeklyPlan, { description, amount, date, type });
+    weeklyPlan = window.FFSWeeklyPlan.addOneOffItem(plan, calculatePlan(plan), weeklyPlan, { description, amount, date, type });
     markWeeklyTimingReviewRequired();
     weeklyPlanUiState.isTimingSetupExpanded = true;
     generatedWeeklyPlanner = null;
@@ -13146,7 +13747,7 @@
       updateSaveStatus("Enter a new amount, date, or select skip before applying.");
       return;
     }
-    weeklyPlan = window.FFSWeeklyPlan.applyOccurrenceEdit(plan, CALC.calculatePlan(plan), weeklyPlan, itemId, occurrenceDate, patch, scope);
+    weeklyPlan = window.FFSWeeklyPlan.applyOccurrenceEdit(plan, calculatePlan(plan), weeklyPlan, itemId, occurrenceDate, patch, scope);
     markWeeklyTimingReviewRequired();
     weeklyPlanUiState.isTimingSetupExpanded = true;
     generatedWeeklyPlanner = null;
@@ -13405,7 +14006,7 @@
   }
 
   function reportScenarioMetrics(name, notes, scenarioPlan, source = "saved") {
-    const scenarioResult = CALC.calculatePlan(scenarioPlan);
+    const scenarioResult = calculatePlan(scenarioPlan);
     const ageLabel = targetAgeOutcome(scenarioResult);
     const ageMatch = /Age\s+(\d+)/i.exec(ageLabel);
     const ageNumber = ageMatch ? Number(ageMatch[1]) : Infinity;
@@ -13660,6 +14261,19 @@
   function renderReports(result) {
     const container = document.getElementById("financialReportBody");
     if (!container) return;
+    const readiness = personalisedResultsReadiness(plan, result);
+    const printButton = document.getElementById("reportPrintButton");
+    const editor = document.querySelector('[data-view-panel="reports"] .report-editor-only');
+    const scenarioComparison = document.getElementById("reportScenarioComparison");
+    if (!readiness.readyForPersonalisedResults) {
+      container.innerHTML = readinessGateHtml(readiness, "a personalised Financial Freedom report");
+      if (printButton) printButton.disabled = true;
+      editor?.classList.add("hidden");
+      if (scenarioComparison) scenarioComparison.innerHTML = "";
+      return;
+    }
+    if (printButton) printButton.disabled = false;
+    editor?.classList.remove("hidden");
     const percent = freedomPercent(result);
     const stage = financialStageInfo(result).stage;
     const gap = Math.max(0, (Number(result.targetCapital) || 0) - (Number(result.financialIndependenceAssets) || 0));
@@ -13894,9 +14508,10 @@
   function renderSetupSummary(result) {
     const container = document.getElementById("setupSummary");
     if (!container) return;
+    const readiness = personalisedResultsReadiness(plan, result);
     const percent = freedomPercent(result);
     const stage = financialStageInfo(result).stage;
-    const rows = [
+    const fullRows = [
       { label: "Financial Freedom progress", value: plainPercent(percent) },
       { label: "Current stage", value: stage.name },
       { label: "Accessible investments", value: money(result.accessibleInvestmentAssets) },
@@ -13924,6 +14539,13 @@
       { label: "Investment return", value: `${Number(plan.investing.expectedInvestmentReturnPct || 0).toFixed(1)}%` },
       { label: "1-year net worth", value: money(netWorthAtYear(result, 1)) },
     ];
+    const rows = readiness.readyForPersonalisedResults ? fullRows : [
+      { label: "Annual income entered", value: money(result.annualGrossIncome) },
+      { label: "Annual living expenses", value: money(result.annualLivingExpenses) },
+      { label: "Current net worth", value: money(result.currentNetWorth) },
+      { label: "Super entered", value: money(result.superannuationBalance) },
+    ];
+    container.classList.toggle("setup-summary-preliminary", !readiness.readyForPersonalisedResults);
     container.innerHTML = rows.map((row) => {
       const jumpAttrs = row.path ? ` role="button" tabindex="0" data-summary-jump data-summary-view="${escapeHtml(row.view)}" data-summary-path="${escapeHtml(row.path)}" aria-label="Edit ${escapeHtml(row.label)}"` : "";
       const label = row.infoKey
@@ -13995,6 +14617,11 @@
   function renderComparison(result) {
     const summary = document.getElementById("comparisonSummary");
     if (!summary) return;
+    const readiness = personalisedResultsReadiness(plan, result);
+    if (!readiness.readyForPersonalisedResults) {
+      summary.innerHTML = readinessGateHtml(readiness, "custom scenario comparisons");
+      return;
+    }
     const comparison = activeDecisionComparison();
     document.querySelectorAll("[data-comparison]").forEach((input) => {
       const value = comparison[input.dataset.comparison] ?? 0;
@@ -14006,7 +14633,7 @@
     });
     const annualAllocation = comparisonSurplusAllocationAmount(result, comparison);
     const revisedPlan = buildComparisonPlan(result);
-    const revisedResult = CALC.calculatePlan(revisedPlan);
+    const revisedResult = calculatePlan(revisedPlan);
     const current = estimatedCashflow(result);
     const revised = estimatedCashflow(revisedResult);
     const currentPercent = freedomPercent(result);
@@ -14044,12 +14671,18 @@
     const actions = document.getElementById("whatIfActions");
     const output = document.getElementById("whatIfResult");
     if (!actions || !output) return;
+    const readiness = personalisedResultsReadiness(plan, result);
+    if (!readiness.readyForPersonalisedResults) {
+      actions.innerHTML = "";
+      output.innerHTML = readinessGateHtml(readiness, "quick comparisons");
+      return;
+    }
     actions.innerHTML = whatIfActions.map((action) => `
       <button class="btn what-if-button ${activeWhatIfId === action.id ? "btn-primary" : ""}" type="button" data-what-if="${action.id}">${escapeHtml(action.label)}</button>
     `).join("");
     const active = whatIfActions.find((action) => action.id === activeWhatIfId) || whatIfActions[0];
     const adjustedPlan = applyScenarioAdjustments(plan, active.adjustments(result));
-    const adjustedResult = CALC.calculatePlan(adjustedPlan);
+    const adjustedResult = calculatePlan(adjustedPlan);
     const currentMonthly = estimatedCashflow(result) / 12;
     const adjustedMonthly = estimatedCashflow(adjustedResult) / 12;
     output.innerHTML = [
@@ -14091,6 +14724,8 @@
       calculationVersion: CALCULATION_VERSION,
       financialYear: FINANCIAL_YEAR,
       planHash: simpleHash(plan),
+      planRevision: plan.meta?.revision?.hash || PLAN_SCHEMA?.revisionHash?.(plan) || "",
+      planRevisionNumber: Number(plan.meta?.revision?.number) || 1,
     };
   }
 
@@ -14124,6 +14759,10 @@
   }
 
   function decisionChangeRowsFromAdjustments(adjustments = {}) {
+    if (TRUST?.scenarioChangesFromAdjustments) {
+      return TRUST.scenarioChangesFromAdjustments(adjustments)
+        .map((change) => scenarioChange(change.label, change.before, change.after));
+    }
     const labels = [
       ["incomeChange", "Income", "per year"],
       ["expenseChange", "Expenses", "per year"],
@@ -14146,7 +14785,7 @@
       })
       .filter(Boolean);
     if (adjustments.surplusAllocationTarget && adjustments.surplusAllocationTarget !== "none") {
-      rows.push(scenarioChange("Direct available surplus", "Not allocated", `${money(comparisonSurplusAllocationAmount(CALC.calculatePlan(plan), adjustments))} per year to ${adjustments.surplusAllocationTarget === "debt" ? "debt repayment" : "investments"}`));
+      rows.push(scenarioChange("Direct available surplus", "Not allocated", `${money(comparisonSurplusAllocationAmount(calculatePlan(plan), adjustments))} per year to ${adjustments.surplusAllocationTarget === "debt" ? "debt repayment" : "investments"}`));
     }
     return rows;
   }
@@ -14177,14 +14816,15 @@
   }
 
   function buildDecisionScenarioSaveContext(mode = "custom") {
-    const baseResult = CALC.calculatePlan(plan);
+    const baseResult = calculatePlan(plan);
     const action = mode === "what-if" ? (whatIfActions.find((item) => item.id === activeWhatIfId) || whatIfActions[0]) : null;
     const adjustments = action ? action.adjustments(baseResult) : activeDecisionComparison();
     const adjustedPlan = action
       ? applyScenarioAdjustments(plan, adjustments)
       : buildComparisonPlan(baseResult);
-    const scenarioResult = CALC.calculatePlan(adjustedPlan);
+    const scenarioResult = calculatePlan(adjustedPlan);
     const changes = decisionChangeRowsFromAdjustments(adjustments);
+    const overlay = TRUST?.createScenarioOverlay?.({ actionId: action?.id || "custom", label: action?.label || "Custom decision scenario", adjustments }) || null;
     return {
       scenarioType: "decision",
       defaultName: suggestedDecisionScenarioName(mode, action, changes),
@@ -14193,6 +14833,7 @@
         mode: mode === "what-if" ? "decision-what-if" : "decision-custom",
         actionId: action?.id || "",
         adjustments: { ...comparisonDefaults, ...adjustments },
+        ...(overlay ? { overlay } : {}),
       },
       changedInputs: changes,
       keyResultSnapshot: decisionKeyResultSnapshot(baseResult, scenarioResult),
@@ -14461,7 +15102,7 @@
   }
 
   function scenarioComparisonMetrics(scenario) {
-    const scenarioResult = CALC.calculatePlan(scenario.plan);
+    const scenarioResult = calculatePlan(scenario.plan);
     const projectedNetWorth = netWorthAtYear(scenarioResult, 10);
     const investmentBalance = investmentAtYear(scenarioResult, 10);
     const superBalance = superAtYear(scenarioResult, 10);
@@ -14549,7 +15190,7 @@
     const snapshotRows = keyResultRows(scenario.keyResultSnapshot);
     if (snapshotRows.length) return snapshotRows;
     if (!scenario.plan) return [];
-    return keyResultRows(financialPlanKeyResultSnapshot(CALC.calculatePlan(scenario.plan)));
+    return keyResultRows(financialPlanKeyResultSnapshot(calculatePlan(scenario.plan)));
   }
 
   function scenarioRowDisplayValue(row) {
@@ -14672,7 +15313,7 @@
     return `Saved plan - ${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
   }
 
-  function scenarioSummary(planSnapshot, result = CALC.calculatePlan(planSnapshot)) {
+  function scenarioSummary(planSnapshot, result = calculatePlan(planSnapshot)) {
     const personal = planSnapshot.personal || {};
     const ages = [personal.person1Age, personal.person2Age].filter((age) => Number(age) > 0).join(" / ") || "Not entered";
     const targetAge = Number(personal.fullRetirementAge) || Number(personal.semiRetirementAge) || Number(personal.workOptionalAge) || 0;
@@ -14692,7 +15333,6 @@
       updateSaveStatus("Sample Plan is temporary. Return to My Plan before saving a personal scenario.");
       return;
     }
-    syncCollectionsToLegacy();
     const scenarios = loadScenarios();
     const nameInput = document.getElementById("scenarioName");
     const notesInput = document.getElementById("scenarioNotes");
@@ -14709,7 +15349,7 @@
     const name = scenarioName || fallbackName;
     const planSnapshot = CALC.clonePlan(plan);
     if (!isBundledSamplePlan(planSnapshot)) markPersonalPlanCreated();
-    const resultSnapshot = CALC.calculatePlan(planSnapshot);
+    const resultSnapshot = calculatePlan(planSnapshot);
     const savedAt = new Date().toISOString();
     const scenario = {
       id: `scenario-${Date.now()}`,
@@ -14770,7 +15410,7 @@
       return;
     }
     list.innerHTML = scenarios.map((scenario) => {
-      const scenarioResult = CALC.calculatePlan(scenario.plan);
+      const scenarioResult = calculatePlan(scenario.plan);
       const summary = scenario.summary || scenarioSummary(scenario.plan, scenarioResult);
       return `
         <article class="scenario-row">
@@ -14804,7 +15444,11 @@
   function scenarioCardHtml(scenario) {
     const type = normaliseSavedScenarioType(scenario.scenarioType);
     const selected = savedScenarioComparisonAnchorId === scenario.id || savedScenarioComparisonTargetId === scenario.id;
-    const keySnapshot = scenario.keyResultSnapshot || (scenario.plan ? financialPlanKeyResultSnapshot(CALC.calculatePlan(scenario.plan)) : null);
+    const keySnapshot = scenario.keyResultSnapshot || (scenario.plan ? financialPlanKeyResultSnapshot(calculatePlan(scenario.plan)) : null);
+    const typedChanges = scenario.events?.length && SCENARIO_OVERLAY?.provenance
+      ? SCENARIO_OVERLAY.provenance(scenario.events).map((item) => scenarioChange(item.title, "Base plan", item.description))
+      : scenario.changedInputs || [];
+    const stale = SCENARIO_OVERLAY?.isStale?.(scenario, plan);
     return `
       <article class="scenario-library-card${selected ? " is-selected" : ""}">
         <div class="scenario-card-heading">
@@ -14815,10 +15459,11 @@
           <span class="scenario-card-date">${escapeHtml(scenarioDisplayDate(scenario))}</span>
         </div>
         ${scenario.notes ? `<p class="scenario-note">${escapeHtml(scenario.notes)}</p>` : ""}
+        ${stale ? `<p class="scenario-note" role="status"><strong>Plan changed since this scenario was created.</strong> It remains available and will be applied to the current plan when opened.</p>` : ""}
         <div class="scenario-card-grid">
           <section class="scenario-card-section">
             <h4>What changed</h4>
-            ${changedInputsListHtml(scenario.changedInputs || [], 4)}
+            ${changedInputsListHtml(typedChanges, 4)}
           </section>
           <section class="scenario-card-section">
             <h4>Key outcome</h4>
@@ -14890,8 +15535,9 @@
       goalItems: { id: makeId("goal"), name: "New goal", current: 0, target: 0 },
     };
     if (!defaults[collection]) return;
-    plan[collection].push(defaults[collection]);
-    syncCollectionsToLegacy();
+    plan = ensureCurrentPlanIdentity(PLAN_MUTATIONS?.upsert
+      ? PLAN_MUTATIONS.upsert(plan, collection, defaults[collection])
+      : { ...plan, [collection]: [...plan[collection], defaults[collection]] });
     if (weeklyPlan) {
       markWeeklyTimingReviewRequired();
       saveWeeklyPlan();
@@ -14900,11 +15546,38 @@
     renderAll();
   }
 
+  function addConsumerSetupItem(action) {
+    ensureCollectionData();
+    const created = CONSUMER_SETUP?.createItem?.(action, {
+      makeId,
+      person1Name: personDisplayName(1),
+      person2Name: personDisplayName(2),
+    });
+    if (!created || !Array.isArray(plan[created.collection])) return;
+    plan = ensureCurrentPlanIdentity(PLAN_MUTATIONS?.upsert
+      ? PLAN_MUTATIONS.upsert(plan, created.collection, created.item)
+      : { ...plan, [created.collection]: [...plan[created.collection], created.item] });
+    if (weeklyPlan) {
+      markWeeklyTimingReviewRequired();
+      saveWeeklyPlan();
+    }
+    autosavePlan();
+    renderAll();
+    requestAnimationFrame(() => {
+      document.querySelector(`[data-collection="${created.collection}"][data-id="${created.item.id}"]`)?.focus();
+    });
+  }
+
   function removeCollectionItem(collection, id) {
     ensureCollectionData();
     if (!Array.isArray(plan[collection])) return;
-    plan[collection] = plan[collection].filter((item) => item.id !== id);
-    syncCollectionsToLegacy();
+    if (collection === "assetItems" && LINKED_SETUP?.removeLinkedAsset) {
+      plan = ensureCurrentPlanIdentity(migratePlanData(LINKED_SETUP.removeLinkedAsset(plan, id).plan));
+    } else if (PLAN_MUTATIONS?.remove) {
+      plan = ensureCurrentPlanIdentity(PLAN_MUTATIONS.remove(plan, collection, id));
+    } else {
+      plan[collection] = plan[collection].filter((item) => item.id !== id);
+    }
     if (weeklyPlan) {
       markWeeklyTimingReviewRequired();
       saveWeeklyPlan();
@@ -14918,7 +15591,7 @@
       updateSaveStatus("Sample Plan progress is not recorded. Return to My Plan to record personal progress.");
       return;
     }
-    const result = CALC.calculatePlan(plan);
+    const result = calculatePlan(plan);
     const goal = normalisedShortTermGoals(result).find((item) => item.id === goalId) || primaryShortTermGoal(result);
     if (!goal) {
       showWorkspace("goals");
@@ -14956,7 +15629,7 @@
         dedupeKey: `goal-${goal.id}-${Date.now()}`,
       },
     });
-    syncEngagementAchievements(CALC.calculatePlan(plan));
+    syncEngagementAchievements(calculatePlan(plan));
     showEngagementCelebration({
       title: "Great work!",
       message: `You added ${money(amount)} toward ${goal.name}.`,
@@ -14995,7 +15668,7 @@
       return;
     }
     if (action === "change-future-age") {
-      const result = CALC.calculatePlan(plan);
+      const result = calculatePlan(plan);
       const current = futureYouPreview(result).age;
       const response = window.prompt("Choose the age for Future You", String(current));
       if (response === null) return;
@@ -15033,8 +15706,7 @@
   }
 
   function renderOutputs() {
-    syncCollectionsToLegacy();
-    const result = CALC.calculatePlan(plan);
+    const result = calculatePlan(plan);
     safeRenderModule("Demo banner", () => renderDemoModeBanner());
     safeRenderModule("Sample plan options", () => renderSamplePlanOptions());
     safeRenderModule("Setup labels", () => {
@@ -15155,7 +15827,7 @@
       weeklyPlan = loadWeeklyPlan();
       restoreDraftUiInputs();
       updateSaveStatus("Existing saved plan restored.");
-    } else if (isBlankPlan(plan)) {
+    } else if (isBlankPlan(plan) || !hasMeaningfulPersonalPlanData(plan)) {
       plan = blankUserPlan();
       generatedWeeklyPlanner = null;
       restoredDraftUi = {};
@@ -15328,7 +16000,7 @@
     modal.setAttribute("aria-modal", "true");
     modal.setAttribute("aria-labelledby", "goalInfoTitle");
     modal.innerHTML = `
-      <div class="goal-info-backdrop" data-info-close></div>
+      <div class="goal-info-backdrop" data-dialog-backdrop data-info-close></div>
       <article class="goal-info-card">
         <button class="goal-info-close" type="button" data-info-close aria-label="Close information popup">X</button>
         <h3 id="goalInfoTitle"></h3>
@@ -15345,13 +16017,17 @@
     const modal = ensureGoalInfoModal();
     modal.querySelector("#goalInfoTitle").textContent = copy.title;
     modal.querySelector("#goalInfoBody").textContent = copy.body;
-    modal.classList.remove("hidden");
-    modal.querySelector(".goal-info-close").focus();
+    if (DIALOGS?.open) DIALOGS.open(modal, { initialFocus: ".goal-info-close", onRequestClose: closeGoalInfo });
+    else {
+      modal.classList.remove("hidden");
+      modal.querySelector(".goal-info-close").focus();
+    }
   }
 
   function closeGoalInfo() {
     const modal = document.getElementById("goalInfoModal");
-    if (modal) modal.classList.add("hidden");
+    if (DIALOGS?.close) DIALOGS.close(modal);
+    else if (modal) modal.classList.add("hidden");
   }
 
   function saveScenario() {
@@ -15439,7 +16115,7 @@
     else if (text.includes("expense") || text.includes("spend")) activeWhatIfId = "expenses-500";
     else if (text.includes("invest")) activeWhatIfId = "invest-250";
     const action = whatIfActions.find((item) => item.id === activeWhatIfId);
-    if (action) decisionScenarioDraft = { ...comparisonDefaults, ...action.adjustments(CALC.calculatePlan(plan)) };
+    if (action) decisionScenarioDraft = { ...comparisonDefaults, ...action.adjustments(calculatePlan(plan)) };
     renderOutputs();
     document.getElementById("whatIfResult")?.scrollIntoView({ behavior: "smooth", block: "start" });
     updateSaveStatus("Quick What-If selected. Financial Plan unchanged.");
@@ -15524,11 +16200,10 @@
       updateSaveStatus("Sample Plan is temporary. Return to My Plan before duplicating a personal scenario.");
       return;
     }
-    syncCollectionsToLegacy();
     const scenarios = loadScenarios();
     const planSnapshot = CALC.clonePlan(plan);
     if (!isBundledSamplePlan(planSnapshot)) markPersonalPlanCreated();
-    const resultSnapshot = CALC.calculatePlan(planSnapshot);
+    const resultSnapshot = calculatePlan(planSnapshot);
     const savedAt = new Date().toISOString();
     const scenario = {
       id: `scenario-${Date.now()}`,
@@ -15594,6 +16269,12 @@
 
     document.addEventListener("input", (event) => {
       const target = event.target;
+      if (target.dataset.linkedSetupField !== undefined && linkedSetupDraft) {
+        const field = target.dataset.linkedSetupField;
+        linkedSetupDraft[field] = target.type === "checkbox" ? target.checked : target.type === "number" ? target.value : target.value;
+        linkedSetupDraft.errors = [];
+        return;
+      }
       if (target.dataset.semiAdjustment !== undefined || target.dataset.semiAdjustmentRange !== undefined) {
         updateSemiRetirementAdjustmentFromInput(target);
         return;
@@ -15691,10 +16372,15 @@
       }
       if (target.dataset.collection) {
         ensureCollectionData();
-        const item = plan[target.dataset.collection]?.find((entry) => entry.id === target.dataset.id);
+        let item = plan[target.dataset.collection]?.find((entry) => entry.id === target.dataset.id);
         if (!item) return;
         const value = target.dataset.type === "boolean" ? target.checked : target.dataset.type === "text" ? target.value : Number(target.value);
-        item[target.dataset.key] = value;
+        if (PLAN_MUTATIONS?.upsert) {
+          plan = ensureCurrentPlanIdentity(PLAN_MUTATIONS.upsert(plan, target.dataset.collection, { ...item, [target.dataset.key]: value }));
+          item = plan[target.dataset.collection].find((entry) => entry.id === target.dataset.id);
+        } else {
+          item[target.dataset.key] = value;
+        }
         if (target.dataset.collection === "incomeItems") {
           item.type = normaliseIncomeType(item.type, plan.incomeItems.indexOf(item));
           item.owner = normaliseIncomeOwner(item.owner, item.type, plan.incomeItems.indexOf(item));
@@ -15737,7 +16423,6 @@
           saveWeeklyPlan();
         }
         syncCollectionInputs(target.dataset.collection, target.dataset.id, target.dataset.key, value);
-        syncCollectionsToLegacy();
         autosavePlan();
         if (target.dataset.collection === "liabilityItems" && (target.dataset.key === "type" || target.dataset.key === "investmentAssetCategory")) {
           renderAll();
@@ -15749,8 +16434,18 @@
         }
         if (target.dataset.collection === "incomeItems" && (target.dataset.key === "amount" || target.dataset.key === "frequency")) {
           refreshEmployerSuperPanels();
+          if (item.type === "salaryWages") refreshSalaryAnnualEquivalent(item);
+          if (target.dataset.key === "frequency" && item.type === "salaryWages") {
+            renderForms();
+            renderOutputs();
+            return;
+          }
         }
-        renderOutputs();
+        if (target.dataset.collection === "expenseItems" && target.dataset.key === "amount") {
+          plan.meta = { ...(plan.meta || {}), setupConfirmations: { ...(plan.meta?.setupConfirmations || {}), spendingReviewed: true } };
+        }
+        // Keep the active editor mounted while typing. Full dependent views refresh on blur.
+        renderSetupSummary(calculatePlan(plan));
         return;
       }
       if (target.dataset.comparison) {
@@ -15773,6 +16468,14 @@
         }
       }
       setPath(plan, target.dataset.path, value);
+      if (/^assets\.superPerson[12]$/.test(target.dataset.path) && Number(value) > 0) {
+        const personNumber = target.dataset.path.endsWith("2") ? 2 : 1;
+        const person = personNumber === 2 ? "person2" : "person1";
+        setCanonicalSuperBalance(personNumber, value);
+        setPath(plan, `meta.setupConfirmations.${person}NoSuper`, false);
+      } else if (/^assets\.superPerson[12]$/.test(target.dataset.path)) {
+        setCanonicalSuperBalance(target.dataset.path.endsWith("2") ? 2 : 1, value);
+      }
       generatedWeeklyPlanner = null;
       if (weeklyPlan) {
         markWeeklyTimingReviewRequired();
@@ -15791,13 +16494,13 @@
         syncInputs("liabilities.monthlyRepayment", value);
       }
       if (target.dataset.path === "income.person1HasStslDebt" || target.dataset.path === "income.person2HasStslDebt") {
-        syncCollectionsToLegacy();
+        normaliseStslLiabilities();
+        PLAN_SCHEMA?.deriveRelationships?.(plan);
         autosavePlan();
         renderAll();
         return;
       }
       if (target.dataset.path?.startsWith("investing.person") && target.dataset.path.includes("EmployerSuperOverride")) {
-        syncCollectionsToLegacy();
         autosavePlan();
         renderForms();
         renderOutputs();
@@ -15809,6 +16512,14 @@
 
     document.addEventListener("change", (event) => {
       const target = event.target;
+      if (target.dataset.linkedSetupField !== undefined && linkedSetupDraft) {
+        const field = target.dataset.linkedSetupField;
+        linkedSetupDraft[field] = target.type === "checkbox" ? target.checked : target.value;
+        linkedSetupDraft.errors = [];
+        if (field === "linkExistingLoanId") applyExistingLoanToLinkedDraft(target.value);
+        if (["owner", "hasLoan", "taxableRentalProfitProvided", "useAdvancedCashIncome", "existingLoanChoice", "linkExistingLoanId"].includes(field)) renderLinkedSetupDialog();
+        return;
+      }
       if (target.dataset.dashboardFutureAge !== undefined) {
         updateDashboardFutureAge(target.value, { commit: true });
         return;
@@ -15844,8 +16555,8 @@
       if (target.dataset.progressSnapshotSelect !== undefined) {
         selectedProgressSnapshotId = target.value || "";
         saveDraft();
-        renderFinancialProgress(CALC.calculatePlan(plan));
-        renderFinancialProgressDashboardCard(CALC.calculatePlan(plan));
+        renderFinancialProgress(calculatePlan(plan));
+        renderFinancialProgressDashboardCard(calculatePlan(plan));
         return;
       }
       if (target.closest("[data-timing-editor]")) {
@@ -15859,6 +16570,10 @@
 
     document.addEventListener("focusout", (event) => {
       const target = event.target;
+      if (target.dataset.collection !== undefined) {
+        renderOutputs();
+        return;
+      }
       if (target.dataset.weeklyActual !== undefined || target.dataset.weeklyOpeningBalance !== undefined) {
         const weekNumber = Number(target.dataset.weeklyWeek || target.dataset.weeklyOpeningBalance) || weeklyPlan?.currentWeekNumber || 1;
         commitWeeklyActualDraft(weekNumber);
@@ -15873,6 +16588,12 @@
         commitWeeklyActualDraft(weekNumber);
         target.blur();
       }
+    });
+
+    document.addEventListener("submit", (event) => {
+      if (!event.target.closest("[data-linked-setup-form]")) return;
+      event.preventDefault();
+      commitLinkedSetup();
     });
 
     document.addEventListener("click", (event) => {
@@ -15923,6 +16644,19 @@
       if (event.target.closest("[data-policy-close]")) {
         event.preventDefault();
         closePolicyPage();
+        return;
+      }
+
+      const linkedSetupOpen = event.target.closest("[data-linked-setup-open]");
+      if (linkedSetupOpen) {
+        event.preventDefault();
+        openLinkedSetup(linkedSetupOpen.dataset.linkedSetupOpen, linkedSetupOpen.dataset.linkedAssetId || "");
+        return;
+      }
+      const linkedSetupAction = event.target.closest("[data-linked-setup-action]");
+      if (linkedSetupAction) {
+        event.preventDefault();
+        if (linkedSetupAction.dataset.linkedSetupAction === "close") closeLinkedSetup();
         return;
       }
 
@@ -16055,7 +16789,6 @@
         const owner = employerSuperReset.dataset.employerSuperReset === "person2" ? "person2" : "person1";
         plan.investing[`${owner}EmployerSuperOverrideEnabled`] = false;
         plan.investing[`${owner}EmployerSuperOverride`] = 0;
-        syncCollectionsToLegacy();
         autosavePlan();
         renderForms();
         renderOutputs();
@@ -16172,7 +16905,7 @@
           renderOutputs();
         }
         if (action === "rebuild-plan" && weeklyPlan) {
-          weeklyPlan = window.FFSWeeklyPlan.reforecast(plan, CALC.calculatePlan(plan), weeklyPlan);
+          weeklyPlan = window.FFSWeeklyPlan.reforecast(plan, calculatePlan(plan), weeklyPlan);
           generatedWeeklyPlanner = null;
           saveWeeklyPlan("Future weeks rebuilt. Completed week history was preserved.");
           renderAll();
@@ -16188,6 +16921,12 @@
       const addButton = event.target.closest("[data-add-collection]");
       if (addButton) {
         addCollectionItem(addButton.dataset.addCollection);
+        return;
+      }
+
+      const consumerAddButton = event.target.closest("[data-consumer-add]");
+      if (consumerAddButton) {
+        addConsumerSetupItem(consumerAddButton.dataset.consumerAdd);
         return;
       }
 
@@ -16220,6 +16959,7 @@
       if (wizardStep) {
         activeWizardStep = Number(wizardStep.dataset.wizardStep) || 0;
         saveDraft();
+        renderForms();
         renderOutputs();
         document.querySelector('[data-view-panel="setup"]').scrollIntoView({ behavior: "smooth", block: "start" });
         return;
@@ -16295,6 +17035,7 @@
     });
 
     document.addEventListener("keydown", (event) => {
+      if (event.defaultPrevented) return;
       if (event.key === "Escape") {
         closeMobileActionMenu();
         closeSamplePlanMenus();
@@ -16350,6 +17091,7 @@
     document.getElementById("wizardPrevButton").addEventListener("click", () => {
       activeWizardStep = Math.max(0, activeWizardStep - 1);
       saveDraft();
+      renderForms();
       renderOutputs();
       document.querySelector('[data-view-panel="setup"]').scrollIntoView({ behavior: "smooth", block: "start" });
     });
@@ -16364,8 +17106,16 @@
         return;
       }
       activeWizardStep = Math.min(wizardSteps.length - 1, activeWizardStep + 1);
+      renderForms();
       renderOutputs();
       document.querySelector('[data-view-panel="setup"]').scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    document.getElementById("wizardStepSelect")?.addEventListener("change", (event) => {
+      activeWizardStep = Math.max(0, Math.min(wizardSteps.length - 1, Number(event.target.value) || 0));
+      saveDraft();
+      renderForms();
+      renderOutputs();
+      document.getElementById("wizardHeading")?.focus?.({ preventScroll: true });
     });
     document.getElementById("exportButton").addEventListener("click", () => window.print());
     document.getElementById("reportPrintButton").addEventListener("click", () => printWithMode("financial-report"));
@@ -16437,6 +17187,48 @@
 
   bindEvents();
   renderAll();
+  if (window.FFS_STAGE1_BROWSER_TESTS_ENABLED === true) {
+    window.FFSStage1BrowserTestHooks = {
+      setPlan(nextPlan, view = "dashboard") {
+        plan = ensureCurrentPlanIdentity(CALC.clonePlan(nextPlan || blankUserPlan()));
+        generatedWeeklyPlanner = null;
+        renderAll();
+        showWorkspace(view);
+        return personalisedResultsReadiness(plan, calculatePlan(plan));
+      },
+      getPlan() {
+        return CALC.clonePlan(plan);
+      },
+      getReadiness() {
+        return personalisedResultsReadiness(plan, calculatePlan(plan));
+      },
+      showWorkspace,
+      setWizardStep(index) {
+        activeWizardStep = Math.max(0, Math.min(wizardSteps.length - 1, Number(index) || 0));
+        renderAll();
+        showWorkspace("setup");
+        return activeWizardStep;
+      },
+      openPolicyPage,
+      closePolicyPage,
+      openDurabilityDialog,
+      closeDurabilityDialog,
+      openLinkedSetup,
+      closeLinkedSetup,
+      commitLinkedSetup,
+      sampleScenarioList,
+      migrateScenarioData,
+      quickScenarioProvenance() {
+        const result = calculatePlan(plan);
+        return whatIfActions.map((action) => {
+          const adjustments = action.adjustments(result);
+          const overlay = TRUST?.createScenarioOverlay?.({ actionId: action.id, label: action.label, adjustments });
+          return { id: action.id, label: action.label, adjustments, changes: overlay?.changes || decisionChangeRowsFromAdjustments(adjustments) };
+        });
+      },
+      renderAll,
+    };
+  }
   window.addEventListener("storage", (event) => {
     if (!STORAGE?.handleStorageEvent(event)) return;
     dataDeletionActive = true;
@@ -16456,3 +17248,4 @@
   loadAiInsightsConfig();
   if (hasOpenedWorkspace) showWorkspace(activeView);
 })();
+

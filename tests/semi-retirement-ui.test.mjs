@@ -1554,7 +1554,8 @@ test("Stage G4 Decision Engine presents opportunities with details collapsed", (
   const snippet = sourceBetween(appSource, "function renderDecision", "function updateSemiRetirementDraftFromInput");
   assert.match(snippet, /result\.decisionOptions\.map/);
   assert.match(snippet, /Potential tax benefit/);
-  assert.match(snippet, /Potential wealth benefit/);
+  assert.match(snippet, /Estimated annual wealth benefit/);
+  assert.match(snippet, /Annual comparison using the current rates and tax assumptions/);
   assert.match(snippet, /<details class="decision-details mt-3">/);
   assert.match(snippet, /<summary>View details<\/summary>/);
   assert.match(snippet, /Cashflow impact/);
