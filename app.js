@@ -9670,6 +9670,34 @@
     `;
   }
 
+  function renderRetainedAssetsHtml(viewModel) {
+    const retained = viewModel.retainedAssets;
+    if (!retained) return "";
+    const amount = value => value === null ? "Unknown" : semiRetirementMoney(value);
+    const types = { home: "Principal residence", principalResidence: "Principal residence", principal_residence: "Principal residence", rentalInvestmentProperty: "Rental property", rentalProperty: "Rental property", investmentProperty: "Investment property", otherProperty: "Other property", vehicle: "Vehicle / personal asset" };
+    const owner = asset => asset.owner === "joint" ? "Joint household ownership" : (viewModel.people.find(person => person.id === asset.owner)?.name || asset.owner);
+    return `<section class="semi-retirement-results-section retained-assets">
+      <div class="card-subheading"><h4>Property &amp; other assets still owned</h4>
+        <p>At ${retained.reference === "exhaustion" ? "retirement funding exhaustion" : "projection end"} in ${escapeHtml(String(retained.calendarYear))}.</p></div>
+      <div class="semi-retirement-results-grid">
+        ${semiRetirementMetricCard("Projected retained value", amount(retained.totalValue))}
+        ${semiRetirementMetricCard("Linked debt remaining", amount(retained.totalLinkedDebt))}
+        ${semiRetirementMetricCard("Net equity remaining", amount(retained.totalNetEquity))}
+      </div>
+      <p class="field-help">These assets remain owned ${retained.reference === "exhaustion" ? "after liquid retirement funds are exhausted" : "at projection end"}. They are not treated as available retirement cash unless a sale or equity-release event is modelled. Values are estimates based on modelling assumptions.</p>
+      ${retained.debtUnknown ? '<p class="field-help">Linked debt could not be determined for some assets. Relink the relevant loans to establish net equity.</p>' : ""}
+      <div class="semi-retirement-results-grid retained-asset-list">${retained.assets.map(asset => `<article class="semi-retirement-metric-card retained-asset-card">
+        <h5>${escapeHtml(asset.name)}</h5><p>${escapeHtml(types[asset.type] || "Other asset")}</p>
+        <dl><dt>Projected value</dt><dd>${escapeHtml(amount(asset.projectedValue))}</dd>
+        <dt>Loan remaining</dt><dd>${escapeHtml(amount(asset.linkedDebt))}</dd>
+        <dt>Net equity</dt><dd>${escapeHtml(amount(asset.netEquity))}</dd>
+        <dt>Ownership</dt><dd>${escapeHtml(owner(asset))} (${escapeHtml(String(asset.ownershipPercent))}%)</dd>
+        <dt>Status</dt><dd>${escapeHtml(asset.status)}</dd></dl>
+      </article>`).join("")}</div>
+      ${retained.assets.length ? '<p class="field-help">These assets could potentially be retained, sold later, downsized, or form part of the estate.</p>' : '<p class="field-help">No retained assets are projected at this point.</p>'}
+    </section>`;
+  }
+
   function renderSemiRetirementLongevityHtml(viewModel) {
     const longevity = viewModel.longevity || {};
     const accessible = longevity.accessibleFundsExhausted;
@@ -9686,11 +9714,12 @@
         </div>
         <div class="semi-retirement-results-grid">
           ${semiRetirementMetricCard("Lifestyle funding", unfunded?.calendarYear ? `Shortfall starts in ${unfunded.calendarYear}` : `Funded through ${projectionEnd.value.replace("+", "")}`, unfunded?.calendarYear ? semiRetirementAgeList(milestoneAgesFromObject(unfunded, viewModel.people)) : projectionEnd.note, unfunded?.calendarYear ? "is-warning" : "is-positive")}
-          ${semiRetirementMetricCard("Investments available before super", accessible?.calendarYear ? `Used by ${accessibleLast.value}` : "Remain available", accessible?.calendarYear ? `${accessibleLast.note}. Available super continues funding retirement where required.` : "Through the projection period.", accessibleTone)}
-          ${semiRetirementMetricCard("Total retirement investments", allFunds?.calendarYear ? `Used by ${semiRetirementFirstAgeLabel(milestoneAgesFromObject(allFunds, viewModel.people))}` : "Remain positive", allFunds?.calendarYear ? semiRetirementAgeList(milestoneAgesFromObject(allFunds, viewModel.people)) : "Investments plus super remain positive through projection end.", allFunds?.calendarYear ? "is-warning" : "is-positive")}
+          ${semiRetirementMetricCard("Investments available before super", accessible?.calendarYear ? `Used by ${accessibleLast.value}` : "Remain available", accessible?.calendarYear ? `${accessibleLast.note}. ${allFunds?.calendarYear && allFunds.calendarYear <= accessible.calendarYear ? "Liquid retirement funds are exhausted in this year." : "Available super continues funding retirement where required."}` : "Through the projection period.", accessibleTone)}
+          ${semiRetirementMetricCard("Retirement investments", allFunds?.calendarYear ? `Exhausted by ${semiRetirementFirstAgeLabel(milestoneAgesFromObject(allFunds, viewModel.people))}` : "No exhaustion projected", allFunds?.calendarYear ? semiRetirementAgeList(milestoneAgesFromObject(allFunds, viewModel.people)) : "No retirement investment exhaustion within the projection horizon.", allFunds?.calendarYear ? "is-warning" : "is-positive")}
           ${semiRetirementMetricCard("Unfunded lifestyle spending", unfunded?.calendarYear ? money(longevity.totalUnfundedSpending || 0) : "None projected", unfunded?.calendarYear ? `${semiRetirementAgeList(milestoneAgesFromObject(unfunded, viewModel.people))} - first shortfall ${unfunded.calendarYear}` : "No projected unfunded lifestyle spending.", unfunded?.calendarYear ? "is-warning" : "is-positive")}
         </div>
       </section>
+      ${renderRetainedAssetsHtml(viewModel)}
     `;
   }
 
@@ -10226,7 +10255,7 @@
                 ${semiRetirementDetailRows([
                   { label: "Net cash income", value: semiRetirementMoney(household.totalNetEmploymentIncome) },
                   { label: "Lifestyle spending", value: semiRetirementMoney(household.applicableLifestyleSpending) },
-                  { label: "Portfolio withdrawal", value: semiRetirementMoney(household.totalAccessibleWithdrawal) },
+                  { label: "Portfolio withdrawal", value: semiRetirementMoney(household.totalPortfolioWithdrawal) },
                   { label: "Accessible investments", value: semiRetirementMoney(household.closingAccessibleInvestmentBalance) },
                   { label: "Super balance", value: semiRetirementMoney(household.totalSuperBalance) },
                 ])}
@@ -17248,4 +17277,3 @@
   loadAiInsightsConfig();
   if (hasOpenedWorkspace) showWorkspace(activeView);
 })();
-
