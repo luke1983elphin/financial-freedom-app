@@ -9012,3 +9012,12 @@ body.scenario-save-modal-open {
     page-break-inside: avoid;
   }
 }
+
+/* Retained property is reported separately from spendable retirement funds. */
+.retained-assets, .retained-assets .semi-retirement-results-grid > * { min-width: 0; }
+.retained-assets .semi-retirement-results-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); }
+.retained-assets :is(h4, h5, p, dd, strong) { overflow-wrap: anywhere; }
+.retained-asset-card { padding: 1rem; border: 1px solid var(--border-color, #dbe2ea); border-radius: 12px; }
+.retained-asset-card h5 { font-size: 1rem; margin: 0; }
+.retained-asset-card dl { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: .5rem; }
+.retained-asset-card dd { margin: 0; text-align: right; }

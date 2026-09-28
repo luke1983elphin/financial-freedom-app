@@ -381,7 +381,9 @@
     const propertyLike = new Set(["home", "principalResidence", "principal_residence", "otherProperty", "rentalInvestmentProperty", "rentalProperty", "investmentProperty", "vehicle"]);
     const growthAssumptions = propertyGrowthAssumptionsFromPlan(plan);
     const detailed = items
-      .filter((item) => propertyLike.has(item.category || item.type))
+      .filter((item) => propertyLike.has(item.category || item.type)
+        || ((item.category || item.type) !== "super" && (item.includeInFI === false || item.includeInFi === false
+          || item.includeInFiAssets === false || item.excludeFromFI === true || item.excludeFromFi === true || item.isPersonalUse === true)))
       .map((item, index) => {
         const type = item.category || item.type || "other";
         const resolvedGrowth = PROPERTY_TYPES.has(type)
@@ -391,12 +393,15 @@
           id: String(item.id || `asset-${index + 1}`),
           name: String(item.name || item.description || `Asset ${index + 1}`),
           type,
+          owner: item.owner || "joint",
+          ownershipPercent: item.ownershipPercent ?? 100,
           openingValue: nonNegative(item.value ?? item.currentValue ?? item.balance),
           annualGrowthRatePct: resolvedGrowth.ratePct,
           assetSpecificGrowthRatePct: resolvedGrowth.source === "asset-specific" ? resolvedGrowth.ratePct : null,
           growthRateSource: resolvedGrowth.source,
           propertyTypeGroup: resolvedGrowth.group,
-          includeInNetWorth: item.includeInNetWorth !== false,
+          // Additional excluded assets are report-only; preserve existing financial totals.
+          includeInNetWorth: propertyLike.has(type) && item.includeInNetWorth !== false,
           isAccessibleAsset: false,
           isPersonalUse: item.isPersonalUse === true,
         };
@@ -1960,6 +1965,7 @@
 
     return {
       isAvailable: true,
+      retainedAssets: summary.retainedAssets || null,
       people,
       retirementTiming,
       projectionEndAge,

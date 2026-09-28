@@ -439,6 +439,8 @@
       annualGrowthRate,
       annualGrowthRatePct: roundRatio(annualGrowthRate * 100),
       growthRateSource: resolvedGrowth.growthRateSource,
+      owner: String(asset.owner || "joint"),
+      ownershipPercent: hasFiniteNumber(asset.ownershipPercent) ? Math.max(0, Math.min(100, number(asset.ownershipPercent))) : 100,
       includeInNetWorth: asset.includeInNetWorth !== false,
       isProperty: PROPERTY_ASSET_TYPES.has(type),
       isRentalInvestmentProperty: RENTAL_INVESTMENT_PROPERTY_TYPES.has(type),
@@ -1024,6 +1026,40 @@
     };
   }
 
+  function retainedAssetsAtYear(row, exhausted) {
+    if (!row) return null;
+    // Resolve only unique stable relationships, including asset -> rental income
+    // -> loan links used by older linked-setup records. Never match names.
+    const assetIds = new Set(row.assets.map(asset => asset.id));
+    const debtAssetIds = new Map(row.liabilities.map(debt => {
+      if (assetIds.has(debt.linkedAssetId)) return [debt.id, debt.linkedAssetId];
+      const candidates = new Set((row.propertyIncome || []).filter(income =>
+        income.id === debt.linkedRentalIncomeId || income.linkedLoanIds?.includes(debt.id)
+      ).map(income => income.linkedAssetId).filter(id => assetIds.has(id)));
+      return [debt.id, candidates.size === 1 ? [...candidates][0] : null];
+    }));
+    const assets = row.assets.filter(asset => !asset.isAccessibleAsset && asset.type !== "super"
+      && asset.closingValue > 0 && asset.ownershipPercent > 0).map(asset => {
+      const linked = row.liabilities.filter(debt => debtAssetIds.get(debt.id) === asset.id);
+      const unresolved = row.liabilities.some(debt => !debtAssetIds.get(debt.id) && debt.closingBalance > 0
+        && ((asset.isProperty && ["homeLoan", "rentalPropertyLoan", "investmentPropertyLoan", "investmentLoan", "mortgage"].includes(debt.type))
+          || (asset.type === "vehicle" && debt.type === "vehicleLoan") || debt.type === "otherDebt"));
+      const linkedDebt = roundCurrency(linked.reduce((total, debt) => total + debt.closingBalance, 0));
+      return { id: asset.id, name: asset.name, type: asset.type, owner: asset.owner,
+        ownershipPercent: asset.ownershipPercent, projectedValue: asset.closingValue,
+        linkedLoanIds: linked.map(debt => debt.id), linkedDebt: unresolved ? null : linkedDebt,
+        knownLinkedDebt: linkedDebt, netEquity: unresolved ? null : roundCurrency(asset.closingValue - linkedDebt),
+        status: unresolved ? "Linked debt unknown" : linkedDebt > 0 ? "Still owned" : "Owned outright" };
+    });
+    const totalValue = roundCurrency(assets.reduce((total, asset) => total + asset.projectedValue, 0));
+    const knownLinkedDebt = roundCurrency(assets.reduce((total, asset) => total + asset.knownLinkedDebt, 0));
+    const debtUnknown = assets.some(asset => asset.linkedDebt === null);
+    return { calendarYear: row.calendarYear, person1Age: row.person1Age, person2Age: row.person2Age,
+      reference: exhausted ? "exhaustion" : "projection-end", assets, totalValue,
+      totalLinkedDebt: debtUnknown ? null : knownLinkedDebt, knownLinkedDebt,
+      totalNetEquity: debtUnknown ? null : roundCurrency(totalValue - knownLinkedDebt), debtUnknown };
+  }
+
   function projectAssetYear(asset, openingValue) {
     const opening = roundCurrency(Math.max(0, number(openingValue)));
     const growth = roundCurrency(opening * asset.annualGrowthRate);
@@ -1039,6 +1075,8 @@
       annualGrowthRate: asset.annualGrowthRate,
       annualGrowthRatePct: asset.annualGrowthRatePct,
       growthRateSource: asset.growthRateSource,
+      owner: asset.owner,
+      ownershipPercent: asset.ownershipPercent,
       includeInNetWorth: asset.includeInNetWorth,
       isProperty: asset.isProperty,
       isRentalInvestmentProperty: asset.isRentalInvestmentProperty,
@@ -2234,8 +2272,8 @@
         }
       }
       const requiredWithdrawal = withdrawAccessibleBalance(requiredShortfall);
-      const requiredAccessibleWithdrawal = requiredWithdrawal.total;
-      const requiredAccessibleInvestmentWithdrawal = roundCurrency(requiredWithdrawal.total - requiredWithdrawal.fromUnallocated);
+      let requiredAccessibleWithdrawal = requiredWithdrawal.total;
+      let requiredAccessibleInvestmentWithdrawal = roundCurrency(requiredWithdrawal.total - requiredWithdrawal.fromUnallocated);
       const requiredUnallocatedWithdrawal = requiredWithdrawal.fromUnallocated;
       requiredShortfall = roundCurrency(requiredShortfall - requiredAccessibleWithdrawal);
 
@@ -2251,7 +2289,7 @@
       const optionalSuperFunding = optionalShortfallAfterAccessible > 0
         ? withdrawFromSuper(optionalShortfallAfterAccessible, peopleYear, peopleStates, normalised)
         : { total: 0, unmet: 0, withdrawals: {} };
-      const requiredSuperWithdrawal = requiredSuperFunding.total;
+      let requiredSuperWithdrawal = requiredSuperFunding.total;
       const optionalAdditionalLifestyleSuperWithdrawal = optionalSuperFunding.total;
       const optionalAdditionalLifestyleWithdrawal = roundCurrency(
         optionalAdditionalLifestyleAccessibleWithdrawal
@@ -2266,14 +2304,14 @@
           return withdrawals;
         }, {}),
       };
-      const requiredTotalPortfolioWithdrawal = roundCurrency(requiredAccessibleWithdrawal + requiredSuperWithdrawal);
-      const totalPortfolioWithdrawal = roundCurrency(
+      let requiredTotalPortfolioWithdrawal = roundCurrency(requiredAccessibleWithdrawal + requiredSuperWithdrawal);
+      let totalPortfolioWithdrawal = roundCurrency(
         requiredTotalPortfolioWithdrawal
         + optionalAdditionalLifestyleWithdrawal,
       );
-      const unmetSpending = roundCurrency(requiredSuperFunding.unmet + unfundedOptionalAdditionalLifestyleWithdrawal);
-      const totalAccessibleWithdrawal = roundCurrency(requiredAccessibleWithdrawal + optionalAdditionalLifestyleAccessibleWithdrawal);
-      const totalAccessibleInvestmentWithdrawal = roundCurrency(
+      let unmetSpending = roundCurrency(requiredSuperFunding.unmet + unfundedOptionalAdditionalLifestyleWithdrawal);
+      let totalAccessibleWithdrawal = roundCurrency(requiredAccessibleWithdrawal + optionalAdditionalLifestyleAccessibleWithdrawal);
+      let totalAccessibleInvestmentWithdrawal = roundCurrency(
         requiredAccessibleInvestmentWithdrawal
         + optionalAdditionalLifestyleInvestmentWithdrawal
         + downsizeAccessibleInvestmentWithdrawal,
@@ -2285,9 +2323,9 @@
       const accessibleEarningsBasis = Math.max(0, ordinaryOpeningBalance + ordinaryNetMovement * 0.5);
       const accessibleInvestmentEarnings = roundCurrency(accessibleEarningsBasis * normalised.accessibleInvestments.annualReturnRate);
       const accessibleInvestmentFees = roundCurrency(accessibleEarningsBasis * Math.max(0, normalised.accessibleInvestments.annualFeesRate));
-      const closingAccessibleInvestmentBalance = roundCurrency(Math.max(0, accessibleBeforeReturn + accessibleInvestmentEarnings - accessibleInvestmentFees));
-      const totalAccessibleAssets = roundCurrency(closingAccessibleInvestmentBalance + unallocatedSurplusBalance);
-      const accessibleReconciliationExpectedClosing = roundCurrency(
+      let closingAccessibleInvestmentBalance = roundCurrency(Math.max(0, accessibleBeforeReturn + accessibleInvestmentEarnings - accessibleInvestmentFees));
+      let totalAccessibleAssets = roundCurrency(closingAccessibleInvestmentBalance + unallocatedSurplusBalance);
+      let accessibleReconciliationExpectedClosing = roundCurrency(
         accessibleOpening
         + accessibleInvestmentEarnings
         + plannedExternalAccessibleContribution
@@ -2297,7 +2335,7 @@
         - totalAccessibleInvestmentWithdrawal
         - accessibleInvestmentFees,
       );
-      const accessibleReconciliationDifference = roundCurrency(closingAccessibleInvestmentBalance - accessibleReconciliationExpectedClosing);
+      let accessibleReconciliationDifference = roundCurrency(closingAccessibleInvestmentBalance - accessibleReconciliationExpectedClosing);
 
       peopleYear.forEach((person) => {
         const source = normalised.people.find((item) => item.id === person.id);
@@ -2334,6 +2372,53 @@
         };
         peopleStates[person.id].openingSuperBalance = person.closingSuperBalance;
       });
+
+      // Earnings are credited after the normal mid-year withdrawal waterfall.
+      // Settle any remaining required shortfall at YEAR END: these withdrawals
+      // do not change the already-earned mid-year returns or create new returns.
+      const yearEndAccessibleWithdrawal = roundCurrency(Math.min(
+        unmetSpending, Math.max(0, totalAccessibleAssets - minimumAccessibleBalance),
+        closingAccessibleInvestmentBalance,
+      ));
+      if (yearEndAccessibleWithdrawal > 0) {
+        closingAccessibleInvestmentBalance = roundCurrency(closingAccessibleInvestmentBalance - yearEndAccessibleWithdrawal);
+        totalAccessibleAssets = roundCurrency(totalAccessibleAssets - yearEndAccessibleWithdrawal);
+        requiredAccessibleWithdrawal = roundCurrency(requiredAccessibleWithdrawal + yearEndAccessibleWithdrawal);
+        requiredAccessibleInvestmentWithdrawal = roundCurrency(requiredAccessibleInvestmentWithdrawal + yearEndAccessibleWithdrawal);
+        totalAccessibleWithdrawal = roundCurrency(totalAccessibleWithdrawal + yearEndAccessibleWithdrawal);
+        totalAccessibleInvestmentWithdrawal = roundCurrency(totalAccessibleInvestmentWithdrawal + yearEndAccessibleWithdrawal);
+        accessibleReconciliationExpectedClosing = roundCurrency(accessibleReconciliationExpectedClosing - yearEndAccessibleWithdrawal);
+        accessibleReconciliationDifference = roundCurrency(closingAccessibleInvestmentBalance - accessibleReconciliationExpectedClosing);
+        unmetSpending = roundCurrency(unmetSpending - yearEndAccessibleWithdrawal);
+      }
+      let yearEndSuperWithdrawal = 0;
+      const preferredIds = normalised.scenario.superWithdrawalOrder || [];
+      const settlementOrder = peopleYear.slice().sort((a, b) => {
+        const rank = person => preferredIds.includes(person.id) ? preferredIds.indexOf(person.id) : preferredIds.length;
+        return rank(a) - rank(b) || b.age - a.age || String(a.id).localeCompare(String(b.id));
+      });
+      settlementOrder.forEach(person => {
+        if (person.age < person.superAccessAge || unmetSpending <= 0) return;
+        const amount = roundCurrency(Math.min(unmetSpending, person.closingSuperBalance));
+        person.yearEndSuperWithdrawal = amount;
+        person.superWithdrawal = roundCurrency(person.superWithdrawal + amount);
+        person.closingSuperBalance = roundCurrency(person.closingSuperBalance - amount);
+        person.superReconciliation.withdrawal = person.superWithdrawal;
+        person.superReconciliation.expectedClosingBalance = roundCurrency(person.superReconciliation.expectedClosingBalance - amount);
+        person.superReconciliation.closingBalance = person.closingSuperBalance;
+        person.superReconciliation.difference = roundCurrency(person.closingSuperBalance - person.superReconciliation.expectedClosingBalance);
+        peopleStates[person.id].openingSuperBalance = person.closingSuperBalance;
+        superFunding.withdrawals[person.id] = person.superWithdrawal;
+        yearEndSuperWithdrawal = roundCurrency(yearEndSuperWithdrawal + amount);
+        unmetSpending = roundCurrency(unmetSpending - amount);
+      });
+      requiredSuperWithdrawal = roundCurrency(requiredSuperWithdrawal + yearEndSuperWithdrawal);
+      requiredSuperFunding.total = requiredSuperWithdrawal;
+      requiredSuperFunding.unmet = unmetSpending;
+      superFunding.total = roundCurrency(superFunding.total + yearEndSuperWithdrawal);
+      superFunding.unmet = unmetSpending;
+      requiredTotalPortfolioWithdrawal = roundCurrency(requiredTotalPortfolioWithdrawal + yearEndAccessibleWithdrawal + yearEndSuperWithdrawal);
+      totalPortfolioWithdrawal = roundCurrency(totalPortfolioWithdrawal + yearEndAccessibleWithdrawal + yearEndSuperWithdrawal);
 
       const totalSuperBalance = roundCurrency(peopleYear.reduce((total, person) => total + person.closingSuperBalance, 0));
       const totalInvestableAssets = roundCurrency(totalAccessibleAssets + totalSuperBalance);
@@ -2430,6 +2515,7 @@
           superInvestmentEarnings: person.superInvestmentEarnings,
           superFees: person.superFees,
           superWithdrawal: person.superWithdrawal,
+          yearEndSuperWithdrawal: person.yearEndSuperWithdrawal || 0,
           closingSuperBalance: person.closingSuperBalance,
           superReconciliation: person.superReconciliation,
         })),
@@ -2556,6 +2642,8 @@
             closingBalance: closingAccessibleInvestmentBalance,
             difference: accessibleReconciliationDifference,
           },
+          yearEndAccessibleWithdrawal,
+          yearEndSuperWithdrawal,
           totalSuperWithdrawal: superFunding.total,
           totalSuperBalance,
           totalInvestableAssets,
@@ -2618,6 +2706,8 @@
       summary.totalPropertyEquityAtEndAge = finalYear.household.totalPropertyEquity;
       summary.totalNetWorthAtEndAge = finalYear.household.totalNetWorth;
     }
+    const retainedReference = years.find(row => row.calendarYear === summary.allRetirementFundsExhaustedYear) || finalYear;
+    summary.retainedAssets = retainedAssetsAtYear(retainedReference, Boolean(summary.allRetirementFundsExhaustedYear));
     summary.minimumEstateBalanceTarget = roundCurrency(normalised.scenario.minimumEstateBalanceAtEndAge);
     summary.minimumEstateBalanceShortfallAtEndAge = roundCurrency(Math.max(
       0,
