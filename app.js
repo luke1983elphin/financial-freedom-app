@@ -9674,7 +9674,7 @@
     const retained = viewModel.retainedAssets;
     if (!retained) return "";
     const amount = value => value === null ? "Unknown" : semiRetirementMoney(value);
-    const types = { home: "Principal residence", principalResidence: "Principal residence", principal_residence: "Principal residence", rentalInvestmentProperty: "Rental property", rentalProperty: "Rental property", investmentProperty: "Investment property", otherProperty: "Other property", vehicle: "Vehicle / personal asset" };
+    const types = { home: "Principal residence", principalResidence: "Principal residence", principal_residence: "Principal residence", rentalInvestmentProperty: "Rental property", rentalProperty: "Rental property", investmentProperty: "Investment property", otherProperty: "Other property", vehicle: "Vehicle / personal asset", restrictedSuper: "Super below access age", cashReserve: "Explicit cash reserve" };
     const owner = asset => asset.owner === "joint" ? "Joint household ownership" : (viewModel.people.find(person => person.id === asset.owner)?.name || asset.owner);
     return `<section class="semi-retirement-results-section retained-assets">
       <div class="card-subheading"><h4>Property &amp; other assets still owned</h4>
@@ -9686,6 +9686,7 @@
       </div>
       <p class="field-help">These assets remain owned ${retained.reference === "exhaustion" ? "after liquid retirement funds are exhausted" : "at projection end"}. They are not treated as available retirement cash unless a sale or equity-release event is modelled. Values are estimates based on modelling assumptions.</p>
       ${retained.debtUnknown ? '<p class="field-help">Linked debt could not be determined for some assets. Relink the relevant loans to establish net equity.</p>' : ""}
+      ${retained.assets.some(asset => ["restrictedSuper", "cashReserve"].includes(asset.type)) ? '<p class="field-help">Exhaustion refers to funds eligible for withdrawal in this year. Inaccessible super and any explicit cash reserve remain owned and are shown below.</p>' : ""}
       <div class="semi-retirement-results-grid retained-asset-list">${retained.assets.map(asset => `<article class="semi-retirement-metric-card retained-asset-card">
         <h5>${escapeHtml(asset.name)}</h5><p>${escapeHtml(types[asset.type] || "Other asset")}</p>
         <dl><dt>Projected value</dt><dd>${escapeHtml(amount(asset.projectedValue))}</dd>

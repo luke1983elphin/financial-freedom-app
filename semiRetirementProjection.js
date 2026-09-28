@@ -1051,6 +1051,20 @@
         knownLinkedDebt: linkedDebt, netEquity: unresolved ? null : roundCurrency(asset.closingValue - linkedDebt),
         status: unresolved ? "Linked debt unknown" : linkedDebt > 0 ? "Still owned" : "Owned outright" };
     });
+    if (exhausted) {
+      // Explicit reserves and inaccessible super are still owned, but cannot
+      // postpone exhaustion of the funding that is eligible for this year.
+      const excludedBalance = (id, name, type, owner, value, status) => {
+        if (value <= 0) return;
+        assets.push({ id, name, type, owner, ownershipPercent: 100, projectedValue: value,
+          linkedLoanIds: [], linkedDebt: 0, knownLinkedDebt: 0, netEquity: value, status });
+      };
+      excludedBalance("reserved-accessible", "Reserved accessible funds", "cashReserve", "joint",
+        row.household.totalAccessibleAssets, "Reserved from withdrawals");
+      row.people.filter(person => person.age < person.superAccessAge).forEach(person =>
+        excludedBalance(`inaccessible-super-${person.id}`, `${person.name} super`, "restrictedSuper", person.id,
+          person.closingSuperBalance, "Not yet accessible"));
+    }
     const totalValue = roundCurrency(assets.reduce((total, asset) => total + asset.projectedValue, 0));
     const knownLinkedDebt = roundCurrency(assets.reduce((total, asset) => total + asset.knownLinkedDebt, 0));
     const debtUnknown = assets.some(asset => asset.linkedDebt === null);
@@ -2440,7 +2454,11 @@
         summary.firstUnfundedSpendingAge = summary.firstUnfundedSpending.person1Age;
         summary.firstUnfundedSpendingYear = summary.firstUnfundedSpending.calendarYear;
       }
-      if (unmetSpending > 0 && totalInvestableAssets === 0 && milestoneIsUnset(summary.allRetirementFundsExhausted)) {
+      const eligibleRetirementFundingRemaining = roundCurrency(
+        Math.max(0, totalAccessibleAssets - minimumAccessibleBalance)
+        + peopleYear.filter(person => person.age >= person.superAccessAge).reduce((total, person) => total + person.closingSuperBalance, 0),
+      );
+      if (unmetSpending > 0 && eligibleRetirementFundingRemaining === 0 && milestoneIsUnset(summary.allRetirementFundsExhausted)) {
         summary.allRetirementFundsExhausted = milestoneForYear(calendarYear, peopleYear);
         summary.allRetirementFundsExhaustedAge = summary.allRetirementFundsExhausted.person1Age;
         summary.allRetirementFundsExhaustedYear = summary.allRetirementFundsExhausted.calendarYear;
