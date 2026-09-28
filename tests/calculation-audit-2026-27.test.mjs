@@ -35,7 +35,7 @@ function basePlan() {
 
 test("2026-27 resident tax helper uses the audited resident bracket table before offsets and Medicare", () => {
   const CALC = loadCalculator();
-  assert.equal(CALC.CALCULATION_VERSION, "2026.27.2");
+  assert.equal(CALC.CALCULATION_VERSION, "2026.27.3");
   assert.equal(CALC.FINANCIAL_YEAR, "2026-27");
   const cases = [
     [18200, 0],
@@ -84,7 +84,7 @@ test("R3D rule governance warning follows Australian financial-year boundaries a
   assert.equal(historical.currentRulesUnsupported, false);
   assert.equal(historical.warning, "");
   assert.equal(july.rulesLastReviewed, "8 September 2026");
-  assert.equal(july.calculationVersion, "2026.27.2");
+  assert.equal(july.calculationVersion, "2026.27.3");
 });
 
 test("LITO reduces income tax only and is capped at income tax before Medicare", () => {
@@ -478,7 +478,7 @@ test("rental cashflow uses linked loan treatment without deducting loan interest
   assert.equal(result.passiveIncomeBreakdown.rental, 7000);
 });
 
-test("Financial Freedom progress uses net FI assets while passive income stays separate", () => {
+test("Financial Freedom progress uses accessible assets while property wealth and passive income stay separate", () => {
   const { CALC, plan } = basePlan();
   plan.personal.person1Age = 45;
   plan.personal.fullRetirementAge = 55;
@@ -509,12 +509,13 @@ test("Financial Freedom progress uses net FI assets while passive income stays s
   assert.equal(result.investmentPropertyEquity, 250000);
   assert.equal(result.accessibleInvestmentAssets, 750000);
   assert.equal(result.superannuationBalance, 500000);
-  assert.equal(result.financialIndependenceAssets, 1000000);
-  assert.equal(result.currentNetFiAssets, 1000000);
-  assert.equal(result.financialFreedomProgressRaw, 31.2479);
-  assert.equal(result.financialFreedomScore, 31.2479);
-  assert.equal(result.lifestyleFundingPercent, 40);
-  assert.equal(result.estimatedSustainableIncomeFromCurrentFiAssets, 40000);
+  assert.equal(result.financialIndependenceAssets, 750000);
+  assert.equal(result.currentNetFiAssets, 750000);
+  assert.equal(result.totalFiWealth, 1000000);
+  assert.equal(result.financialFreedomProgressRaw, Math.round(750000 / result.targetCapital * 1e6) / 1e4);
+  assert.equal(result.financialFreedomScore, result.financialFreedomProgressRaw);
+  assert.equal(result.lifestyleFundingPercent, 30);
+  assert.equal(result.estimatedSustainableIncomeFromCurrentFiAssets, 30000);
   assert.equal(result.passiveIncomeCoveragePercent, 0);
   assert.equal(result.annualPassiveIncome, 0);
   assert.equal(result.projectedFinancialInvestmentGrowthBase, 750000);
@@ -525,7 +526,7 @@ test("Financial Freedom progress uses net FI assets while passive income stays s
   assert.equal(result.projectedPropertyGrowth, 18000);
   assert.equal(result.combinedWealthCreation, 70500);
   assert.equal(result.totalIncomeProducingAssets, 1500000);
-  assert.equal(result.includeInvestmentPropertyEquityInFi, true);
+  assert.equal(result.includeInvestmentPropertyEquityInFi, false);
   assert.ok(result.financialFreedomProgressProjection[0].netFiAssets > result.financialIndependenceAssets);
 
   plan.liabilityItems.push({ id: "share-loan", type: "investmentLoan", balance: 100000 });
@@ -533,8 +534,9 @@ test("Financial Freedom progress uses net FI assets while passive income stays s
   assert.equal(result.otherInvestmentDebt, 100000);
   assert.equal(result.liquidInvestmentAssets, 650000);
   assert.equal(result.accessibleInvestmentAssets, 650000);
-  assert.equal(result.financialIndependenceAssets, 900000);
-  assert.equal(result.financialFreedomProgressRaw, 28.1231);
+  assert.equal(result.financialIndependenceAssets, 650000);
+  assert.equal(result.totalFiWealth, 900000);
+  assert.equal(result.financialFreedomProgressRaw, Math.round(650000 / result.targetCapital * 1e6) / 1e4);
   assert.equal(result.projectedFinancialInvestmentGrowthBase, 750000);
   assert.equal(result.projectedFinancialInvestmentGrowth, 52500);
   assert.equal(result.projectedInvestmentGrowthBase, 750000);
@@ -545,12 +547,13 @@ test("Financial Freedom progress uses net FI assets while passive income stays s
   plan.personal.person1Age = 61;
   result = CALC.calculatePlan(plan);
   assert.equal(result.fiAssetPolicy.superIncludedInCurrentNetFiAssets, true);
-  assert.equal(result.financialIndependenceAssets, 1400000);
-  assert.equal(result.financialFreedomProgressRaw, 56);
+  assert.equal(result.financialIndependenceAssets, 1150000);
+  assert.equal(result.totalFiWealth, 1400000);
+  assert.equal(result.financialFreedomProgressRaw, 46);
 
   plan.personal.targetAnnualSpending = 10000;
   result = CALC.calculatePlan(plan);
-  assert.equal(result.financialFreedomProgressRaw, 560);
+  assert.equal(result.financialFreedomProgressRaw, 460);
   assert.equal(result.financialFreedomScore, 100);
 
   plan.personal.targetAnnualSpending = 0;
@@ -653,12 +656,14 @@ test("property growth is calculated from gross investment property value and kep
   assert.equal(result.projectedPropertyGrowthBase, 500000);
   assert.equal(result.projectedPropertyGrowth, 15000);
   assert.equal(result.investmentPropertyEquity, 200000);
-  assert.equal(result.financialIndependenceAssets, 200000);
+  assert.equal(result.financialIndependenceAssets, 0);
+  assert.equal(result.totalFiWealth, 200000);
   assert.equal(result.accessibleInvestmentAssets, 0);
   assert.equal(result.annualPassiveIncome, 0);
   assert.equal(result.cashSurplusBeforeInvesting, result.finalProjectedCashSurplus);
   assert.equal(result.combinedWealthCreation, 15000);
-  assert.ok(result.financialFreedomProgressProjection[0].netFiAssets > result.financialIndependenceAssets);
+  assert.equal(result.financialFreedomProgressProjection[0].netFiAssets, 0);
+  assert.ok(result.financialFreedomProgressProjection[0].totalFiWealth > result.totalFiWealth);
 });
 
 test("investment property growth excludes the principal residence and totals multiple investment properties separately", () => {

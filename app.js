@@ -300,7 +300,7 @@
     },
     cashflowAllocation: {
       title: "Spare Cashflow Allocation",
-      body: "These amounts are deducted from available cashflow because you have chosen to allocate that spare cash toward wealth-building instead of leaving it as unused surplus.",
+      body: "Configured annual investing is your target. Actual investing is capped at the cash surplus remaining after the modelled extra-super commitment. A zero or negative surplus funds no new discretionary investment. Extra super retains its separate contribution and tax assumptions.",
     },
     financialStage: {
       title: "Financial stages",
@@ -308,7 +308,7 @@
     },
     financialFreedomProgress: {
       title: "Financial Freedom Progress",
-      body: "Financial Freedom progress compares your current net Financial Independence assets with your target FI assets. It includes income-producing and investable assets, excludes personal-use assets such as your home and vehicles, and deducts linked investment debt.",
+      body: "Financial Freedom progress compares accessible financial assets, including super when eligible, with your target capital. Investment-property equity contributes to Total FI Wealth but cannot fund spending without a modelled sale. Home equity remains separate. Linked financial-investment debt is deducted from accessible assets.",
     },
     sustainableIncome: {
       title: "Estimated sustainable income",
@@ -1240,21 +1240,25 @@
     const progressRow = useCurrentPosition ? null : projectionRowAtAge(result.financialFreedomProgressProjection, projectedAge);
     const netWorthRow = useCurrentPosition ? null : projectionRowAtAge(result.netWorthProjection, projectedAge);
     const mortgageBalance = mortgageBalanceAtAge(result, projectedAge);
-    const superAccessible = projectedAge >= Number(result.superAccessAge || 60) ? Number(superRow?.closingBalance) || 0 : 0;
-    const projectedFiAssets = (Number(investment?.closingBalance) || result.investmentBalance || 0) + (Number(plan.assets.offsetBalance) || 0) + superAccessible;
-    const effectiveProjectedFiAssets = Number(progressRow?.netFiAssets) || projectedFiAssets;
+    const fiWealth = CALC.selectFiWealthAtAge(result, projectedAge) || {};
+    const effectiveProjectedFiAssets = Number(fiWealth.accessibleFiAssets ?? 0);
     return {
       age: projectedAge,
       requestedAge,
       year,
       currentAge,
-      investmentBalance: Number(investment?.closingBalance) || result.investmentBalance || 0,
-      superBalance: Number(superRow?.closingBalance) || result.superannuationBalance || 0,
+      investmentBalance: Number(investment?.closingBalance ?? result.investmentBalance ?? 0),
+      superBalance: Number(superRow?.closingBalance ?? result.superannuationBalance ?? 0),
       mortgageBalance,
       netWorth: year <= 0 ? result.currentNetWorth : Number(netWorthRow?.closingBalance) || result.currentNetWorth || 0,
       projectedFiAssets: effectiveProjectedFiAssets,
+      accessibleFiAssets: effectiveProjectedFiAssets,
+      investmentPropertyEquity: Number(fiWealth.investmentPropertyEquity ?? 0),
+      totalFiWealth: Number(fiWealth.totalFiWealth ?? 0),
+      principalResidenceEquity: Number(fiWealth.principalResidenceEquity ?? 0),
+      inaccessibleSuper: Number(fiWealth.inaccessibleSuper ?? 0),
       passiveIncome: effectiveProjectedFiAssets * safeWithdrawalRate(),
-      progress: Number(progressRow?.progress) || engagementProgress(result).financialFreedomRaw || 0,
+      progress: Number(fiWealth.progress ?? progressRow?.progress ?? engagementProgress(result).financialFreedomRaw ?? 0),
     };
   }
 
@@ -1510,15 +1514,11 @@
   }
 
   function progressAtYear(result, year) {
-    return result.financialFreedomProgressProjection[Math.max(0, year - 1)]?.progress || freedomPercent(result);
+    return CALC.selectFiWealthAtAge(result, Number(result.plan.personal.person1Age) + year)?.progress ?? freedomPercent(result);
   }
 
   function projectedFiAssetsAtYear(result, year) {
-    const projectionRow = result.financialFreedomProgressProjection[Math.max(0, year - 1)];
-    if (projectionRow && Number.isFinite(Number(projectionRow.netFiAssets))) return roundForDisplay(projectionRow.netFiAssets);
-    const row = result.investmentProjection[Math.max(0, year - 1)];
-    const superAccessible = row?.age >= result.superAccessAge ? superAtYear(result, year) : 0;
-    return roundForDisplay((row?.closingBalance || 0) + (Number(result.plan.assets.offsetBalance) || 0) + (Number(result.investmentPropertyEquity) || 0) + superAccessible);
+    return roundForDisplay(CALC.selectFiWealthAtAge(result, Number(result.plan.personal.person1Age) + year)?.accessibleFiAssets ?? 0);
   }
 
   function projectedDebtAtYear(result, year) {
@@ -6753,7 +6753,10 @@
     const id = options.resultsId === null ? "" : (options.resultsId || "dashboardFutureYouResults");
     return `
       <div class="dashboard-future-results"${id ? ` id="${escapeHtml(id)}"` : ""} data-dashboard-future-results>
-        ${summaryTile("Projected FI assets", money(future.projectedFiAssets), "", "currentFiAssets")}
+        ${summaryTile("Accessible FI Assets", money(future.accessibleFiAssets), "", "currentFiAssets")}
+        ${summaryTile("Investment Property Equity", money(future.investmentPropertyEquity))}
+        ${summaryTile("Total FI Wealth", money(future.totalFiWealth))}
+        ${summaryTile("Home Equity", money(future.principalResidenceEquity))}
         ${summaryTile("Projected net worth", money(future.netWorth))}
         ${summaryTile("Projected passive income", `${money(future.passiveIncome)} pa`, "", "passiveIncome")}
         ${summaryTile("Financial Freedom %", plainPercent(future.progress), "", "financialFreedomProgress")}
@@ -14374,7 +14377,10 @@
           ${Number((result.stslRepaymentEstimate || result.helpRepaymentEstimate)?.person1?.balance || 0) > 0 ? summaryTile(`${personDisplayName(1)} STSL balance`, money((result.stslRepaymentEstimate || result.helpRepaymentEstimate).person1.balance)) : ""}
           ${Number((result.stslRepaymentEstimate || result.helpRepaymentEstimate)?.person2?.balance || 0) > 0 ? summaryTile(`${personDisplayName(2)} STSL balance`, money((result.stslRepaymentEstimate || result.helpRepaymentEstimate).person2.balance)) : ""}
           ${summaryTile("Net worth", money(result.currentNetWorth))}
-          ${summaryTile("Current FI assets", money(result.financialIndependenceAssets))}
+          ${summaryTile("Accessible FI Assets", money(result.accessibleFiAssets))}
+          ${summaryTile("Investment Property Equity", money(result.investmentPropertyEquity))}
+          ${summaryTile("Total FI Wealth", money(result.totalFiWealth))}
+          ${summaryTile("Home Equity", money(result.principalResidenceEquity))}
           ${summaryTile("Current investment portfolio", money(result.investmentBalance))}
           ${summaryTile("Superannuation balance", money(result.superannuationBalance))}
         </div>
@@ -14546,18 +14552,21 @@
       { label: "Current stage", value: stage.name },
       { label: "Accessible investments", value: money(result.accessibleInvestmentAssets) },
       { label: "Super from age 60", value: money(result.superannuationBalance) },
-      { label: "Annual Income", value: money(result.annualGrossIncome) },
+      { label: "Annual household cash income (net rent)", value: money(result.householdCashflow.totalHouseholdCashIncome) },
       { label: "Net income after tax, Medicare and STSL", value: money(result.netIncomeAfterTaxHelp) },
       { label: "Annual Living Expenses", value: money(result.annualLivingExpenses) },
-      { label: "Annual Loan Repayments", value: money(result.annualDebtRepayments) },
+      { label: "Annual Loan Repayments", value: money(result.householdCashflow.totalRequiredLoanRepayments) },
+      { label: "Loan deductions from cash income", value: money(result.householdCashflow.debtCashflowDeduction) },
+      { label: "Rental interest already included in net rent", value: money(result.householdCashflow.rentalInterestAlreadyInCashIncome) },
       { label: "Annual Surplus", value: money(result.cashSurplusBeforeInvesting) },
       {
-        label: "Spare cashflow used to invest",
+        label: "Affordable cashflow used to invest",
         value: money(result.annualInvestmentContributions),
         infoKey: "cashflowAllocation",
         view: "investments",
         path: "investing.annualInvestingTarget",
       },
+      { label: "Configured annual investing", value: money(result.configuredInvestmentContribution) },
       {
         label: "Spare cashflow invested in extra super",
         value: money(result.annualExtraSuperContributions),

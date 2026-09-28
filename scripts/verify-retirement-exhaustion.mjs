@@ -8,6 +8,7 @@ import { resolve, extname, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import vm from 'node:vm';
 import { fixture, trace } from './retirement-exhaustion-fixture.mjs';
+import { load, household } from './fi-cashflow-fixture.mjs';
 const root=resolve(process.argv[2] || '.');
 const output=resolve(process.argv[3] || 'outputs/retirement-exhaustion'); mkdirSync(output,{recursive:true});
 const { chromium }=await import(process.env.FFS_PLAYWRIGHT_MODULE ? pathToFileURL(process.env.FFS_PLAYWRIGHT_MODULE).href : 'playwright');
@@ -41,7 +42,7 @@ const before=model(true,input).result,after=model(false,input).result;
 writeFileSync(resolve(output,'before.json'),JSON.stringify({summary:before.summary,trace:trace(before)},null,2));
 writeFileSync(resolve(output,'after.json'),JSON.stringify({summary:after.summary,trace:trace(after)},null,2));
 // Unaffected outputs must be identical after removing additive report metadata.
-const strip=v=>Array.isArray(v)?v.map(strip):v&&typeof v==='object'?Object.fromEntries(Object.entries(v).filter(([k])=>!['retainedAssets','owner','ownershipPercent','yearEndSuperWithdrawal','yearEndAccessibleWithdrawal'].includes(k)).map(([k,x])=>[k,strip(x)])):v;
+const strip=v=>Array.isArray(v)?v.map(strip):v&&typeof v==='object'?Object.fromEntries(Object.entries(v).filter(([k])=>!['retainedAssets','owner','ownershipPercent','yearEndSuperWithdrawal','yearEndAccessibleWithdrawal','calculationVersion'].includes(k)).map(([k,x])=>[k,strip(x)])):v;
 const parity=[];
 for(const variant of ['well-funded','zero-return','no-spending']) {
   const i=fixture();
@@ -82,6 +83,30 @@ try {
   await page.locator('.retained-assets').screenshot({path:resolve(output,'app-retained-assets-375.png')});
   await page.screenshot({path:resolve(output,'app-smoke.png'),fullPage:true});
   checks.push({check:'Actual app loads and sample plan renders',pass:true});
+  const fiTools=load(pathToFileURL(root+sep));const fiPlan=household(fiTools.CALC);
+  const financial=fiTools.CALC.calculatePlan(fiPlan);
+  writeFileSync(resolve(output,'cashflow-reconciliation.json'),JSON.stringify({input:fiPlan,wealth:financial.fiWealth,
+    nextYearWealth:financial.fiWealthProjection[1],cashflow:financial.householdCashflow,tax:financial.taxEstimate,
+    propertyCashflow:financial.rentalPropertyCashflow.propertyResults},null,2));
+  // Readiness requires positive growth assumptions; current balances/cashflow
+  // are unchanged. The zero-growth calculation fixture above remains separate.
+  const browserFiPlan=structuredClone(fiPlan);
+  Object.assign(browserFiPlan.investing,{expectedInvestmentReturnPct:5,expectedSuperReturnPct:5,inflationPct:2.5});
+  await page.evaluate(p=>FFSStage1BrowserTestHooks.setPlan(p,'dashboard'),browserFiPlan);
+  await page.evaluate(()=>{const slider=document.querySelector('[data-dashboard-future-age]');slider.value='43';slider.dispatchEvent(new Event('input',{bubbles:true}));});
+  const futureText=await page.locator('[data-dashboard-future-results]').first().innerText();
+  assert.match(futureText,/Accessible FI Assets/i);assert.match(futureText,/\$340,000/);assert.match(futureText,/\$690,000/);
+  for(const width of [1366,375]) {
+    await page.setViewportSize({width,height:900});
+    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+    await page.locator('.dashboard-future-card').first().screenshot({path:resolve(output,'future-you-'+width+'.png')});
+  }
+  await page.evaluate(()=>FFSStage1BrowserTestHooks.showWorkspace('setup'));
+  const summary=await page.locator('#setupSummary').innerText();
+  assert.match(summary,/48,000/);assert.match(summary,/7,880/);assert.match(summary,/120,000/);
+  await page.setViewportSize({width:1366,height:900});
+  await page.locator('#setupSummary').screenshot({path:resolve(output,'live-summary-1366.png')});
+  checks.push({check:'Future You current composition and Live Summary dollar reconciliation',pass:true});
   for(const mode of ['before','after','large']) for(const width of [1366,375]) {
     await page.setViewportSize({width,height:900});await page.goto(origin+'/'+mode);
     const dimensions=await page.evaluate(()=>({viewport:innerWidth,width:document.documentElement.scrollWidth}));

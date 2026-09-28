@@ -1,5 +1,5 @@
 (function attachCalculator(global) {
-  const CALCULATION_VERSION = "2026.27.2";
+  const CALCULATION_VERSION = "2026.27.3";
   const FINANCIAL_YEAR = "2026-27";
   const MONTHS_PER_YEAR = 12;
   const CHECKPOINT_YEARS = [5, 10, 20, 30];
@@ -696,10 +696,27 @@
     return roundCurrency(annualize(item.amount, frequency));
   }
 
+  function isActiveFinancialRecord(item = {}) {
+    return item.active !== false && item.isActive !== false && item.deleted !== true
+      && item.isDeleted !== true && !item.deletedAt && !["inactive", "deleted"].includes(item.status);
+  }
+
+  function canonicalLiabilityItems(plan = {}) {
+    const records = new Map();
+    (plan.liabilityItems || []).filter(isActiveFinancialRecord).forEach((item, index) => {
+      const id = String(item.id || `legacy-loan-${index}`);
+      if (!records.has(id)) records.set(id, { ...item, id, type: item.type || item.category,
+        balance: item.balance ?? item.currentBalance, repayment: item.repayment ?? item.repaymentAmount,
+        interestRatePct: item.interestRatePct ?? item.interestRate ?? 0,
+        termYears: item.termYears ?? item.remainingTermYears });
+    });
+    return [...records.values()];
+  }
+
   function normalisedIncomeItems(plan = {}) {
     const items = Array.isArray(plan.incomeItems) ? plan.incomeItems : [];
     if (items.length) {
-      return items.map((item, index) => {
+      return items.filter(isActiveFinancialRecord).map((item, index) => {
         const type = normaliseIncomeType(item.type || item.incomeType, index);
         const owner = normaliseIncomeOwner(item.owner || item.incomeOwner, type, index);
         const person1AllocationPercentage = number(item.person1AllocationPercentage ?? item.person1AllocationPct);
@@ -729,6 +746,7 @@
   function incomeCashAnnualAmount(item = {}) {
     const type = normaliseIncomeType(item.type || item.incomeType);
     if (type === "salaryWages") return salaryCashEarningsAnnualAmount(item);
+    if (type === "rentalNetCashIncome") return rentalCashIncomeAnnualAmount(item) ?? 0;
     return roundCurrency(annualize(item.amount, item.frequency || "annually"));
   }
 
@@ -765,6 +783,7 @@
   function incomeTaxableAnnualAmount(item = {}) {
     const type = normaliseIncomeType(item.type || item.incomeType);
     if (type === "salaryWages") return salaryCashEarningsAnnualAmount(item);
+    if (type === "rentalNetCashIncome") return roundCurrency(annualize(item.amount, "annually"));
     return incomeCashAnnualAmount(item);
   }
 
@@ -917,7 +936,7 @@
 
   function getAnnualLoanBreakdown(loan = {}) {
     const repaymentType = loan.repaymentType === "interestOnly" ? "interestOnly" : "principalAndInterest";
-    if (isLoanPaidOffForForwardCashflow(loan)) {
+    if (!isActiveFinancialRecord(loan) || isLoanPaidOffForForwardCashflow(loan)) {
       return {
         loanId: loan.id || "",
         annualRepayments: 0,
@@ -970,7 +989,7 @@
       annualInterestRate,
       monthlyRepayment,
       termYears,
-      offsetBalance: 0,
+      offsetBalance: nonNegative(loan.offsetBalance),
     });
     const firstYear = amortisation.schedule.slice(0, MONTHS_PER_YEAR);
     let actualRegularRepayments = roundCurrency(firstYear.reduce((total, row) => total + row.repayment, 0));
@@ -1024,11 +1043,11 @@
         annualLoanRepayments,
         annualLoanInterest,
         annualLoanPrincipal,
-        householdDebtDeduction: 0,
-        rentalPassiveIncomeBeforePrincipal: 0,
-        rentalPrincipalRepayments: 0,
-        rentalHouseholdCashflowAfterPrincipal: 0,
-        householdCashflowContribution: 0,
+        householdDebtDeduction: annualLoanRepayments,
+        rentalPassiveIncomeBeforePrincipal: -annualLoanInterest,
+        rentalPrincipalRepayments: annualLoanPrincipal,
+        rentalHouseholdCashflowAfterPrincipal: -annualLoanRepayments,
+        householdCashflowContribution: -annualLoanRepayments,
         warnings: cashIncomeWarnings,
       };
     }
@@ -1062,8 +1081,9 @@
 
   function calculateRentalCashflowSummary(plan = {}) {
     const incomeItems = normalisedIncomeItems(plan).filter((item) => item.type === "rentalNetCashIncome");
-    const rentalLoans = (Array.isArray(plan.liabilityItems) ? plan.liabilityItems : [])
-      .filter((item) => item.type === "rentalPropertyLoan");
+    const rentalAssetIds = new Set(canonicalAssetRecords(plan, INVESTMENT_PROPERTY_ASSET_CATEGORIES).map(asset => asset.id));
+    const rentalLoans = canonicalLiabilityItems(plan).filter(item => item.type === "rentalPropertyLoan"
+      || rentalAssetIds.has(item.linkedAssetId || item.investmentLink?.linkedAssetId));
     const usedLoanIds = new Set();
     const warnings = [];
     const propertyResults = incomeItems.map((income) => {
@@ -1071,8 +1091,9 @@
       const linkedLoans = rentalLoans.filter((loan) => {
         const linkedFromIncome = linkedIds.includes(String(loan.id || ""));
         const linkedFromLoan = loan.linkedRentalIncomeId && String(loan.linkedRentalIncomeId) === String(income.id || "");
-        if (!linkedFromIncome && !linkedFromLoan) return false;
-        if (usedLoanIds.has(loan.id) && !loan.allowMultipleRentalLinks) {
+        const linkedFromAsset = income.linkedAssetId && income.linkedAssetId === (loan.linkedAssetId || loan.investmentLink?.linkedAssetId);
+        if (!linkedFromIncome && !linkedFromLoan && !linkedFromAsset) return false;
+        if (usedLoanIds.has(loan.id)) {
           warnings.push(`${loan.name || "A rental property loan"} is linked to more than one rental income entry. It has only been counted once.`);
           return false;
         }
@@ -1087,10 +1108,9 @@
 
     const unlinkedRentalLoans = rentalLoans.filter((loan) => loan.id && !usedLoanIds.has(loan.id));
     const confirmedUnlinked = unlinkedRentalLoans
-      .filter((loan) => loan.unlinkedRentalCashflowTreatment === "afterInterest" || loan.unlinkedRentalCashflowTreatment === "beforeInterest")
       .map((loan) => {
         const breakdown = getAnnualLoanBreakdown(loan);
-        const treatment = loan.unlinkedRentalCashflowTreatment === "beforeInterest" ? "beforeInterest" : "afterInterest";
+        const treatment = loan.unlinkedRentalCashflowTreatment === "afterInterest" ? "afterInterest" : "beforeInterest";
       return {
         loan,
         breakdown,
@@ -1103,7 +1123,7 @@
       });
     unlinkedRentalLoans
       .filter((loan) => !loan.unlinkedRentalCashflowTreatment || loan.unlinkedRentalCashflowTreatment === "unconfirmed")
-      .forEach((loan) => warnings.push(`${loan.name || "A rental property loan"} is not linked to a rental property income entry. Confirm whether loan interest is already included in the rental cashflow amount.`));
+      .forEach((loan) => warnings.push(`${loan.name || "A rental property loan"} is not linked to a rental property income entry. Its full payment is included unless after-interest treatment is explicitly confirmed. Link the loan to clarify interest treatment.`));
 
     const propertyDebtDeduction = roundCurrency(propertyResults.reduce((total, item) => total + item.householdDebtDeduction, 0));
     const confirmedUnlinkedDebtDeduction = roundCurrency(confirmedUnlinked.reduce((total, item) => total + item.householdDebtDeduction, 0));
@@ -1205,7 +1225,7 @@
   function annualExpenseBreakdown(plan) {
     const coreCategories = new Set(["living", "food", "utilities", "insurance", "schoolChildren", "ratesPropertyCosts"]);
     if (Array.isArray(plan.expenseItems) && plan.expenseItems.length) {
-      return plan.expenseItems.reduce((breakdown, item) => {
+      return plan.expenseItems.filter(isActiveFinancialRecord).reduce((breakdown, item) => {
         const amount = annualize(item.amount, item.frequency);
         if (coreCategories.has(item.category)) {
           breakdown.living = roundCurrency(breakdown.living + amount);
@@ -1749,7 +1769,7 @@
     const records = new Map();
     (Array.isArray(plan.assetItems) ? plan.assetItems : []).forEach((item, index) => {
       const category = assetRecordCategory(item);
-      if (!wanted.has(category) || !assetRecordIncludesInFi(item)) return;
+      if (!isActiveFinancialRecord(item) || !wanted.has(category) || !assetRecordIncludesInFi(item)) return;
       const value = assetRecordValue(item);
       const stableId = item.assetId || item.id || item.uid || item.key || `${category}:${String(item.name || item.description || "").trim().toLowerCase()}:${index}`;
       const existing = records.get(stableId);
@@ -1768,7 +1788,7 @@
   function canonicalAssetAmount(plan = {}, categories = [], legacyAmount = 0) {
     const records = canonicalAssetRecords(plan, categories);
     const detailedTotal = roundCurrency(records.reduce((total, item) => total + assetRecordValue(item), 0));
-    const hasDetailedValue = records.some((item) => assetRecordValue(item) > 0);
+    const hasDetailedValue = (plan.assetItems || []).some(item => categories.includes(assetRecordCategory(item)));
     return {
       amount: hasDetailedValue ? detailedTotal : nonNegative(legacyAmount),
       detailedTotal,
@@ -1856,7 +1876,7 @@
 
   function investmentPropertyRecords(plan = {}) {
     const records = canonicalAssetRecords(plan, INVESTMENT_PROPERTY_ASSET_CATEGORIES);
-    if (records.some((item) => assetRecordValue(item) > 0)) return records;
+    if ((plan.assetItems || []).some(item => INVESTMENT_PROPERTY_ASSET_CATEGORIES.includes(assetRecordCategory(item)))) return records;
     const legacyValue = nonNegative(plan.assets?.otherPropertyValue);
     return legacyValue > 0
       ? [{ id: "legacy-other-property", category: "otherProperty", name: "Investment property", value: legacyValue, canonicalAssetId: "legacy-other-property" }]
@@ -1899,9 +1919,58 @@
 
   function liabilityItemTotal(plan = {}, categories = []) {
     const wanted = new Set(categories);
-    return (Array.isArray(plan.liabilityItems) ? plan.liabilityItems : [])
+    return canonicalLiabilityItems(plan)
       .filter((item) => wanted.has(item.type) || wanted.has(item.category))
       .reduce((total, item) => total + nonNegative(item.balance ?? item.value ?? item.amount), 0);
+  }
+
+  function householdLoanCashflow(plan, mortgageRepayments, cardRepayments, rental) {
+    const loans = canonicalLiabilityItems(plan);
+    const rentalIds = new Set([...rental.propertyResults.flatMap(property => property.linkedLoanIds),
+      ...rental.unlinkedRentalLoans.map(loan => loan.id)]);
+    const homeTypes = new Set(["homeLoan", "mortgage", "home_loan", "mortgageLoan"]);
+    const cardTypes = new Set(["creditCard", "credit_card"]);
+    const studyTypes = new Set(["hecsHelp", "stsl", "helpDebt", "studyLoan"]);
+    const home = loans.filter(loan => homeTypes.has(loan.type));
+    let offset = canonicalAssetAmount(plan, ["offset"], plan.assets?.offsetBalance).amount;
+    const homeBreakdowns = home.map(loan => {
+      const assigned = Math.min(offset, nonNegative(loan.balance)); offset -= assigned;
+      return getAnnualLoanBreakdown({ ...loan, offsetBalance: assigned });
+    });
+    const cards = loans.filter(loan => cardTypes.has(loan.type));
+    const others = loans.filter(loan => !homeTypes.has(loan.type) && !cardTypes.has(loan.type)
+      && !studyTypes.has(loan.type) && !rentalIds.has(loan.id));
+    const hasHomeRecords = (plan.liabilityItems || []).some(loan => homeTypes.has(loan.type || loan.category));
+    const hasCardRecords = (plan.liabilityItems || []).some(loan => cardTypes.has(loan.type || loan.category));
+    const principalResidenceLoanRepayments = roundCurrency(hasHomeRecords ? homeBreakdowns.reduce((n,loan)=>n+loan.annualRepayments,0) : mortgageRepayments);
+    const creditCardRepayments = roundCurrency(hasCardRecords ? cards.reduce((n,loan)=>n+getAnnualLoanBreakdown(loan).annualRepayments,0) : cardRepayments);
+    const otherLoanRepayments = roundCurrency(others.reduce((n,loan)=>n+getAnnualLoanBreakdown(loan).annualRepayments,0) + creditCardRepayments);
+    const investmentPropertyLoanRepayments = rental.annualLoanRepayments;
+    return { principalResidenceLoanRepayments, investmentPropertyLoanRepayments, otherLoanRepayments, creditCardRepayments,
+      totalRequiredLoanRepayments: roundCurrency(principalResidenceLoanRepayments + investmentPropertyLoanRepayments + otherLoanRepayments),
+      debtCashflowDeduction: roundCurrency(principalResidenceLoanRepayments + rental.annualHouseholdDebtDeduction + otherLoanRepayments),
+      rentalInterestAlreadyInCashIncome: roundCurrency(investmentPropertyLoanRepayments - rental.annualHouseholdDebtDeduction) };
+  }
+
+  function selectFiWealthAtAge(result, age) {
+    const rows = result.fiWealthProjection || [];
+    if (!rows.length) return result.fiWealth || null;
+    return rows.find(row => row.age >= age) || rows.at(-1);
+  }
+
+  const projectedDebtBalanceCache = new Map();
+  function projectedLinkedDebtBalance(loan, years) {
+    const key = JSON.stringify(loan);
+    if (!projectedDebtBalanceCache.has(key)) {
+      if (projectedDebtBalanceCache.size >= 256) projectedDebtBalanceCache.clear();
+      projectedDebtBalanceCache.set(key, [nonNegative(loan.balance)]);
+    }
+    const balances = projectedDebtBalanceCache.get(key);
+    while (balances.length <= years) {
+      const balance = balances.at(-1);
+      balances.push(balance > 0 ? getAnnualLoanBreakdown({ ...loan, balance }).closingBalance : 0);
+    }
+    return balances[years];
   }
 
   function calculateNetFiAssetSummary({
@@ -1937,14 +2006,25 @@
         + otherInvestableAsset.amount
         + downsizingBoost);
     const grossLiquidInvestmentAssets = roundCurrency(investmentProjectionStartingBalance + offsetAsset.amount);
-    const otherInvestmentDebt = liabilityItemTotal(plan, ["investmentLoan", "shareInvestmentLoan", "managedFundLoan"]);
+    const years = Math.max(0, Math.round(number(currentAge) - number(plan.personal?.person1Age)));
+    const propertyIds = new Set(canonicalAssetRecords(plan, INVESTMENT_PROPERTY_ASSET_CATEGORIES).map(asset => asset.id));
+    const propertyLoans = canonicalLiabilityItems(plan).filter(loan => {
+      const linked = loan.linkedAssetId || loan.investmentLink?.linkedAssetId;
+      return linked ? propertyIds.has(linked) : loan.type === "rentalPropertyLoan";
+    });
+    const propertyLoanIds = new Set(propertyLoans.map(loan=>loan.id));
+    const otherInvestmentDebt = roundCurrency(canonicalLiabilityItems(plan).filter(loan => !propertyLoanIds.has(loan.id)
+      && ["investmentLoan", "shareInvestmentLoan", "managedFundLoan"].includes(loan.type))
+      .reduce((total,loan)=>total+projectedLinkedDebtBalance(loan,years),0));
     const liquidInvestmentAssets = roundCurrency(Math.max(0, grossLiquidInvestmentAssets - otherInvestmentDebt));
     const investmentPropertyAsset = canonicalAssetAmount(plan, INVESTMENT_PROPERTY_ASSET_CATEGORIES, assets.otherPropertyValue);
     const investmentPropertyGrossValue = roundCurrency(Number.isFinite(Number(projectedInvestmentPropertyGrossValue))
       ? nonNegative(projectedInvestmentPropertyGrossValue)
       : investmentPropertyAsset.amount);
-    const investmentPropertyDebt = roundCurrency(nonNegative(rentalPropertyDebt) || liabilityItemTotal(plan, ["rentalPropertyLoan"]));
-    const investmentPropertyEquity = roundCurrency(Math.max(0, investmentPropertyGrossValue - investmentPropertyDebt));
+    const investmentPropertyDebt = roundCurrency(propertyLoans.length
+      ? propertyLoans.reduce((total, loan) => total + projectedLinkedDebtBalance(loan, years), 0)
+      : (plan.liabilityItems || []).length ? 0 : nonNegative(rentalPropertyDebt));
+    const investmentPropertyEquity = roundCurrency(investmentPropertyGrossValue - investmentPropertyDebt);
     const availableSuperBalance = roundCurrency(Number.isFinite(Number(projectedSuperBalance))
       ? nonNegative(projectedSuperBalance)
       : Number.isFinite(Number(superBalance))
@@ -1952,8 +2032,25 @@
         : nonNegative(assets.superPerson1) + nonNegative(assets.superPerson2));
     const superIncludedInNetFiAssets = includeSuperOverride ?? (nonNegative(currentAge) >= SUPER_ACCESS_AGE);
     const superIncludedAmount = superIncludedInNetFiAssets ? availableSuperBalance : 0;
-    const netFiAssets = roundCurrency(liquidInvestmentAssets + investmentPropertyEquity + superIncludedAmount);
+    const accessibleFiAssets = roundCurrency(liquidInvestmentAssets + superIncludedAmount);
+    const totalFiWealth = roundCurrency(accessibleFiAssets + investmentPropertyEquity);
+    const homeValue = canonicalAssetAmount(plan, ["home", "principalResidence", "principal_residence"], assets.homeValue).amount
+      * Math.pow(1 + principalResidenceGrowthRateForAsset(plan, { category: "home" }), years);
+    const homeLoans = canonicalLiabilityItems(plan).filter(loan => ["homeLoan", "mortgage", "home_loan", "mortgageLoan"].includes(loan.type));
+    const legacyHome = calculateLoanSummary(plan);
+    let unassignedOffset = offsetAsset.amount;
+    const projectedHomeDebt = homeLoans.reduce((total, loan) => {
+      const assigned = Math.min(unassignedOffset, nonNegative(loan.balance)); unassignedOffset -= assigned;
+      return total + projectedLinkedDebtBalance({ ...loan, offsetBalance: assigned }, years);
+    }, 0);
+    const hasHomeRecords = (plan.liabilityItems || []).some(loan => ["homeLoan", "mortgage", "home_loan", "mortgageLoan"].includes(loan.type));
+    const homeDebt = hasHomeRecords ? projectedHomeDebt
+      : years ? balanceAtMonth(legacyHome.schedule, legacyHome.finalBalance, years * MONTHS_PER_YEAR) : nonNegative(plan.liabilities?.homeLoanBalance);
+    const principalResidenceEquity = roundCurrency(homeValue - homeDebt);
+    const netFiAssets = accessibleFiAssets; // Funding aliases share one definition.
     return {
+      accessibleFiAssets, totalFiWealth, principalResidenceEquity,
+      accessibleSuper: superIncludedAmount, inaccessibleSuper: roundCurrency(availableSuperBalance - superIncludedAmount),
       canonicalAssetSource: {
         cash: cashAsset.source,
         offset: offsetAsset.source,
@@ -2058,9 +2155,9 @@
     const investmentPropertyGrossValue = currentFiAssetSummary.investmentPropertyGrossValue;
     const investmentPropertyDebt = currentFiAssetSummary.investmentPropertyDebt;
     const investmentPropertyEquity = currentFiAssetSummary.investmentPropertyEquity;
-    const includeInvestmentPropertyEquityInFi = investmentPropertyEquity > 0;
+    const includeInvestmentPropertyEquityInFi = false;
     const superAccessibleToday = currentFiAssetSummary.superIncludedAmount;
-    const accessibleFICapital = currentFiAssetSummary.netFiAssets;
+    const accessibleFICapital = currentFiAssetSummary.accessibleFiAssets;
     const totalIncomeProducingAssets = currentFiAssetSummary.totalIncomeProducingAssets;
     const financialIndependenceAssets = accessibleFICapital;
     const incomeSummary = incomeBreakdown(plan);
@@ -2213,21 +2310,37 @@
     const annualLivingExpenses = annualExpenses;
     const hasPositiveKnownHomeLoan = hasExplicitFiniteNumericValue(planInput?.liabilities?.homeLoanBalance)
       && Number(planInput.liabilities.homeLoanBalance) > 0;
-    const annualMortgageRepayments = explicitPaidOffHomeLoan
+    let annualMortgageRepayments = explicitPaidOffHomeLoan
       ? 0
       : hasPositiveKnownHomeLoan
         ? roundCurrency(loan.schedule.slice(0, MONTHS_PER_YEAR).reduce((total, row) => total + row.repayment, 0))
         : roundCurrency(nonNegative(plan.liabilities.monthlyRepayment || plan.expenses.mortgageRepayments) * MONTHS_PER_YEAR);
-    const annualCreditCardRepayments = roundCurrency(nonNegative(plan.liabilities.creditCardMonthlyRepayment) * MONTHS_PER_YEAR);
+    let annualCreditCardRepayments = roundCurrency(nonNegative(plan.liabilities.creditCardMonthlyRepayment) * MONTHS_PER_YEAR);
     const annualRentalLoanCashflowRepayments = roundCurrency(rentalPropertyCashflow.annualHouseholdDebtDeduction);
-    const annualDebtRepayments = roundCurrency(annualMortgageRepayments + annualCreditCardRepayments + annualRentalLoanCashflowRepayments);
+    const loanCashflow = householdLoanCashflow(plan, annualMortgageRepayments, annualCreditCardRepayments, rentalPropertyCashflow);
+    annualMortgageRepayments = loanCashflow.principalResidenceLoanRepayments;
+    annualCreditCardRepayments = loanCashflow.creditCardRepayments;
+    const annualDebtRepayments = loanCashflow.debtCashflowDeduction;
+    const annualLoanRepayments = loanCashflow.totalRequiredLoanRepayments;
     const medicareLevySurchargeForCashflow = nonNegative(taxEstimate.medicareLevySurcharge);
     const estimatedTaxAndHelp = roundCurrency(taxEstimate.incomeTax + taxEstimate.medicareLevy + medicareLevySurchargeForCashflow + helpRepaymentEstimate.annualRepayment);
     const netIncomeAfterTaxHelp = roundCurrency(annualGrossIncome - taxEstimate.incomeTax - taxEstimate.medicareLevy - medicareLevySurchargeForCashflow - helpRepaymentEstimate.annualRepayment);
-    const annualInvestmentContributions = roundCurrency(nonNegative(plan.investing.annualInvestingTarget));
+    const configuredInvestmentContribution = roundCurrency(nonNegative(plan.investing.annualInvestingTarget));
     const annualExtraSuperContributions = roundCurrency(nonNegative(plan.investing.extraSuperContributions));
     const cashSurplusBeforeInvesting = roundCurrency(netIncomeAfterTaxHelp - annualCoreLivingExpenses - annualDebtRepayments - annualOtherRegularExpenses);
+    const actualAffordableInvestmentContribution = roundCurrency(Math.min(configuredInvestmentContribution,
+      Math.max(0, cashSurplusBeforeInvesting - annualExtraSuperContributions)));
+    const annualInvestmentContributions = actualAffordableInvestmentContribution;
     const cashSurplusAfterInvesting = roundCurrency(cashSurplusBeforeInvesting - annualInvestmentContributions - annualExtraSuperContributions);
+    const householdCashflow = { ...loanCashflow, grossEmploymentIncome: roundCurrency(person1SalaryWages + person2SalaryWages),
+      rentalCashIncome: rentalPropertyCashflow.annualNetRentalIncome,
+      passiveCashIncome: roundCurrency(annualGrossIncome - person1SalaryWages - person2SalaryWages - rentalPropertyCashflow.annualNetRentalIncome),
+      taxableRentalIncome: roundCurrency(normalisedIncomeItems(plan).filter(item=>item.type === "rentalNetCashIncome").reduce((n,item)=>n+incomeTaxableAnnualAmount(item),0)),
+      totalHouseholdCashIncome: annualGrossIncome, taxAndRequiredDeductions: estimatedTaxAndHelp,
+      netIncomeAfterTax: netIncomeAfterTaxHelp, livingExpenses: annualLivingExpenses,
+      annualSurplus: cashSurplusBeforeInvesting, configuredInvestmentContribution, actualAffordableInvestmentContribution,
+      actualInvestmentContribution: annualInvestmentContributions, extraSuperContribution: annualExtraSuperContributions,
+      remainingCashSurplus: cashSurplusAfterInvesting };
     const finalProjectedCashSurplus = cashSurplusAfterInvesting;
     const cashSurplusAfterTaxHelpAndInvesting = finalProjectedCashSurplus;
     const firstYearMortgagePrincipalReduction = roundCurrency(loan.schedule.slice(0, 12).reduce((total, row) => total + Math.max(0, row.principalRepaid), 0));
@@ -2240,7 +2353,7 @@
     const netConcessionalSuperContributions = roundCurrency(netEmployerSuperContributions + netExtraSuperContributions);
     const superContributionsTaxPaid = roundCurrency(grossConcessionalSuperContributions - netConcessionalSuperContributions);
     const wealthCreationRate = roundCurrency(
-      nonNegative(plan.investing.annualInvestingTarget)
+      actualAffordableInvestmentContribution
       + netEmployerSuperContributions
       + netExtraSuperContributions
       + firstYearMortgagePrincipalReduction,
@@ -2272,7 +2385,7 @@
     });
     const investmentProjection = projectBalance({
       startingBalance: investmentBalance,
-      annualContribution: plan.investing.annualInvestingTarget,
+      annualContribution: actualAffordableInvestmentContribution,
       expectedReturn: expectedInvestmentReturn,
       years: 30,
       currentAge,
@@ -2333,7 +2446,7 @@
         projectedInvestmentBalance: investment.closingBalance,
         projectedInvestmentPropertyGrossValue: projectedInvestmentPropertyGrossValue(plan, projectionYears),
       });
-      const projectedFiAssets = projectedFiSummary.netFiAssets;
+      const projectedFiAssets = projectedFiSummary.accessibleFiAssets;
       const requiredCapital = roundCurrency(milestoneTargetCapital * item.coverage);
       return {
         ...item,
@@ -2403,11 +2516,12 @@
       return {
         year: row.year,
         age: row.age,
-        netFiAssets: projectedFiSummary.netFiAssets,
-        estimatedSustainableIncome: roundCurrency(projectedFiSummary.netFiAssets * safeWithdrawalRate),
+        ...projectedFiSummary,
+        netFiAssets: projectedFiSummary.accessibleFiAssets,
+        estimatedSustainableIncome: roundCurrency(projectedFiSummary.accessibleFiAssets * safeWithdrawalRate),
         inflatedAnnualLifestyleSpending,
         requiredCapital: roundCurrency(requiredCapital),
-        progress: requiredCapital > 0 ? Math.min(200, roundRatio(projectedFiSummary.netFiAssets / requiredCapital * 100)) : 0,
+        progress: requiredCapital > 0 ? Math.min(200, roundRatio(projectedFiSummary.accessibleFiAssets / requiredCapital * 100)) : 0,
       };
     });
     const targetInvestmentRow = targetProjectionYear > 0 ? investmentProjection[targetProjectionYear - 1] : { closingBalance: investmentBalance, age: currentAge, year: 0 };
@@ -2481,6 +2595,12 @@
       currentNetWorth,
       investmentBalance,
       accessibleInvestmentAssets,
+      fiWealth: { ...currentFiAssetSummary, year: 0, age: currentAge },
+      fiWealthProjection: [{ ...currentFiAssetSummary, year: 0, age: currentAge, progress: financialFreedomProgressRaw }, ...financialFreedomProgressProjection],
+      householdCashflow, configuredInvestmentContribution, actualAffordableInvestmentContribution, annualLoanRepayments,
+      accessibleFiAssets: currentFiAssetSummary.accessibleFiAssets,
+      totalFiWealth: currentFiAssetSummary.totalFiWealth,
+      principalResidenceEquity: currentFiAssetSummary.principalResidenceEquity,
       canonicalAssetSource: currentFiAssetSummary.canonicalAssetSource,
       cashFiAssets: currentFiAssetSummary.cashFiAssets,
       offsetFiAssets: currentFiAssetSummary.offsetFiAssets,
@@ -2502,7 +2622,7 @@
       fiAssetPolicy: {
         includeInvestmentPropertyEquityInFi,
         superIncludedInCurrentNetFiAssets: currentFiAssetSummary.superIncludedInNetFiAssets,
-        note: "Financial Freedom progress uses current net FI assets divided by target FI assets. FI assets include liquid investment assets and net rental/investment-property equity, exclude the family home and personal-use assets, and include super only once it is accessible in the model.",
+        note: "Financial Freedom progress uses accessible FI assets divided by target capital. Investment-property equity is reported separately in Total FI Wealth and cannot fund withdrawals without a modelled sale. Home equity is excluded. Super is included only when accessible under the model.",
       },
       superannuationBalance,
       superAccessibleToday,
@@ -2542,7 +2662,7 @@
       financialFreedomProgressDisplay: financialFreedomScore,
       fiTargetRemaining,
       targetAgeNetFiAssets: targetAgeFiAssetSummary.netFiAssets,
-      targetAgeEstimatedSustainableIncome: roundCurrency(targetAgeFiAssetSummary.netFiAssets * safeWithdrawalRate),
+      targetAgeEstimatedSustainableIncome: roundCurrency(targetAgeFiAssetSummary.accessibleFiAssets * safeWithdrawalRate),
       targetAgeSuperIncludedInNetFiAssets: targetAgeFiAssetSummary.superIncludedInNetFiAssets,
       annualExpenses,
       annualLivingExpenses,
@@ -2666,6 +2786,10 @@
     propertyGrowthRateForAsset,
     principalResidenceGrowthRateForAsset,
     calculateNetFiAssetSummary,
+    selectFiWealthAtAge,
+    householdLoanCashflow,
+    canonicalLiabilityItems,
+    isActiveFinancialRecord,
     calculateNetFIAssets,
     hasExplicitFiniteNumericValue,
     isExplicitZeroBalance,
