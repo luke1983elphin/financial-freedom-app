@@ -470,7 +470,7 @@
         };
       })
       .filter((item) => item.openingBalance > 0 || item.repaymentAmount > 0);
-    if (filtered.length) return filtered;
+    if (filtered.length || global.FFSCalculator?.hasStructuredLiabilityAuthority?.(plan)) return filtered;
     const fallback = [];
     if (nonNegative(plan.liabilities?.homeLoanBalance) > 0) {
       fallback.push({

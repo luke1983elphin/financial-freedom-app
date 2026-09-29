@@ -547,13 +547,14 @@ test("Financial Freedom progress uses accessible assets while property wealth an
   plan.personal.person1Age = 61;
   result = CALC.calculatePlan(plan);
   assert.equal(result.fiAssetPolicy.superIncludedInCurrentNetFiAssets, true);
-  assert.equal(result.financialIndependenceAssets, 1150000);
-  assert.equal(result.totalFiWealth, 1400000);
-  assert.equal(result.financialFreedomProgressRaw, 46);
+  // Person 2 has not reached access age: their $100k remains inaccessible.
+  assert.equal(result.financialIndependenceAssets, 1050000);
+  assert.equal(result.totalFiWealth, 1300000);
+  assert.equal(result.financialFreedomProgressRaw, 42);
 
   plan.personal.targetAnnualSpending = 10000;
   result = CALC.calculatePlan(plan);
-  assert.equal(result.financialFreedomProgressRaw, 460);
+  assert.equal(result.financialFreedomProgressRaw, 420);
   assert.equal(result.financialFreedomScore, 100);
 
   plan.personal.targetAnnualSpending = 0;

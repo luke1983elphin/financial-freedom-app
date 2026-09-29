@@ -701,6 +701,56 @@
       && item.isDeleted !== true && !item.deletedAt && !["inactive", "deleted"].includes(item.status);
   }
 
+  function hasStructuredLiabilityAuthority(plan = {}) {
+    // An empty collection is authoritative only when the saved schema identifies
+    // a structured plan. Unversioned legacy plans retain their original fallback.
+    return Array.isArray(plan.liabilityItems) && (plan.liabilityItems.length > 0
+      || number(plan.planSchemaVersion || plan.meta?.schemaVersion) >= 1);
+  }
+
+  function accumulationMortgageCashflows(plan, legacyLoan, baselineAnnualPayment, knownBalance) {
+    const types = new Set(["homeLoan", "mortgage", "home_loan", "mortgageLoan"]);
+    const structured = hasStructuredLiabilityAuthority(plan);
+    let offset = canonicalAssetAmount(plan, ["offset"], plan.assets?.offsetBalance).amount;
+    const loans = canonicalLiabilityItems(plan).filter(item => types.has(item.type)).map(item => {
+      const assigned = Math.min(offset, nonNegative(item.balance)); offset -= assigned;
+      return { ...item, offsetBalance: assigned };
+    });
+    return Array.from({ length: 30 }, (_, index) => {
+      if (structured) {
+        let openingBalance = 0, repayment = 0;
+        loans.forEach(loan => {
+          openingBalance += nonNegative(loan.balance);
+          const annual = getAnnualLoanBreakdown(loan);
+          repayment += annual.annualRepayments;
+          loan.balance = annual.closingBalance;
+        });
+        return { openingBalance: roundCurrency(openingBalance), repayment: roundCurrency(repayment) };
+      }
+      const months = legacyLoan.schedule.slice(index * MONTHS_PER_YEAR, (index + 1) * MONTHS_PER_YEAR);
+      const scheduledPayments = months.reduce((sum, row) => sum + row.repayment, 0);
+      // A term-limited schedule with unpaid principal is not a payoff. Keep the
+      // existing payment obligation when no later schedule is available.
+      const unscheduledPayments = legacyLoan.finalBalance > 0 ? (MONTHS_PER_YEAR - months.length) * baselineAnnualPayment / MONTHS_PER_YEAR : 0;
+      return { openingBalance: roundCurrency(months[0]?.openingBalance ?? legacyLoan.finalBalance),
+        repayment: knownBalance ? roundCurrency(scheduledPayments + unscheduledPayments) : baselineAnnualPayment };
+    });
+  }
+
+  function superAccessByPerson(plan, age, balances) {
+    const elapsed = number(age) - number(plan.personal?.person1Age);
+    return [1, 2].map(index => {
+      const id = `person${index}`;
+      const personAge = nonNegative(plan.personal?.[`${id}Age`]) + elapsed;
+      const balance = nonNegative(balances[id]);
+      // The main plan currently models age 60 for each person. Detailed scenario
+      // overrides remain local to the detailed retirement model.
+      const eligible = personAge >= SUPER_ACCESS_AGE;
+      return { id, age: personAge, accessAge: SUPER_ACCESS_AGE, balance,
+        accessible: eligible ? balance : 0, inaccessible: eligible ? 0 : balance };
+    });
+  }
+
   function canonicalLiabilityItems(plan = {}) {
     const records = new Map();
     (plan.liabilityItems || []).filter(isActiveFinancialRecord).forEach((item, index) => {
@@ -1488,7 +1538,7 @@
     };
   }
 
-  function projectBalance({ startingBalance, annualContribution, expectedReturn, years, currentAge, safeWithdrawalRate, extraMonthlyContributions = [] }) {
+  function projectBalance({ startingBalance, annualContribution, expectedReturn, years, currentAge, safeWithdrawalRate, extraMonthlyContributions = [], annualContributions = [] }) {
     const monthlyReturn = number(expectedReturn) / MONTHS_PER_YEAR;
     const rows = [];
     let balance = roundCurrency(nonNegative(startingBalance));
@@ -1499,7 +1549,7 @@
       let growth = 0;
       for (let month = 1; month <= MONTHS_PER_YEAR; month += 1) {
         const absoluteMonth = (year - 1) * MONTHS_PER_YEAR + month;
-        const contribution = nonNegative(annualContribution) / MONTHS_PER_YEAR + nonNegative(extraMonthlyContributions[absoluteMonth - 1]);
+        const contribution = nonNegative(annualContributions[year - 1] ?? annualContribution) / MONTHS_PER_YEAR + nonNegative(extraMonthlyContributions[absoluteMonth - 1]);
         balance = roundCurrency(balance + contribution);
         contributions = roundCurrency(contributions + contribution);
         const monthGrowth = roundCurrency(balance * monthlyReturn);
@@ -1940,8 +1990,8 @@
     const cards = loans.filter(loan => cardTypes.has(loan.type));
     const others = loans.filter(loan => !homeTypes.has(loan.type) && !cardTypes.has(loan.type)
       && !studyTypes.has(loan.type) && !rentalIds.has(loan.id));
-    const hasHomeRecords = (plan.liabilityItems || []).some(loan => homeTypes.has(loan.type || loan.category));
-    const hasCardRecords = (plan.liabilityItems || []).some(loan => cardTypes.has(loan.type || loan.category));
+    const hasHomeRecords = hasStructuredLiabilityAuthority(plan);
+    const hasCardRecords = hasStructuredLiabilityAuthority(plan);
     const principalResidenceLoanRepayments = roundCurrency(hasHomeRecords ? homeBreakdowns.reduce((n,loan)=>n+loan.annualRepayments,0) : mortgageRepayments);
     const creditCardRepayments = roundCurrency(hasCardRecords ? cards.reduce((n,loan)=>n+getAnnualLoanBreakdown(loan).annualRepayments,0) : cardRepayments);
     const otherLoanRepayments = roundCurrency(others.reduce((n,loan)=>n+getAnnualLoanBreakdown(loan).annualRepayments,0) + creditCardRepayments);
@@ -1982,6 +2032,7 @@
     projectedInvestmentBalance,
     projectedInvestmentPropertyGrossValue,
     projectedSuperBalance,
+    projectedSuperByPerson,
     includeSuperOverride,
   } = {}) {
     const assets = plan.assets || {};
@@ -2030,8 +2081,14 @@
       : Number.isFinite(Number(superBalance))
         ? nonNegative(superBalance)
         : nonNegative(assets.superPerson1) + nonNegative(assets.superPerson2));
-    const superIncludedInNetFiAssets = includeSuperOverride ?? (nonNegative(currentAge) >= SUPER_ACCESS_AGE);
-    const superIncludedAmount = superIncludedInNetFiAssets ? availableSuperBalance : 0;
+    const openingTotal = nonNegative(assets.superPerson1) + nonNegative(assets.superPerson2);
+    const person1Balance = projectedSuperByPerson?.person1 ?? (openingTotal > 0
+      ? roundCurrency(availableSuperBalance * nonNegative(assets.superPerson1) / openingTotal) : availableSuperBalance);
+    const superPeople = superAccessByPerson(plan, currentAge, { person1: person1Balance,
+      person2: projectedSuperByPerson?.person2 ?? roundCurrency(availableSuperBalance - person1Balance) });
+    const superIncludedAmount = includeSuperOverride === false ? 0
+      : roundCurrency(superPeople.reduce((total, person) => total + person.accessible, 0));
+    const superIncludedInNetFiAssets = superPeople.some(person => person.age >= person.accessAge);
     const accessibleFiAssets = roundCurrency(liquidInvestmentAssets + superIncludedAmount);
     const totalFiWealth = roundCurrency(accessibleFiAssets + investmentPropertyEquity);
     const homeValue = canonicalAssetAmount(plan, ["home", "principalResidence", "principal_residence"], assets.homeValue).amount
@@ -2043,13 +2100,13 @@
       const assigned = Math.min(unassignedOffset, nonNegative(loan.balance)); unassignedOffset -= assigned;
       return total + projectedLinkedDebtBalance({ ...loan, offsetBalance: assigned }, years);
     }, 0);
-    const hasHomeRecords = (plan.liabilityItems || []).some(loan => ["homeLoan", "mortgage", "home_loan", "mortgageLoan"].includes(loan.type));
+    const hasHomeRecords = hasStructuredLiabilityAuthority(plan);
     const homeDebt = hasHomeRecords ? projectedHomeDebt
       : years ? balanceAtMonth(legacyHome.schedule, legacyHome.finalBalance, years * MONTHS_PER_YEAR) : nonNegative(plan.liabilities?.homeLoanBalance);
     const principalResidenceEquity = roundCurrency(homeValue - homeDebt);
     const netFiAssets = accessibleFiAssets; // Funding aliases share one definition.
     return {
-      accessibleFiAssets, totalFiWealth, principalResidenceEquity,
+      accessibleFiAssets, totalFiWealth, principalResidenceEquity, superPeople,
       accessibleSuper: superIncludedAmount, inaccessibleSuper: roundCurrency(availableSuperBalance - superIncludedAmount),
       canonicalAssetSource: {
         cash: cashAsset.source,
@@ -2379,9 +2436,20 @@
     const projectedInvestmentGrowthBase = projectedFinancialInvestmentGrowthBase;
     const projectedInvestmentGrowth = projectedFinancialInvestmentGrowth;
     const combinedWealthCreation = roundCurrency(annualPassiveIncome + projectedFinancialInvestmentGrowth + projectedPropertyGrowth);
-    const freedMonthlyRepayments = Array.from({ length: 360 }, (_, monthIndex) => {
-      if (!loan.payoffMonth) return 0;
-      return monthIndex + 1 > loan.payoffMonth ? nonNegative(plan.liabilities.monthlyRepayment || plan.expenses.mortgageRepayments) : 0;
+    const mortgageCashflows = accumulationMortgageCashflows(plan, loan, annualMortgageRepayments,
+      hasExplicitFiniteNumericValue(planInput?.liabilities?.homeLoanBalance));
+    // Preserve the simpler model's fixed income/living/other-debt assumptions.
+    // Only scheduled mortgage cashflow changes; payoff is not an allocation rule.
+    const accumulationCashflowProjection = mortgageCashflows.map((mortgage, index) => {
+      const requiredDebtRepayments = roundCurrency(annualDebtRepayments - annualMortgageRepayments + mortgage.repayment);
+      const surplus = roundCurrency(netIncomeAfterTaxHelp - annualLivingExpenses - requiredDebtRepayments);
+      const affordableInvesting = roundCurrency(Math.min(configuredInvestmentContribution, Math.max(0, surplus - annualExtraSuperContributions)));
+      return { year: index + 1, age: currentAge + index + 1, openingMortgageBalance: mortgage.openingBalance,
+        requiredMortgageRepayment: mortgage.repayment, mortgageCashflowDeduction: mortgage.repayment,
+        netHouseholdCashIncome: netIncomeAfterTaxHelp, livingExpenses: annualLivingExpenses,
+        requiredDebtRepayments, configuredInvesting: configuredInvestmentContribution, affordableInvesting,
+        actualInvesting: affordableInvesting, remainingSurplus: roundCurrency(surplus - annualExtraSuperContributions - affordableInvesting),
+        investmentContribution: affordableInvesting };
     });
     const investmentProjection = projectBalance({
       startingBalance: investmentBalance,
@@ -2390,7 +2458,7 @@
       years: 30,
       currentAge,
       safeWithdrawalRate,
-      extraMonthlyContributions: freedMonthlyRepayments,
+      annualContributions: accumulationCashflowProjection.map(row => row.investmentContribution),
     });
     const superProjection = projectBalance({
       startingBalance: superannuationBalance,
@@ -2400,6 +2468,18 @@
       currentAge,
       safeWithdrawalRate,
     });
+    const person1SuperProjection = projectBalance({ startingBalance: nonNegative(plan.assets.superPerson1),
+      annualContribution: netConcessionalSuperContribution(employerSuper.person1Amount
+        + nonNegative(plan.investing.extraSuperContributions) - extraSuperSplitForTax.person2),
+      expectedReturn: expectedSuperReturn, years: 30, currentAge, safeWithdrawalRate });
+    const superBalancesAtYear = year => {
+      if (year <= 0) return { person1: nonNegative(plan.assets.superPerson1), person2: nonNegative(plan.assets.superPerson2) };
+      const index = Math.min(29, year - 1);
+      const total = superProjection[index].closingBalance;
+      const person1 = Math.min(total, person1SuperProjection[index].closingBalance);
+      // Preserve the validated aggregate trajectory; assign cent rounding to P2.
+      return { person1, person2: roundCurrency(total - person1) };
+    };
     const targetAnnualLifestyleSpending = nonNegative(plan.personal.targetAnnualSpending);
     const targetProjectionAge = nonNegative(plan.personal.fullRetirementAge) || currentAge;
     const targetProjectionYear = Math.max(0, Math.min(30, Math.round(targetProjectionAge - currentAge)));
@@ -2442,6 +2522,7 @@
         currentAge: item.age,
         superBalance: superannuationBalance,
         projectedSuperBalance: superRow.closingBalance,
+        projectedSuperByPerson: superBalancesAtYear(superRow.year),
         rentalPropertyDebt: rentalPropertyLoanBalance,
         projectedInvestmentBalance: investment.closingBalance,
         projectedInvestmentPropertyGrossValue: projectedInvestmentPropertyGrossValue(plan, projectionYears),
@@ -2462,7 +2543,9 @@
     const sustainabilityStartAge = Math.max(fullRetirementAge, SUPER_ACCESS_AGE);
     const retirementInvestments = rowAtAge(investmentProjection, sustainabilityStartAge);
     const retirementSuper = rowAtAge(superProjection, sustainabilityStartAge);
-    const totalRetirementAssets = roundCurrency(retirementInvestments.closingBalance + retirementSuper.closingBalance);
+    const eligibleRetirementSuper = superAccessByPerson(plan, sustainabilityStartAge, superBalancesAtYear(retirementSuper.year))
+      .reduce((total, person) => total + person.accessible, 0);
+    const totalRetirementAssets = roundCurrency(retirementInvestments.closingBalance + eligibleRetirementSuper);
     const retirementSustainability = [
       simulateRetirement({
         label: "Capital preserved",
@@ -2509,6 +2592,7 @@
         currentAge: row.age,
         superBalance: superannuationBalance,
         projectedSuperBalance: superProjection[index].closingBalance,
+        projectedSuperByPerson: superBalancesAtYear(row.year),
         rentalPropertyDebt: rentalPropertyLoanBalance,
         projectedInvestmentBalance: row.closingBalance,
         projectedInvestmentPropertyGrossValue: projectedInvestmentPropertyGrossValue(plan, row.year),
@@ -2530,7 +2614,8 @@
       plan,
       currentAge: targetProjectionAge,
       superBalance: superannuationBalance,
-      projectedSuperBalance: targetSuperRow?.closingBalance || superannuationBalance,
+      projectedSuperBalance: targetSuperRow?.closingBalance ?? superannuationBalance,
+      projectedSuperByPerson: superBalancesAtYear(targetProjectionYear),
       rentalPropertyDebt: rentalPropertyLoanBalance,
       projectedInvestmentBalance: targetInvestmentRow?.closingBalance || investmentBalance,
       projectedInvestmentPropertyGrossValue: projectedInvestmentPropertyGrossValue(plan, targetProjectionYear),
@@ -2719,6 +2804,7 @@
       },
       financialFreedomScore,
       investmentProjection,
+      accumulationCashflowProjection,
       superProjection,
       milestones,
       retirementSustainability,
@@ -2789,6 +2875,7 @@
     selectFiWealthAtAge,
     householdLoanCashflow,
     canonicalLiabilityItems,
+    hasStructuredLiabilityAuthority,
     isActiveFinancialRecord,
     calculateNetFIAssets,
     hasExplicitFiniteNumericValue,
