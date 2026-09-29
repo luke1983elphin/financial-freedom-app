@@ -763,7 +763,72 @@
     return [...records.values()];
   }
 
+  const FINANCIAL_INVESTMENT_CATEGORIES = ["shares", "share", "etf", "crypto", "cryptocurrency", "managedFund", "managedFunds", "investmentBond", "investmentBonds", "other", "otherInvestment", "privateInvestment", "businessInvestment"];
+
+  function investmentReturnValidation(asset = {}) {
+    if (asset.investmentReturnMode !== "totalReturn") return [];
+    const rate = Number(asset.expectedTotalReturnPct), yieldPct = Number(asset.expectedIncomeYieldPct);
+    const errors = [];
+    if (!Number.isFinite(rate) || rate < 0 || asset.expectedTotalReturnPct === "" || asset.expectedTotalReturnPct == null) errors.push("Enter a non-negative expected total return.");
+    if (!Number.isFinite(yieldPct) || yieldPct < 0 || asset.expectedIncomeYieldPct === "" || asset.expectedIncomeYieldPct == null) errors.push("Enter a non-negative income yield.");
+    if (yieldPct > rate) errors.push("Income yield cannot exceed the expected total return under this modelling method.");
+    if (!["cash", "reinvest"].includes(asset.incomeTreatment)) errors.push("Choose whether investment income is reinvested or paid as cash.");
+    return errors;
+  }
+
+  // One nominal return split, reused by previews, cashflow, accumulation and retirement.
+  function investmentReturnAmounts(asset, balance = asset.value, period = 1) {
+    const errors = investmentReturnValidation(asset);
+    if (errors.length) throw new RangeError(errors.join(" "));
+    const totalReturn = roundCurrency(nonNegative(balance) * number(asset.expectedTotalReturnPct) / 100 * period);
+    const incomeReturn = roundCurrency(nonNegative(balance) * number(asset.expectedIncomeYieldPct) / 100 * period);
+    const cashIncome = asset.incomeTreatment === "cash" ? incomeReturn : 0;
+    return { totalReturn, incomeReturn, cashIncome, taxableIncome: incomeReturn,
+      capitalGrowth: roundCurrency(totalReturn - incomeReturn), retainedReturn: roundCurrency(totalReturn - cashIncome) };
+  }
+
+  function investmentReturnAssets(plan = {}) {
+    return canonicalAssetRecords(plan, FINANCIAL_INVESTMENT_CATEGORIES).filter(asset => asset.investmentReturnMode === "totalReturn");
+  }
+
+  function linkedInvestmentIncomeYield(plan, asset) {
+    const amount=rawNormalisedIncomeItems(plan).filter(i=>["dividends","distributions"].includes(i.type) && String(i.linkedAssetId || "")===String(asset.id || asset.canonicalAssetId))
+      .reduce((n,i)=>n+incomeTaxableAnnualAmount(i),0);
+    return nonNegative(asset.value)>0 ? amount/nonNegative(asset.value)*100 : 0;
+  }
+
+  function investmentIncomeReviewItems(plan = {}) {
+    const assets = canonicalAssetRecords(plan, FINANCIAL_INVESTMENT_CATEGORIES);
+    const legacyValue=["sharesEtfs","crypto","managedFunds","investmentBonds","businessInvestments","privateInvestments","otherInvestmentAssets"].reduce((n,key)=>n+nonNegative(plan.assets?.[key]),0);
+    if (!assets.some(a => a.value > 0 && number(a.investmentReturnMode === "totalReturn" ? a.expectedTotalReturnPct : plan.investing?.expectedInvestmentReturnPct) !== 0)
+      && !(assets.length===0 && legacyValue>0 && number(plan.investing?.expectedInvestmentReturnPct)!==0)) return [];
+    const linkedIds = new Set(investmentReturnAssets(plan).map(a => a.canonicalAssetId));
+    return rawNormalisedIncomeItems(plan).filter(item => ["dividends", "distributions"].includes(item.type)
+      && incomeTaxableAnnualAmount(item) > 0 && !linkedIds.has(String(item.linkedAssetId || ""))
+      && item.confirmedSeparateInvestmentIncome !== true);
+  }
+
   function normalisedIncomeItems(plan = {}) {
+    const raw = rawNormalisedIncomeItems(plan);
+    const assets = investmentReturnAssets(plan);
+    if (!assets.length) return raw;
+    const configuredIds = new Set(assets.map(a => a.canonicalAssetId));
+    const result = raw.filter(item => !(["dividends", "distributions"].includes(item.type) && configuredIds.has(String(item.linkedAssetId || ""))));
+    for (const asset of assets) {
+      const income = plan._investmentIncomeAmounts?.[asset.canonicalAssetId] || investmentReturnAmounts(asset);
+      const linked = raw.filter(item => ["dividends", "distributions"].includes(item.type) && String(item.linkedAssetId || "") === asset.canonicalAssetId);
+      // Linked records are references, never competing amounts or ownership inputs.
+      result.push({ id: `investment-income:${asset.canonicalAssetId}`, name: `${asset.name || "Investment"} income`,
+        type: asset.category.startsWith("managed") ? "distributions" : "dividends", owner: asset.owner || "joint",
+        person1AllocationPercentage: asset.person1AllocationPercentage, person2AllocationPercentage: asset.person2AllocationPercentage,
+        amount: income.taxableIncome, frequency: "annually", investmentCashIncome: income.cashIncome,
+        investmentTaxableIncome: income.taxableIncome, linkedAssetId: asset.canonicalAssetId,
+        sourceIncomeIds: linked.map(item => item.id), derivedInvestmentIncome: true });
+    }
+    return result;
+  }
+
+  function rawNormalisedIncomeItems(plan = {}) {
     const items = Array.isArray(plan.incomeItems) ? plan.incomeItems : [];
     if (items.length) {
       return items.filter(isActiveFinancialRecord).map((item, index) => {
@@ -794,6 +859,7 @@
   }
 
   function incomeCashAnnualAmount(item = {}) {
+    if (item.derivedInvestmentIncome === true) return roundCurrency(item.investmentCashIncome);
     const type = normaliseIncomeType(item.type || item.incomeType);
     if (type === "salaryWages") return salaryCashEarningsAnnualAmount(item);
     if (type === "rentalNetCashIncome") return rentalCashIncomeAnnualAmount(item) ?? 0;
@@ -831,6 +897,7 @@
   }
 
   function incomeTaxableAnnualAmount(item = {}) {
+    if (item.derivedInvestmentIncome === true) return roundCurrency(item.investmentTaxableIncome);
     const type = normaliseIncomeType(item.type || item.incomeType);
     if (type === "salaryWages") return salaryCashEarningsAnnualAmount(item);
     if (type === "rentalNetCashIncome") return roundCurrency(annualize(item.amount, "annually"));
@@ -1569,6 +1636,71 @@
     return rows;
   }
 
+  function investmentPortfolioComponents(plan, balance) {
+    const assets = investmentReturnAssets(plan);
+    if (!assets.length) return [];
+    const configured = assets.map(asset => ({ ...asset, id: asset.canonicalAssetId, value: asset.value,
+      sourceIncomeIds: rawNormalisedIncomeItems(plan).filter(i => ["dividends", "distributions"].includes(i.type) && String(i.linkedAssetId || "") === asset.canonicalAssetId).map(i => i.id) }));
+    const total = configured.reduce((n,a) => n+a.value,0);
+    // Accessible balances may be net of investment debt. Scale holdings consistently.
+    if (total > balance && total > 0) configured.forEach(a => { a.value = roundCurrency(a.value * balance / total); });
+    const residual = roundCurrency(Math.max(0, balance - configured.reduce((n,a) => n+a.value,0)));
+    configured.push({ id: "investment-legacy-residual", name: "Other portfolio funds", value: residual,
+      investmentReturnMode: "legacyReinvested", expectedTotalReturnPct: number(plan.investing.expectedInvestmentReturnPct), expectedIncomeYieldPct: 0, incomeTreatment: "reinvest" });
+    return configured;
+  }
+
+  function allocateInvestmentMovement(components, movement) {
+    const total = components.reduce((n,a) => n+nonNegative(a.value),0);
+    let remaining = roundCurrency(movement);
+    return components.map((asset,index) => {
+      const share = index === components.length-1 ? remaining : roundCurrency(total > 0 ? movement*nonNegative(asset.value)/total : 0);
+      remaining = roundCurrency(remaining-share);
+      return { ...asset, value: roundCurrency(Math.max(0, asset.value+share)) };
+    });
+  }
+
+  function projectSplitInvestmentYear(components, annualContribution) {
+    let holdings = components.map(a => ({...a}));
+    const income = Object.fromEntries(holdings.map(a => [a.id,{cashIncome:0,taxableIncome:0,totalReturn:0,retainedReturn:0}]));
+    let contributions=0;
+    for (let month=0;month<12;month++) {
+      const contribution = month===11 ? roundCurrency(annualContribution-contributions) : roundCurrency(annualContribution/12);
+      contributions=roundCurrency(contributions+contribution);
+      holdings=allocateInvestmentMovement(holdings,contribution).map(asset => {
+        const amounts=investmentReturnAmounts(asset,asset.value,1/12);
+        for(const key of Object.keys(income[asset.id])) income[asset.id][key]=roundCurrency(income[asset.id][key]+amounts[key]);
+        return {...asset,value:roundCurrency(asset.value+amounts.retainedReturn)};
+      });
+    }
+    return {holdings,income,contributions};
+  }
+
+  function projectConfiguredInvestments(plan, balance, cashflows, currentAge, safeWithdrawalRate) {
+    let holdings=investmentPortfolioComponents(plan,balance);
+    return cashflows.map((flow,index) => {
+      const openingBalance=roundCurrency(holdings.reduce((n,a)=>n+a.value,0));
+      let contribution=flow.investmentContribution, projected, finances;
+      for(let iteration=0;iteration<40;iteration++) {
+        projected=projectSplitInvestmentYear(holdings,contribution);
+        finances=calculatePlan(plan,{cashflowOnly:true,investmentIncomeAmounts:projected.income});
+        const surplus=roundCurrency(finances.netIncomeAfterTaxHelp-flow.livingExpenses-flow.requiredDebtRepayments);
+        const next=roundCurrency(Math.min(flow.configuredInvesting,Math.max(0,surplus-finances.annualExtraSuperContributions)));
+        if (Math.abs(next-contribution)<=0.01) break;
+        if(iteration===39) throw new RangeError("Investment cashflow could not converge. Review the return and contribution assumptions.");
+        contribution=next;
+      }
+      holdings=projected.holdings;
+      Object.assign(flow,{netHouseholdCashIncome:finances.netIncomeAfterTaxHelp,affordableInvesting:contribution,actualInvesting:contribution,investmentContribution:contribution,
+        remainingSurplus:roundCurrency(finances.netIncomeAfterTaxHelp-flow.livingExpenses-flow.requiredDebtRepayments-finances.annualExtraSuperContributions-contribution)});
+      const totals=Object.values(projected.income).reduce((s,a)=>({cash:s.cash+a.cashIncome,taxable:s.taxable+a.taxableIncome,growth:s.growth+a.retainedReturn,total:s.total+a.totalReturn}),{cash:0,taxable:0,growth:0,total:0});
+      const closingBalance=roundCurrency(holdings.reduce((n,a)=>n+a.value,0));
+      return {year:index+1,age:currentAge+index+1,openingBalance,annualContribution:projected.contributions,investmentGrowth:roundCurrency(totals.growth),closingBalance,
+        passiveIncome:roundCurrency(closingBalance*safeWithdrawalRate),investmentCashIncome:roundCurrency(totals.cash),investmentTaxableIncome:roundCurrency(totals.taxable),
+        totalInvestmentReturn:roundCurrency(totals.total),investmentComponents:holdings.map(a=>({...a}))};
+    });
+  }
+
   function milestoneStatus(projected, required) {
     if (required <= 0) return STATUS.AMBER;
     if (projected >= required) return STATUS.GREEN;
@@ -2141,9 +2273,11 @@
     return calculateNetFiAssetSummary(financialData).netFiAssets;
   }
 
-  function calculatePlan(planInput) {
+  function calculatePlan(planInput, options = {}) {
     const explicitPaidOffHomeLoan = isExplicitZeroBalance(planInput?.liabilities?.homeLoanBalance);
     const plan = clonePlan(planInput);
+    delete plan._investmentIncomeAmounts;
+    if(options.cashflowOnly && options.investmentIncomeAmounts) plan._investmentIncomeAmounts=options.investmentIncomeAmounts;
     const loan = calculateLoanSummary(plan);
     const currentAge = nonNegative(plan.personal.person1Age);
     const downsizingBoost = downsizingInvestmentBoost(plan);
@@ -2418,6 +2552,8 @@
     const enteredSafeWithdrawalRate = annualRate(plan.investing.safeWithdrawalRatePct);
     const safeWithdrawalRate = enteredSafeWithdrawalRate > 0 ? enteredSafeWithdrawalRate : 0.04;
     const expectedInvestmentReturn = annualRate(plan.investing.expectedInvestmentReturnPct);
+    if (options.cashflowOnly) return {netIncomeAfterTaxHelp,annualExtraSuperContributions};
+    const configuredReturnAssets = investmentReturnAssets(plan);
     const expectedSuperReturn = annualRate(plan.investing.expectedSuperReturnPct);
     const inflation = annualRate(plan.investing.inflationPct);
     const grossGrowthInvestmentAssets = roundCurrency(
@@ -2428,7 +2564,9 @@
       + currentFiAssetSummary.otherInvestableFiAssets,
     );
     const projectedFinancialInvestmentGrowthBase = grossGrowthInvestmentAssets;
-    const projectedFinancialInvestmentGrowth = roundCurrency(projectedFinancialInvestmentGrowthBase * expectedInvestmentReturn);
+    const configuredReturnSummary = configuredReturnAssets.map(asset => ({...investmentReturnAmounts(asset),id:asset.canonicalAssetId}));
+    const projectedFinancialInvestmentGrowth = roundCurrency(projectedFinancialInvestmentGrowthBase * expectedInvestmentReturn
+      + configuredReturnAssets.reduce((n,asset,index)=>n+configuredReturnSummary[index].retainedReturn-asset.value*expectedInvestmentReturn,0));
     const propertyGrowthSummary = projectedPropertyGrowthSummary(plan);
     const projectedPropertyGrowthBase = propertyGrowthSummary.grossValue;
     const projectedPropertyGrowthRate = propertyGrowthSummary.blendedGrowthRate;
@@ -2451,7 +2589,7 @@
         actualInvesting: affordableInvesting, remainingSurplus: roundCurrency(surplus - annualExtraSuperContributions - affordableInvesting),
         investmentContribution: affordableInvesting };
     });
-    const investmentProjection = projectBalance({
+    const investmentProjection = configuredReturnAssets.length ? projectConfiguredInvestments(plan,investmentBalance,accumulationCashflowProjection,currentAge,safeWithdrawalRate) : projectBalance({
       startingBalance: investmentBalance,
       annualContribution: actualAffordableInvestmentContribution,
       expectedReturn: expectedInvestmentReturn,
@@ -2546,12 +2684,17 @@
     const eligibleRetirementSuper = superAccessByPerson(plan, sustainabilityStartAge, superBalancesAtYear(retirementSuper.year))
       .reduce((total, person) => total + person.accessible, 0);
     const totalRetirementAssets = roundCurrency(retirementInvestments.closingBalance + eligibleRetirementSuper);
+    // These simple illustrations withdraw from a combined pot without a separate
+    // passive-income stream, so use full economic return, not retained return.
+    const retirementExpectedReturn = configuredReturnAssets.length && totalRetirementAssets>0
+      ? (retirementInvestments.investmentComponents.reduce((n,a)=>n+a.value*number(a.expectedTotalReturnPct)/100,0)+eligibleRetirementSuper*expectedInvestmentReturn)/totalRetirementAssets
+      : expectedInvestmentReturn;
     const retirementSustainability = [
       simulateRetirement({
         label: "Capital preserved",
         startingAge: fullRetirementAge,
         startingBalance: totalRetirementAssets,
-        expectedReturn: expectedInvestmentReturn,
+        expectedReturn: retirementExpectedReturn,
         inflation,
         firstYearDraw: totalRetirementAssets * safeWithdrawalRate,
       }),
@@ -2559,7 +2702,7 @@
         label: "Capital slowly declines",
         startingAge: fullRetirementAge,
         startingBalance: totalRetirementAssets,
-        expectedReturn: expectedInvestmentReturn,
+        expectedReturn: retirementExpectedReturn,
         inflation,
         firstYearDraw: inflatedLifestyleSpending(targetAnnualLifestyleSpending, inflation, Math.max(0, fullRetirementAge - currentAge)),
       }),
@@ -2567,9 +2710,9 @@
         label: "Maximum lifestyle",
         startingAge: fullRetirementAge,
         startingBalance: totalRetirementAssets,
-        expectedReturn: expectedInvestmentReturn,
+        expectedReturn: retirementExpectedReturn,
         inflation,
-        firstYearDraw: maximumLifestyleDraw(totalRetirementAssets, expectedInvestmentReturn, inflation),
+        firstYearDraw: maximumLifestyleDraw(totalRetirementAssets, retirementExpectedReturn, inflation),
       }),
     ];
     const netWorthProjection = investmentProjection.map((row, index) => {
@@ -2735,6 +2878,10 @@
       projectedPropertyGrowth,
       projectedPropertyGrowthProperties: propertyGrowthSummary.properties,
       combinedWealthCreation,
+      ...(configuredReturnAssets.length ? {investmentReturnSummary: {assets:configuredReturnAssets.map((a,i)=>({...a,...configuredReturnSummary[i]})),
+        cashIncome:roundCurrency(configuredReturnSummary.reduce((n,a)=>n+a.cashIncome,0)),
+        retainedReturn:projectedFinancialInvestmentGrowth,
+        totalReturn:roundCurrency(projectedFinancialInvestmentGrowth+configuredReturnSummary.reduce((n,a)=>n+a.cashIncome,0))}} : {}),
       targetAnnualLifestyleSpendingToday: targetAnnualLifestyleSpending,
       targetAnnualLifestyleSpendingAtFinancialFreedomAge,
       targetProjectionAge,
@@ -2831,6 +2978,15 @@
     DEFAULT_PRINCIPAL_RESIDENCE_GROWTH_RATE,
     emptyPlan,
     clonePlan,
+    FINANCIAL_INVESTMENT_CATEGORIES,
+    investmentReturnValidation,
+    investmentReturnAmounts,
+    investmentReturnAssets,
+    linkedInvestmentIncomeYield,
+    investmentIncomeReviewItems,
+    investmentPortfolioComponents,
+    allocateInvestmentMovement,
+    projectSplitInvestmentYear,
     annualize,
     annualRecurringExpenses,
     financialYearConfigs: FINANCIAL_YEAR_CONFIGS,

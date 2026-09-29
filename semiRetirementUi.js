@@ -550,6 +550,7 @@
         const type = isRental ? "rentalTaxableIncome" : item.type === "other" ? "otherPassive" : item.type;
         return {
           id: `passive-${String(item.id || index + 1)}`,
+          ...(item.derivedInvestmentIncome ? {derivedInvestmentIncome:true,sourceIncomeIds:clone(item.sourceIncomeIds || [])} : {}),
           sourceIncomeId: String(item.id || ""),
           name: String(item.name || item.propertyName || `Passive income ${index + 1}`),
           type,
@@ -620,6 +621,7 @@
         person2SalaryWages: salaryForPerson(result, 2),
       },
       assets: {
+        ...(global.FFSCalculator?.investmentReturnAssets(plan).length ? {investmentComponents:global.FFSCalculator.investmentPortfolioComponents(plan,nonNegative(result.accessibleInvestmentAssets)-nonNegative(result.offsetFiAssets))} : {}),
         accessibleInvestmentAssets: nonNegative(result.accessibleInvestmentAssets),
         superPerson1: superForPerson(plan, 1),
         superPerson2: superForPerson(plan, 2),
@@ -726,6 +728,7 @@
       },
       accessibleInvestments: {
         openingBalance: nonNegative(result.accessibleInvestmentAssets),
+        ...(global.FFSCalculator?.investmentReturnAssets(plan).length ? {components:global.FFSCalculator.investmentPortfolioComponents(plan,Math.max(0,nonNegative(result.accessibleInvestmentAssets)-nonNegative(result.offsetFiAssets))),componentBaseReturnPct:number(plan.investing?.expectedInvestmentReturnPct)} : {}),
         openingOffsetBalance: Math.min(nonNegative(result.accessibleInvestmentAssets), nonNegative(result.offsetFiAssets ?? plan.assets?.offsetBalance)),
         annualReturnRatePct: number(plan.investing?.expectedInvestmentReturnPct, 7),
         annualFeesRatePct: 0,
@@ -927,6 +930,8 @@
       },
       accessibleInvestments: {
         openingBalance: nonNegative(draft.accessibleInvestments?.openingBalance),
+        ...(draft.accessibleInvestments?.components?.length ? {components:clone(draft.accessibleInvestments.components).map(asset=>({...asset,
+          expectedTotalReturnPct:number(asset.expectedTotalReturnPct)+number(draft.accessibleInvestments.annualReturnRatePct)-number(draft.accessibleInvestments.componentBaseReturnPct)}))} : {}),
         openingOffsetBalance: nonNegative(draft.accessibleInvestments?.openingOffsetBalance),
         annualReturnRate: percentToRate(draft.accessibleInvestments?.annualReturnRatePct),
         annualFeesRate: percentToRate(draft.accessibleInvestments?.annualFeesRatePct),
