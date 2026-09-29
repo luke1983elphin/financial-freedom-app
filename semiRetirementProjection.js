@@ -586,6 +586,7 @@
     const cashSource = item.annualCashIncome ?? item.cashIncome ?? item.cashAmount ?? item.annualAmount ?? item.amount;
     const taxableSource = item.annualTaxableIncome ?? item.taxableIncome ?? item.taxableAmount ?? item.annualAmount ?? item.amount;
     return {
+      ...(item.derivedInvestmentIncome ? {derivedInvestmentIncome:true} : {}),
       id: normaliseRecordId(item, "passive-income", index),
       name: String(item.name || item.description || `Passive income ${index + 1}`),
       type,
@@ -1239,8 +1240,15 @@
     return rows;
   }
 
-  function projectPassiveIncomeRows(normalised, yearIndex) {
-    return normalised.passiveIncome.map((income) => {
+  function projectPassiveIncomeRows(normalised, yearIndex, investmentComponents = []) {
+    const source = normalised.passiveIncome.filter(income => !(investmentComponents.length && income.derivedInvestmentIncome));
+    investmentComponents.filter(asset=>asset.investmentReturnMode === "totalReturn").forEach(asset=>{
+      const amounts=CALC.investmentReturnAmounts(asset);
+      source.push({id:`investment-income:${asset.id}`,name:`${asset.name || "Investment"} income`,type:asset.category?.startsWith("managed")?"distributions":"dividends",
+        owner:asset.owner || "joint",shares:ownershipShares(asset),linkedAssetId:asset.id,sourceIncomeId:(asset.sourceIncomeIds || []).join(","),
+        annualCashIncome:amounts.cashIncome,annualTaxableIncome:amounts.taxableIncome,annualCashGrowthRate:0,annualTaxableGrowthRate:0});
+    });
+    return source.map((income) => {
       const cashIncome = grownAmount(income.annualCashIncome, income.annualCashGrowthRate, yearIndex);
       const taxableIncome = grownAmount(income.annualTaxableIncome, income.annualTaxableGrowthRate, yearIndex);
       return {
@@ -1337,6 +1345,7 @@
       },
       accessibleInvestments: {
         openingBalance: openingAccessibleBalance,
+        ...(input?.accessibleInvestments?.components?.length ? {components:JSON.parse(JSON.stringify(input.accessibleInvestments.components))} : {}),
         openingOffsetBalance,
         annualReturnRate: number(input?.accessibleInvestments?.annualReturnRate),
         annualFeesRate: number(input?.accessibleInvestments?.annualFeesRate),
@@ -1394,6 +1403,9 @@
 
   function validateInputs(input) {
     const errors = [];
+    (input?.accessibleInvestments?.components || []).forEach((asset,index)=>{
+      for(const message of CALC.investmentReturnValidation?.(asset) || []) errors.push({path:`accessibleInvestments.components.${index}`,message});
+    });
     if (!input || typeof input !== "object") {
       addValidation(errors, "inputs", "Projection inputs must be provided as an object.");
       return errors;
@@ -1878,7 +1890,9 @@
       inflation: "Household lifestyle spending and rental cash income are treated as projection-start dollars and inflated from projection year zero using the same CPI assumption.",
       financialYearConvention: "Each annual projection row represents the Australian financial year beginning on 1 July of its calendarYear (for example, calendarYear 2027 uses 2027-28 rules).",
       futureTaxRuleTreatment: "Supported enacted resident tax rates are applied for each row. For later unsupported years, the last supported rule configuration is held without assumed threshold indexation.",
-      investmentReturnTiming: "Total-return method. Earnings equal opening balance return plus 50% of net annual cash movement return. Fees use the same midpoint balance. Dividends, interest and rent are not added separately.",
+      investmentReturnTiming: normalised.accessibleInvestments.components?.length
+        ? "Configured holdings apply their retained return rate on the existing midpoint balance. Cash yield is estimated from opening holdings, separately from retained growth. Reinvested yield is taxable but stays in the portfolio. Contributions and withdrawals are allocated proportionally; offsets earn no investment return."
+        : "Total-return method. Earnings equal opening balance return plus 50% of net annual cash movement return. Fees use the same midpoint balance. Dividends, interest and rent are not added separately.",
       superContributionTiming: "Employer and additional concessional contributions are reduced by 15% contributions tax before being added to super. The projection does not optimise concessional caps or carry-forward amounts.",
       plannedExtraConcessionalContributionTreatment: "Planned extra concessional contribution events are selected by person and financial year. The financial year is mapped to the annual projection row with the same starting calendar year, so 2030-31 is applied once to calendarYear 2030. Events are paid from household cash once, reduce the selected person's modelled taxable income under the simplified concessional assumption, and use the same 15% contributions-tax treatment as other additional concessional contributions.",
       superAccessTreatment: "scenario-assumed-access-age",
@@ -1967,6 +1981,7 @@
     const replacementHomeStates = {};
     let accessibleOpening = roundCurrency(normalised.accessibleInvestments.openingBalance);
     const offsetStates = buildInitialOffsetStates(normalised, accessibleOpening);
+    let investmentComponents = (normalised.accessibleInvestments.components || []).map(a=>({...a}));
     let unallocatedSurplusBalance = 0;
     // Age is measured at the start of each projection year; projectionEndAge belongs to the youngest person.
     const maxYears = projectionHorizonYears;
@@ -1991,7 +2006,11 @@
           warnings: [],
         };
       });
-      const passiveIncomeRows = projectPassiveIncomeRows(normalised, yearIndex);
+      if(investmentComponents.length) {
+        const ordinaryOpening=Math.max(0,accessibleOpening-activeOffsetTotal(offsetStates,liabilityStates));
+        investmentComponents=CALC.allocateInvestmentMovement(investmentComponents,ordinaryOpening-investmentComponents.reduce((n,a)=>n+a.value,0));
+      }
+      const passiveIncomeRows = projectPassiveIncomeRows(normalised, yearIndex, investmentComponents);
       peopleYear.forEach((person) => {
         const source = normalised.people.find((item) => item.id === person.id) || person;
         const passive = passiveIncomeForPerson(passiveIncomeRows, person.id);
@@ -2335,9 +2354,24 @@
       const ordinaryNetMovement = roundCurrency(ordinaryAccessibleBalance - ordinaryOpeningBalance);
       const accessibleBeforeReturn = roundCurrency(ordinaryAccessibleBalance + offsetClosingBalance);
       const accessibleEarningsBasis = Math.max(0, ordinaryOpeningBalance + ordinaryNetMovement * 0.5);
-      const accessibleInvestmentEarnings = roundCurrency(accessibleEarningsBasis * normalised.accessibleInvestments.annualReturnRate);
+      let accessibleInvestmentEarnings = roundCurrency(accessibleEarningsBasis * normalised.accessibleInvestments.annualReturnRate);
+      let splitInvestmentReturns = [];
+      if(investmentComponents.length) {
+        const midpoint=CALC.allocateInvestmentMovement(investmentComponents,accessibleEarningsBasis-ordinaryOpeningBalance);
+        splitInvestmentReturns=midpoint.map((asset,index)=>{
+          const total=CALC.investmentReturnAmounts(asset,asset.value);
+          const distribution=CALC.investmentReturnAmounts(investmentComponents[index]);
+          return {id:asset.id,totalReturn:roundCurrency(total.retainedReturn+distribution.cashIncome),cashIncome:distribution.cashIncome,taxableIncome:distribution.taxableIncome,
+            retainedReturn:total.retainedReturn};
+        });
+        accessibleInvestmentEarnings=roundCurrency(splitInvestmentReturns.reduce((n,a)=>n+a.retainedReturn,0));
+        // Cash distributions use opening holdings; the residual retained-return rate
+        // uses the existing midpoint movement basis. Income is never retained twice.
+        investmentComponents=CALC.allocateInvestmentMovement(investmentComponents,ordinaryNetMovement).map((a,i)=>({...a,value:Math.max(0,roundCurrency(a.value+splitInvestmentReturns[i].retainedReturn))}));
+      }
       const accessibleInvestmentFees = roundCurrency(accessibleEarningsBasis * Math.max(0, normalised.accessibleInvestments.annualFeesRate));
       let closingAccessibleInvestmentBalance = roundCurrency(Math.max(0, accessibleBeforeReturn + accessibleInvestmentEarnings - accessibleInvestmentFees));
+      if(investmentComponents.length) investmentComponents=CALC.allocateInvestmentMovement(investmentComponents,Math.max(0,closingAccessibleInvestmentBalance-offsetClosingBalance)-investmentComponents.reduce((n,a)=>n+a.value,0));
       let totalAccessibleAssets = roundCurrency(closingAccessibleInvestmentBalance + unallocatedSurplusBalance);
       let accessibleReconciliationExpectedClosing = roundCurrency(
         accessibleOpening
@@ -2638,6 +2672,7 @@
           offsetInvestmentReturnExcluded: offsetOpeningBalance,
           accessibleEarningsBasis,
           accessibleInvestmentEarnings,
+          ...(investmentComponents.length ? {splitInvestmentReturns,investmentComponents:investmentComponents.map(a=>({...a}))} : {}),
           accessibleInvestmentFees,
           closingAccessibleInvestmentBalance,
           totalAccessibleAssets,

@@ -152,6 +152,10 @@
     const plan = collections(clone(sourcePlan));
     const makeId = options.makeId || defaultId;
     const errors = [];
+    if (draft.investmentReturnMode === "totalReturn") {
+      if (!globalThis.FFSCalculator?.investmentReturnValidation) errors.push("Investment return validation is unavailable.");
+      else errors.push(...globalThis.FFSCalculator.investmentReturnValidation(draft));
+    }
     if (!text(draft.name)) errors.push("Enter an investment name or description.");
     validateOwnership(draft, errors);
     const existingAsset = findById(plan.assetItems, draft.assetId);
@@ -170,6 +174,12 @@
     asset.category = investmentCategory(draft.investmentType);
     asset.investmentType = draft.investmentType || "shares";
     asset.value = numberOrZero(draft.value);
+    if (draft.investmentReturnMode) {
+      asset.investmentReturnMode = draft.investmentReturnMode;
+      asset.expectedTotalReturnPct = draft.expectedTotalReturnPct;
+      asset.incomeTreatment = draft.incomeTreatment;
+      asset.expectedIncomeYieldPct = draft.expectedIncomeYieldPct;
+    }
     asset.guidedSetup = true;
     ownership(asset, draft);
     if (!existingAsset) plan.assetItems.push(asset);
