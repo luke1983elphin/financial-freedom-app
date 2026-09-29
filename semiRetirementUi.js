@@ -377,7 +377,7 @@
   }
 
   function projectionAssetsFromPlan(plan = {}) {
-    const items = Array.isArray(plan.assetItems) ? plan.assetItems : [];
+    const items = (Array.isArray(plan.assetItems) ? plan.assetItems : []).filter(item => global.FFSCalculator?.isActiveFinancialRecord?.(item) !== false);
     const propertyLike = new Set(["home", "principalResidence", "principal_residence", "otherProperty", "rentalInvestmentProperty", "rentalProperty", "investmentProperty", "vehicle"]);
     const growthAssumptions = propertyGrowthAssumptionsFromPlan(plan);
     const detailed = items
@@ -436,9 +436,9 @@
   }
 
   function projectionLiabilitiesFromPlan(plan = {}) {
-    const items = Array.isArray(plan.liabilityItems) ? plan.liabilityItems : [];
+    const items = global.FFSCalculator?.canonicalLiabilityItems?.(plan) || (Array.isArray(plan.liabilityItems) ? plan.liabilityItems : []);
     const homeLoanTypes = new Set(["homeLoan", "mortgage", "home_loan", "mortgageLoan"]);
-    let unappliedHomeOffsetBalance = nonNegative(plan.assets?.offsetBalance);
+    let unappliedHomeOffsetBalance = nonNegative(global.FFSCalculator?.calculateNetFiAssetSummary?.({ plan, currentAge: plan.personal?.person1Age })?.offsetFiAssets ?? plan.assets?.offsetBalance);
     const offsetForLiability = (item, type, openingBalance) => {
       const explicitOffset = item.openingOffsetBalance ?? item.offsetBalance ?? item.linkedOffsetBalance;
       if (explicitOffset !== null && explicitOffset !== undefined && explicitOffset !== "") return nonNegative(explicitOffset);
@@ -470,7 +470,7 @@
         };
       })
       .filter((item) => item.openingBalance > 0 || item.repaymentAmount > 0);
-    if (filtered.length) return filtered;
+    if (filtered.length || global.FFSCalculator?.hasStructuredLiabilityAuthority?.(plan)) return filtered;
     const fallback = [];
     if (nonNegative(plan.liabilities?.homeLoanBalance) > 0) {
       fallback.push({
@@ -726,7 +726,7 @@
       },
       accessibleInvestments: {
         openingBalance: nonNegative(result.accessibleInvestmentAssets),
-        openingOffsetBalance: Math.min(nonNegative(result.accessibleInvestmentAssets), nonNegative(plan.assets?.offsetBalance)),
+        openingOffsetBalance: Math.min(nonNegative(result.accessibleInvestmentAssets), nonNegative(result.offsetFiAssets ?? plan.assets?.offsetBalance)),
         annualReturnRatePct: number(plan.investing?.expectedInvestmentReturnPct, 7),
         annualFeesRatePct: 0,
         externalAnnualAccessibleContribution: 0,

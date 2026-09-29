@@ -66,9 +66,21 @@ test('ineligible super remains unavailable despite shortfall', () => {
   assert.ok(y.household.totalSuperBalance>0);
   assert.ok(y.household.unmetSpending>0);
 });
+test('practical exhaustion reports restricted super separately without withdrawing it', () => {
+  const r=project(i=>{i.people[0].currentAge=55;i.people[0].fullRetirementAge=55;i.projectionEndAge=56;i.accessibleInvestments.openingBalance=0;});
+  assert.equal(r.summary.allRetirementFundsExhaustedYear,2066);
+  const a=r.summary.retainedAssets.assets.find(a=>a.type==='restrictedSuper');
+  assert.equal(a.projectedValue,r.years[0].household.totalSuperBalance);
+  assert.equal(a.status,'Not yet accessible');
+});
 test('explicit accessible reserve is respected by settlement', () => {
   const y=exhausted(i=>{i.accessibleInvestments.openingBalance=10000;i.scenario.minimumAccessibleBalance=10000;}).years[0];
   assert.equal(y.household.totalAccessibleAssets,10000);
+});
+test('explicit reserve does not postpone available-funding exhaustion', () => {
+  const r=exhausted(i=>{i.accessibleInvestments.openingBalance=10000;i.scenario.minimumAccessibleBalance=10000;});
+  assert.equal(r.summary.allRetirementFundsExhaustedYear,2066);
+  assert.equal(r.summary.retainedAssets.assets.find(a=>a.type==='cashReserve').projectedValue,10000);
 });
 test('home owned outright',()=>{
   const a=exhausted().summary.retainedAssets.assets[0];
@@ -106,6 +118,10 @@ test('legacy unlinked property debt never guesses from matching names',()=>{
   const s=exhausted(i=>{i.liabilities=[{...debt('loan',''),name:'Home'}];}).summary.retainedAssets;
   assert.equal(s.assets[0].linkedDebt,null); assert.equal(s.assets[0].netEquity,null);
   assert.equal(s.assets[0].status,'Linked debt unknown'); assert.equal(s.totalNetEquity,null);
+});
+test('stable rental-income links resolve debt without name matching',()=>{
+  const s=exhausted(i=>{i.assets[0].type='rentalInvestmentProperty';i.liabilities=[{...debt('loan','','rentalPropertyLoan'),linkedRentalIncomeId:'rent'}];i.propertyIncome=[{id:'rent',linkedAssetId:'home',linkedLoanIds:['loan'],rentalCashIncome:0,taxableRentalIncome:0}];}).summary.retainedAssets;
+  assert.equal(s.assets[0].linkedDebt,120000); assert.equal(s.debtUnknown,false);
 });
 test('accessible and super asset rows are not retained assets',()=>{
   const s=exhausted(i=>i.assets=[{id:'cash',type:'cash',isAccessibleAsset:true,openingValue:100},{id:'super',type:'super',openingValue:100}]).summary.retainedAssets;

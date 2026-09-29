@@ -67,7 +67,7 @@ const fixtures = [
   {
     name: "property household",
     plan: () => samplePlan("established-family-wealth-building"),
-    expected: { tax: 70489.32, netIncome: 211310.68, surplus: -11103.17, totalDebt: 930000, netWorth: 2068000, accessibleInvestments: 491000, super: 575000, propertyEquity: 280000, retirementYear: 2044, retirementAccessible: 2904778.95, retirementSuper: 2953629.38, retirementDebt: 93065.13, projectionEndNetWorth: 23843554.69 },
+    expected: { tax: 70489.32, netIncome: 211310.68, surplus: 0, totalDebt: 930000, netWorth: 2068000, accessibleInvestments: 491000, super: 575000, propertyEquity: 280000, retirementYear: 2044, retirementAccessible: 2904778.95, retirementSuper: 2953629.38, retirementDebt: 93065.13, projectionEndNetWorth: 23843554.69 },
   },
   {
     name: "semi-retirement household",
