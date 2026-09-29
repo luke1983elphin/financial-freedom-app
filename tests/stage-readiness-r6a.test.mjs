@@ -172,9 +172,9 @@ test("R6A Home labels the engagement classifier as a journey step", () => {
 test("R6A Dashboard and Reports retain the authoritative four-stage classifier", () => {
   assert.match(appSource, /function renderDashboard\(result\)[\s\S]*?const stageInfo = financialStageInfo\(result\);/);
   assert.match(appSource, /<span class="metric-label">Financial Stage<\/span>/);
-  assert.match(appSource, /function renderReports\(result\)[\s\S]*?const stage = financialStageInfo\(result\)\.stage;/);
-  assert.match(appSource, /summaryTile\("Current financial stage", stage\.name\)/);
-  assert.match(appSource, /what each milestone represents/);
+  assert.match(appSource, /function reportPresentationHtml\(result, generatedDate\)[\s\S]*?const stage = financialStageInfo\(result\)\.stage;/);
+  assert.match(appSource, /m\("Current financial stage", stage\.name,/);
+  assert.match(appSource, /Progress thresholds used by the app/);
 });
 
 test("R6A Dashboard updates its own stage card rather than the first global match", () => {

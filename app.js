@@ -6429,8 +6429,9 @@
   function lineChart(svgId, series, options = {}) {
     const svg = document.getElementById(svgId);
     if (!svg) return;
-    const width = 760;
+    const width = options.width || 760;
     const height = options.height || 300;
+    if (options.width) svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
     const margin = { top: 22, right: 28, bottom: 42, left: 76 };
     const chartWidth = width - margin.left - margin.right;
     const chartHeight = height - margin.top - margin.bottom;
@@ -13911,25 +13912,25 @@
         label: "Building the Foundation",
         coverage: 0.25,
         targetAge: plan.personal.person1Age,
-        description: "Establishing positive cashflow, building emergency savings and gaining control over debt.",
+        description: "25% of the FI asset target: an early asset-building milestone.",
       },
       {
         label: "Building Wealth",
         coverage: 0.5,
         targetAge: plan.personal.workOptionalAge,
-        description: "Regularly reducing debt, investing and increasing long-term financial assets.",
+        description: "50% of the FI asset target: halfway to the full modelled requirement.",
       },
       {
         label: "Financial Independence",
         coverage: 0.75,
         targetAge: plan.personal.semiRetirementAge,
-        description: "Investments and passive income can fund a meaningful portion of the household's lifestyle.",
+        description: "75% of the FI asset target: the app's Financial Independence milestone.",
       },
       {
         label: "Financial Freedom",
         coverage: 1,
         targetAge: plan.personal.fullRetirementAge,
-        description: "Investments and passive income are projected to fund the household's target lifestyle.",
+        description: "100% of the FI asset target: the full modelled spending-based capital requirement.",
       },
     ];
     return milestoneDefinitions.map((milestone) => {
@@ -13937,7 +13938,7 @@
       const progress = threshold > 0 ? Math.min(100, Math.max(0, percent / threshold * 100)) : 0;
       const reach = milestoneReachEstimate(result, threshold);
       const reached = percent >= threshold;
-      const status = reached ? "Reached" : reach.years ? "On track" : "Not yet reached";
+      const status = reached ? "Reached" : reach.years ? "Projected within forecast" : "Not yet reached";
       const estimatedYear = reach.years === 0 ? "Reached now" : reach.years ? String(new Date().getFullYear() + reach.years) : "Beyond forecast";
       return `
         <article class="report-milestone-card ${reached ? "status-green" : reach.years ? "status-amber" : ""}">
@@ -14291,6 +14292,194 @@
     `, "report-page-break report-compact-section");
   }
 
+  function reportMetric(label, value, explanation = "", primary = false) {
+    return `<article class="report-metric${primary ? " report-metric-primary" : ""}"><h3>${escapeHtml(label)}</h3><strong>${escapeHtml(value)}</strong>${explanation ? `<p>${escapeHtml(explanation)}</p>` : ""}</article>`;
+  }
+
+  function reportGroup(title, content, columns = 2) {
+    return `<div class="report-group"><h3 class="report-group-title">${escapeHtml(title)}</h3><div class="report-metrics report-columns-${columns}">${content}</div></div>`;
+  }
+
+  function reportChart(id, title, description) {
+    return `<article class="report-chart-card"><h3>${escapeHtml(title)}</h3><p>${escapeHtml(description)}</p><svg id="${id}" class="chart" viewBox="0 0 760 280" role="img" aria-label="${escapeHtml(title + '. ' + description)}"></svg></article>`;
+  }
+
+  function reportLoanAssumptions(result) {
+    const p = result.plan;
+    const loans = CALC.canonicalLiabilityItems(p).filter(loan => Number(loan.balance) > 0 && !["stsl", "hecs", "help", "studyLoan", "hecsHelp"].includes(loan.type));
+    if (loans.length) return loans.map(loan => {
+      const original = (p.liabilityItems || []).find(item => item.id === loan.id) || {};
+      const missing = (original.interestRatePct === undefined || original.interestRatePct === null || original.interestRatePct === "")
+        && (original.interestRate === undefined || original.interestRate === null || original.interestRate === "");
+      const rate = Number(loan.interestRatePct) || 0;
+      return reportMetric(`${loan.name || loan.type.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase()} interest`, `${rate.toFixed(2)}%`,
+        `${money(loan.balance)} outstanding. ${missing ? "No rate entered; this loan record uses 0%. Review the assumption." : rate === 0 ? "A zero rate is entered for this loan. Review whether this is intended." : "Rate entered for this loan; other loans may use different rates."}`);
+    }).join("");
+    if (Number(p.liabilities?.homeLoanBalance) > 0 && !p.liabilityItems?.length && !Number(p.planSchemaVersion || p.meta?.schemaVersion)) {
+      const rate = Number(p.liabilities.homeLoanInterestRatePct) || 0;
+      return reportMetric("Home loan interest", `${rate.toFixed(2)}%`, rate ? "Rate used by the home-loan schedule." : "No home-loan interest is applied by the schedule. Review the zero or missing rate.");
+    }
+    return reportMetric("Loan interest", "No active loan records", "STSL is treated separately through compulsory repayment estimates.");
+  }
+
+  function reportRentalSection(result) {
+    const rent = result.rentalPropertyCashflow;
+    if (!rent || (!rent.propertyResults?.length && !rent.confirmedUnlinked?.length && !rent.warnings?.length)) return "";
+    return reportSection("Rental Property Cashflow", "Rental cash income is already included in household income. The loan deduction is already included in the cashflow waterfall.", `
+      ${reportGroup("Income and loan repayments", [
+        reportMetric("Rental cash income entered", money(rent.annualNetRentalIncome), "Cash income on the entered before-interest or after-interest basis."),
+        reportMetric("Passive rental income before principal", money(rent.annualRentalPassiveIncomeBeforePrincipal), "Rental cash income after interest; principal repayments are separate."),
+        reportMetric("Rental loan principal", money(rent.annualLoanPrincipal), "Principal reduces the loan balance; it is not a rental expense for tax."),
+        reportMetric("Rental deduction in household cashflow", money(rent.annualHouseholdDebtDeduction), "Full repayments for before-interest rent; principal only for after-interest rent."),
+        reportMetric("Net household rental contribution", money(rent.annualHouseholdCashflowContribution), "Rental cash income less the applicable loan cashflow deduction.", true),
+        reportMetric("Taxable rental income", money(result.householdCashflow.taxableRentalIncome), "The separate rental amount used in the tax estimate; it may differ from cash income."),
+        reportMetric("Estimated linked rental interest", money(rent.annualLoanInterest), rent.annualLoanInterest ? "Interest estimated for linked rental loans." : "No linked rental interest is estimated. Check loan links, balances and entered rates."),
+      ].join(""), 3)}
+      ${(rent.warnings || []).map(warning => `<p class="report-note">${escapeHtml(warning)}</p>`).join("")}
+    `, "report-page-break");
+  }
+
+  function reportReviewActions(result) {
+    const surplus = result.finalProjectedCashSurplus;
+    const action = (title, why, test) => `<article class="report-review-action"><h4>${escapeHtml(title)}</h4><p><strong>Why:</strong> ${escapeHtml(why)}</p><p><strong>Scenario to test:</strong> ${escapeHtml(test)}</p></article>`;
+    return `${reportGroup("Immediate priorities", action(surplus < 0 ? "Cashflow shortfall" : "Remaining cash buffer",
+      `The plan shows ${money(surplus)} remaining each year after spending and contributions.`, "Compare different spending and contribution levels while checking affordability."))}
+      ${reportGroup("Next 12 months", action("Investing affordability", `The model allocates ${money(result.annualInvestmentContributions)} to annual investing from an entered target of ${money(result.configuredInvestmentContribution)}.`, "Compare the entered target with a lower contribution and inspect the remaining surplus.")
+        + action("Debt and interest assumptions", `Outstanding liabilities total ${money(result.totalLiabilities)}. Rates and repayment details affect the estimates.`, "Check loan details, then compare a changed interest rate or repayment."))}
+      ${reportGroup("Long-term review", action("Financial Independence target", `The model shows a remaining target gap of ${money(result.fiTargetRemaining)}.`, "Compare different lifestyle spending and retirement ages.")
+        + action("Access to retirement savings", `Superannuation totals ${money(result.superannuationBalance)}; access is assessed separately for each person.`, "Compare accessible savings and super contributions in a saved retirement scenario."))}
+      <p class="report-small-note">These are prompts for review, not instructions to implement a strategy. Compare saved scenarios separately; this report describes the current plan.</p>`;
+  }
+
+  function reportPresentationHtml(result, generatedDate) {
+    const p = result.plan, m = reportMetric;
+    const progress = freedomPercent(result), fi = milestoneReachEstimate(result, 75);
+    const annual = result.finalProjectedCashSurplus;
+    const passive = result.passiveIncomeBreakdown;
+    const stage = financialStageInfo(result).stage;
+    const tax = result.taxEstimate;
+    const cashRows = [
+      ["Household cash income before tax", result.annualGrossIncome],
+      [`Income tax (${tax.taxYear})`, -tax.incomeTax],
+      ["Medicare levy", -tax.medicareLevy],
+      ["Medicare levy surcharge", -tax.medicareLevySurcharge],
+      ...(result.helpRepaymentEstimate.annualRepayment > 0 ? [["STSL compulsory repayments", -result.helpRepaymentEstimate.annualRepayment]] : []),
+      ["Living expenses", -result.annualLivingExpenses], ["Debt cashflow deductions", -result.annualDebtRepayments],
+      ["Annual investing (affordable amount)", -result.annualInvestmentContributions],
+      ...(result.annualExtraSuperContributions > 0 ? [["Extra super contributions", -result.annualExtraSuperContributions]] : []),
+      ["Remaining annual cash surplus", annual],
+    ];
+    const annualExplain = "After modelled tax, Medicare, STSL, living costs, debt deductions, investing and extra super.";
+    const disclaimer = `<div class="report-disclaimer"><h3>Important disclaimer</h3>
+      <p>This report is provided for education and financial modelling purposes only. It is not personal financial, taxation, legal or investment advice.</p>
+      <p>The results are estimates based on the information and assumptions entered. Actual outcomes may vary due to changes in income, expenses, investment returns, inflation, interest rates, taxation, legislation and personal circumstances.</p>
+      <p>Consider obtaining professional advice before making significant financial decisions.</p></div>`;
+    return `
+      <div class="report-opening">
+        <article class="report-title-card"><p class="brand-kicker">Current plan · Educational modelling</p><h1>Financial Freedom Report</h1><p>Generated ${escapeHtml(generatedDate)}. Based on the information and assumptions entered; this is not a saved retirement scenario.</p></article>
+        ${reportSection("Executive Summary", "Your position today and the target the model is working towards.", `
+          <div class="report-narrative-box"><p>Your net worth is approximately <strong>${money(result.currentNetWorth)}</strong>. Of this, <strong>${money(result.accessibleFiAssets)}</strong> counts as accessible Financial Independence (FI) assets under the model.</p>
+          <p>Annual lifestyle spending of <strong>${money(result.targetAnnualLifestyleSpendingToday)}</strong>, adjusted for inflation to your target age, produces an estimated FI target of <strong>${money(result.targetCapital)}</strong>. Current FI assets represent <strong>${plainPercent(progress)}</strong> of that target.</p>
+          <p>The plan retains an estimated <strong>${money(annual)}</strong> annual cash ${annual < 0 ? "shortfall" : "surplus"} after modelled deductions and wealth-building contributions.</p></div>
+          ${reportGroup("At a Glance", [
+            m("Financial Freedom progress", plainPercent(progress), "Current accessible FI assets divided by the estimated target.", true),
+            m("Current financial stage", stage.name, "The app's current stage indicator, based on FI progress."),
+            m("Remaining annual cash surplus", money(annual), annualExplain),
+            m("Current investment portfolio", money(result.investmentBalance), "Non-super investment projection starting balance, including cash and excluding offset."),
+            m("Current liabilities", money(result.totalLiabilities), "All modelled liabilities, including any STSL balance."),
+            m("Target FI assets", money(result.targetCapital), "Inflation-adjusted target spending divided by the withdrawal assumption."),
+            m("Estimated FI age", fi.age ? `Age ${fi.age}` : "Beyond 30 years", "The app's 75% FI milestone: reached now or first reached in the forecast."),
+            m("Estimated Financial Freedom age", targetAgeOutcome(result), "First forecast year reaching 100% of that year's spending-based FI target."),
+          ].join(""))}
+        `, "report-executive")}
+      </div>
+      ${financialProgressReportSectionHtml(result)}
+      ${reportSection("Current Financial Position", "Household wealth is broader than the assets available to support Financial Independence.", `
+        ${reportGroup("Household position", [
+          m("Annual household cash income", money(result.annualGrossIncome), "Salaries before tax plus other cash income, with rental income on its entered net basis."),
+          m("Annual living expenses", money(result.annualLivingExpenses), "Living and other regular expenses before debt deductions and investing."),
+          m("Total assets", money(result.totalAssets), "Assets included in the current household balance sheet."),
+          m("Total liabilities", money(result.totalLiabilities), "Outstanding household liabilities, including STSL where present."),
+          m("Net worth", money(result.currentNetWorth), "Total assets less total liabilities.", true),
+          ...(result.helpRepaymentEstimate.balance > 0 ? [m("STSL balance", money(result.helpRepaymentEstimate.balance), "Included in total liabilities; compulsory repayments appear separately in cashflow.")] : []),
+        ].join(""))}
+        ${reportGroup("Financial Independence position", [
+          m("Accessible FI Assets", money(result.accessibleFiAssets), "Cash, offset and eligible financial investments net of investment debt, plus super accessible by each person's age.", true),
+          m("Investment Property Equity", money(result.investmentPropertyEquity), "Investment property value less its debt; separate from accessible spending assets."),
+          m("Total FI Wealth", money(result.totalFiWealth), "Accessible FI Assets plus Investment Property Equity. Excludes home equity and inaccessible super."),
+        ].join(""), 3)}
+        ${reportGroup("Other key capital", [
+          m("Home Equity", money(result.principalResidenceEquity), "Principal residence value less home debt. It does not fund retirement without a modelled release."),
+          m("Current investment portfolio", money(result.investmentBalance), "Shown within household assets and FI assets, not an additional amount to add."),
+          m("Superannuation balance", money(result.superannuationBalance), "Total super; only each person's accessible portion is included in FI assets."),
+        ].join(""), 3)}
+      `, "report-page-break")}
+      ${reportSection("Cashflow Analysis", "Cash income is reduced by tax, compulsory repayments, living costs and planned wealth-building contributions.", `
+        <div class="report-waterfall">${cashRows.map(([label, value], index) => `<div class="report-cash-row${index === 0 ? " report-cash-start" : index === cashRows.length - 1 ? " report-cash-total" : ""}"><span>${escapeHtml(label)}</span><strong>${money(value)}</strong></div>`).join("")}</div>
+        ${reportGroup("Cash remaining", m("Remaining annual cash surplus", money(annual), annualExplain, true) + m("Equivalent monthly surplus", money(annual / 12), "Annual remaining surplus divided by 12; timing within the year will vary."))}
+        <p class="report-note">Debt cashflow deductions avoid counting rental interest twice when it is already included in net rent. The investing amount is limited by the model's affordability calculation; an entered target is not always fully funded.</p>
+        ${tax.medicareLevySurchargeEstimate?.cannotConfirm ? '<p class="report-warning">Medicare levy surcharge is not confirmed or included: complete private hospital cover information.</p>' : ""}
+        <p class="report-small-note">${annual < 0 ? "A negative remaining surplus indicates an affordability shortfall under the current inputs." : "A positive surplus is a modelled cash buffer, not a guarantee of future cash availability."}</p>
+      `, "report-page-break")}
+      ${reportRentalSection(result)}
+      ${passive?.total || passive?.rental ? reportSection("Passive Cash Income", "Income that may help fund the target lifestyle without salary or wages.", `
+        <div class="report-waterfall">${[["Interest", passive.interest], ["Dividends", passive.dividends], ["Distribution income", passive.distributions], ["Rental income after interest, before principal", passive.rental], ["Other passive income", passive.otherPassive], ["Total passive cash income", passive.total]].filter(([label, value]) => value !== 0 || label.startsWith("Total")).map(([label,value]) => `<div class="report-cash-row"><span>${escapeHtml(label)}</span><strong>${money(value)}</strong></div>`).join("")}</div>
+        <p class="report-note">These amounts are already reflected in household cash income. Rental loan principal reduces household cashflow separately; it does not reduce the passive rental income measure.</p>
+      `, "report-passive-section") : ""}
+      ${reportSection("Financial Freedom Progress", "Current accessible FI assets compared with the lifestyle-based target.", `
+        <div class="report-metrics report-columns-3 report-target-bridge">${m("Current FI assets", money(result.financialIndependenceAssets), "Accessible assets counted by the model.", true)}${m("Gap to target", money(result.fiTargetRemaining), "Additional assets needed under these assumptions.")}${m("Target FI assets", money(result.targetCapital), "Capital needed for the target lifestyle.")}</div>
+        <p class="report-progress-label">${plainPercent(progress)} of the estimated target</p>${reportProgressBar(progress)}
+        ${reportGroup("What is supporting wealth creation?", [
+          m("Estimated sustainable income", `${money(result.estimatedSustainableIncomeFromCurrentFiAssets)} p.a.`, "Current FI assets multiplied by the model's withdrawal assumption; not guaranteed cash income."),
+          m("Current Passive Cash Income", `${money(result.annualPassiveIncome)} p.a.`, "Non-salary cash income, with rental income after interest but before principal."),
+          m("Projected Financial Investment Growth", `${money(result.projectedFinancialInvestmentGrowth)} p.a.`, "Eligible financial investments excluding cash and offset, multiplied by the entered investment return."),
+          m("Projected Property Growth", `${money(result.projectedPropertyGrowth)} p.a.`, "Investment property gross value growth using its property assumptions; excludes the home."),
+          m("Combined Wealth Creation", `${money(result.combinedWealthCreation)} p.a.`, "The model adds passive cash income, financial investment growth and investment-property growth. This is not spendable income."),
+        ].join(""))}
+        <p class="report-note">If the investment return already includes dividends or distributions, the combined figure can overlap with passive income. Do not treat it as an independent total return or a cashflow surplus.</p>
+      `, "report-page-break")}
+      ${reportSection("Future Outlook", "Estimates under the current plan, shown in future nominal dollars.", `
+        ${result.investmentPropertyDebt > 0 ? '<p class="report-warning"><strong>Projection limit:</strong> The existing future net-worth and debt forecasts omit investment-property loan balances. They can overstate net worth and understate debt. Current liabilities and investment-property equity do include this debt.</p>' : ""}
+        ${reportGroup("Near term", m("1-year projected net worth", money(netWorthAtYear(result,1))) + m("2-year projected net worth", money(netWorthAtYear(result,2))))}
+        ${reportGroup("10-year outlook", m("Projected net worth", money(netWorthAtYear(result,10)), "Projected household assets less modelled liabilities.", true) + m("Projected FI assets", money(projectedFiAssetsAtYear(result,10)), "Includes super only when each person reaches the modelled access age.") + m("Projected investment portfolio", money(investmentAtYear(result,10)), "Non-super portfolio after modelled growth and affordable contributions.") + m("Projected debt", money(projectedDebtAtYear(result,10)), "Existing report estimate from the loan schedule, STSL and other entered debts."))}
+        ${reportGroup("Long term", m("30-year projected net worth", money(netWorthAtYear(result,30))) + m("Estimated Financial Freedom age", targetAgeOutcome(result), "First forecast year reaching the full spending-based target."))}
+        <p class="report-narrative">Over 10 years, the model estimates net worth of ${money(netWorthAtYear(result,10))}, an investment portfolio of ${money(investmentAtYear(result,10))} and debt of ${money(projectedDebtAtYear(result,10))}. Actual returns, tax, income, spending and inflation will vary.</p>
+      `, "report-page-break")}
+      ${reportSection("Progress and Wealth Over Time", "Future progress uses each year's inflation-adjusted spending target and includes super as it becomes accessible.", `
+        ${reportChart("reportProgressChart", "Financial Freedom progress", "The line is capped at 100% for readability; calculated progress can be higher.")}
+        ${reportChart("reportNetWorthChart", "Net worth projection", "Projected household wealth after modelled liabilities. This is broader than accessible FI assets.")}
+      `, "report-page-break report-chart-page")}
+      ${reportSection("Assets and Debt Over Time", "Distinct views of funding assets and outstanding liabilities.", `
+        ${reportChart("reportFiAssetsChart", "FI assets projection", "Accessible FI assets, including each person's super from their modelled access age.")}
+        ${reportChart("reportDebtChart", "Debt reduction", "Year 0 includes all liabilities. Future years use the home-loan schedule, STSL, other debts and credit cards; investment-property loans are excluded.")}
+      `, "report-page-break report-chart-page")}
+      ${reportSection("Milestones", "Progress thresholds used by the app; these are modelling milestones, not guarantees of retirement affordability.", `
+        <div class="report-milestone-grid">${reportMilestoneRows(result)}</div>
+        <p class="report-small-note">Estimated timing is shown using the first person's age. “Projected within forecast” means the threshold is reached within 30 years; it does not mean the entered target age is met.</p>
+      `, "report-page-break")}
+      ${reportSection("Personalised Action Plan", "Observations and scenarios worth reviewing, based on the current plan.", reportReviewActions(result), "report-page-break")}
+      ${reportSection("Important Assumptions", "The inputs that drive the model, rather than predictions of future conditions.", `
+        <div class="report-metrics report-columns-2">
+          ${m("Investment return", `${Number(p.investing.expectedInvestmentReturnPct || 0).toFixed(1)}%`, "Annual return compounded in the non-super portfolio; separately entered passive income is not automatically reinvested.")}
+          ${m("Inflation", `${Number(p.investing.inflationPct || 0).toFixed(1)}%`, "Increases target lifestyle spending in future-year FI calculations; current cashflow expenses remain entered amounts.")}
+          ${m("Super growth", `${Number(p.investing.expectedSuperReturnPct || 0).toFixed(1)}%`, "Annual return used for super balances, alongside modelled net contributions.")}
+          ${m("Target retirement age", `Age ${p.personal.fullRetirementAge || "not set"}`, "Used to set the inflation horizon for the current FI capital target, capped at 30 years.")}
+          ${m("Withdrawal assumption", `${(Number(p.investing.safeWithdrawalRatePct) > 0 ? Number(p.investing.safeWithdrawalRatePct) : 4).toFixed(1)}%`, "Used for FI targets and sustainable income; the model defaults to 4% when a positive rate is not entered.")}
+          ${m("Annual target lifestyle spending", money(result.targetAnnualLifestyleSpendingToday), "Today's spending target, inflated for future FI requirements.")}
+          ${m("Super access", `Age ${result.superAccessAge}`, "Applied separately to each person's age in the current plan; saved retirement scenarios can differ.")}
+          ${m("Projection period", "30 years", "The current-plan forecast horizon. Milestones outside it are not estimated.")}
+        </div>
+      `, "report-page-break")}
+      ${reportSection("Important Modelling Information", "Read the results alongside these limits.", `
+        ${reportGroup("Loan rates in this plan", reportLoanAssumptions(result))}
+        <p class="report-small-note">Loans can have different rates. A single home-loan rate is not a household borrowing rate. The net-worth and debt charts use the home-loan schedule; linked rental loans are assessed separately for cashflow and FI property equity.</p>
+        <div class="report-narrative-box"><p>This is a current-plan report. Saved retirement scenarios keep their own inputs and outcomes and must be compared separately.</p><p>Property equity and locked super are not immediately available spending money. No property sale or release of home equity should be assumed unless explicitly modelled.</p><p>Projections use simplified tax, debt and return assumptions. Different views may use different timing or debt schedules; review the underlying loan details before relying on projected balances.</p></div>
+        ${disclaimer}
+        <footer class="report-footer"><span>Financial Freedom Report</span><span>Generated ${escapeHtml(generatedDate)}</span></footer>
+      `, "report-page-break report-final-section")}
+    `;
+  }
+
   function renderReports(result) {
     const container = document.getElementById("financialReportBody");
     if (!container) return;
@@ -14308,237 +14497,43 @@
     if (printButton) printButton.disabled = false;
     editor?.classList.remove("hidden");
     const percent = freedomPercent(result);
-    const stage = financialStageInfo(result).stage;
-    const gap = Math.max(0, (Number(result.targetCapital) || 0) - (Number(result.financialIndependenceAssets) || 0));
-    const monthlyFinalSurplus = estimatedCashflow(result) / 12;
-    const annualFinalSurplus = estimatedCashflow(result);
-    const fiReach = milestoneReachEstimate(result, 75);
-    const estimatedFiAge = fiReach.age ? `Age ${fiReach.age}` : "Beyond 30 years";
-    const estimatedFreedomAge = targetAgeOutcome(result);
-    const recommendations = reportRecommendations(result);
     const generatedDate = new Date().toLocaleString("en-AU", { dateStyle: "medium", timeStyle: "short" });
-    const cashflowTone = result.finalProjectedCashSurplus < 0 ? "report-warning" : "report-positive";
-    const cashflowHeading = result.finalProjectedCashSurplus < 0 ? "Cashflow warning" : "Positive cashflow";
-    const cashflowText = result.finalProjectedCashSurplus < 0
-      ? "Your current plan allocates more money than the estimated cash available. The plan may need to be adjusted by reducing expenses, reducing contributions, increasing income or using available cash reserves."
-      : "Your plan currently retains an estimated cash buffer after all entered spending and wealth-building contributions.";
-    const financialHealth = result.finalProjectedCashSurplus < 0
-      ? "The model shows a cashflow shortfall after tax, STSL compulsory repayments, spending, debt repayments and planned wealth-building contributions."
-      : "The model shows a positive cash buffer after tax, STSL compulsory repayments, spending, debt repayments and planned wealth-building contributions.";
-    const tenYearProgress = progressAtYear(result, 10);
-    const tenYearProgressText = tenYearProgress > 100
-      ? "Projected net FI assets exceed the selected target in the 10-year view, based on the assumptions entered."
-      : `Projected Financial Freedom progress is ${plainPercent(tenYearProgress)} in 10 years, based on the assumptions entered.`;
     if (activeView === "reports") maybeCreateAutomaticFinancialSnapshot(result, "report");
-    const progressReportSection = financialProgressReportSectionHtml(result);
-
-    const summaryNarrative = `
-      <div class="report-narrative-box">
-        <p>Your current net worth is approximately <strong>${money(result.currentNetWorth)}</strong>. Of this amount, approximately <strong>${money(result.financialIndependenceAssets)}</strong> is currently counted as Financial Independence (FI) assets capable of supporting your future lifestyle.</p>
-        <p>Based on annual lifestyle spending of <strong>${money(plan.personal.targetAnnualSpending)}</strong>, your estimated Financial Freedom target is <strong>${money(result.targetCapital)}</strong>. Your current net FI assets represent approximately <strong>${plainPercent(percent)}</strong> of that target.</p>
-        <p>${escapeHtml(financialHealth)}</p>
-      </div>
-    `;
-
-    container.innerHTML = `
-      <article class="report-title-card">
-        <p class="brand-kicker">Financial Freedom Report</p>
-        <h1>Your Financial Freedom Report</h1>
-        <p>Generated ${escapeHtml(generatedDate)}. This report is an educational modelling summary based on the information and assumptions entered.</p>
-      </article>
-
-      ${reportSection("Executive Summary", "A concise overview of your current financial position, progress and estimated future outcome.", `
-        ${summaryNarrative}
-        <div class="summary-grid mt-4">
-          ${summaryTile("Financial Freedom progress", plainPercent(percent))}
-          ${summaryTile("Current financial stage", stage.name)}
-          ${summaryTile("Current annual surplus", money(annualFinalSurplus), annualFinalSurplus >= 0 ? "status-green" : "status-amber")}
-          ${summaryTile("Current investment amount", money(result.investmentBalance))}
-          ${summaryTile("Current debt", money(result.totalLiabilities))}
-          ${summaryTile("Target FI assets", money(result.targetCapital))}
-          ${summaryTile("Estimated FI age", estimatedFiAge)}
-          ${summaryTile("Estimated Financial Freedom age", estimatedFreedomAge)}
-        </div>
-        <div class="report-top-actions mt-4">
-          <h3>Top recommended actions</h3>
-          ${reportTopActionList(recommendations)}
-        </div>
-      `, "report-executive")}
-
-      ${progressReportSection}
-
-      ${reportSection("Current Financial Position", "A clean summary of income, expenses, assets, liabilities and the assets currently counted toward Financial Independence.", `
-        <div class="summary-grid">
-          ${summaryTile("Income", money(result.annualGrossIncome))}
-          ${summaryTile("Expenses", money(result.annualLivingExpenses))}
-          ${summaryTile("Net cashflow", money(result.finalProjectedCashSurplus), result.finalProjectedCashSurplus >= 0 ? "status-green" : "status-amber")}
-          ${summaryTile("Total assets", money(result.totalAssets))}
-          ${summaryTile("Total liabilities", money(result.totalLiabilities))}
-          ${Number((result.stslRepaymentEstimate || result.helpRepaymentEstimate)?.person1?.balance || 0) > 0 ? summaryTile(`${personDisplayName(1)} STSL balance`, money((result.stslRepaymentEstimate || result.helpRepaymentEstimate).person1.balance)) : ""}
-          ${Number((result.stslRepaymentEstimate || result.helpRepaymentEstimate)?.person2?.balance || 0) > 0 ? summaryTile(`${personDisplayName(2)} STSL balance`, money((result.stslRepaymentEstimate || result.helpRepaymentEstimate).person2.balance)) : ""}
-          ${summaryTile("Net worth", money(result.currentNetWorth))}
-          ${summaryTile("Accessible FI Assets", money(result.accessibleFiAssets))}
-          ${summaryTile("Investment Property Equity", money(result.investmentPropertyEquity))}
-          ${summaryTile("Total FI Wealth", money(result.totalFiWealth))}
-          ${summaryTile("Home Equity", money(result.principalResidenceEquity))}
-          ${summaryTile("Current investment portfolio", money(result.investmentBalance))}
-          ${summaryTile("Superannuation balance", money(result.superannuationBalance))}
-        </div>
-        <p class="report-narrative">You currently have total assets of ${money(result.totalAssets)} and total liabilities of ${money(result.totalLiabilities)}, resulting in net worth of approximately ${money(result.currentNetWorth)}.</p>
-        <p class="report-narrative">Your current FI assets may be lower than total net worth because some assets, such as your home, vehicles or personal-use assets, may not currently be treated as available to fund living costs.</p>
-      `, "report-page-break")}
-
-      ${reportSection("Cashflow Analysis", "A step-by-step view of how gross income is reduced by estimated tax, STSL compulsory repayments, living costs, debt repayments and planned wealth-building contributions.", `
-        <div class="table-list cashflow-list report-waterfall">
-          ${[
-            ["Gross income", result.annualGrossIncome],
-            [`Less: Estimated income tax (${result.taxEstimate.taxYear})`, -result.taxEstimate.incomeTax],
-            ["Less: Estimated Medicare levy - simplified 2% calculation", -result.taxEstimate.medicareLevy],
-            ["Less: Medicare levy surcharge", result.taxEstimate.medicareLevySurchargeEstimate?.cannotConfirm ? "MLS not included - complete private hospital cover information" : -result.taxEstimate.medicareLevySurcharge],
-            ...(Number(result.helpRepaymentEstimate.annualRepayment) > 0 ? [["Less: Estimated STSL compulsory repayment", -result.helpRepaymentEstimate.annualRepayment]] : []),
-            ["Less: Living expenses", -result.annualLivingExpenses],
-            ["Less: Debt repayments", -result.annualDebtRepayments],
-            ["Less: Annual investing", -result.annualInvestmentContributions],
-            ["Less: Extra super contributions", -result.annualExtraSuperContributions],
-            ["Remaining cash surplus", result.finalProjectedCashSurplus],
-          ].map(([label, value]) => cashflowRowHtml(label, value)).join("")}
-        </div>
-        ${rentalCashflowSummaryHtml(result, { compact: true })}
-        <p class="report-narrative">Cashflow is estimated from gross income, then reduced by tax, Medicare levy, STSL compulsory repayments where applicable, living expenses, debt repayments, investing and extra super contributions.</p>
-        <p class="report-narrative">The remaining cash surplus is the amount left after the planned spending and wealth-building amounts entered in the app.</p>
-        <div class="${cashflowTone}"><strong>${cashflowHeading}</strong><p>${cashflowText}</p></div>
-      `, "report-page-break report-compact-section")}
-
-      ${reportSection("Financial Freedom Progress", "This section compares current net FI assets with the target assets needed to support your chosen lifestyle. Passive Cash Income is shown separately as supporting context.", `
-        <div class="summary-grid">
-          ${summaryTile("Current FI assets", money(result.financialIndependenceAssets))}
-          ${summaryTile("Target FI assets", money(result.targetCapital))}
-          ${summaryTile("Gap to target", money(gap))}
-          ${summaryTile("Financial Freedom progress", plainPercent(percent))}
-          ${summaryTile("Estimated sustainable income", money(result.estimatedSustainableIncomeFromCurrentFiAssets), "", "sustainableIncome")}
-          ${summaryTile("Current Passive Cash Income", money(annualPassiveIncome(result)), "", "passiveIncome")}
-          ${summaryTile("Projected Financial Investment Growth", money(result.projectedFinancialInvestmentGrowth ?? result.projectedInvestmentGrowth ?? 0), "", "projectedInvestmentGrowth")}
-          ${summaryTile("Projected Property Growth", money(result.projectedPropertyGrowth || 0), "", "projectedPropertyGrowth")}
-          ${summaryTile("Combined Wealth Creation", money(result.combinedWealthCreation || 0), "", "combinedWealthCreation")}
-          ${summaryTile("10-year investment balance", money(investmentAtYear(result, 10)))}
-          ${summaryTile("10-year debt estimate", money(projectedDebtAtYear(result, 10)))}
-        </div>
-        ${passiveIncomeBreakdownHtml(result, { compact: true, showOwners: true })}
-        ${reportProgressBar(percent)}
-        <div class="report-chart-grid mt-4">
-          <article class="report-chart-card report-chart-wide">
-            <h3>Financial Freedom progress</h3>
-            <svg id="reportProgressChart" class="chart" viewBox="0 0 760 280" role="img" aria-label="Report Financial Freedom progress"></svg>
-            <p>Current progress compares current net FI assets with target FI assets. Future projected progress includes super from the age it becomes accessible in the model.</p>
-          </article>
-        </div>
-      `, "report-page-break")}
-
-      ${reportSection("Future Projections", "Estimated changes in net worth, FI assets and debt if the current assumptions continue.", `
-        <div class="summary-grid">
-          ${summaryTile("1-year projected net worth", money(netWorthAtYear(result, 1)))}
-          ${summaryTile("2-year projected net worth", money(netWorthAtYear(result, 2)))}
-          ${summaryTile("10-year projected net worth", money(netWorthAtYear(result, 10)))}
-          ${summaryTile("30-year projected net worth", money(netWorthAtYear(result, 30)))}
-          ${summaryTile("10-year FI assets", money(projectedFiAssetsAtYear(result, 10)))}
-          ${summaryTile("10-year investment portfolio", money(investmentAtYear(result, 10)))}
-          ${summaryTile("10-year debt estimate", money(projectedDebtAtYear(result, 10)))}
-          ${summaryTile("Estimated Financial Freedom age", estimatedFreedomAge)}
-        </div>
-        <p class="report-narrative">Over the next 10 years, your net worth is projected to grow to approximately ${money(netWorthAtYear(result, 10))}.</p>
-        <p class="report-narrative">During the same period, your investment portfolio is projected to grow to approximately ${money(investmentAtYear(result, 10))}, while debt may reduce to approximately ${money(projectedDebtAtYear(result, 10))}.</p>
-        <p class="report-narrative">These projections depend heavily on the assumptions entered and actual investment returns, inflation, tax, income and spending will vary.</p>
-        <p class="report-note"><strong>10-year progress:</strong> ${escapeHtml(tenYearProgressText)}</p>
-        <div class="report-chart-grid mt-4">
-          <article class="report-chart-card">
-            <h3>Net worth projection</h3>
-            <svg id="reportNetWorthChart" class="chart" viewBox="0 0 760 280" role="img" aria-label="Report net worth forecast"></svg>
-            <p>Estimated net worth over time based on the current assumptions.</p>
-          </article>
-          <article class="report-chart-card">
-            <h3>FI assets projection</h3>
-            <svg id="reportFiAssetsChart" class="chart" viewBox="0 0 760 280" role="img" aria-label="Report FI assets forecast"></svg>
-            <p>Estimated FI assets, including superannuation only from the modelled access age.</p>
-          </article>
-          <article class="report-chart-card">
-            <h3>Debt reduction</h3>
-            <svg id="reportDebtChart" class="chart" viewBox="0 0 760 280" role="img" aria-label="Report debt reduction forecast"></svg>
-            <p>Estimated total debt balance over time using the plan information entered.</p>
-          </article>
-        </div>
-      `, "report-page-break")}
-
-      ${reportSection("Milestones", "Compact milestones showing target age, estimated timing and what each milestone represents.", `
-        <div class="report-milestone-grid">${reportMilestoneRows(result)}</div>
-      `, "report-page-break report-compact-section")}
-
-      ${reportSection("Personalised Action Plan", "Modelling observations to help decide what to review or test next. This is not personal financial advice.", `
-        <p class="report-note">These actions are based only on the information entered and the app's modelling outputs. They are intended as prompts for review, not instructions to implement a strategy.</p>
-        ${reportActionPlan(result, recommendations)}
-        <div class="report-recommendation-grid mt-4">${reportRecommendationCards(recommendations)}</div>
-      `, "report-page-break")}
-
-      ${reportSection("Important Assumptions", "The major assumptions that drive the projected results.", `
-        <div class="report-assumption-grid">
-          ${reportExplainer("Investment return", `${Number(plan.investing.expectedInvestmentReturnPct || 0).toFixed(1)}%`, "Estimated average annual return for non-super investments.")}
-          ${reportExplainer("Inflation", `${Number(plan.investing.inflationPct || 0).toFixed(1)}%`, "Estimated annual increase in lifestyle costs.")}
-          ${reportExplainer("Loan interest", `${Number(plan.liabilities.homeLoanInterestRatePct || 0).toFixed(2)}%`, "Entered home loan interest rate used by the loan model.")}
-          ${reportExplainer("Super growth", `${Number(plan.investing.expectedSuperReturnPct || 0).toFixed(1)}%`, "Estimated average annual return for superannuation.")}
-          ${reportExplainer("Retirement assumptions", `Age ${plan.personal.fullRetirementAge || "not set"}`, "Target age entered for long-term financial freedom planning.")}
-          ${reportExplainer("Withdrawal assumptions", `${Number(plan.investing.safeWithdrawalRatePct || 0).toFixed(1)}%`, "Percentage of FI assets assumed to fund annual lifestyle spending.")}
-          ${reportExplainer("Annual lifestyle spending needed for Financial Freedom", money(plan.personal.targetAnnualSpending), "Annual spending target used to estimate required FI assets.")}
-          ${reportExplainer("Projection period", "30 years", "Long-term projection period currently shown by the app.")}
-        </div>
-      `, "report-page-break report-compact-section")}
-
-      ${reportSection("Disclaimer", "Important limits of this educational modelling report.", `
-        <div class="report-outcome-box">
-          <h3>Current estimated outcome</h3>
-          <div class="summary-grid mt-4">
-            ${summaryTile("Financial Freedom progress", plainPercent(percent))}
-            ${summaryTile("Estimated Financial Freedom age", estimatedFreedomAge)}
-            ${summaryTile("Target FI capital", money(result.targetCapital))}
-            ${summaryTile("Current FI assets", money(result.financialIndependenceAssets))}
-            ${summaryTile("Gap remaining", money(gap))}
-            ${summaryTile("Monthly projected surplus", money(monthlyFinalSurplus), monthlyFinalSurplus >= 0 ? "status-green" : "status-amber")}
-          </div>
-        </div>
-        <div class="report-disclaimer">
-          <h3>Important disclaimer</h3>
-          <p>This report is provided for education and financial modelling purposes only. It is not personal financial, taxation, legal or investment advice.</p>
-          <p>The results are estimates based on the information and assumptions entered. Actual outcomes may vary due to changes in income, expenses, investment returns, inflation, interest rates, taxation, legislation and personal circumstances.</p>
-          <p>Consider obtaining professional advice before making significant financial decisions.</p>
-        </div>
-        <footer class="report-footer">
-          <span>Financial Freedom Report</span>
-          <span>Generated ${escapeHtml(generatedDate)}</span>
-          <span>Education and modelling only. Not financial advice.</span>
-        </footer>
-      `, "report-page-break report-compact-section")}
-    `;
+    container.innerHTML = reportPresentationHtml(result, generatedDate);
 
     renderWeeklyPlannerControls(result);
+    renderReportCharts(result);
+    container.reportChartObserver?.disconnect();
+    if (typeof ResizeObserver !== "undefined") {
+      container.reportChartObserver = new ResizeObserver(() => renderReportCharts(result));
+      container.reportChartObserver.observe(container);
+    }
+  }
+
+  function renderReportCharts(result) {
+    const percent = freedomPercent(result);
+    const width = Math.max(320, Math.min(760, document.getElementById("reportNetWorthChart")?.clientWidth || 760));
     const projectionYears = [0, 1, 2, 5, 10, 20, 30];
     lineChart("reportNetWorthChart", [{
       label: "Net worth",
       color: "#2563eb",
       points: [{ x: 0, y: result.currentNetWorth }, ...result.netWorthProjection.map((row) => ({ x: row.year, y: row.closingBalance }))],
-    }], { height: 280, xMarks: [0, 10, 20, 30], xLabel: (mark) => `${mark}y` });
+    }], { width, height: 280, xMarks: [0, 10, 20, 30], xLabel: (mark) => `${mark}y` });
     lineChart("reportProgressChart", [{
       label: "Progress",
       color: "#0f9f6e",
       points: [{ x: 0, y: Math.min(100, percent) }, ...result.financialFreedomProgressProjection.map((row) => ({ x: row.year, y: Math.min(100, row.progress) }))],
-    }], { height: 280, xMarks: [0, 10, 20, 30], xLabel: (mark) => `${mark}y`, yLabel: (value) => `${Math.round(value)}%` });
+    }], { width, height: 280, xMarks: [0, 10, 20, 30], xLabel: (mark) => `${mark}y`, yLabel: (value) => `${Math.round(value)}%` });
     lineChart("reportFiAssetsChart", [{
       label: "FI assets",
       color: "#0f9f6e",
       points: projectionYears.map((year) => ({ x: year, y: year === 0 ? result.financialIndependenceAssets : projectedFiAssetsAtYear(result, year) })),
-    }], { height: 280, xMarks: [0, 10, 20, 30], xLabel: (mark) => `${mark}y` });
+    }], { width, height: 280, xMarks: [0, 10, 20, 30], xLabel: (mark) => `${mark}y` });
     lineChart("reportDebtChart", [{
       label: "Debt",
       color: "#dc4c3e",
       points: projectionYears.map((year) => ({ x: year, y: year === 0 ? result.totalLiabilities : projectedDebtAtYear(result, year) })),
-    }], { height: 280, xMarks: [0, 10, 20, 30], xLabel: (mark) => `${mark}y` });
+    }], { width, height: 280, xMarks: [0, 10, 20, 30], xLabel: (mark) => `${mark}y` });
   }
 
   function renderSetupSummary(result) {

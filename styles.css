@@ -9031,3 +9031,96 @@ body.scenario-save-modal-open {
 .saved-retirement-card-grid summary { cursor: pointer; font-size: 13px; font-weight: 800; }
 .saved-retirement-card-grid summary:focus-visible { outline: 2px solid #0f9f6e; outline-offset: 3px; }
 @media (max-width: 600px) { .saved-retirement-outcome { grid-template-columns: minmax(0, 1fr); gap: 12px; } }
+
+/* Current-plan report: readable screen hierarchy and independent print flow. */
+#financialReportBody { min-width: 0; color: #0f2742; }
+#financialReportBody * { box-sizing: border-box; min-width: 0; }
+#financialReportBody :is(p,h1,h2,h3,h4,strong,span,td,th) { overflow-wrap: anywhere; }
+.report-opening { display: grid; gap: 20px; }
+.report-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.report-columns-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.report-group { margin-top: 18px; }
+.report-group-title { font-size: 16px; margin: 0 0 10px; color: #0f2742; }
+.report-metric { padding: 16px; border: 1px solid #e2e8f0; border-radius: 12px; background: #f8fafc; }
+.report-metric h3 { font-size: 13px; line-height: 1.35; margin: 0 0 6px; color: #475569; }
+.report-metric > strong { display: block; font-size: 23px; line-height: 1.2; letter-spacing: -.02em; }
+.report-metric p { margin: 8px 0 0; font-size: 13px; line-height: 1.5; color: #475569; font-weight: 500; }
+.report-metric-primary { background: #edf9f4; border-color: #a5d9c3; }
+.report-metric-primary > strong { color: #08734e; }
+.report-cash-row { display: flex; justify-content: space-between; gap: 16px; padding: 11px 14px; border-bottom: 1px solid #e2e8f0; font-size: 14px; line-height: 1.4; }
+.report-cash-row strong { flex-shrink: 0; }
+.report-cash-start { background: #edf2f7; font-weight: 750; }
+.report-cash-total { background: #edf9f4; border-top: 2px solid #0f9f6e; font-weight: 750; }
+.report-progress-label { font-size: 19px; font-weight: 750; margin: 8px 0; }
+#financialReportBody .report-milestone-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.report-review-action { border-left: 3px solid #0f9f6e; background: #f8fafc; padding: 16px; border-radius: 0 12px 12px 0; }
+.report-review-action h4 { font-size: 16px; margin: 0 0 8px; }
+.report-review-action p { font-size: 13px; line-height: 1.55; margin: 6px 0 0; color: #475569; }
+#financialReportBody .report-chart-card .chart { display: block; width: 100%; min-height: 0; height: auto; max-height: none; }
+#financialReportBody .report-chart-card { margin-top: 12px; }
+#financialReportBody .report-disclaimer p + p { margin-top: 10px; }
+@media (max-width: 650px) {
+  #financialReportBody :is(.report-metrics,.report-milestone-grid) { grid-template-columns: minmax(0,1fr); }
+  #financialReportBody .report-stage { padding: 18px; }
+  .report-cash-row { padding: 10px 0; font-size: 13px; }
+  #financialReportBody .report-mini-table > div { flex-wrap: wrap; }
+}
+@media print {
+  @page financial-report {
+    size: A4 portrait;
+    margin: 14mm 12mm 16mm;
+    @bottom-left { content: "Financial Freedom · Current plan"; font-size: 8pt; color: #475569; }
+    @bottom-center { content: ""; }
+    @bottom-right { content: "Page " counter(page); font-size: 8pt; color: #475569; }
+  }
+  body[data-print-mode="financial-report"] { page: financial-report; }
+  body[data-print-mode="financial-report"] :is(.report-toolbar,[data-view-panel="reports"] > .section-heading,#reportScenarioComparison,#disclaimer,.planner-export-panel) { display: none !important; }
+  body[data-print-mode="financial-report"] :is(#appWorkspace,#appWorkspace > div,#appWorkspace > div > div,[data-view-panel="reports"]) { padding: 0 !important; margin: 0 !important; border: 0 !important; max-width: none !important; width: 100% !important; }
+  body[data-print-mode="financial-report"] #financialReportBody { display: block; margin: 0; width: 100%; font-size: 10pt; }
+  #financialReportBody :is(.report-opening,.report-stage) { display: block; }
+  #financialReportBody .report-stage { border: 0; border-radius: 0; margin: 0 !important; padding: 0 !important; box-shadow: none; }
+  #financialReportBody .report-stage.report-page-break { break-before: page; }
+  #financialReportBody .report-stage:not(.report-page-break) { break-before: auto; }
+  #financialReportBody .report-stage-heading { padding-bottom: 3mm; margin: 0 0 4mm; break-after: avoid; }
+  #financialReportBody .report-stage-heading h2 { font-size: 21pt !important; line-height: 1.15; }
+  #financialReportBody .report-stage-heading p { font-size: 10pt !important; line-height: 1.4 !important; }
+  #financialReportBody .report-title-card { border: 0; border-bottom: 2px solid #0f9f6e; border-radius: 0; padding: 0 0 4mm !important; margin: 0 0 5mm; }
+  #financialReportBody .report-title-card h1 { font-size: 28pt !important; }
+  #financialReportBody .report-title-card p { font-size: 10pt; line-height: 1.4; }
+  #financialReportBody .report-narrative-box { padding: 3mm; border-radius: 2mm; font-size: 10pt; line-height: 1.5; }
+  #financialReportBody .report-narrative-box p + p { margin-top: 2mm; }
+  #financialReportBody .report-group { margin: 4mm 0 0; }
+  #financialReportBody .report-group-title { font-size: 12pt; margin: 0 0 2mm; break-after: avoid; }
+  #financialReportBody .report-metrics { gap: 3mm; grid-template-columns: repeat(2,minmax(0,1fr)); }
+  #financialReportBody .report-columns-3 { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  #financialReportBody .report-metric { padding: 3mm; border-radius: 2mm; }
+  #financialReportBody .report-metric h3 { font-size: 9.5pt; margin-bottom: 1.5mm; }
+  #financialReportBody .report-metric > strong { font-size: 17pt; }
+  #financialReportBody .report-metric p { font-size: 9.5pt; line-height: 1.4; margin-top: 2mm; }
+  #financialReportBody :is(.report-metric,.report-chart-card,.report-review-action,.report-milestone-card,.report-cash-row,.report-disclaimer,.report-footer) { break-inside: avoid; page-break-inside: avoid; }
+  #financialReportBody :is(h2,h3,h4) { break-after: avoid; }
+  #financialReportBody :is(p,li) { orphans: 3; widows: 3; }
+  #financialReportBody .report-cash-row { padding: 3mm; font-size: 10pt; }
+  #financialReportBody :is(.report-note,.report-small-note,.report-narrative) { font-size: 10pt !important; line-height: 1.4 !important; margin: 3mm 0 0; }
+  #financialReportBody .report-note { padding: 3mm; }
+  #financialReportBody .report-progress-bar { margin: 2mm 0; height: 4mm; }
+  #financialReportBody .report-chart-card { padding: 4mm !important; margin: 5mm 0 0; }
+  #financialReportBody .report-chart-card .chart { min-height: 0 !important; max-height: none; height: auto; width: 100%; }
+  #financialReportBody .chart-label { font-size: 15px; }
+  #financialReportBody .report-milestone-grid { grid-template-columns: repeat(2,minmax(0,1fr)) !important; gap: 4mm !important; }
+  #financialReportBody .report-milestone-card { padding: 4mm !important; }
+  #financialReportBody .report-milestone-title { display: block; }
+  #financialReportBody .report-milestone-title span { display: inline-block; margin-top: 2mm; }
+  #financialReportBody .report-review-action { padding: 3mm; }
+  #financialReportBody .report-review-action h4 { font-size: 11pt; }
+  #financialReportBody .report-review-action p { font-size: 10pt; line-height: 1.45; }
+  #financialReportBody .report-final-section { margin-top: 6mm !important; break-inside: avoid; }
+  #financialReportBody .report-passive-section { margin-top: 5mm !important; break-inside: avoid; }
+  #financialReportBody .report-final-section.report-page-break { margin-top: 0 !important; break-inside: auto; }
+  #financialReportBody .report-disclaimer { padding: 3mm; margin-top: 4mm; }
+  #financialReportBody .report-disclaimer p { font-size: 10pt; line-height: 1.45; }
+  #financialReportBody .report-footer { position: static; display: flex; flex-wrap: wrap; gap: 3mm; font-size: 8pt; margin-top: 3mm; }
+  #financialReportBody table { table-layout: fixed; width: 100%; min-width: 0; }
+  #financialReportBody thead { display: table-header-group; }
+  #financialReportBody tr { break-inside: avoid; }
+}
