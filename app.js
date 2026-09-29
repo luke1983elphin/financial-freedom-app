@@ -372,7 +372,7 @@
     },
     investmentReturn: {
       title: "Investment Return",
-      body: "Total return includes capital growth and investment income. If dividends or distributions are taken as cash, configure the income component on the asset so it is not counted twice. Legacy assumptions remain unchanged until configured.",
+      body: "Total return includes both capital growth and dividends/distributions. Actual investment returns will vary and may be negative in some years.",
     },
     inflationRate: {
       title: "Inflation Rate",
@@ -1445,7 +1445,7 @@
     }
     scenarioPlan.investing.annualInvestingTarget = addAmount(scenarioPlan.investing.annualInvestingTarget, adjustments.investmentContributionChange || adjustments.annualInvestingTarget || 0);
     scenarioPlan.investing.expectedInvestmentReturnPct = addAmount(scenarioPlan.investing.expectedInvestmentReturnPct, adjustments.investmentReturnChangePct || 0);
-    (scenarioPlan.assetItems || []).filter(a=>a.investmentReturnMode === "totalReturn").forEach(asset=>{
+    (scenarioPlan.assetItems || []).filter(a=>a.investmentReturnMode === "totalReturn" && CALC.assetCapabilities(a.category).supportsFinancialInvestmentReturn).forEach(asset=>{
       asset.expectedTotalReturnPct = Number(asset.expectedTotalReturnPct)+(adjustments.investmentReturnChangePct || 0);
     });
     scenarioPlan.investing.employerSuperContributions = addAmount(scenarioPlan.investing.employerSuperContributions, adjustments.superContributionChange || 0);
@@ -5156,7 +5156,7 @@
 
   function dynamicInput(collection, item, key, label, options = {}) {
     const rawValue = item[key] ?? "";
-    const isBlankNumber = options.kind !== "text" && options.type !== "select" && Number(rawValue) === 0 && rawValue !== "0";
+    const isBlankNumber = !options.showZero && options.kind !== "text" && options.type !== "select" && Number(rawValue) === 0 && rawValue !== "0";
     const value = isBlankNumber ? "" : rawValue;
     const common = `data-collection="${collection}" data-id="${item.id}" data-key="${key}"`;
     const infoButton = infoButtonHtml(options.infoKey, label);
@@ -5365,18 +5365,33 @@
   }
 
   function investmentReturnFields(item, input) {
+    const category=item.category || item.investmentType;
+    const caps=CALC.assetCapabilities(category,item);
+    if(!caps.supportsFinancialInvestmentReturn) return "";
+    if(!caps.supportsInvestmentIncomeYield) item={...item,expectedIncomeYieldPct:0,incomeTreatment:"reinvest"};
     const mode=item.investmentReturnMode || "legacyReinvested";
-    const fields=input("investmentReturnMode", "Investment return modelling", {type:"select",options:[["legacyReinvested","Legacy assumptions (unchanged)"],["totalReturn","Configure total return and income"]]});
-    if(mode!=="totalReturn") return `${fields}<p class="field-help">Existing projections are unchanged. Configure a return split to distinguish retained returns from dividends or distributions.</p>`;
+    if(mode!=="totalReturn") return `<section class="investment-return-section"><button class="btn" type="button" data-investment-setup="${escapeHtml(item.id || "guided")}">${caps.supportsInvestmentIncomeYield ? "Set up investment income" : "Set up investment return"}</button><p class="field-help">Your current assumptions stay unchanged until you choose to set this up.</p></section>`;
+    const managed=["managedFund","managedFunds"].includes(category);
+    const crypto=["crypto","cryptocurrency"].includes(category);
+    const incomeLabel=crypto ? "Investment income" : managed ? "Distributions" : "Dividends / distributions";
+    const treatmentLabel=managed ? "distributions" : "investment income";
+    const field=(key,label,options={},help="")=>`<div class="investment-return-field">${input(key,label,{...options,showZero:true})}${help ? `<p class="field-help">${help}</p>` : ""}</div>`;
     const errors=CALC.investmentReturnValidation(item);
     const amounts=errors.length ? null : CALC.investmentReturnAmounts(item);
-    return `${fields}${input("expectedTotalReturnPct","Expected total return (%)",{step:"0.1",infoKey:"investmentReturn"})}
-      <p class="field-help">Estimated annual total return, including capital growth and investment income.</p>
-      ${input("incomeTreatment","Investment income treatment",{type:"select",options:[["reinvest","Reinvest income"],["cash","Take income as cash"]]})}
-      ${input("expectedIncomeYieldPct","Expected income yield (%)",{step:"0.1"})}
-      <p class="field-help">Portion of total return expected as dividends or distributions. Income is taxable under the app's existing rules even when reinvested; enter zero if no income component is modelled.</p>
-      <p class="field-help">${item.incomeTreatment==="cash" ? "Cash income is derived here. Linked income entries are references, not additional amounts." : "Dividends and distributions remain invested and are included in total return. Tax is funded from household cashflow."}</p>
-      ${amounts ? `<p class="field-help">Expected capital growth component: ${(Number(item.expectedTotalReturnPct)-Number(item.expectedIncomeYieldPct)).toFixed(1)}%. Expected annual cash income: ${money(amounts.cashIncome)}. Expected total return: ${money(amounts.totalReturn)}. Preview uses current value.</p>` : `<p role="alert" class="field-help">${errors.map(escapeHtml).join(" ")}</p>`}`;
+    return `<section class="investment-return-section"><h4>Investment return assumptions</h4><div class="input-grid">
+      ${field("expectedTotalReturnPct","Expected total return (%)",{step:"0.1",infoKey:"investmentReturn"},"Pre-filled long-term modelling assumption. You can change this if you want to use a different assumption.")}
+      ${caps.supportsInvestmentIncomeYield ? `${field("incomeTreatment","Investment income treatment",{type:"select",options:[["reinvest",`Reinvest ${treatmentLabel}`],["cash",`Take ${treatmentLabel} as cash`]]})}
+      ${field("expectedIncomeYieldPct",crypto ? "Existing investment income yield (%)" : managed ? "Expected distribution yield (%)" : "Expected dividend / distribution yield (%)",{step:"0.1"},crypto ? "Your previously configured investment income assumption is retained. This forms part of the total return above." : "Estimated percentage of the investment value received as dividends or distributions each year. This forms part of the total return above.")}
+      ${field("owner","Investment income owner",{type:"select",options:incomeOwnerOptions("dividends")})}
+      ${!item.owner || item.owner === "joint" ? field("person1AllocationPercentage",`${personDisplayName(1)} income allocation (%)`,{step:"1"})+field("person2AllocationPercentage",`${personDisplayName(2)} income allocation (%)`,{step:"1"}) : ""}` : ""}
+      </div>
+      ${caps.supportsInvestmentIncomeYield ? `<p class="field-help">Investment income remains included in estimated taxable income whether it is taken as cash or reinvested.</p><p class="field-help">Estimated cash income is calculated from the investment value and dividend/distribution yield, helping prevent investment income from being counted twice.</p>` : ""}
+      ${amounts ? `<div class="investment-annual-outcome"><h4>Estimated annual outcome</h4><dl>
+        <div><dt>Capital growth</dt><dd>${(Number(item.expectedTotalReturnPct)-Number(item.expectedIncomeYieldPct)).toFixed(1)}% · ${money(amounts.capitalGrowth)}</dd></div>
+        ${caps.supportsInvestmentIncomeYield ? `<div><dt>${incomeLabel}</dt><dd>${Number(item.expectedIncomeYieldPct).toFixed(1)}% · ${money(amounts.incomeReturn)}</dd></div>` : ""}
+        <div><dt>Total investment return</dt><dd>${Number(item.expectedTotalReturnPct).toFixed(1)}% · ${money(amounts.totalReturn)}</dd></div></dl>
+        ${caps.supportsInvestmentIncomeYield ? `<p>${item.incomeTreatment==="cash" ? `${money(amounts.cashIncome)} p.a. is currently modelled as cash investment income.` : `${incomeLabel} are currently reinvested.`}</p>` : ""}
+        <p class="field-help">Estimate uses the current investment value.</p></div>` : `<p role="alert" class="field-help">${errors.map(escapeHtml).join(" ")}</p>`}</section>`;
   }
 
   function investmentIncomeLinkFields(item) {
@@ -5499,9 +5514,7 @@
           ${dynamicInput("assetItems", item, "name", "Asset name", { kind: "text", placeholder: "e.g. Offset account" })}
           ${dynamicInput("assetItems", item, "category", "Asset type", { type: "select", options: assetCategoryOptions })}
           ${dynamicInput("assetItems", item, "value", "Asset value", { step: "1000" })}
-          ${CALC.FINANCIAL_INVESTMENT_CATEGORIES.includes(item.category) ? investmentReturnFields({...item,investmentReturnMode:item.investmentReturnMode || "legacyReinvested"},(key,label,options)=>dynamicInput("assetItems",item,key,label,options)) : ""}
-          ${item.investmentReturnMode === "totalReturn" ? dynamicInput("assetItems",{...item,owner:item.owner || "joint"},"owner","Investment income owner",{type:"select",options:incomeOwnerOptions("dividends")}) : ""}
-          ${item.investmentReturnMode === "totalReturn" && (!item.owner || item.owner === "joint") ? dynamicInput("assetItems",item,"person1AllocationPercentage",`${personDisplayName(1)} income allocation (%)`,{step:"1"})+dynamicInput("assetItems",item,"person2AllocationPercentage",`${personDisplayName(2)} income allocation (%)`,{step:"1"}) : ""}
+          ${investmentReturnFields(item,(key,label,options)=>dynamicInput("assetItems",{...item,owner:item.owner || "joint"},key,label,options))}
         </div>
         ${rentalInvestmentNote}
         ${rentalConversionAction}
@@ -5728,7 +5741,7 @@
     if (options.type === "checkbox") {
       return `<label class="toggle-field"><span class="field-label">${escapeHtml(label)}</span><input class="toggle-input" type="checkbox" ${common}${value ? " checked" : ""}></label>`;
     }
-    return `<label><span class="field-label">${escapeHtml(label)}</span><input class="field-input" ${common} type="${options.kind === "text" ? "text" : "number"}" inputmode="${options.kind === "text" ? "text" : "decimal"}" step="${options.step || "1"}" value="${escapeHtml(value ?? "")}" placeholder="${escapeHtml(options.placeholder || "")}"></label>`;
+    return `<label><span class="field-label field-label-with-info">${escapeHtml(label)}${infoButtonHtml(options.infoKey,label)}</span><input class="field-input" ${common} type="${options.kind === "text" ? "text" : "number"}" inputmode="${options.kind === "text" ? "text" : "decimal"}" step="${options.step || "1"}" value="${escapeHtml(value ?? "")}" placeholder="${escapeHtml(options.placeholder || "")}"></label>`;
   }
 
   function linkedSetupOwnershipFields() {
@@ -5827,16 +5840,16 @@
         ${linkedSetupInput("name", "Investment name / description", { kind: "text", placeholder: "e.g. ETF portfolio" })}
         ${linkedSetupInput("investmentType", "Investment type", { type: "select", options: [["shares", "Shares"], ["etf", "ETF"], ["managedFund", "Managed fund"], ["otherInvestment", "Other investment"]] })}
         ${linkedSetupInput("value", "Current value", { step: "1000" })}
-        ${linkedSetupOwnershipFields()}
+        ${CALC.assetCapabilities(linkedSetupDraft.investmentType).supportsInvestmentIncomeYield && linkedSetupDraft.investmentReturnMode === "totalReturn" ? "" : linkedSetupOwnershipFields()}
         ${investmentReturnFields(linkedSetupDraft,linkedSetupInput)}
-        ${linkedSetupDraft.investmentReturnMode !== "totalReturn" ? linkedSetupInput("annualIncome", "Annual dividends / distributions", { step: "100" }) : ""}
+        ${CALC.assetCapabilities(linkedSetupDraft.investmentType).supportsInvestmentIncomeYield && linkedSetupDraft.investmentReturnMode !== "totalReturn" ? linkedSetupInput("annualIncome", "Annual dividends / distributions", { step: "100" }) : ""}
       </div></section>
       <section class="linked-setup-section"><h3>Investment loan</h3>
         ${linkedSetupInput("hasLoan", "Is there a loan associated with this investment?", { type: "checkbox" })}
         ${linkedExistingLoanControlHtml()}
         ${linkedSetupLoanFields()}
       </section>
-      <details class="linked-setup-advanced"><summary>Advanced investment income details</summary><p>Ownership allocation and the income category are saved with the linked records. Existing manual tax and loan settings remain available in Financial Plan.</p></details>
+      <details class="linked-setup-advanced"><summary>More about investment income</summary><p>Your ownership allocation determines whose estimated taxable income includes the investment income. You can review tax and loan settings in Financial Plan.</p></details>
       <div class="linked-setup-actions"><button class="btn" type="button" data-linked-setup-action="close">Cancel</button><button class="btn btn-primary" type="submit">Save shares / investment</button></div>
     </form>`;
   }
@@ -5894,7 +5907,7 @@
       investmentType: asset.investmentType || (asset.category === "managedFund" ? "managedFund" : "shares"),
       annualIncome: income.amount ?? 0,
       investmentReturnMode: asset.investmentReturnMode || (asset.id ? "legacyReinvested" : "totalReturn"),
-      expectedTotalReturnPct: asset.expectedTotalReturnPct ?? plan.investing.expectedInvestmentReturnPct ?? 7,
+      expectedTotalReturnPct: asset.expectedTotalReturnPct ?? (asset.id ? plan.investing.expectedInvestmentReturnPct : 7),
       expectedIncomeYieldPct: asset.expectedIncomeYieldPct ?? CALC.linkedInvestmentIncomeYield(plan,asset),
       incomeTreatment: asset.incomeTreatment || "reinvest",
       errors: [],
@@ -16411,6 +16424,7 @@
       const target = event.target;
       if (target.dataset.linkedSetupField !== undefined && linkedSetupDraft) {
         const field = target.dataset.linkedSetupField;
+        if(field === "investmentType") return; // Type transitions are committed atomically by the change handler.
         linkedSetupDraft[field] = target.type === "checkbox" ? target.checked : target.type === "number" ? target.value : target.value;
         linkedSetupDraft.errors = [];
         return;
@@ -16515,8 +16529,14 @@
         let item = plan[target.dataset.collection]?.find((entry) => entry.id === target.dataset.id);
         if (!item) return;
         const value = target.dataset.type === "boolean" ? target.checked : target.dataset.type === "text" ? target.value : Number(target.value);
+        if(target.dataset.collection === "assetItems" && target.dataset.key === "category" && value !== item.category) {
+          const changed=CALC.assetWithType(item,value);
+          for(const key of ["investmentReturnMode","expectedTotalReturnPct","expectedIncomeYieldPct","incomeTreatment"]) delete item[key];
+          Object.assign(item,changed);
+        }
         if(target.dataset.collection === "assetItems" && ["investmentReturnMode","expectedTotalReturnPct","expectedIncomeYieldPct","incomeTreatment"].includes(target.dataset.key)) {
           const candidate={...item,[target.dataset.key]:value};
+          if(!CALC.assetCapabilities(item.category,item).supportsInvestmentIncomeYield) Object.assign(candidate,{expectedIncomeYieldPct:0,incomeTreatment:"reinvest"});
           if(target.dataset.key === "investmentReturnMode" && value === "totalReturn") {
             candidate.expectedTotalReturnPct ??= plan.investing.expectedInvestmentReturnPct;
             candidate.expectedIncomeYieldPct ??= CALC.linkedInvestmentIncomeYield(plan,item);
@@ -16576,7 +16596,7 @@
         }
         syncCollectionInputs(target.dataset.collection, target.dataset.id, target.dataset.key, value);
         autosavePlan();
-        if((target.dataset.collection === "assetItems" && ["investmentReturnMode","incomeTreatment","owner"].includes(target.dataset.key))
+        if((target.dataset.collection === "assetItems" && ["category","investmentReturnMode","incomeTreatment","owner"].includes(target.dataset.key))
           || (target.dataset.collection === "incomeItems" && target.dataset.key === "confirmedSeparateInvestmentIncome")) {
           renderForms();renderOutputs();return;
         }
@@ -16677,10 +16697,15 @@
       }
       if (target.dataset.linkedSetupField !== undefined && linkedSetupDraft) {
         const field = target.dataset.linkedSetupField;
+        if(field === "investmentType" && target.value !== linkedSetupDraft.investmentType) {
+          const changed=CALC.assetWithType({...linkedSetupDraft,category:linkedSetupDraft.investmentType},target.value);
+          for(const key of ["investmentReturnMode","expectedTotalReturnPct","expectedIncomeYieldPct","incomeTreatment"]) delete linkedSetupDraft[key];
+          Object.assign(linkedSetupDraft,changed);
+        }
         linkedSetupDraft[field] = target.type === "checkbox" ? target.checked : target.value;
         linkedSetupDraft.errors = [];
         if (field === "linkExistingLoanId") applyExistingLoanToLinkedDraft(target.value);
-        if (["owner", "hasLoan", "taxableRentalProfitProvided", "useAdvancedCashIncome", "existingLoanChoice", "linkExistingLoanId", "investmentReturnMode", "incomeTreatment", "expectedTotalReturnPct", "expectedIncomeYieldPct", "value"].includes(field)) renderLinkedSetupDialog();
+        if (["investmentType", "owner", "hasLoan", "taxableRentalProfitProvided", "useAdvancedCashIncome", "existingLoanChoice", "linkExistingLoanId", "investmentReturnMode", "incomeTreatment", "expectedTotalReturnPct", "expectedIncomeYieldPct", "value"].includes(field)) renderLinkedSetupDialog();
         return;
       }
       if (target.dataset.dashboardFutureAge !== undefined) {
@@ -17078,6 +17103,28 @@
           resetWeeklyPlanStorage("Weekly Plan reset.");
           renderAll();
         }
+        return;
+      }
+
+      const investmentSetup = event.target.closest("[data-investment-setup]");
+      if(investmentSetup) {
+        const item=investmentSetup.dataset.investmentSetup === "guided" ? linkedSetupDraft : plan.assetItems.find(a=>a.id===investmentSetup.dataset.investmentSetup);
+        if(!item) return;
+        const source=item === linkedSetupDraft ? {...item,id:item.assetId} : item;
+        const caps=CALC.assetCapabilities(item.category || item.investmentType);
+        if(!caps.supportsFinancialInvestmentReturn) return;
+        const settings={investmentReturnMode:"totalReturn",expectedTotalReturnPct:item.expectedTotalReturnPct ?? plan.investing.expectedInvestmentReturnPct,expectedIncomeYieldPct:caps.supportsInvestmentIncomeYield ? (item.expectedIncomeYieldPct ?? CALC.linkedInvestmentIncomeYield(plan,source)) : 0,incomeTreatment:item.incomeTreatment || "reinvest"};
+        const errors=CALC.investmentReturnValidation({...item,...settings});
+        if(errors.length && item !== linkedSetupDraft) {
+          if(caps.supportsInvestmentIncomeYield) {
+            openLinkedSetup("investment",item.id);
+            Object.assign(linkedSetupDraft,settings,{errors});renderLinkedSetupDialog();
+          } else showDurabilityNotice(errors.join(" "));
+          return;
+        }
+        Object.assign(item,settings);
+        if(item === linkedSetupDraft) renderLinkedSetupDialog();
+        else {autosavePlan();renderAll();}
         return;
       }
 

@@ -4992,6 +4992,22 @@ main {
   gap: 16px;
 }
 
+.investment-return-section {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin-top: 12px;
+}
+.investment-return-section > h4 { margin: 0 0 16px; }
+.dynamic-item-card:has(.investment-return-section) { grid-column: 1 / -1; }
+.investment-return-field, .investment-return-field > label { display: grid; min-width: 0; align-content: start; }
+.investment-return-field .field-help { margin: 8px 0 0; }
+.investment-annual-outcome { margin-top: 20px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; }
+.investment-annual-outcome h4 { margin: 0 0 12px; }
+.investment-annual-outcome dl { display: grid; gap: 12px; margin: 0; }
+.investment-annual-outcome dl > div { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.investment-annual-outcome dd { margin: 0; font-weight: 700; }
+.investment-annual-outcome p { margin: 12px 0 0; }
+
 .input-grid > label,
 .comparison-grid > label {
   display: grid;
