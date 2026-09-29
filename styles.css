@@ -4997,6 +4997,27 @@ main {
   min-width: 0;
   margin-top: 12px;
 }
+
+.projection-disclosure {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  color: var(--slate);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.projection-disclosure .field-info-button { flex-shrink: 0; }
+@media (max-width: 760px) {
+  .field-info-button:is([data-info-key="futureAccessibleFiAssets"], [data-info-key="remainingRequired"], [data-info-key="medicareLevySurchargeAssumption"], [data-info-key="targetAnnualInvesting"], [data-info-key="superAvailability"], [data-info-key="agePensionExclusion"]) {
+    min-width: 44px;
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+  }
+}
 .investment-return-section > h4 { margin: 0 0 16px; }
 .dynamic-item-card:has(.investment-return-section) { grid-column: 1 / -1; }
 .investment-return-field, .investment-return-field > label { display: grid; min-width: 0; align-content: start; }

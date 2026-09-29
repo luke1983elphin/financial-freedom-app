@@ -274,6 +274,30 @@
       title: "Current FI Assets",
       body: "Current FI assets are the income-producing assets you already have today. These are used to measure your progress toward financial independence.",
     },
+    futureAccessibleFiAssets: {
+      title: "Accessible FI Assets",
+      body: "Accessible FI Assets include financial assets available to support your plan. Superannuation is excluded until each person reaches their modelled access age, so this figure may increase significantly when super becomes accessible. For couples, each person's super becomes accessible separately according to their own age.",
+    },
+    remainingRequired: {
+      title: "Remaining Required",
+      body: "Remaining required is the estimated additional amount of accessible FI assets needed to reach your Financial Freedom target, based on your current accessible FI assets and the assumptions in your plan. It is the target less current accessible FI assets, with a minimum of zero. When those assets meet or exceed the target, no additional amount is required under these assumptions.",
+    },
+    medicareLevySurchargeAssumption: {
+      title: "Medicare Levy Surcharge",
+      body: "The model estimates Medicare Levy Surcharge where applicable based on the relevant income thresholds, household circumstances and private hospital cover information entered in the plan. The displayed rates use the same financial-year rules as the tax calculation. Taxable income alone does not determine whether the surcharge applies.",
+    },
+    targetAnnualInvesting: {
+      title: "Your target annual investing",
+      body: "Your target annual investing is the amount you have entered that you would like to invest each year if sufficient cashflow is available. The model may reduce the actual amount invested if your available surplus is lower.",
+    },
+    superAvailability: {
+      title: "Super availability",
+      body: "The balance shown is total super, not necessarily money available today. Each person's super becomes available when they reach the modelled access age. For couples, this can happen in different years.",
+    },
+    agePensionExclusion: {
+      title: "Age Pension is not included",
+      body: "The model does not currently estimate Australian Age Pension entitlements. Eligibility and payment rates depend on factors including age, residency, income, assets and household circumstances. Any future Age Pension entitlement would therefore be additional to, or interact with, the results shown here and should be assessed separately.",
+    },
     withdrawalRate: {
       title: "Withdrawal Rate",
       body: "This is the percentage of your investment portfolio you plan to withdraw each year. A lower rate usually means a safer but higher target.",
@@ -300,7 +324,7 @@
     },
     cashflowAllocation: {
       title: "Spare Cashflow Allocation",
-      body: "Configured annual investing is your target. Actual investing is capped at the cash surplus remaining after the modelled extra-super commitment. A zero or negative surplus funds no new discretionary investment. Extra super retains its separate contribution and tax assumptions.",
+      body: "Your target annual investing is the amount you would like to invest. Actual investing is capped at the cash surplus remaining after the modelled extra-super commitment. A zero or negative surplus funds no new discretionary investment. Extra super retains its separate contribution and tax assumptions.",
     },
     financialStage: {
       title: "Financial stages",
@@ -5157,7 +5181,7 @@
   function dynamicInput(collection, item, key, label, options = {}) {
     const rawValue = item[key] ?? "";
     const isBlankNumber = !options.showZero && options.kind !== "text" && options.type !== "select" && Number(rawValue) === 0 && rawValue !== "0";
-    const value = isBlankNumber ? "" : rawValue;
+    const value = key === "expectedIncomeYieldPct" ? investmentYieldDisplay(rawValue) : isBlankNumber ? "" : rawValue;
     const common = `data-collection="${collection}" data-id="${item.id}" data-key="${key}"`;
     const infoButton = infoButtonHtml(options.infoKey, label);
     if (options.type === "select") {
@@ -5364,6 +5388,13 @@
     `;
   }
 
+  // Presentation only: do not write the rounded display value back to the plan/draft.
+  function investmentYieldDisplay(value) {
+    if (value === "" || value == null) return "";
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? String(Number(numeric.toFixed(2))) : String(value);
+  }
+
   function investmentReturnFields(item, input) {
     const category=item.category || item.investmentType;
     const caps=CALC.assetCapabilities(category,item);
@@ -5381,7 +5412,7 @@
     return `<section class="investment-return-section"><h4>Investment return assumptions</h4><div class="input-grid">
       ${field("expectedTotalReturnPct","Expected total return (%)",{step:"0.1",infoKey:"investmentReturn"},"Pre-filled long-term modelling assumption. You can change this if you want to use a different assumption.")}
       ${caps.supportsInvestmentIncomeYield ? `${field("incomeTreatment","Investment income treatment",{type:"select",options:[["reinvest",`Reinvest ${treatmentLabel}`],["cash",`Take ${treatmentLabel} as cash`]]})}
-      ${field("expectedIncomeYieldPct",crypto ? "Existing investment income yield (%)" : managed ? "Expected distribution yield (%)" : "Expected dividend / distribution yield (%)",{step:"0.1"},crypto ? "Your previously configured investment income assumption is retained. This forms part of the total return above." : "Estimated percentage of the investment value received as dividends or distributions each year. This forms part of the total return above.")}
+      ${field("expectedIncomeYieldPct",crypto ? "Existing investment income yield (%)" : managed ? "Expected distribution yield (%)" : "Expected dividend / distribution yield (%)",{step:"any"},crypto ? "Your previously configured investment income assumption is retained. This forms part of the total return above." : "Estimated percentage of the investment value received as dividends or distributions each year. This forms part of the total return above.")}
       ${field("owner","Investment income owner",{type:"select",options:incomeOwnerOptions("dividends")})}
       ${!item.owner || item.owner === "joint" ? field("person1AllocationPercentage",`${personDisplayName(1)} income allocation (%)`,{step:"1"})+field("person2AllocationPercentage",`${personDisplayName(2)} income allocation (%)`,{step:"1"}) : ""}` : ""}
       </div>
@@ -5733,7 +5764,7 @@
   }
 
   function linkedSetupInput(field, label, options = {}) {
-    const value = linkedSetupDraft?.[field];
+    const value = field === "expectedIncomeYieldPct" ? investmentYieldDisplay(linkedSetupDraft?.[field]) : linkedSetupDraft?.[field];
     const common = `data-linked-setup-field="${escapeHtml(field)}"`;
     if (options.type === "select") {
       return `<label><span class="field-label">${escapeHtml(label)}</span><select class="field-input" ${common}>${optionList(options.options, value)}</select></label>`;
@@ -6304,7 +6335,8 @@
     const advanced = fields.filter((item) => !visible.includes(item));
     container.innerHTML = `
       <div class="input-grid">${visible.map(field).join("")}</div>
-      <details class="setup-advanced-section mt-4"><summary>Advanced assumptions</summary><div class="input-grid mt-4">${advanced.map(field).join("")}</div></details>`;
+      <details class="setup-advanced-section mt-4"><summary>Advanced assumptions</summary><div class="input-grid mt-4">${advanced.map(field).join("")}</div></details>
+      <div id="wizardMlsAssumption" class="mt-4"></div>`;
   }
 
   function renderGoalCollection(containerId) {
@@ -6641,6 +6673,10 @@
     }).join("");
   }
 
+  function agePensionExclusionHtml() {
+    return `<p class="projection-disclosure">Age Pension is not included in these projections.${infoButtonHtml("agePensionExclusion", "Age Pension exclusion")}</p>`;
+  }
+
   function renderWizardResults(result) {
     const percent = freedomPercent(result);
     const stageInfo = financialStageInfo(result);
@@ -6665,6 +6701,7 @@
         ${metricCard("Financial Freedom progress", plainPercent(percent), "", "Current net FI assets divided by target FI assets.", "financialFreedomProgress")}
       </div>
       <button class="btn btn-primary mt-4 w-full justify-center" type="button" data-view="dashboard">View Dashboard</button>
+      ${agePensionExclusionHtml()}
     `;
   }
 
@@ -6811,7 +6848,7 @@
     const id = options.resultsId === null ? "" : (options.resultsId || "dashboardFutureYouResults");
     return `
       <div class="dashboard-future-results"${id ? ` id="${escapeHtml(id)}"` : ""} data-dashboard-future-results>
-        ${summaryTile("Accessible FI Assets", money(future.accessibleFiAssets), "", "currentFiAssets")}
+        ${summaryTile("Accessible FI Assets", money(future.accessibleFiAssets), "", "futureAccessibleFiAssets")}
         ${summaryTile("Investment Property Equity", money(future.investmentPropertyEquity))}
         ${summaryTile("Total FI Wealth", money(future.totalFiWealth))}
         ${summaryTile("Home Equity", money(future.principalResidenceEquity))}
@@ -7043,7 +7080,7 @@
       metricCard("Current Net FI Assets", money(result.financialIndependenceAssets), "", "Income-producing and investable assets counted toward Financial Freedom, net of linked investment debt.", "currentFiAssets"),
       metricCard("Target FI Assets", money(result.targetCapital), "", "Annual lifestyle spending divided by the selected withdrawal rate.", "targetFiAssets"),
       metricCard("Annual Lifestyle Target", money(target), "", "The estimated yearly amount you want investments to support once you reach Financial Freedom.", "annualLifestyleTarget"),
-      metricCard("Remaining Required", money(result.fiTargetRemaining ?? Math.max(0, result.targetCapital - result.financialIndependenceAssets))),
+      metricCard("Remaining Required", money(result.fiTargetRemaining ?? Math.max(0, result.targetCapital - result.financialIndependenceAssets)), "", "", "remainingRequired"),
       metricCard("Estimated Sustainable Income", money(result.estimatedSustainableIncomeFromCurrentFiAssets), "", "Current net FI assets multiplied by the selected withdrawal rate.", "sustainableIncome"),
       metricCard("Passive Cash Income", money(passiveIncome), "", "Estimated annual cash income from investments, such as dividends, interest and net rental income.", "passiveIncome"),
       metricCard("Projected Financial Investment Growth", money(result.projectedFinancialInvestmentGrowth ?? result.projectedInvestmentGrowth ?? 0), "", "Estimated annual growth on gross financial investments before deducting related investment debt.", "projectedInvestmentGrowth"),
@@ -7851,6 +7888,9 @@
     const container = document.getElementById("assumptionsList");
     if (!container) return;
     const governance = CALC.getRuleGovernance({ calculationYear: result.taxEstimate.taxYear });
+    const taxRules = CALC.resolveFinancialYearConfig(result.taxEstimate.taxYear);
+    const mlsRates = taxRules.config.medicareLevySurcharge.rates.map(rate => `${Number((rate * 100).toFixed(2))}%`).join(", ");
+    const mlsAssumption = ["Medicare Levy Surcharge", `${mlsRates} depending on income, household circumstances and private hospital cover (${taxRules.appliedFinancialYear})`, "medicareLevySurchargeAssumption"];
     const rows = [
       ["Rates and rules", result.taxEstimate.taxYear],
       ["Calculation version", governance.calculationVersion],
@@ -7861,7 +7901,8 @@
       ["Inflation", `${Number(plan.investing.inflationPct || 0).toFixed(1)}% per year estimate`],
       ["Wage growth", `${Number(plan.investing.wageGrowthPct || 0).toFixed(1)}% per year estimate`],
       ["Estimated Medicare levy", `Simplified ${Math.round((result.taxEstimate.medicareLevyRate || 0) * 100)}% calculation`],
-      ["Medicare levy surcharge", result.taxEstimate.medicareLevySurchargeEstimate?.cannotConfirm ? "Cover status incomplete" : `${percentFromRatio(result.taxEstimate.medicareLevySurchargeEstimate?.rate || 0)} estimate`],
+      mlsAssumption,
+      ["Your estimated Medicare Levy Surcharge", result.taxEstimate.medicareLevySurchargeEstimate?.cannotConfirm ? "Cover status incomplete" : `${percentFromRatio(result.taxEstimate.medicareLevySurchargeEstimate?.rate || 0)} estimate`],
       ...(result.taxEstimate.medicareLevySurchargeEstimate?.partYearOverlapAssumption ? [["Part-year MLS assumption", result.taxEstimate.medicareLevySurchargeEstimate.partYearOverlapAssumption]] : []),
       ["STSL compulsory repayment assumptions", `Estimated above $69,528 repayment income and capped by current balance when entered`],
       ["Concessional contributions tax", "15% applied before money is invested in super"],
@@ -7869,7 +7910,9 @@
       ["Super access age", `Age ${result.superAccessAge} in this model`],
       ["Important limitations", governance.deferredLimitations.join(" ")],
     ];
-    container.innerHTML = `${governance.warning ? `<p class="tax-note status-amber">${escapeHtml(governance.warning)}</p>` : ""}${rows.map(([label, value]) => summaryTile(label, value)).join("")}`;
+    container.innerHTML = `${governance.warning ? `<p class="tax-note status-amber">${escapeHtml(governance.warning)}</p>` : ""}${rows.map(([label, value, infoKey]) => summaryTile(label, value, "", infoKey)).join("")}`;
+    const wizardMls = document.getElementById("wizardMlsAssumption");
+    if (wizardMls) wizardMls.innerHTML = summaryTile(mlsAssumption[0], mlsAssumption[1], "", mlsAssumption[2]);
   }
 
   function renderHelpReview(result) {
@@ -14605,7 +14648,7 @@
       { label: "Financial Freedom progress", value: plainPercent(percent) },
       { label: "Current stage", value: stage.name },
       { label: "Accessible investments", value: money(result.accessibleInvestmentAssets) },
-      { label: "Super from age 60", value: money(result.superannuationBalance) },
+      { label: `Super available from age ${result.superAccessAge}`, value: money(result.superannuationBalance), infoKey: "superAvailability" },
       { label: "Annual household cash income (net rent)", value: money(result.householdCashflow.totalHouseholdCashIncome) },
       { label: "Net income after tax, Medicare and STSL", value: money(result.netIncomeAfterTaxHelp) },
       { label: "Annual Living Expenses", value: money(result.annualLivingExpenses) },
@@ -14620,7 +14663,7 @@
         view: "investments",
         path: "investing.annualInvestingTarget",
       },
-      { label: "Configured annual investing", value: money(result.configuredInvestmentContribution) },
+      { label: "Your target annual investing", value: money(result.configuredInvestmentContribution), infoKey: "targetAnnualInvesting" },
       {
         label: "Spare cashflow invested in extra super",
         value: money(result.annualExtraSuperContributions),
@@ -14650,7 +14693,7 @@
           <strong>${escapeHtml(row.value)}</strong>
         </div>
       `;
-    }).join("");
+    }).join("") + agePensionExclusionHtml();
   }
 
   function jumpToSummaryTarget(trigger) {
