@@ -9021,3 +9021,13 @@ body.scenario-save-modal-open {
 .retained-asset-card h5 { font-size: 1rem; margin: 0; }
 .retained-asset-card dl { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: .5rem; }
 .retained-asset-card dd { margin: 0; text-align: right; }
+
+.saved-retirement-card-grid { grid-template-columns: minmax(0, 1fr); }
+.saved-retirement-outcome { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.saved-retirement-outcome section { min-width: 0; }
+.saved-retirement-outcome h5 { color: #0f2742; font-size: 13px; font-weight: 850; margin: 0 0 6px; }
+.saved-retirement-card-grid li { overflow-wrap: anywhere; font-size: 13px; }
+.saved-retirement-card-grid details { margin-top: 10px; }
+.saved-retirement-card-grid summary { cursor: pointer; font-size: 13px; font-weight: 800; }
+.saved-retirement-card-grid summary:focus-visible { outline: 2px solid #0f9f6e; outline-offset: 3px; }
+@media (max-width: 600px) { .saved-retirement-outcome { grid-template-columns: minmax(0, 1fr); gap: 12px; } }

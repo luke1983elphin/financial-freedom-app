@@ -14986,20 +14986,66 @@
     return rows;
   }
 
+  function retirementOutcomeSections(outcome) {
+    if (!outcome) return [];
+    const ages = point => point?.ages?.length ? semiRetirementAgeList(point.ages) : "Not available";
+    const horizon = ages(outcome.horizon);
+    const people = outcome.people || [];
+    const semi = people.filter(person => person.hasSemiRetirement && person.semiRetirementAge < person.fullRetirementAge);
+    const pathway = [];
+    if (semi.length) {
+      pathway.push({ label: "Semi-retirement", value: semiRetirementAgeList(semi.map(person => ({ ...person, age: person.semiRetirementAge }))) });
+      people.filter(person => !semi.includes(person)).forEach(person => pathway.push({ label: person.name || person.id,
+        value: `Remains fully employed until age ${person.fullRetirementAge}` }));
+    }
+    pathway.push({ label: "Fully retired household", value: outcome.fullRetirement ? ages(outcome.fullRetirement) : "Not reached within projection" });
+    const exhausted = (label, point) => ({ label: point ? `${label}${point.alreadyZero ? " already zero" : " exhausted"}` : label,
+      value: point ? ages(point) : `Not exhausted by ${horizon}` });
+    return [
+      { title: "Retirement pathway", rows: pathway },
+      { title: "At full retirement", rows: [
+        { label: "Accessible investments", value: semiRetirementMoney(outcome.accessibleAtRetirement) },
+        { label: "Superannuation", value: semiRetirementMoney(outcome.superAtRetirement) },
+        { label: "Retirement funding assets", value: semiRetirementMoney(outcome.fundingAssetsAtRetirement) },
+      ] },
+      { title: "How long the plan lasts", rows: [exhausted("Accessible investments", outcome.accessibleExhaustion),
+        exhausted("Superannuation", outcome.superExhaustion),
+        { label: `Capital assets remaining at ${horizon}`, value: outcome.capital?.debtUnknown ? "Equity unavailable — linked debt unknown" : semiRetirementMoney(outcome.capital?.totalNetEquity) } ] },
+      { title: "Plan horizon", rows: outcome.firstShortfall ? [
+        { label: "Retirement spending shortfall starts", value: ages(outcome.firstShortfall) },
+        { label: "Projection continues to", value: horizon },
+      ] : [{ label: "Retirement spending funded through", value: horizon }] },
+    ];
+  }
+
   function retirementKeyResultSnapshot(viewModel) {
-    const summary = semiRetirementComparisonSummary(viewModel);
-    return {
-      rows: [
-        { label: "Household fully retired", value: summary.fullRetirementLabel },
-        { label: "Assets at full retirement", value: semiRetirementMoney(summary.assetsAtRetirement), rawValue: summary.assetsAtRetirement },
-        { label: "Accessible investments at full retirement", value: semiRetirementMoney(summary.accessibleAtRetirement), rawValue: summary.accessibleAtRetirement },
-        { label: "Super at full retirement", value: semiRetirementMoney(summary.superAtRetirement), rawValue: summary.superAtRetirement },
-        { label: "Accessible investments last until", value: summary.accessibleLastLabel },
-        { label: "Retirement funding status", value: summary.retirementFundingStatus },
-        { label: "Debt at full retirement", value: semiRetirementMoney(summary.debtAtRetirement), rawValue: summary.debtAtRetirement },
-        { label: "Projection-end net worth", value: semiRetirementMoney(summary.projectedEndNetWorth), rawValue: summary.projectedEndNetWorth },
-      ],
-    };
+    const outcome = window.FFSSemiRetirementUi?.buildSavedRetirementOutcome(viewModel);
+    const sections = retirementOutcomeSections(outcome);
+    return { version: 2, retirementOutcome: outcome, sections, rows: sections.flatMap(section => section.rows) };
+  }
+
+  function savedRetirementOutcomeHtml(snapshot) {
+    if (snapshot?.version !== 2 || !snapshot.retirementOutcome) {
+      return `${keyResultsListHtml(snapshot, 20)}<p class="scenario-muted">Older saved snapshot: additional retirement outcomes are unavailable. Open and save a new scenario to capture them.</p>`;
+    }
+    const outcome = snapshot.retirementOutcome;
+    const sections = retirementOutcomeSections(outcome);
+    return `<div class="saved-retirement-outcome">${sections.map(section => `<section><h5>${escapeHtml(section.title)}</h5>${keyResultsListHtml({ rows: section.rows }, 20)}</section>`).join("")}</div>
+      ${outcome.capital?.assets?.length ? `<details class="saved-capital-details"><summary>Capital asset equity breakdown</summary>${keyResultsListHtml({ rows: outcome.capital.assets.map(asset => ({ label: asset.name, value: asset.netEquity === null ? "Linked debt unknown" : money(asset.netEquity) })) }, 100)}<p class="scenario-muted">Includes retained home/property equity; not available retirement cash without a modelled release.</p></details>` : ""}
+      <p class="scenario-muted">Funding assets are accessible investments plus super. Super remains subject to each person's access age. Values are nominal closing balances; retirement balances use the first modelled fully retired year.</p>`;
+  }
+
+  function savedRetirementChangesHtml(scenario) {
+    if (!scenario.scenarioInputSnapshot?.people) return `<h4>Changes recorded when saved</h4>${changedInputsListHtml(scenario.changedInputs || [], 100)}`;
+    const current = window.FFSSemiRetirementUi.buildSemiRetirementScenarioDefaults(plan, calculatePlan(plan)).draft;
+    const changes = window.FFSSemiRetirementUi.savedRetirementChanges(current, scenario.scenarioInputSnapshot);
+    const format = (value, change) => value === null ? "Not set" : change.kind === "age" ? `Age ${value}`
+      : change.kind === "percent" ? `${value}%` : change.kind === "money" ? `${money(value)}${change.annual ? " p.a." : ""}`
+      : typeof value === "boolean" ? (value ? "Enabled" : "Not enabled") : String(value).replace(/-/g, " ");
+    const list = items => `<ul>${items.map(change => `<li>${escapeHtml(change.label)}: ${escapeHtml(format(change.before, change))} → ${escapeHtml(format(change.after, change))}</li>`).join("")}</ul>`;
+    return `<h4>What changed from your current plan</h4>${changes.length ? list(changes.slice(0, 4)) : '<p class="scenario-muted">No settings differ from your current plan.</p>'}
+      ${changes.length > 4 ? `<details><summary>View all ${changes.length} changes</summary>${list(changes.slice(4))}</details>` : ""}
+      ${changes.length ? `<p class="scenario-muted">${changes.length} change${changes.length === 1 ? "" : "s"} from your current plan</p>` : ""}`;
   }
 
   function suggestedRetirementScenarioName(changes = [], draft = {}) {
@@ -15228,7 +15274,7 @@
   function scenarioSnapshotRows(scenario) {
     const snapshotRows = keyResultRows(scenario.keyResultSnapshot);
     if (snapshotRows.length) return snapshotRows;
-    if (!scenario.plan) return [];
+    if (!scenario.plan || normaliseSavedScenarioType(scenario.scenarioType) === "retirement") return [];
     return keyResultRows(financialPlanKeyResultSnapshot(calculatePlan(scenario.plan)));
   }
 
@@ -15241,10 +15287,28 @@
   }
 
   function scenarioComparisonRows(left, right) {
-    const rightRows = new Map(scenarioSnapshotRows(right).map((row) => [row.label, row]));
-    return scenarioSnapshotRows(left)
+    if (left.keyResultSnapshot?.retirementOutcome && right.keyResultSnapshot?.retirementOutcome) {
+      // Keep the saved status/horizon beside each value even when their labels differ.
+      const sectionHtml = scenario => retirementOutcomeSections(scenario.keyResultSnapshot.retirementOutcome).map(section =>
+        [section.title, section.rows.map(row => `${row.label}: ${row.value}`).join("; ")]);
+      const rightSections = new Map(sectionHtml(right));
+      return sectionHtml(left).map(([title, value]) => `<tr><th>${escapeHtml(title)}</th><td>${escapeHtml(value)}</td><td>${escapeHtml(rightSections.get(title) || "Not available")}</td></tr>`).join("");
+    }
+    const comparableRows = scenario => {
+      const outcome = scenario.keyResultSnapshot?.retirementOutcome;
+      if (!outcome) return scenarioSnapshotRows(scenario);
+      const sections = retirementOutcomeSections(outcome);
+      return [
+        { label: "Household fully retired", value: sections[0].rows.at(-1).value },
+        ...sections[1].rows.map((row, index) => ({ ...row, label: ["Accessible investments at full retirement", "Super at full retirement", "Assets at full retirement"][index] })),
+        { label: "Accessible investments last until", value: `${sections[2].rows[0].label}: ${sections[2].rows[0].value}` },
+        { label: "Retirement funding status", value: sections[3].rows.map(row => `${row.label}: ${row.value}`).join("; ") },
+      ];
+    };
+    const rightRows = new Map(comparableRows(right).map((row) => [row.label, row]));
+    return comparableRows(left)
       .filter((row) => rightRows.has(row.label))
-      .slice(0, 8)
+      .slice(0, normaliseSavedScenarioType(left.scenarioType) === "retirement" ? 30 : 8)
       .map((row) => {
         const matching = rightRows.get(row.label);
         return `
@@ -15483,7 +15547,7 @@
   function scenarioCardHtml(scenario) {
     const type = normaliseSavedScenarioType(scenario.scenarioType);
     const selected = savedScenarioComparisonAnchorId === scenario.id || savedScenarioComparisonTargetId === scenario.id;
-    const keySnapshot = scenario.keyResultSnapshot || (scenario.plan ? financialPlanKeyResultSnapshot(calculatePlan(scenario.plan)) : null);
+    const keySnapshot = scenario.keyResultSnapshot || (type !== "retirement" && scenario.plan ? financialPlanKeyResultSnapshot(calculatePlan(scenario.plan)) : null);
     const typedChanges = scenario.events?.length && SCENARIO_OVERLAY?.provenance
       ? SCENARIO_OVERLAY.provenance(scenario.events).map((item) => scenarioChange(item.title, "Base plan", item.description))
       : scenario.changedInputs || [];
@@ -15498,16 +15562,12 @@
           <span class="scenario-card-date">${escapeHtml(scenarioDisplayDate(scenario))}</span>
         </div>
         ${scenario.notes ? `<p class="scenario-note">${escapeHtml(scenario.notes)}</p>` : ""}
-        ${stale ? `<p class="scenario-note" role="status"><strong>Plan changed since this scenario was created.</strong> It remains available and will be applied to the current plan when opened.</p>` : ""}
-        <div class="scenario-card-grid">
-          <section class="scenario-card-section">
-            <h4>What changed</h4>
-            ${changedInputsListHtml(typedChanges, 4)}
-          </section>
-          <section class="scenario-card-section">
-            <h4>Key outcome</h4>
-            ${keyResultsListHtml(keySnapshot, 3)}
-          </section>
+        ${stale ? `<p class="scenario-note" role="status"><strong>Based on an earlier version of your plan</strong><br>Opening this scenario will apply its saved settings to your current plan.</p>` : ""}
+        <div class="scenario-card-grid${type === "retirement" ? " saved-retirement-card-grid" : ""}">
+          ${type === "retirement" ? `<section class="scenario-card-section"><h4>Key outcome</h4>${savedRetirementOutcomeHtml(keySnapshot)}</section>
+          <section class="scenario-card-section">${savedRetirementChangesHtml(scenario)}</section>` : `
+          <section class="scenario-card-section"><h4>What changed</h4>${changedInputsListHtml(typedChanges, 4)}</section>
+          <section class="scenario-card-section"><h4>Key outcome</h4>${keyResultsListHtml(keySnapshot, 3)}</section>`}
         </div>
         <div class="scenario-actions">
           <button class="btn btn-primary" type="button" data-open-scenario="${scenario.id}">Open</button>
