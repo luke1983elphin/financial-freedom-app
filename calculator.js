@@ -765,6 +765,35 @@
 
   const FINANCIAL_INVESTMENT_CATEGORIES = ["shares", "share", "etf", "crypto", "cryptocurrency", "managedFund", "managedFunds", "investmentBond", "investmentBonds", "other", "otherInvestment", "privateInvestment", "businessInvestment"];
 
+  // Field capabilities are distinct from legacy aggregate portfolio membership.
+  function assetCapabilities(category, asset = {}) {
+    // PR #16 already allowed explicitly configured crypto income. Keep it visible
+    // and unchanged; a new/type-switched crypto asset never assumes such income.
+    const existingCryptoIncome = ["crypto", "cryptocurrency"].includes(category) && asset.investmentReturnMode === "totalReturn" && number(asset.expectedIncomeYieldPct) > 0;
+    const income = existingCryptoIncome || ["shares", "share", "etf", "managedFund", "managedFunds", "investmentBond", "investmentBonds", "privateInvestment", "businessInvestment"].includes(category);
+    return {
+      supportsFinancialInvestmentReturn: income || ["crypto", "cryptocurrency"].includes(category),
+      supportsInvestmentIncomeYield: income,
+      supportsPropertyGrowth: ["home", "otherProperty", "rentalInvestmentProperty", "rentalProperty", "investmentProperty"].includes(category),
+      supportsRentalIncome: ["rentalInvestmentProperty", "rentalProperty", "investmentProperty"].includes(category),
+      supportsSuperGrowth: category === "super",
+    };
+  }
+
+  // Only called for an explicit type change/new investment, never while loading a plan.
+  function assetWithType(asset, category) {
+    const next = { ...asset, category }, caps = assetCapabilities(category);
+    if (!caps.supportsFinancialInvestmentReturn) {
+      for (const key of ["investmentReturnMode", "expectedTotalReturnPct", "expectedIncomeYieldPct", "incomeTreatment"]) delete next[key];
+    } else {
+      if (!assetCapabilities(asset.category).supportsFinancialInvestmentReturn || asset.category !== category && asset.investmentReturnMode !== "totalReturn") {
+        Object.assign(next, { investmentReturnMode: "totalReturn", expectedTotalReturnPct: 7, expectedIncomeYieldPct: 0, incomeTreatment: "reinvest" });
+      }
+      if (!caps.supportsInvestmentIncomeYield) Object.assign(next, { expectedIncomeYieldPct: 0, incomeTreatment: "reinvest" });
+    }
+    return next;
+  }
+
   function investmentReturnValidation(asset = {}) {
     if (asset.investmentReturnMode !== "totalReturn") return [];
     const rate = Number(asset.expectedTotalReturnPct), yieldPct = Number(asset.expectedIncomeYieldPct);
@@ -788,7 +817,8 @@
   }
 
   function investmentReturnAssets(plan = {}) {
-    return canonicalAssetRecords(plan, FINANCIAL_INVESTMENT_CATEGORIES).filter(asset => asset.investmentReturnMode === "totalReturn");
+    return canonicalAssetRecords(plan, FINANCIAL_INVESTMENT_CATEGORIES)
+      .filter(asset => asset.investmentReturnMode === "totalReturn" && assetCapabilities(asset.category).supportsFinancialInvestmentReturn);
   }
 
   function linkedInvestmentIncomeYield(plan, asset) {
@@ -800,7 +830,7 @@
   function investmentIncomeReviewItems(plan = {}) {
     const assets = canonicalAssetRecords(plan, FINANCIAL_INVESTMENT_CATEGORIES);
     const legacyValue=["sharesEtfs","crypto","managedFunds","investmentBonds","businessInvestments","privateInvestments","otherInvestmentAssets"].reduce((n,key)=>n+nonNegative(plan.assets?.[key]),0);
-    if (!assets.some(a => a.value > 0 && number(a.investmentReturnMode === "totalReturn" ? a.expectedTotalReturnPct : plan.investing?.expectedInvestmentReturnPct) !== 0)
+    if (!assets.some(a => a.value > 0 && number(a.investmentReturnMode === "totalReturn" && assetCapabilities(a.category).supportsFinancialInvestmentReturn ? a.expectedTotalReturnPct : plan.investing?.expectedInvestmentReturnPct) !== 0)
       && !(assets.length===0 && legacyValue>0 && number(plan.investing?.expectedInvestmentReturnPct)!==0)) return [];
     const linkedIds = new Set(investmentReturnAssets(plan).map(a => a.canonicalAssetId));
     return rawNormalisedIncomeItems(plan).filter(item => ["dividends", "distributions"].includes(item.type)
@@ -2979,6 +3009,8 @@
     emptyPlan,
     clonePlan,
     FINANCIAL_INVESTMENT_CATEGORIES,
+    assetCapabilities,
+    assetWithType,
     investmentReturnValidation,
     investmentReturnAmounts,
     investmentReturnAssets,

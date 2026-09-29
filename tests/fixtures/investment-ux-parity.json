@@ -1,0 +1,425 @@
+[
+  {
+    "name": "populated",
+    "plan": {
+      "personal": {
+        "person1Name": "Alex",
+        "person2Name": "Jordan",
+        "person1Age": 43,
+        "person2Age": 41,
+        "dependants": 0,
+        "workOptionalAge": 50,
+        "semiRetirementAge": 55,
+        "fullRetirementAge": 65,
+        "targetAnnualSpending": 55000
+      },
+      "assets": {
+        "homeValue": 0,
+        "otherPropertyValue": 0,
+        "offsetBalance": 0,
+        "cash": 0,
+        "sharesEtfs": 0,
+        "crypto": 0,
+        "superPerson1": 120000,
+        "superPerson2": 75000,
+        "vehiclesPersonalAssets": 0
+      },
+      "liabilities": {
+        "homeLoanBalance": 0,
+        "homeLoanInterestRatePct": 0,
+        "monthlyRepayment": 0,
+        "remainingLoanTermYears": 0,
+        "hecsHelpDebt": 0,
+        "person1HecsHelpDebt": 0,
+        "person2HecsHelpDebt": 0,
+        "person1StslBalance": 22000,
+        "person2StslBalance": 0,
+        "unassignedStslBalance": 0,
+        "stslOwnerConfirmationNeeded": false,
+        "otherDebts": 0,
+        "creditCardBalance": 0,
+        "creditCardInterestRatePct": 19.99,
+        "creditCardMonthlyRepayment": 0,
+        "creditCardLimit": 0
+      },
+      "income": {
+        "person1IncomeName": "",
+        "person1Income": 0,
+        "person1Frequency": "fortnightly",
+        "person2IncomeName": "",
+        "person2Income": 0,
+        "person2Frequency": "fortnightly",
+        "otherIncomeName": "",
+        "otherIncome": 0,
+        "otherIncomeFrequency": "annually",
+        "person1HasStslDebt": true,
+        "person2HasStslDebt": null,
+        "person1HospitalCoverStatus": "full-year",
+        "person2HospitalCoverStatus": "full-year",
+        "person1HospitalCoverDays": 0,
+        "person2HospitalCoverDays": 0,
+        "dependantsHospitalCoverStatus": "full-year",
+        "dependantsHospitalCoverDays": 0
+      },
+      "expenses": {
+        "livingName": "",
+        "livingCosts": 0,
+        "livingFrequency": "monthly",
+        "mortgageRepayments": 0,
+        "foodName": "",
+        "food": 0,
+        "foodFrequency": "weekly",
+        "utilitiesName": "",
+        "utilities": 0,
+        "utilitiesFrequency": "annually",
+        "insuranceName": "",
+        "insurance": 0,
+        "insuranceFrequency": "annually",
+        "schoolChildrenName": "",
+        "schoolChildren": 0,
+        "schoolChildrenFrequency": "annually",
+        "ratesPropertyCostsName": "",
+        "ratesPropertyCosts": 0,
+        "ratesPropertyCostsFrequency": "annually",
+        "otherExpensesName": "",
+        "otherExpenses": 0,
+        "otherFrequency": "monthly"
+      },
+      "investing": {
+        "annualInvestingTarget": 18000,
+        "employerSuperContributions": 0,
+        "person1EmployerSuperOverrideEnabled": false,
+        "person1EmployerSuperOverride": 0,
+        "person2EmployerSuperOverrideEnabled": false,
+        "person2EmployerSuperOverride": 0,
+        "extraSuperContributions": 0,
+        "expectedInvestmentReturnPct": 7,
+        "expectedSuperReturnPct": 6.5,
+        "inflationPct": 2.5,
+        "wageGrowthPct": 0,
+        "safeWithdrawalRatePct": 4
+      },
+      "downsizing": {
+        "enabled": false,
+        "currentResidenceValue": 0,
+        "futurePropertyValue": 0,
+        "sellingCosts": 0,
+        "buyingCosts": 0,
+        "releasedForInvestment": 0
+      },
+      "assetItems": [
+        {
+          "id": "shares",
+          "category": "shares",
+          "value": 300000,
+          "name": "Portfolio A",
+          "owner": "person1",
+          "investmentReturnMode": "totalReturn",
+          "expectedTotalReturnPct": 7,
+          "expectedIncomeYieldPct": 3,
+          "incomeTreatment": "cash"
+        },
+        {
+          "id": "crypto",
+          "category": "crypto",
+          "value": 200000,
+          "name": "Portfolio B",
+          "owner": "person2",
+          "investmentReturnMode": "totalReturn",
+          "expectedTotalReturnPct": 8,
+          "expectedIncomeYieldPct": 2,
+          "incomeTreatment": "reinvest"
+        },
+        {
+          "id": "offset",
+          "category": "offset",
+          "value": 190000
+        },
+        {
+          "id": "home",
+          "category": "home",
+          "value": 800000,
+          "propertyGrowthRatePct": 0
+        },
+        {
+          "id": "rental",
+          "category": "rentalInvestmentProperty",
+          "value": 600000,
+          "propertyGrowthRatePct": 0
+        },
+        {
+          "id": "asset-super-1",
+          "category": "super",
+          "owner": "person1",
+          "value": 120000
+        },
+        {
+          "id": "asset-super-2",
+          "category": "super",
+          "owner": "person2",
+          "value": 75000
+        }
+      ],
+      "liabilityItems": [
+        {
+          "id": "home-loan",
+          "type": "homeLoan",
+          "linkedAssetId": "home",
+          "balance": 400000,
+          "repayment": 30000,
+          "repaymentFrequency": "annually",
+          "interestRatePct": 5.8,
+          "termYears": 30,
+          "repaymentType": "principalAndInterest"
+        },
+        {
+          "id": "rental-loan",
+          "type": "rentalPropertyLoan",
+          "linkedAssetId": "rental",
+          "balance": 250000,
+          "repayment": 18000,
+          "repaymentFrequency": "annually",
+          "interestRatePct": 6.2,
+          "termYears": 30,
+          "repaymentType": "principalAndInterest"
+        },
+        {
+          "id": "study",
+          "type": "stsl",
+          "owner": "person1",
+          "balance": 22000
+        }
+      ],
+      "incomeItems": [
+        {
+          "id": "salary",
+          "type": "salaryWages",
+          "owner": "person1",
+          "amount": 150000,
+          "frequency": "annually"
+        },
+        {
+          "id": "rent",
+          "type": "rentalNetCashIncome",
+          "owner": "person1",
+          "amount": 5000,
+          "rentalCashIncomeAnnual": 20000,
+          "annualRentReceived": 30000,
+          "annualPropertyExpensesExcludingPrincipal": 10000,
+          "rentalCashflowTreatment": "beforeInterest",
+          "linkedAssetId": "rental",
+          "linkedLoanIds": [
+            "rental-loan"
+          ]
+        },
+        {
+          "id": "salary2",
+          "type": "salaryWages",
+          "owner": "person2",
+          "amount": 110000,
+          "frequency": "annually"
+        },
+        {
+          "id": "div",
+          "type": "dividends",
+          "owner": "joint",
+          "amount": 4500,
+          "frequency": "annually",
+          "linkedAssetId": "shares"
+        },
+        {
+          "id": "interest",
+          "type": "interest",
+          "owner": "joint",
+          "amount": 1000,
+          "frequency": "annually"
+        }
+      ],
+      "expenseItems": [
+        {
+          "id": "living",
+          "category": "living",
+          "amount": 40000,
+          "frequency": "annually"
+        }
+      ]
+    },
+    "sha256": "f3615e4455dfec62067c0d82a138855ba760b9e2d73390cfc814a783e1ad3a08"
+  },
+  {
+    "name": "simple",
+    "plan": {
+      "personal": {
+        "person1Name": "Alex",
+        "person2Name": "Jordan",
+        "person1Age": 43,
+        "person2Age": 0,
+        "dependants": 0,
+        "workOptionalAge": 50,
+        "semiRetirementAge": 55,
+        "fullRetirementAge": 65,
+        "targetAnnualSpending": 55000
+      },
+      "assets": {
+        "homeValue": 0,
+        "otherPropertyValue": 0,
+        "offsetBalance": 0,
+        "cash": 0,
+        "sharesEtfs": 0,
+        "crypto": 0,
+        "superPerson1": 120000,
+        "superPerson2": 0,
+        "vehiclesPersonalAssets": 0
+      },
+      "liabilities": {
+        "homeLoanBalance": 0,
+        "homeLoanInterestRatePct": 0,
+        "monthlyRepayment": 0,
+        "remainingLoanTermYears": 0,
+        "hecsHelpDebt": 0,
+        "person1HecsHelpDebt": 0,
+        "person2HecsHelpDebt": 0,
+        "person1StslBalance": 0,
+        "person2StslBalance": 0,
+        "unassignedStslBalance": 0,
+        "stslOwnerConfirmationNeeded": false,
+        "otherDebts": 0,
+        "creditCardBalance": 0,
+        "creditCardInterestRatePct": 19.99,
+        "creditCardMonthlyRepayment": 0,
+        "creditCardLimit": 0
+      },
+      "income": {
+        "person1IncomeName": "",
+        "person1Income": 0,
+        "person1Frequency": "fortnightly",
+        "person2IncomeName": "",
+        "person2Income": 0,
+        "person2Frequency": "fortnightly",
+        "otherIncomeName": "",
+        "otherIncome": 0,
+        "otherIncomeFrequency": "annually",
+        "person1HasStslDebt": null,
+        "person2HasStslDebt": null,
+        "person1HospitalCoverStatus": "full-year",
+        "person2HospitalCoverStatus": "full-year",
+        "person1HospitalCoverDays": 0,
+        "person2HospitalCoverDays": 0,
+        "dependantsHospitalCoverStatus": "full-year",
+        "dependantsHospitalCoverDays": 0
+      },
+      "expenses": {
+        "livingName": "",
+        "livingCosts": 0,
+        "livingFrequency": "monthly",
+        "mortgageRepayments": 0,
+        "foodName": "",
+        "food": 0,
+        "foodFrequency": "weekly",
+        "utilitiesName": "",
+        "utilities": 0,
+        "utilitiesFrequency": "annually",
+        "insuranceName": "",
+        "insurance": 0,
+        "insuranceFrequency": "annually",
+        "schoolChildrenName": "",
+        "schoolChildren": 0,
+        "schoolChildrenFrequency": "annually",
+        "ratesPropertyCostsName": "",
+        "ratesPropertyCosts": 0,
+        "ratesPropertyCostsFrequency": "annually",
+        "otherExpensesName": "",
+        "otherExpenses": 0,
+        "otherFrequency": "monthly"
+      },
+      "investing": {
+        "annualInvestingTarget": 18000,
+        "employerSuperContributions": 0,
+        "person1EmployerSuperOverrideEnabled": false,
+        "person1EmployerSuperOverride": 0,
+        "person2EmployerSuperOverrideEnabled": false,
+        "person2EmployerSuperOverride": 0,
+        "extraSuperContributions": 0,
+        "expectedInvestmentReturnPct": 7,
+        "expectedSuperReturnPct": 6.5,
+        "inflationPct": 2.5,
+        "wageGrowthPct": 0,
+        "safeWithdrawalRatePct": 4
+      },
+      "downsizing": {
+        "enabled": false,
+        "currentResidenceValue": 0,
+        "futurePropertyValue": 0,
+        "sellingCosts": 0,
+        "buyingCosts": 0,
+        "releasedForInvestment": 0
+      },
+      "assetItems": [
+        {
+          "id": "shares",
+          "category": "shares",
+          "value": 500000,
+          "name": "Portfolio A",
+          "owner": "person1",
+          "investmentReturnMode": "totalReturn",
+          "expectedTotalReturnPct": 7,
+          "expectedIncomeYieldPct": 3,
+          "incomeTreatment": "reinvest"
+        },
+        {
+          "id": "crypto",
+          "category": "crypto",
+          "value": 50000
+        },
+        {
+          "id": "offset",
+          "category": "offset",
+          "value": 190000
+        },
+        {
+          "id": "home",
+          "category": "home",
+          "value": 800000,
+          "propertyGrowthRatePct": 0
+        },
+        {
+          "id": "asset-super-1",
+          "category": "super",
+          "owner": "person1",
+          "value": 120000
+        }
+      ],
+      "liabilityItems": [
+        {
+          "id": "home-loan",
+          "type": "homeLoan",
+          "linkedAssetId": "home",
+          "balance": 400000,
+          "repayment": 30000,
+          "repaymentFrequency": "annually",
+          "interestRatePct": 5.8,
+          "termYears": 30,
+          "repaymentType": "principalAndInterest"
+        }
+      ],
+      "incomeItems": [
+        {
+          "id": "salary",
+          "type": "salaryWages",
+          "owner": "person1",
+          "amount": 150000,
+          "frequency": "annually"
+        }
+      ],
+      "expenseItems": [
+        {
+          "id": "living",
+          "category": "living",
+          "amount": 40000,
+          "frequency": "annually"
+        }
+      ]
+    },
+    "sha256": "13690f757c221b0b79a92895aa1bad66a4e0f12a4f21233585901c39f0309462"
+  }
+]
