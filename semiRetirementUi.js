@@ -2046,6 +2046,86 @@
     };
   }
 
+  function buildSavedRetirementOutcome(view = {}) {
+    if (!view.isAvailable || !view.annualRows?.length) return null;
+    const rows = view.annualRows, end = rows.at(-1);
+    const full = view.keyResults?.accessibleWhenBothFullyRetired?.row;
+    const point = row => row ? { calendarYear: row.calendarYear,
+      ages: (row.ages || row.people || []).map(person => ({ id: person.id, name: person.name, age: person.age })) } : null;
+    const depletion = (field, milestone, withdrawal) => {
+      const canonical = milestone?.calendarYear && rows.find(row => row.calendarYear === milestone.calendarYear);
+      if (canonical) return { ...point(canonical), alreadyZero: false };
+      const depleted = rows.find(row => Number(row.household[field]) === 0 && Number(row.household[withdrawal]) > 0);
+      if (depleted) return { ...point(depleted), alreadyZero: false };
+      if (full && Number(full.household[field]) === 0) return { ...point(full), alreadyZero: true };
+      if (rows.every(row => Number(row.household[field]) === 0)) return { ...point(rows[0]), alreadyZero: true };
+      return null;
+    };
+    const capital = global.FFSSemiRetirementProjection?.retainedAssetsAtYear(end, false);
+    return {
+      version: 1,
+      people: (view.people || []).map(person => ({ id: person.id, name: person.name,
+        hasSemiRetirement: person.hasSemiRetirement, semiRetirementAge: person.semiRetirementAge,
+        fullRetirementAge: person.fullRetirementAge, superAccessAge: person.superAccessAge })),
+      fullRetirement: point(full),
+      accessibleAtRetirement: full?.household?.closingAccessibleInvestmentBalance ?? null,
+      superAtRetirement: full?.household?.totalSuperBalance ?? null,
+      fundingAssetsAtRetirement: full?.household?.totalInvestableAssets ?? null,
+      accessibleExhaustion: depletion("closingAccessibleInvestmentBalance", view.longevity?.accessibleFundsExhausted, "totalAccessibleWithdrawal"),
+      superExhaustion: depletion("totalSuperBalance", null, "totalSuperWithdrawal"),
+      horizon: point(end),
+      firstShortfall: point(rows.find(row => Number(row.household?.unmetSpending) > 0)),
+      capital: capital ? { totalNetEquity: capital.totalNetEquity, debtUnknown: capital.debtUnknown,
+        assets: capital.assets.map(asset => ({ name: asset.name, type: asset.type, netEquity: asset.netEquity })) } : null,
+    };
+  }
+
+  function savedRetirementChanges(base = {}, saved = {}) {
+    const changes = [];
+    const ignored = new Set(["id", "name", "sourceKey", "version", "mode", "growthRateSource", "propertyTypeGroup"]);
+    const labels = { fullRetirementAge: "full retirement", semiRetirementAge: "semi-retirement",
+      semiRetirementGrossIncome: "semi-retirement income", superAccessAge: "super access age",
+      fullRetirementLifestyleSpending: "Retirement spending", semiRetirementLifestyleSpending: "Semi-retirement spending",
+      externalAnnualAccessibleContribution: "Annual investing", annualReturnRatePct: "Investment return",
+        inflationRatePct: "Inflation", projectionEndAge: "Projection end age",
+        additionalContributionsStopAge: "additional super contributions stop age",
+        existingAdditionalConcessionalContributions: "additional super contributions" };
+      const human = key => labels[key] || key.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/Pct$/, " (%)").toLowerCase();
+    const walk = (before, after, prefix = "", key = "") => {
+      if (ignored.has(key)) return;
+      if (Array.isArray(before) || Array.isArray(after)) {
+        const a = Array.isArray(before) ? before : [], b = Array.isArray(after) ? after : [];
+        const ids = [...new Set([...a, ...b].map((item, index) => item.id || String(index)))];
+        ids.forEach(id => {
+          const left = a.find((item, index) => (item.id || String(index)) === id);
+          const right = b.find((item, index) => (item.id || String(index)) === id);
+          walk(left, right, `${right?.name || left?.name || right?.description || left?.description || human(key)} `);
+        });
+        return;
+      }
+      if ((before && typeof before === "object") || (after && typeof after === "object")) {
+        const a = before || {}, b = after || {};
+        const person = "hasSemiRetirement" in a || "hasSemiRetirement" in b;
+        for (const field of new Set([...Object.keys(a), ...Object.keys(b)])) {
+            if (person && field === "hasSemiRetirement") continue;
+            if (person && field === "additionalContributionsStopAge"
+              && !Number(a.existingAdditionalConcessionalContributions) && !Number(b.existingAdditionalConcessionalContributions)) continue;
+          if (person && ["semiRetirementAge", "semiRetirementGrossIncome"].includes(field)) {
+            walk(a.hasSemiRetirement ? a[field] : null, b.hasSemiRetirement ? b[field] : null, prefix, field);
+          } else walk(a[field], b[field], prefix || (["household", "scenario", "people"].includes(key) ? "" : key ? `${human(key)}: ` : ""), field);
+        }
+        return;
+      }
+      if (String(before ?? "") === String(after ?? "")) return;
+      changes.push({ label: `${prefix}${human(key)}`, before: before ?? null, after: after ?? null,
+        kind: /Age$/.test(key) ? "age" : /Pct$|Percent$/.test(key) ? "percent" : typeof (after ?? before) === "number"
+          && !/year|count/i.test(key) ? "money" : "plain",
+        annual: /income|spending|contribution/i.test(key) && !/balance/i.test(key) });
+    };
+    for (const key of ["people", "household", "accessibleInvestments", "assumptions", "scenario", "assets", "liabilities", "propertyIncome", "passiveIncome", "projectionStartYear", "projectionEndAge"]) walk(base[key], saved[key], "", key);
+    return changes;
+  }
+
   const SCENARIO_ADJUSTMENT_FIELDS = {
     fullRetirementLifestyleSpending: {
       path: "household.fullRetirementLifestyleSpending",
@@ -2203,6 +2283,8 @@
 
   global.FFSSemiRetirementUi = {
     buildSemiRetirementScenarioDefaults,
+    buildSavedRetirementOutcome,
+    savedRetirementChanges,
     basePlanSourceKey,
     projectionPropertyIncomeFromPlan,
     projectionPassiveIncomeFromPlan,

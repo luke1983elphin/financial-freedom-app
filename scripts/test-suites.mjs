@@ -1,6 +1,7 @@
 export const DEFAULT_SUITE_TIMEOUT_MS = 120_000;
 
 export const ACTIVE_TEST_SUITES = [
+  { id: "saved-retirement-cards", file: "tests/saved-retirement-cards.test.mjs", groups: ["all", "mjs", "semi-retirement", "saved-cards"] },
   { id: "final-modelling-assurance", file: "tests/final-modelling-assurance.test.mjs", groups: ["all", "mjs", "assurance"] },
   { id: "fi-wealth-cashflow", file: "tests/fi-wealth-cashflow.test.mjs", groups: ["all", "mjs", "fi-cashflow"] },
   { id: "retirement-exhaustion-retained-assets", file: "tests/retirement-exhaustion-retained-assets.test.mjs", groups: ["all", "mjs", "semi-retirement"] },

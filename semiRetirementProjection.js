@@ -2755,6 +2755,7 @@
   global.FFSSemiRetirementProjection = {
     featureFlags: FEATURE_FLAGS,
     projectRetirementScenario,
+    retainedAssetsAtYear,
     validateRetirementProjectionInputs: validateInputs,
     normaliseRetirementProjectionInputs: normaliseInputs,
     projectDebtYearForAudit: projectDebtYear,
