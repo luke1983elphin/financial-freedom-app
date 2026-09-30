@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+import {test} from 'node:test';
+import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
+const source=readFileSync(new URL('../app.js',import.meta.url),'utf8');
+const extract=name=>{const a=source.indexOf('  function '+name+'(');assert.ok(a>=0);return source.slice(a,source.indexOf('\n  function ',a+5));};
+const nodes={decisionList:{innerHTML:''},decisionPassiveIncomeSummary:{innerHTML:''}};
+const ctx={plan:{},escapeHtml:String,percentFromRatio:n=>String(n),dollarsPerDollar:String,summaryTile:(l,v)=>`<div>${l}: ${v}</div>`,personalisedResultsReadiness:()=>({readyForPersonalisedResults:true}),decisionPassiveIncomeSummaryHtml:()=>'',document:{getElementById:id=>nodes[id],querySelector:()=>null}};
+vm.runInNewContext(['modellingCopy','modellingInformationHtml','renderDecision','highestRecommendation','comparisonDiff','weeklyPriority'].map(extract).join('\n'),ctx);
+ctx.roundForDisplay=n=>Math.round(n*100)/100;ctx.money=n=>`$${n}`;
+test('Decision Engine displays alphabetical comparisons without scores, endorsement or result mutation',()=>{
+ const r={decisionOptions:[{label:'Extra super',score:.9,taxSaving:.1,afterTaxBenefit:.2,cashflowImpact:1},{label:'ETF/share investing',score:.1,taxSaving:0,afterTaxBenefit:.3,cashflowImpact:1}]};const before=JSON.stringify(r);ctx.renderDecision(r);
+ assert.equal(JSON.stringify(r),before);assert.ok(nodes.decisionList.innerHTML.indexOf('<h3 class="mt-1 text-xl font-black text-navy">ETF')<nodes.decisionList.innerHTML.indexOf('<h3 class="mt-1 text-xl font-black text-navy">Extra'));
+ assert.doesNotMatch(nodes.decisionList.innerHTML,/Priority score|Strongest opportunity|Worth considering|current ranking/);assert.match(nodes.decisionList.innerHTML,/subject to superannuation rules/);
+});
+test('dashboard observation does not endorse the highest-scoring option',()=>{assert.equal(ctx.highestRecommendation({decisionOptions:[{label:'Extra super'}]}),ctx.highestRecommendation({decisionOptions:[{label:'Offset account'}]}));});
+test('scenario money differences keep exact values without favourable colours',()=>{assert.equal(ctx.comparisonDiff(100,125).text,'+$25');assert.equal(ctx.comparisonDiff(100,125).tone,'');assert.equal(ctx.comparisonDiff(125,100,true).text,'$-25');});
+test('report comparisons do not select or present a winner',()=>{const code=extract('reportScenarioComparisonHtml');assert.doesNotMatch(code,/reportBestOverall\(|reportCategoryWinners\(|Better Result|winnerCards/);assert.match(code,/const compared = savedMetrics\[0\]/);});
+test('assumptions explain convenience defaults and actual limitations',()=>{const html=ctx.modellingInformationHtml();for(const phrase of ['not predictions','deterministic','not comprehensively','Age Pension not included','preservation and release','investment-property loan balances'])assert.ok(html.includes(phrase),phrase);});
+test('withdrawal and FI age disclosures do not promise retirement suitability',()=>{assert.match(ctx.modellingCopy().withdrawal,/not a guarantee/);assert.match(ctx.modellingCopy().fiAge,/not a recommended retirement age/);});
+test('weekly investing and super text describe entered allocations',()=>{const html=ctx.weeklyPriority({investmentTransferTotal:100,superTransferTotal:50});assert.match(html,/entered investing/);assert.match(html,/entered super contributions/);assert.doesNotMatch(html,/invest \$|contribute \$/);});
+test('report and saved scenario headings use neutral modelling language',()=>{assert.match(extract('reportPresentationHtml'),/Planning Review/);assert.match(extract('scenarioCardHtml'),/Key modelled outcome/);assert.match(extract('savedRetirementChangesHtml'),/Changes from the current plan/);});

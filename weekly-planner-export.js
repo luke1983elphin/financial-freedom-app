@@ -306,7 +306,7 @@
         text("Invest", STYLE.header),
         text("Contribute to super", STYLE.header),
         text("Expected closing bank balance", STYLE.header),
-        text("Weekly priority", STYLE.header),
+        text("Modelled weekly activity", STYLE.header),
         text("Income received", STYLE.header),
         text("Bills paid", STYLE.header),
         text("Investing done", STYLE.header),

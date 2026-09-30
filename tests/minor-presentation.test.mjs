@@ -6,7 +6,7 @@ import {load} from '../scripts/fi-cashflow-fixture.mjs';
 import {investmentReturnFixture} from '../scripts/investment-return-fixture.mjs';
 const {CALC}=load();
 const source=readFileSync(new URL('../app.js',import.meta.url),'utf8');
-const names=['investmentYieldDisplay','dynamicInput','linkedSetupInput','infoButtonHtml','summaryTile','agePensionExclusionHtml','renderAssumptions','renderSetupSummary','renderWizardResults','dashboardFutureMetricsHtml'];
+const names=['investmentYieldDisplay','dynamicInput','linkedSetupInput','infoButtonHtml','summaryTile','agePensionExclusionHtml','modellingCopy','modellingInformationHtml','renderAssumptions','renderSetupSummary','renderWizardResults','dashboardFutureMetricsHtml'];
 const code=names.map(name=>{const a=source.indexOf('  function '+name+'(');assert.ok(a>=0,name);return source.slice(a,source.indexOf('\n  function ',a+5));}).join('\n');
 const copyStart=source.indexOf('  const goalInfoCopy =');
 const copyCode=source.slice(copyStart,source.indexOf('\n  };',copyStart)+5)+'\nthis.copy=goalInfoCopy;';
@@ -58,8 +58,8 @@ test('target investing label and help remain distinct from affordable investment
  assert.doesNotMatch(nodes.setupSummary.innerHTML,/Configured annual investing/);
 });
 test('Live Summary super availability label is derived from the model result',()=>{
- const {ctx,nodes,r}=setup();ctx.renderSetupSummary(r);assert.ok(nodes.setupSummary.innerHTML.includes(`Super available from age ${r.superAccessAge}`));
- ctx.renderSetupSummary({...r,superAccessAge:65});assert.match(nodes.setupSummary.innerHTML,/Super available from age 65/);assert.match(ctx.copy.superAvailability.body,/different years/);
+ const {ctx,nodes,r}=setup();ctx.renderSetupSummary(r);assert.ok(nodes.setupSummary.innerHTML.includes(`Modelled super access age ${r.superAccessAge}`));
+ ctx.renderSetupSummary({...r,superAccessAge:65});assert.match(nodes.setupSummary.innerHTML,/Modelled super access age 65/);assert.match(ctx.copy.superAvailability.body,/different years/);
 });
 test('Age Pension exclusion and help appear in Live Summary including preliminary plans',()=>{
  const {ctx,nodes,r}=setup();ctx.renderSetupSummary(r);assert.match(nodes.setupSummary.innerHTML,/Age Pension is not included in these projections/);assert.match(nodes.setupSummary.innerHTML,/data-info-key="agePensionExclusion"/);

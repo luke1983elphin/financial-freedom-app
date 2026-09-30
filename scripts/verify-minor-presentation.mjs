@@ -58,7 +58,7 @@ try{
  }
  for(const [name,width,height] of [['desktop',1440,1100],['mobile',375,900]]){
   await page.setViewportSize({width,height});await page.evaluate(()=>{FFSStage1BrowserTestHooks.setWizardStep(8);FFSStage1BrowserTestHooks.closeDurabilityDialog();});
-  const summary=page.locator('#setupSummary');assert.match(await summary.innerText(),/Your target annual investing/);assert.match(await summary.innerText(),/Affordable cashflow used to invest/);assert.match(await summary.innerText(),/Super available from age 60/);
+  const summary=page.locator('#setupSummary');assert.match(await summary.innerText(),/Your target annual investing/);assert.match(await summary.innerText(),/Affordable cashflow used to invest/);assert.match(await summary.innerText(),/Modelled super access age 60/);
   for(const id of ['setupSummary','wizardResultsSummary']){assert.match(await page.locator('#'+id).innerText(),/Age Pension is not included in these projections/);await page.locator('#'+id).screenshot({path:resolve(out,`${id}-${name}.png`),style:'header { visibility: hidden !important; }'});}
   await help('targetAnnualInvesting',/may reduce the actual amount invested/,name);await help('superAvailability',/different years/,name);await help('agePensionExclusion',/age, residency, income, assets and household circumstances/,name);
   await page.evaluate(()=>FFSStage1BrowserTestHooks.setWizardStep(7));assert.match(await page.locator('#wizardMlsAssumption').innerText(),/0%, 1%, 1.25%, 1.5%/);assert.match(await page.locator('#wizardMlsAssumption').innerText(),/2026-27/);

@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
+import {resolve,join} from 'node:path';
+import vm from 'node:vm';
+import {investmentReturnFixture} from './investment-return-fixture.mjs';
+const baseline=resolve(process.argv[2]),candidate=resolve(process.argv[3]||'.'),out=resolve(process.argv[4]||'outputs/wording-parity');mkdirSync(out,{recursive:true});
+function runtime(root){const c={console,structuredClone};c.window=c;c.globalThis=c;vm.createContext(c);for(const f of ['calculator.js','semiRetirementProjection.js','semiRetirementUi.js','v2-data.js'])vm.runInContext(readFileSync(join(root,f),'utf8'),c);return c;}
+const before=runtime(baseline),after=runtime(candidate),fixtures=[...before.FFS_DATA.samplePlans.map(x=>({id:x.id,plan:x.plan})),...[false,true].map(simple=>({id:simple?'simple-configured':'populated-configured',plan:investmentReturnFixture(simple)}))];
+const json=x=>JSON.parse(JSON.stringify(x));
+function run(c,p){const current=c.FFSCalculator.calculatePlan(json(p));const scenario=json(p);scenario.investing.annualInvestingTarget=Number(scenario.investing.annualInvestingTarget||0)+1200;const scenarioResult=c.FFSCalculator.calculatePlan(scenario);const saved=JSON.parse(JSON.stringify({name:'User scenario name',plan:scenario,result:scenarioResult}));const draft=c.FFSSemiRetirementUi.buildSemiRetirementScenarioDefaults(json(p),current).draft;const retirement=c.FFSSemiRetirementUi.runSemiRetirementProjection(c.FFSSemiRetirementProjection,draft);return json({current,scenarioResult,savedReloadResult:c.FFSCalculator.calculatePlan(saved.plan),retirement});}
+const rows=[];for(const {id,plan} of fixtures){const a=run(before,plan),b=run(after,plan);writeFileSync(join(out,id+'-before.json'),JSON.stringify(a));writeFileSync(join(out,id+'-after.json'),JSON.stringify(b));assert.deepEqual(b,a,id);rows.push({id,fullResultsIdentical:true});}
+for(const f of ['calculator.js','semiRetirementProjection.js','semiRetirementUi.js','plan-schema.js','plan-mutations.js','scenario-overlay.js','weekly-plan.js'])assert.equal(readFileSync(join(candidate,f),'utf8').replaceAll('\r\n','\n'),readFileSync(join(baseline,f),'utf8').replaceAll('\r\n','\n'),f);
+writeFileSync(join(out,'summary.json'),JSON.stringify({fixtures:rows,numericalDifferences:0,scope:'Complete current-plan, changed-contribution scenario, saved/reloaded scenario and retirement results; calculation and saved-data modules identical after line-ending normalization'},null,2));console.log(`${rows.length} full-result fixtures identical; zero numerical differences.`);
