@@ -175,6 +175,7 @@ test("Integration V1G projection uses the current calculator tax helper", () => 
 test("Integration V1H current surplus and accessible investment values are not double counted", () => {
   const { result, defaults } = defaultsFor();
   const draft = defaults.draft;
+  draft.scenario.workingPhaseSurplusDestination = "accessible-investments";
   draft.accessibleInvestments.externalAnnualAccessibleContribution = 0;
   assert.equal(draft.accessibleInvestments.openingBalance, result.accessibleInvestmentAssets);
   const projected = UI.runSemiRetirementProjection(ENGINE, draft);

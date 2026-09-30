@@ -107,6 +107,7 @@ function loadAppUiHooks() {
   context.globalThis = context;
   vm.runInNewContext(readFileSync(CALCULATOR_PATH, "utf8"), context);
   vm.runInNewContext(readFileSync(WEEKLY_PLAN_PATH, "utf8"), context);
+  vm.runInNewContext(readFileSync(new URL("../semiRetirementUi.js", import.meta.url), "utf8"), context);
   vm.runInNewContext(readFileSync(APP_PATH, "utf8"), context);
   return {
     context,

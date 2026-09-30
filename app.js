@@ -4795,10 +4795,10 @@
     }
   }
 
-  // Only creation paths call this factory. Loading/importing old plans keeps legacy defaults.
+  // Only creation paths call this factory. Loading/importing plans preserves explicit choices.
   function newUserPlan() {
     const fresh = CALC.emptyPlan();
-    fresh.projectionSettings = { workingPhaseSurplusDestination: "enjoyment" };
+    fresh.projectionSettings = { workingPhaseSurplusDestination: window.FFSSemiRetirementUi.defaultWorkingPhaseSurplusDestination() };
     return fresh;
   }
 
