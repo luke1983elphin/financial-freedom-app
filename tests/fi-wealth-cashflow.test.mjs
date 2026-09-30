@@ -117,7 +117,7 @@ test('Future You uses the same selector at current next and zero-balance ages',(
   const source=readFileSync(new URL('../app.js',import.meta.url),'utf8');
   const names=['projectionRowAtAge','projectionYearForAge','mortgageBalanceAtAge','futureYouPreview'];
   const funcs=names.map(name=>{const start=source.indexOf('  function '+name+'(');return source.slice(start,source.indexOf('\n  function ',start+5));}).join('\n');
-  const p=household(CALC),r=CALC.calculatePlan(p),c={plan:p,CALC,engagementData:()=>({futureYouAge:43}),safeWithdrawalRate:()=>.04,engagementProgress:()=>({financialFreedomRaw:0})};
+  const p=household(CALC),r=CALC.calculatePlan(p),c={plan:p,CALC,futureYouSelectedAge:null,safeWithdrawalRate:()=>.04,engagementProgress:()=>({financialFreedomRaw:0})};
   vm.runInNewContext(funcs,c);assert.equal(c.futureYouPreview(r).totalFiWealth,690000);
-  c.engagementData=()=>({futureYouAge:44});assert.equal(c.futureYouPreview(r).accessibleFiAssets,r.fiWealthProjection[1].accessibleFiAssets);
+  c.futureYouSelectedAge=44;assert.equal(c.futureYouPreview(r).accessibleFiAssets,r.fiWealthProjection[1].accessibleFiAssets);
 });
