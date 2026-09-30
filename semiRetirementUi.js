@@ -604,6 +604,7 @@
 
   function basePlanSourceKey(plan = {}, result = {}) {
     return JSON.stringify({
+      workingPhaseSurplusDestination: plan.projectionSettings?.workingPhaseSurplusDestination ?? "accessible-investments",
       personal: {
         person1Name: plan.personal?.person1Name || "",
         person2Name: plan.personal?.person2Name || "",
@@ -746,7 +747,7 @@
         oneOffIncomeEvents: [],
         plannedConcessionalContributions: [],
         downsizeHomeEvent: defaultDownsizeHomeEvent(people, assets, currentYear()),
-        workingPhaseSurplusDestination: "accessible-investments",
+        workingPhaseSurplusDestination: plan.projectionSettings?.workingPhaseSurplusDestination ?? "accessible-investments",
         surplusDestination: "enjoyment",
         minimumAccessibleBalance: 0,
         minimumEstateBalanceAtEndAge: 0,
