@@ -292,15 +292,15 @@
     },
     superAvailability: {
       title: "Super availability",
-      body: "The balance shown is total super, not necessarily money available today. Each person's super becomes available when they reach the modelled access age. For couples, this can happen in different years.",
+      body: "The balance shown is total super, not necessarily money available today. Modelled access is assessed per person and can occur in different years. Actual access depends on applicable preservation and release rules and individual circumstances.",
     },
     agePensionExclusion: {
       title: "Age Pension is not included",
       body: "The model does not currently estimate Australian Age Pension entitlements. Eligibility and payment rates depend on factors including age, residency, income, assets and household circumstances. Any future Age Pension entitlement would therefore be additional to, or interact with, the results shown here and should be assessed separately.",
     },
     withdrawalRate: {
-      title: "Withdrawal Rate",
-      body: "This is the percentage of your investment portfolio you plan to withdraw each year. A lower rate usually means a safer but higher target.",
+      title: "Modelled withdrawal rate",
+      body: "Percentage of modelled FI assets assumed to be withdrawn annually for projection purposes. This is an editable modelling assumption and is not a recommended withdrawal rate.",
     },
     buildingWealthTargetAge: {
       title: "Building Wealth Target Age",
@@ -312,7 +312,7 @@
     },
     financialFreedomTargetAge: {
       title: "Financial Freedom Target Age",
-      body: "Your investments are projected to fully support your chosen lifestyle over the long term.",
+      body: "The model compares FI assets with a spending-based capital target. This is a modelling result, not a recommended retirement age.",
     },
     annualInvestingTarget: {
       title: "Annual Investing Target",
@@ -335,8 +335,8 @@
       body: "Financial Freedom progress compares accessible financial assets, including super when eligible, with your target capital. Investment-property equity contributes to Total FI Wealth but cannot fund spending without a modelled sale. Home equity remains separate. Linked financial-investment debt is deducted from accessible assets.",
     },
     sustainableIncome: {
-      title: "Estimated sustainable income",
-      body: "This estimates the annual income your current net FI assets may support using the selected withdrawal rate. It is separate from actual Passive Cash Income currently recorded in your plan.",
+      title: "Modelled annual withdrawal amount",
+      body: "Calculated by applying the selected withdrawal assumption to modelled FI assets. It is not a guarantee that this amount can be sustained. This is separate from entered Passive Cash Income.",
     },
     stslDebt: {
       title: "Study and Training Support Loan",
@@ -403,7 +403,7 @@
       body: "This estimates how much living costs may increase each year. The app uses this to keep future spending targets realistic.",
     },
     semiSuperAccessAge: {
-      title: "Assumed super access age",
+      title: "Modelled super access age",
       body: "The age this scenario assumes super becomes available. Actual access depends on superannuation preservation and conditions-of-release rules.",
     },
     semiAdditionalSuperContribution: {
@@ -700,6 +700,26 @@
     return `${((Number(value) || 0) * 100).toFixed(1)}%`;
   }
 
+  function modellingCopy() {
+    return {
+      short: "Educational modelling only — not financial advice.",
+      medium: "Financial Freedom provides educational modelling based on the information and assumptions entered. Results are estimates and are not financial advice or recommendations.",
+      full: "This tool provides educational financial modelling based on information and assumptions entered by the user. Results are estimates and projections, not guarantees or recommendations. Financial Freedom does not take into account all matters that may be relevant to a financial decision. Consider obtaining appropriately licensed financial advice before making decisions about financial products or significant financial strategies.",
+      assumptions: "Financial Freedom uses assumptions to illustrate possible future outcomes. Default assumptions are provided for modelling convenience and are not predictions of future returns. You can change assumptions to test different scenarios. Actual investment returns, inflation, interest rates, taxation and other outcomes will vary.",
+      super: "Superannuation projections are estimates based on the information and assumptions entered. Access to superannuation depends on applicable preservation and release rules and individual circumstances.",
+      tax: "Tax and STSL amounts are estimates for modelling purposes and may differ from actual assessments or obligations.",
+      pension: "These projections do not include any future Age Pension entitlement or payments. Actual eligibility and payment amounts depend on the rules and circumstances applying at the relevant time.",
+      fiAge: "Estimated from the assumptions entered. This is a modelling result, not a recommended retirement age.",
+      withdrawal: "Calculated by applying the selected withdrawal assumption to modelled FI assets. It is not a guarantee that this amount can be sustained.",
+      limitations: "Projections use deterministic assumptions rather than forecasts of market volatility. Investment returns, property values and inflation may differ materially from assumptions. Legislative rules may change. Fees, transaction costs and taxes are not comprehensively modelled; coverage depends on the inputs and projection used. Results depend on the completeness and accuracy of user inputs. Debt schedules differ between current-plan and retirement views; current-plan future debt and net-worth charts omit investment-property loan balances.",
+    };
+  }
+
+  function modellingInformationHtml() {
+    const copy = modellingCopy();
+    return `<details class="modelling-information"><summary>About modelling assumptions and model limitations</summary><p>${escapeHtml(copy.assumptions)}</p><h4>Model limitations</h4><p>${escapeHtml(copy.limitations)}</p><p>${escapeHtml(copy.tax)}</p><p>${escapeHtml(copy.super)}</p><p><strong>Age Pension not included.</strong> ${escapeHtml(copy.pension)}</p><p>${escapeHtml(copy.medium)}</p></details>`;
+  }
+
   function percentScore(value) {
     return `${Math.round(Number(value) || 0)}%`;
   }
@@ -729,13 +749,13 @@
       min: 40,
       nextAt: 100,
       name: "Financial Independence",
-      explanation: "Investments and passive income can fund a meaningful portion of the household's lifestyle.",
+      explanation: "The modelled withdrawal amount covers part of entered lifestyle spending.",
     },
     {
       min: 100,
       nextAt: null,
       name: "Financial Freedom",
-      explanation: "Investments and passive income are projected to fund the household's target lifestyle.",
+      explanation: "The modelled withdrawal amount meets entered lifestyle spending under the selected assumptions.",
     },
   ];
 
@@ -790,13 +810,13 @@
     if (insufficient) {
       actions.push("Complete the remaining plan information to calculate your financial stage.");
     } else {
-      if (emergencyTarget > 0 && cash < emergencyTarget) actions.push(`Build your emergency reserve to ${money(emergencyTarget)}.`);
-      if (surplus <= 0) actions.push("Maintain positive annual spare cashflow.");
-      if (investmentAssets <= 0) actions.push("Start building income-producing FI assets.");
-      if (debtRatio > 0.5 && totalDebt > 0) actions.push("Reduce debt to below 50% of total assets.");
-      if (lifestylePercent < 100 && investmentAssets > 0) actions.push(`Continue building FI assets toward ${money(result.targetCapital || 0)}.`);
+      if (emergencyTarget > 0 && cash < emergencyTarget) actions.push(`The model uses a cash-reserve reference of ${money(emergencyTarget)}.`);
+      if (surplus <= 0) actions.push("The model shows no positive annual spare cashflow.");
+      if (investmentAssets <= 0) actions.push("No income-producing FI assets are currently entered.");
+      if (debtRatio > 0.5 && totalDebt > 0) actions.push("Debt currently exceeds 50% of entered assets.");
+      if (lifestylePercent < 100 && investmentAssets > 0) actions.push(`The modelled FI asset target is ${money(result.targetCapital || 0)}.`);
     }
-    if (!actions.length) actions.push("Keep reviewing cashflow, debt and investment contributions so progress stays on track.");
+    if (!actions.length) actions.push("Cashflow, debt and contribution assumptions affect the projected outcome.");
     return {
       stage,
       stageIndex,
@@ -835,43 +855,43 @@
     },
     {
       name: "Building Stability",
-      purpose: "Create positive cashflow and start building reliable cash reserves.",
-      priority: "Keep regular spending below income and confirm the weekly plan.",
+      purpose: "Cashflow and cash reserves shown under the entered assumptions.",
+      priority: "Entered spending and income determine modelled cashflow.",
     },
     {
       name: "Emergency Ready",
-      purpose: "Build a cash buffer so unexpected costs do not derail the plan.",
-      priority: "Increase cash or offset savings toward three months of expenses.",
+      purpose: "Entered cash reserves compared with modelled expenses.",
+      priority: "The stage reference compares entered cash and offset with three months of expenses.",
     },
     {
       name: "Reducing Debt",
-      purpose: "Reduce pressure from loans, credit cards and other debts.",
-      priority: "Keep repayments on track and consider extra debt reduction scenarios.",
+      purpose: "Entered loans, credit cards and other debts.",
+      priority: "Entered repayments and debt balances determine the debt projection.",
     },
     {
       name: "Building Wealth",
-      purpose: "Invest regularly and grow income-producing assets.",
-      priority: "Maintain planned investment and super contributions.",
+      purpose: "Entered investment contributions and projected assets.",
+      priority: "Entered investment and super contributions are included in the projection.",
     },
     {
       name: "Growing Investment Income",
-      purpose: "Build enough investments for passive income to cover more lifestyle costs.",
-      priority: "Review whether current investing is enough for the target age.",
+      purpose: "Modelled investments and passive income compared with lifestyle costs.",
+      priority: "The model compares entered investing and target timing.",
     },
     {
       name: "Approaching Independence",
-      purpose: "Close the gap between investment income and the target lifestyle cost.",
-      priority: "Model the highest-impact scenarios before changing the plan.",
+      purpose: "Modelled investment income compared with target lifestyle costs.",
+      priority: "Scenarios illustrate the effects of different assumptions.",
     },
     {
       name: "Financial Independence",
       purpose: "Investments and passive income can fund a meaningful portion of lifestyle costs.",
-      priority: "Review accessibility, super timing and risk before relying on the result.",
+      priority: "Asset accessibility and super timing affect projected funding.",
     },
     {
       name: "Financial Freedom",
       purpose: "Investments and passive income are projected to fund the chosen lifestyle.",
-      priority: "Keep the plan reviewed and stress-test assumptions regularly.",
+      priority: "Different assumptions produce different projections.",
     },
   ];
 
@@ -931,11 +951,11 @@
     const nextStage = engagementJourneyStages[index + 1] || null;
     const actions = [];
     if (!hasPlanData) actions.push("Complete the Financial Plan to calculate your journey.");
-    if (surplus <= 0 && hasPlanData) actions.push("Create positive final projected surplus.");
-    if (emergency < 3 && hasPlanData) actions.push(`Build cash or offset reserves toward ${emergency.toFixed(1)} of 3 months covered.`);
-    if ((invested <= 0 && result.annualInvestmentContributions <= 0) && hasPlanData) actions.push("Start building income-producing investments.");
-    if (debt > 0 && result.totalAssets > 0 && debt > result.totalAssets * 0.5) actions.push("Reduce debt pressure below 50% of total assets.");
-    if (progress.financialIndependenceRaw < 100 && invested > 0) actions.push(`Grow FI assets toward ${money(result.targetCapital || 0)}.`);
+    if (surplus <= 0 && hasPlanData) actions.push("Final projected surplus is zero or negative.");
+    if (emergency < 3 && hasPlanData) actions.push(`Entered cash and offset cover ${emergency.toFixed(1)} months of modelled expenses; the stage reference is 3 months.`);
+    if ((invested <= 0 && result.annualInvestmentContributions <= 0) && hasPlanData) actions.push("No income-producing investments are entered.");
+    if (debt > 0 && result.totalAssets > 0 && debt > result.totalAssets * 0.5) actions.push("Debt exceeds 50% of entered assets.");
+    if (progress.financialIndependenceRaw < 100 && invested > 0) actions.push(`The modelled FI target is ${money(result.targetCapital || 0)}.`);
     if (!actions.length) actions.push(stage.priority);
     return {
       index,
@@ -1146,8 +1166,8 @@
     if (goal && goalRemaining(goal) > 0) {
       const suggested = Math.min(goalRemaining(goal), Math.max(50, Number(goal.recurringAmount) || 100));
       return {
-        title: `Add progress to ${goal.name}`,
-        text: `Recording ${money(suggested)} would move this goal closer. Only record money you have actually set aside.`,
+        title: `Recorded progress for ${goal.name}`,
+        text: "Only money actually set aside belongs in recorded goal progress.",
         action: "add-goal-progress",
         actionLabel: "Add Progress",
         goalId: goal.id,
@@ -1156,13 +1176,13 @@
     if ((Number(result.annualInvestmentContributions) || 0) > 0) {
       return {
         title: "Review your investment contribution",
-        text: "Check that this week's planned investing is still affordable after bills and spending.",
+        text: "This week's entered investing is included in projected cashflow after bills and spending.",
         action: "investments",
         actionLabel: "Review Investments",
       };
     }
     return {
-      title: "You are on track",
+      title: "Current plan observations",
       text: "A quick weekly review will keep your journey current.",
       action: "dashboard",
       actionLabel: "Review Progress",
@@ -1586,12 +1606,7 @@
   }
 
   function highestRecommendation(result) {
-    const top = result.decisionOptions[0];
-    if (!top) return "Load a sample plan or start a plan to see your next best step.";
-    if (top.label === "Extra super") return "Consider extra super: the model shows a strong estimated tax and long-term wealth benefit.";
-    if (top.label === "Offset account") return "Consider offset savings: it may reduce interest while keeping cash accessible.";
-    if (top.label === "ETF/share investing") return "Consider investing more: it may improve long-term growth while staying accessible.";
-    return "Consider extra debt repayments: it may reduce interest and strengthen your balance sheet.";
+    return result.decisionOptions.length ? "Compare modelled cashflow, debt, investment and super outcomes under your selected assumptions." : "Enter plan information to explore modelled outcomes.";
   }
 
   function celebrationItems(result) {
@@ -1656,9 +1671,9 @@
         ? `You're spending ${expenseVariancePct.toFixed(1)}% more than planned.`
         : "Your spending is close to plan.";
     const recommendation = Math.abs(expenseVariancePct) >= 5
-      ? `Your actual spending trend differs from the Financial Plan. Review whether the strategic spending assumption should be updated.`
+      ? `Recorded spending differs from the spending assumption in the Financial Plan.`
       : Math.abs(incomeTrendPct) >= 5
-        ? `Your income trend differs from the Financial Plan. Review whether your strategic income assumption should be updated.`
+        ? `Recorded income differs from the income assumption in the Financial Plan.`
         : missedInvestments >= 2
           ? `Investment contributions have been missed ${missedInvestments} times. Review whether the weekly transfer target is still realistic.`
           : `You're still projected to achieve Financial Freedom at ${targetAgeOutcome(result).toLowerCase()}, based on the current Financial Plan assumptions.`;
@@ -2704,7 +2719,7 @@
       {
         icon: "List",
         title: "Weekly Mission",
-        description: "Receive personalised weekly actions to help improve your cashflow, savings and long-term wealth.",
+        description: "Explore weekly cashflow observations based on the information and assumptions entered.",
       },
       {
         icon: "AI",
@@ -4514,7 +4529,7 @@
     card.innerHTML = `
       <span class="ai-beta-label">Private Beta</span>
       <h3>AI Financial Freedom Insights</h3>
-      <p>Receive a personalised explanation of your financial position, identify your biggest opportunities and explore strategies that may help you reach financial freedom sooner.</p>
+      <p>Explore educational explanations of the modelled results and compare scenario assumptions.</p>
       ${completion.complete
         ? `<button class="btn btn-primary mt-4" type="button" data-ai-insights-action="open">Open AI Insights</button>`
         : `<div class="ai-locked-note">
@@ -4572,8 +4587,8 @@
       <article class="ai-result-card">
         <div class="ai-result-card-heading">
           <h4>${escapeHtml(item.title)}</h4>
-          ${item.importance ? `<span class="ai-chip">${escapeHtml(item.importance)}</span>` : ""}
-          ${item.potentialImpact ? `<span class="ai-chip">${escapeHtml(item.potentialImpact)} impact</span>` : ""}
+
+
         </div>
         <p>${escapeHtml(item.explanation || item.reason || "")}</p>
         ${item.tradeOffs?.length ? `<ul>${item.tradeOffs.map((tradeOff) => `<li>${escapeHtml(tradeOff)}</li>`).join("")}</ul>` : ""}
@@ -4601,8 +4616,8 @@
           ${renderAiInsightList(report.pressurePoints)}
         </div>
         <div class="ai-report-section">
-          <h3>Highest-Priority Opportunities</h3>
-          ${renderAiInsightList(report.rankedOpportunities)}
+          <h3>Items to Review</h3>
+          ${renderAiInsightList([...(report.rankedOpportunities || [])].sort((a, b) => a.title.localeCompare(b.title)))}
         </div>
         <div class="ai-report-section">
           <h3>Scenarios Worth Exploring</h3>
@@ -4623,7 +4638,7 @@
           }).join("") : `<p class="ai-empty-note">No scenario suggestions were returned.</p>`}
         </div>
         <div class="ai-report-section">
-          <h3>Suggested Action Plan</h3>
+          <h3>Planning Review</h3>
           <div class="ai-action-grid">
             <article><h4>Next 30 Days</h4><ul>${report.actionPlan.next30Days.map((item) => `<li>${escapeHtml(item)}</li>`).join("") || "<li>Review your plan details.</li>"}</ul></article>
             <article><h4>Next 12 Months</h4><ul>${report.actionPlan.next12Months.map((item) => `<li>${escapeHtml(item)}</li>`).join("") || "<li>Model one practical scenario.</li>"}</ul></article>
@@ -5410,9 +5425,9 @@
     const errors=CALC.investmentReturnValidation(item);
     const amounts=errors.length ? null : CALC.investmentReturnAmounts(item);
     return `<section class="investment-return-section"><h4>Investment return assumptions</h4><div class="input-grid">
-      ${field("expectedTotalReturnPct","Expected total return (%)",{step:"0.1",infoKey:"investmentReturn"},"Pre-filled long-term modelling assumption. You can change this if you want to use a different assumption.")}
+      ${field("expectedTotalReturnPct","Assumed annual total return (%)",{step:"0.1",infoKey:"investmentReturn"},"Modelling assumption for the estimated annual total return of this investment. Change this assumption if you want to test a different return.")}
       ${caps.supportsInvestmentIncomeYield ? `${field("incomeTreatment","Investment income treatment",{type:"select",options:[["reinvest",`Reinvest ${treatmentLabel}`],["cash",`Take ${treatmentLabel} as cash`]]})}
-      ${field("expectedIncomeYieldPct",crypto ? "Existing investment income yield (%)" : managed ? "Expected distribution yield (%)" : "Expected dividend / distribution yield (%)",{step:"any"},crypto ? "Your previously configured investment income assumption is retained. This forms part of the total return above." : "Estimated percentage of the investment value received as dividends or distributions each year. This forms part of the total return above.")}
+      ${field("expectedIncomeYieldPct",crypto ? "Existing investment income yield (%)" : managed ? "Assumed income/distribution yield (%)" : "Assumed dividend yield (%)",{step:"any"},crypto ? "Your previously configured investment income assumption is retained. This forms part of the total return above." : "Modelling assumption for the portion of total return represented by dividends or distributions. Actual dividends and investment returns may vary.")}
       ${field("owner","Investment income owner",{type:"select",options:incomeOwnerOptions("dividends")})}
       ${!item.owner || item.owner === "joint" ? field("person1AllocationPercentage",`${personDisplayName(1)} income allocation (%)`,{step:"1"})+field("person2AllocationPercentage",`${personDisplayName(2)} income allocation (%)`,{step:"1"}) : ""}` : ""}
       </div>
@@ -6336,7 +6351,7 @@
     container.innerHTML = `
       <div class="input-grid">${visible.map(field).join("")}</div>
       <details class="setup-advanced-section mt-4"><summary>Advanced assumptions</summary><div class="input-grid mt-4">${advanced.map(field).join("")}</div></details>
-      <div id="wizardMlsAssumption" class="mt-4"></div>`;
+      <div id="wizardMlsAssumption" class="mt-4"></div>${modellingInformationHtml()}`;
   }
 
   function renderGoalCollection(containerId) {
@@ -6411,11 +6426,11 @@
       { label: "Extra super contributions", path: "investing.extraSuperContributions", step: "1000", infoKey: "extraSuperContributions" },
     ];
     const assumptionFields = [
-      { label: "Expected investment return (%)", path: "investing.expectedInvestmentReturnPct", step: "0.1", infoKey: "investmentReturn" },
-      { label: "Expected super return (%)", path: "investing.expectedSuperReturnPct", step: "0.1" },
+      { label: "Assumed annual investment return (%)", path: "investing.expectedInvestmentReturnPct", step: "0.1", infoKey: "investmentReturn" },
+      { label: "Assumed annual super return (%)", path: "investing.expectedSuperReturnPct", step: "0.1" },
       { label: "Inflation (%)", path: "investing.inflationPct", step: "0.1", infoKey: "inflationRate" },
       { label: "Wage growth (%)", path: "investing.wageGrowthPct", step: "0.1" },
-      { label: "Safe withdrawal rate (%)", path: "investing.safeWithdrawalRatePct", step: "0.1", infoKey: "withdrawalRate" },
+      { label: "Modelled withdrawal rate (%)", path: "investing.safeWithdrawalRatePct", step: "0.1", infoKey: "withdrawalRate" },
     ];
     const downsizingFields = [
       {
@@ -6470,10 +6485,10 @@
     renderCashflowInputs("incomeExpenseForm");
     renderForm("investingForm", [
       { label: "Annual investing target", path: "investing.annualInvestingTarget", step: "1000", infoKey: "annualInvestingTarget" },
-      { label: "Expected investment return (%)", path: "investing.expectedInvestmentReturnPct", step: "0.1" },
+      { label: "Assumed annual investment return (%)", path: "investing.expectedInvestmentReturnPct", step: "0.1" },
       { label: "Inflation (%)", path: "investing.inflationPct", step: "0.1" },
       { label: "Wage growth (%)", path: "investing.wageGrowthPct", step: "0.1" },
-      { label: "Safe withdrawal rate (%)", path: "investing.safeWithdrawalRatePct", step: "0.1" },
+      { label: "Modelled withdrawal rate (%)", path: "investing.safeWithdrawalRatePct", step: "0.1" },
     ]);
     const linkedInvestmentSetup = document.getElementById("linkedInvestmentSetup");
     if (linkedInvestmentSetup) linkedInvestmentSetup.innerHTML = linkedInvestmentRecordsHtml();
@@ -6481,7 +6496,7 @@
       { label: superDisplayName(1), path: "assets.superPerson1", step: "1000" },
       { label: superDisplayName(2), path: "assets.superPerson2", step: "1000" },
       { label: "Extra super contributions", path: "investing.extraSuperContributions", step: "1000", infoKey: "extraSuperContributions" },
-      { label: "Expected super return (%)", path: "investing.expectedSuperReturnPct", step: "0.1" },
+      { label: "Assumed annual super return (%)", path: "investing.expectedSuperReturnPct", step: "0.1" },
     ]);
     appendEmployerSuperPanel("superForm");
     renderForm("wizardAboutForm", aboutFields);
@@ -6626,15 +6641,15 @@
     const gap = Math.max(0, (Number(milestone.requiredCapital) || 0) - (Number(result.financialIndependenceAssets) || 0));
     const surplus = Number(result.finalProjectedCashSurplus) || 0;
     if (achieved) {
-      return `This milestone is currently reached based on the assumptions used. Keep checking cashflow, debt and investment contributions so progress stays on track.`;
+      return `This milestone is currently reached under the assumptions entered. Different assumptions can change the result.`;
     }
     if (surplus > 0) {
-      return `${money(gap)} more financial independence assets are estimated for this milestone. Your model shows ${money(surplus)} final annual surplus, so directing part of that surplus to investments, offset or debt reduction may help you move faster.`;
+      return `${money(gap)} more financial independence assets are estimated for this milestone. The model shows ${money(surplus)} final annual surplus. Different allocation assumptions can be compared in scenarios.`;
     }
     if (isCurrent) {
-      return `${money(gap)} more financial independence assets are estimated for this milestone. The current plan shows a cashflow shortfall, so reviewing expenses, loan repayments or gross income assumptions may be the first practical step.`;
+      return `${money(gap)} more financial independence assets are estimated for this milestone. The current model shows a cashflow shortfall under the entered expense, loan repayment and gross income assumptions.`;
     }
-    return `${money(gap)} more financial independence assets are estimated for this milestone. This is a future target; focus first on the highlighted current milestone.`;
+    return `${money(gap)} more financial independence assets are estimated for this milestone. This is a future modelling threshold under the entered assumptions.`;
   }
 
   function milestoneCards(result) {
@@ -6701,7 +6716,7 @@
         ${metricCard("Financial Freedom progress", plainPercent(percent), "", "Current net FI assets divided by target FI assets.", "financialFreedomProgress")}
       </div>
       <button class="btn btn-primary mt-4 w-full justify-center" type="button" data-view="dashboard">View Dashboard</button>
-      ${agePensionExclusionHtml()}
+      ${agePensionExclusionHtml()}<p class="field-help">${escapeHtml(modellingCopy().medium)}</p>
     `;
   }
 
@@ -6799,14 +6814,14 @@
         <div class="engagement-progress-track" aria-label="Weekly mission ${mission.percent}% complete"><span style="width:${mission.percent}%"></span></div>
         ${nextTask ? `
           <div class="dashboard-current-action">
-            <span class="metric-label">Current recommended action</span>
-            <div class="dashboard-task-button dashboard-task-recommendation" aria-label="Current recommended action">
+            <span class="metric-label">Current observation</span>
+            <div class="dashboard-task-button dashboard-task-recommendation" aria-label="Current observation">
               <strong>${escapeHtml(nextTask.title)}</strong>
             </div>
           </div>
         ` : `
           <div class="dashboard-current-action">
-            <span class="metric-label">Current recommended action</span>
+            <span class="metric-label">Current observation</span>
             <strong>Weekly Mission complete</strong>
             <p class="field-help">All weekly actions are recorded. Open the Weekly Plan if you want to review or correct anything.</p>
           </div>
@@ -7030,7 +7045,7 @@
         <p id="freedomStageText">${escapeHtml(stage.explanation)}</p>
         <p id="freedomPassiveText" class="progress-caption">Based on current net FI assets compared with your target FI assets. Passive Cash Income is tracked separately.</p>
         <div class="dashboard-stage-next">
-          <span class="metric-label">What helps next</span>
+          <span class="metric-label">Current observation</span>
           <strong>${escapeHtml(stageInfo.actions[0] || milestone.text)}</strong>
         </div>
       `;
@@ -7081,14 +7096,14 @@
       metricCard("Target FI Assets", money(result.targetCapital), "", "Annual lifestyle spending divided by the selected withdrawal rate.", "targetFiAssets"),
       metricCard("Annual Lifestyle Target", money(target), "", "The estimated yearly amount you want investments to support once you reach Financial Freedom.", "annualLifestyleTarget"),
       metricCard("Remaining Required", money(result.fiTargetRemaining ?? Math.max(0, result.targetCapital - result.financialIndependenceAssets)), "", "", "remainingRequired"),
-      metricCard("Estimated Sustainable Income", money(result.estimatedSustainableIncomeFromCurrentFiAssets), "", "Current net FI assets multiplied by the selected withdrawal rate.", "sustainableIncome"),
+      metricCard("Modelled Annual Withdrawal Amount", money(result.estimatedSustainableIncomeFromCurrentFiAssets), "", "Current net FI assets multiplied by the selected withdrawal rate.", "sustainableIncome"),
       metricCard("Passive Cash Income", money(passiveIncome), "", "Estimated annual cash income from investments, such as dividends, interest and net rental income.", "passiveIncome"),
       metricCard("Projected Financial Investment Growth", money(result.projectedFinancialInvestmentGrowth ?? result.projectedInvestmentGrowth ?? 0), "", "Estimated annual growth on gross financial investments before deducting related investment debt.", "projectedInvestmentGrowth"),
       ...(result.investmentReturnSummary ? [metricCard("Investment cash income",money(result.investmentReturnSummary.cashIncome),"","Configured distributions included once in passive cash income."),metricCard("Total financial investment return",money(result.investmentReturnSummary.totalReturn),"","Retained financial return plus configured cash distributions.","investmentReturn")] : []),
       metricCard("Projected Property Growth", money(result.projectedPropertyGrowth || 0), "", "Estimated annual growth on gross investment property values.", "projectedPropertyGrowth"),
       metricCard("Combined Wealth Creation", money(result.combinedWealthCreation || 0), "", "Passive Cash Income plus projected financial investment growth and projected property growth.", "combinedWealthCreation"),
       metricCard("Annual Living Expenses", money(livingExpenses), "", "This is calculated from your recurring expense items and excludes investing and loan principal repayments."),
-      metricCard("Highest Priority", highestRecommendation(result)),
+      metricCard("Modelling observation", highestRecommendation(result)),
       weeklyHealthCheckCard(result),
     ].join("");
     const passiveBreakdown = document.getElementById("dashboardPassiveIncomeBreakdown");
@@ -7906,12 +7921,13 @@
       ...(result.taxEstimate.medicareLevySurchargeEstimate?.partYearOverlapAssumption ? [["Part-year MLS assumption", result.taxEstimate.medicareLevySurchargeEstimate.partYearOverlapAssumption]] : []),
       ["STSL compulsory repayment assumptions", `Estimated above $69,528 repayment income and capped by current balance when entered`],
       ["Concessional contributions tax", "15% applied before money is invested in super"],
-      ["Safe withdrawal rate", `${Number(plan.investing.safeWithdrawalRatePct || 0).toFixed(1)}% estimate`],
-      ["Super access age", `Age ${result.superAccessAge} in this model`],
+      ["Modelled withdrawal rate", `${Number(plan.investing.safeWithdrawalRatePct || 0).toFixed(1)}% estimate`],
+      ["Modelled super access age", `Age ${result.superAccessAge} in this model`],
       ["Important limitations", governance.deferredLimitations.join(" ")],
     ];
     container.innerHTML = `${governance.warning ? `<p class="tax-note status-amber">${escapeHtml(governance.warning)}</p>` : ""}${rows.map(([label, value, infoKey]) => summaryTile(label, value, "", infoKey)).join("")}`;
     const wizardMls = document.getElementById("wizardMlsAssumption");
+    container.innerHTML += modellingInformationHtml();
     if (wizardMls) wizardMls.innerHTML = summaryTile(mlsAssumption[0], mlsAssumption[1], "", mlsAssumption[2]);
   }
 
@@ -8630,7 +8646,7 @@
         <details class="semi-retirement-input-details mt-4">
           <summary>More assumptions</summary>
           <div class="input-grid mt-4">
-            ${semiRetirementInput({ label: "Assumed super access age", path: `${prefix}.superAccessAge`, step: "1", infoKey: "semiSuperAccessAge", help: "This is a modelling assumption, not a legal determination." })}
+            ${semiRetirementInput({ label: "Modelled super access age", path: `${prefix}.superAccessAge`, step: "1", infoKey: "semiSuperAccessAge", help: "This is a modelling assumption, not a legal determination." })}
             ${semiRetirementInput({ label: "Current super balance", path: `${prefix}.openingSuperBalance`, step: "1000" })}
             ${semiRetirementInput({ label: "Employer super rate (%)", path: `${prefix}.employerSuperRatePct`, step: "0.1", help: "Pre-filled from the selected financial year where available." })}
             ${semiRetirementInput({ label: "Current additional super contribution", path: `${prefix}.existingAdditionalConcessionalContributions`, step: "1000", infoKey: "semiAdditionalSuperContribution", help: "Temporary scenario contribution amount." })}
@@ -9143,7 +9159,7 @@
         </div>
         <div class="semi-retirement-snapshot-grid mt-4">
           ${semiRetirementCards}
-          ${semiRetirementMetricCard("Fully retire", fullyRetire, "Employment income stops at the selected ages.")}
+          ${semiRetirementMetricCard("Modelled full retirement", fullyRetire, "Employment income stops at the selected ages.")}
           ${semiRetirementMetricCard("Debt-free", debtFree.value, debtFree.note)}
           ${semiRetirementMetricCard("Investments before super last to", accessibleLast.value, accessibleLast.note, viewModel.status?.type === "shortfall" ? "is-warning" : "")}
           ${semiRetirementMetricCard(viewModel.status?.type === "shortfall" ? "Funding shortfall starts" : "Lifestyle funded to", lifestyleFundedTo.value, lifestyleFundedTo.note, viewModel.status?.type === "shortfall" ? "is-warning" : "is-positive")}
@@ -9656,7 +9672,7 @@
           ${renderSemiRetirementComparisonMainDifferences(scenarioSet)}
         </section>
         <section>
-          <h2>Key outcomes</h2>
+          <h2>Key modelled outcomes</h2>
           <table class="semi-retirement-print-table">
             <thead>
               <tr><th>Outcome</th>${scenarioSet.map((scenario) => `<th>${escapeHtml(scenario.name)}</th>`).join("")}</tr>
@@ -9707,7 +9723,7 @@
           <p>This report illustrates projected outcomes based on the information and assumptions entered. Results are estimates, not guaranteed outcomes, and do not replace professional financial, taxation or legal advice.</p>
           <p>Currency note: lifestyle inputs are entered in today's dollars. Future balances and projected spending outputs are nominal future values where the existing projection engine inflates them.</p>
           <p>Property equity contributes to projected net worth but is not automatically available to fund retirement spending unless a specific strategy releases it.</p>
-          <p>Super access ages used in this report are scenario assumptions and are not a legal determination of eligibility to access super.</p>
+          <p>Modelled super access ages used in this report are scenario assumptions and are not a legal determination of eligibility to access super.</p>
           <p>${escapeHtml(CALC.getRuleGovernance().futureRuleAssumption)}</p>
         </section>
       </article>
@@ -9756,7 +9772,7 @@
       <section class="semi-retirement-results-section">
         <div class="card-subheading">
           <h4>Retirement Timeline</h4>
-          <p>Key events are ordered by the annual projection output.</p>
+          <p>Modelled events are ordered by the annual projection output; retirement dates reflect the selected scenario.</p>
         </div>
         ${timeline.length ? `
           <ol class="semi-retirement-timeline">
@@ -9766,7 +9782,7 @@
                   <strong>${escapeHtml(String(group.calendarYear))}</strong>
                   <span>${escapeHtml(semiRetirementAgeList(group.ages || []))}</span>
                 </div>
-                <ul>${group.events.map((event) => `<li><strong class="semi-retirement-timeline-title">${escapeHtml(event.title)}</strong>${event.detail ? `<span class="semi-retirement-timeline-detail">${escapeHtml(event.detail)}</span>` : ""}</li>`).join("")}</ul>
+                <ul>${group.events.map((event) => `<li><strong class="semi-retirement-timeline-title">Modelled: ${escapeHtml(event.title)}</strong>${event.detail ? `<span class="semi-retirement-timeline-detail">${escapeHtml(event.detail)}</span>` : ""}</li>`).join("")}</ul>
               </li>
             `).join("")}
           </ol>
@@ -10492,11 +10508,12 @@
         <div class="card-subheading">
           <div>
             <span class="metric-label">Projection results</span>
-            <h4>Your Retirement Plan Results</h4>
+            <h4>Modelled Retirement Results</h4>
             <p>Based on the ages, income, spending, investment and return assumptions entered above.</p>
           </div>
           <button class="btn btn-primary" type="button" data-save-stage-g-scenario="retirement">Save Scenario</button>
         </div>
+        <p class="field-help">${escapeHtml(modellingCopy().medium)}</p><p class="field-help">${escapeHtml(modellingCopy().super)}</p><p class="field-help"><strong>Age Pension not included.</strong> ${escapeHtml(modellingCopy().pension)}</p>
         ${renderSemiRetirementSnapshotHtml(viewModel)}
         ${renderSemiRetirementComparisonHtml(viewModel)}
         ${renderSemiRetirementAdjustmentsHtml(resultDraft)}
@@ -10530,7 +10547,7 @@
           <p>Changes here apply to this scenario only and won't change your Financial Plan.</p>
         </div>
         <details class="semi-retirement-disclaimer">
-          <summary>About this projection</summary>
+          <summary>About this projection</summary>${modellingInformationHtml()}
           <p>This projection uses the information and assumptions entered in the app to illustrate possible future outcomes. Results are estimates, not predictions.</p>
           <p>Supported enacted tax rules are applied for each financial year, then the last supported rule set is held for later years. Future thresholds are not indexed unless enacted.</p>
         </details>
@@ -10605,7 +10622,7 @@
     const saveButton = document.querySelector('[data-save-stage-g-scenario="decision-what-if"]');
     const customDetails = document.getElementById("customScenarioDetails");
     if (!readiness.readyForPersonalisedResults) {
-      if (decisionList) decisionList.innerHTML = readinessGateHtml(readiness, "personalised recommendations");
+      if (decisionList) decisionList.innerHTML = readinessGateHtml(readiness, "scenario comparisons");
       const passiveSummary = document.getElementById("decisionPassiveIncomeSummary");
       if (passiveSummary) passiveSummary.innerHTML = "";
       if (saveButton) saveButton.disabled = true;
@@ -10614,11 +10631,11 @@
     }
     if (saveButton) saveButton.disabled = false;
     customDetails?.classList.remove("hidden");
-    decisionList.innerHTML = result.decisionOptions.map((option, index) => `
+    decisionList.innerHTML = `<p class="field-help decision-model-notice">${escapeHtml(modellingCopy().medium)} Options are shown alphabetically, without a recommended option.</p>` + [...result.decisionOptions].sort((a, b) => a.label.localeCompare(b.label)).map((option, index) => `
       <article class="card decision-coach-card">
         <div class="flex items-start justify-between gap-4">
           <div>
-            <span class="text-sm font-bold text-success">${index === 0 ? "Strongest opportunity" : index === 1 ? "Worth considering" : "Compare"}</span>
+            <span class="text-sm font-bold text-success">Modelled comparison</span>
             <h3 class="mt-1 text-xl font-black text-navy">${escapeHtml(option.label)}</h3>
           </div>
           <strong class="rounded-full bg-blue-50 px-3 py-1 text-sm text-blue-700">Option ${index + 1}</strong>
@@ -10629,8 +10646,8 @@
         </div>
         <p class="field-help">Annual comparison using the current rates and tax assumptions. Longer-term outcomes are shown in the scenario results below.</p>
         <div class="coach-section">
-          <span>Why it matters</span>
-          <p>${escapeHtml(option.explanation)}</p>
+          <span>Modelled effect</span>
+          <p>${escapeHtml(option.label === "Extra super" ? "Models the entered contribution after contributions tax and the estimated personal tax effect. Access remains subject to superannuation rules and individual circumstances." : option.label === "ETF/share investing" ? "Uses the assumed return after the model’s simplified marginal-tax adjustment. Actual investment values and returns may vary." : option.explanation)}</p>
         </div>
         <div class="decision-card-actions">
           <button class="btn" type="button" data-decision-explore="${escapeHtml(option.label)}">Explore</button>
@@ -10639,8 +10656,8 @@
           <summary>View details</summary>
           <div class="summary-grid mt-3">
             ${summaryTile("Cashflow impact", `${dollarsPerDollar(option.cashflowImpact)} cost per $1 modelled`, "", "decisionCashflowImpact")}
-            ${summaryTile("Priority score", percentFromRatio(option.score))}
-            ${summaryTile("Raw model ranking input", `Option ${index + 1} in current ranking`)}
+
+
             ${summaryTile("Financial freedom progress", "Model this below to see the plan result", "", "decisionFreedomProgress")}
           </div>
         </details>
@@ -11582,12 +11599,12 @@
   function weeklyPriority(week) {
     const actions = [];
     if (week.receiptsTotal > 0) actions.push(`${money(week.receiptsTotal)} of estimated net income is expected`);
-    if (week.essentialTotal > 0) actions.push(`pay ${money(week.essentialTotal)} of bills and spending`);
-    if (week.provisionsTotal > 0) actions.push(`set aside ${money(week.provisionsTotal)} for future expenses`);
-    if (week.offsetTransferTotal > 0) actions.push(`transfer ${money(week.offsetTransferTotal)} to offset`);
-    if (week.debtTransferTotal > 0) actions.push(`pay ${money(week.debtTransferTotal)} extra off debt`);
-    if (week.investmentTransferTotal > 0) actions.push(`invest ${money(week.investmentTransferTotal)}`);
-    if (week.superTransferTotal > 0) actions.push(`contribute ${money(week.superTransferTotal)} to super`);
+    if (week.essentialTotal > 0) actions.push(`${money(week.essentialTotal)} of entered bills and spending`);
+    if (week.provisionsTotal > 0) actions.push(`${money(week.provisionsTotal)} of provisions for future expenses`);
+    if (week.offsetTransferTotal > 0) actions.push(`${money(week.offsetTransferTotal)} of entered offset transfers`);
+    if (week.debtTransferTotal > 0) actions.push(`${money(week.debtTransferTotal)} of entered extra debt repayments`);
+    if (week.investmentTransferTotal > 0) actions.push(`${money(week.investmentTransferTotal)} of entered investing`);
+    if (week.superTransferTotal > 0) actions.push(`${money(week.superTransferTotal)} of entered super contributions`);
     if (!actions.length) return "Review expected money in, bills and the closing bank balance for this week.";
     return `This week, ${actions.join(", ")}.`;
   }
@@ -11599,7 +11616,7 @@
       { label: "Investment return", value: `${Number(plan.investing.expectedInvestmentReturnPct || 0).toFixed(1)}%`, note: "Not applied to the weekly bank schedule." },
       { label: "Super return", value: `${Number(plan.investing.expectedSuperReturnPct || 0).toFixed(1)}%`, note: "Not applied to the weekly bank schedule." },
       { label: "Inflation", value: `${Number(plan.investing.inflationPct || 0).toFixed(1)}%`, note: "Shown as a plan assumption only." },
-      { label: "Safe withdrawal rate", value: `${Number(plan.investing.safeWithdrawalRatePct || 0).toFixed(1)}%`, note: "Used to estimate target FI capital." },
+      { label: "Modelled withdrawal rate", value: `${Number(plan.investing.safeWithdrawalRatePct || 0).toFixed(1)}%`, note: "Used to estimate target FI capital." },
       { label: "Current net worth", value: money(result.currentNetWorth), note: "From the currently loaded plan." },
       { label: "Final projected annual surplus", value: money(result.finalProjectedCashSurplus), note: "From the app cashflow model before planner timing." },
       { label: "Estimated amounts set aside", value: "Used where no due date is stored", note: "Annual or irregular bills are spread evenly across 52 weeks." },
@@ -11915,7 +11932,7 @@
   }
 
   function weeklyStatusLabel(status) {
-    if (status === "on-track") return "On track";
+    if (status === "on-track") return "Projected balance above buffer";
     if (status === "tight") return "Tight week";
     return "Action needed";
   }
@@ -12318,7 +12335,7 @@
   function weeklyTimingStatusText(validation) {
     const settings = weeklyPlan?.settings || {};
     if (validation.blocking.length) return "Review required";
-    if (settings.timingSetupNeedsReview || settings.timingSetupRequiresReview) return "Timing updated - review recommended";
+    if (settings.timingSetupNeedsReview || settings.timingSetupRequiresReview) return "Timing updated - review available";
     if (settings.timingSetupReviewed) return "Timing reviewed";
     return "Review timing";
   }
@@ -13176,11 +13193,11 @@
             ? "Editing this completed week. Saving changes may update later balances."
             : week.isCompleted
               ? "This completed week is saved. Review its recorded results or choose Edit Completed Week to make changes."
-              : planned.statusMessage)}</p>
+              : planned.status === "on-track" ? "After entered bills, spending and transfers, the projected bank balance is above the entered minimum buffer." : planned.statusMessage)}</p>
         </div>
         <div class="weekly-status-badge">
           <span>Current status</span>
-          <strong>${escapeHtml(planned.statusLabel || weeklyStatusLabel(planned.status))}</strong>
+          <strong>${escapeHtml(planned.status === "on-track" ? "Projected balance above buffer" : planned.statusLabel || weeklyStatusLabel(planned.status))}</strong>
         </div>
       </article>
 
@@ -13221,7 +13238,7 @@
                     <span>${money(planned.discretionaryAllowance)}</span>
                     <span>${money(transfers)}</span>
                     <span>${money(planned.closingBalance)}</span>
-                    <em>${escapeHtml(planned.statusLabel || weeklyStatusLabel(planned.status))}</em>
+                    <em>${escapeHtml(planned.status === "on-track" ? "Projected balance above buffer" : planned.statusLabel || weeklyStatusLabel(planned.status))}</em>
                   </div>
                 </summary>
                 <div class="weekly-expanded-detail">
@@ -13357,7 +13374,7 @@
             <input class="field-input" type="number" step="100" data-weekly-setting="extraDebtRepaymentTarget" value="${weeklyInputValue(settings.extraDebtRepaymentTarget)}">
           </label>
           <label>
-            <span class="field-label">Allocation priority</span>
+            <span class="field-label">Entered allocation order</span>
             <select class="field-input" data-weekly-setting="priorityFirst" data-type="text">
               <option value="extraDebt"${allocation.priority?.[0] === "extraDebt" ? " selected" : ""}>Extra debt repayment first</option>
               <option value="investment"${allocation.priority?.[0] === "investment" ? " selected" : ""}>Invest first</option>
@@ -13367,7 +13384,7 @@
           <label>
             <span class="field-label">Surplus allocation method</span>
             <select class="field-input" data-weekly-setting="allocationMode" data-type="text">
-              <option value="priority"${allocation.mode === "priority" ? " selected" : ""}>Priority order</option>
+              <option value="priority"${allocation.mode === "priority" ? " selected" : ""}>Entered order</option>
               <option value="split"${allocation.mode === "split" ? " selected" : ""}>Split by percentage</option>
               <option value="cash"${allocation.mode === "cash" ? " selected" : ""}>Keep as cash</option>
             </select>
@@ -13774,7 +13791,7 @@
     timingEditDraft = null;
     generatedWeeklyPlanner = null;
     syncWeeklyPlanExportSettings();
-    saveWeeklyPlan("Timing updated - review recommended.");
+    saveWeeklyPlan("Timing updated - review available.");
     renderAll();
     showWorkspace("weeklyplan");
   }
@@ -14071,23 +14088,23 @@
     if (finalSurplus < 0) {
       recommendations.push({
         priority: "High",
-        title: "Review the projected cashflow shortfall",
+        title: "Projected cashflow shortfall",
         why: `The current model shows an estimated annual shortfall of ${money(Math.abs(finalSurplus))}.`,
         impact: "Reducing planned spending, reducing contributions, increasing income or using available reserves may improve affordability.",
       });
     } else {
       recommendations.push({
         priority: "Medium",
-        title: "Decide how to use the remaining cash buffer",
+        title: "Remaining modelled cash surplus",
         why: `The current model shows an estimated monthly final surplus of ${money(monthlySurplus)} after planned spending and wealth-building contributions.`,
-        impact: "Build a custom scenario can model directing this surplus toward investments or debt repayment.",
+        impact: "Scenario modelling can illustrate different allocations of this surplus.",
       });
     }
 
     if (creditCardBalance > 0) {
       recommendations.push({
         priority: "High",
-        title: "Review high-interest debt",
+        title: "Entered credit card debt",
         why: `The plan includes credit card debt of ${money(creditCardBalance)} at an estimated interest rate of ${creditCardRate.toFixed(2)}%.`,
         impact: "The model can estimate debt reduction effects where repayment, balance and rate information has been entered.",
       });
@@ -14096,7 +14113,7 @@
     if (gap > 0) {
       recommendations.push({
         priority: "Medium",
-        title: "Continue building Financial Independence assets",
+        title: "Financial Independence asset gap",
         why: `The estimated gap to the Financial Freedom target is ${money(gap)}.`,
         impact: `Current planned annual investing is ${money(result.annualInvestmentContributions)} and extra super contributions are ${money(result.annualExtraSuperContributions)}.`,
       });
@@ -14105,16 +14122,16 @@
     if (accessibleAssets <= 0 && result.targetCapital > 0) {
       recommendations.push({
         priority: "High",
-        title: "Build accessible investments outside superannuation",
+        title: "Accessible investment balance",
         why: "The model currently shows little or no accessible Financial Independence assets before superannuation access age.",
-        impact: "Building accessible investments may improve flexibility before age 60, based on the assumptions entered.",
+        impact: "Scenario modelling can illustrate different balances before the modelled super access age.",
       });
     } else if (result.superannuationBalance > accessibleAssets * 2 && result.plan.personal.person1Age < result.superAccessAge) {
       recommendations.push({
         priority: "Medium",
-        title: "Balance superannuation and accessible investments",
-        why: "A large part of wealth is held in superannuation, which this model treats as accessible from age 60.",
-        impact: "Additional accessible investments may improve flexibility before superannuation access age.",
+        title: "Superannuation and accessible investments",
+        why: "A large part of entered wealth is held in superannuation; modelled access is assessed per person.",
+        impact: "Scenario modelling can illustrate different balances before the modelled super access age.",
       });
     }
 
@@ -14124,7 +14141,7 @@
   function reportRecommendationCards(recommendations) {
     return recommendations.map((item) => `
       <article class="report-recommendation-card">
-        <span class="priority-pill priority-${item.priority.toLowerCase()}">${escapeHtml(item.priority)}</span>
+        <span class="report-small-note">Modelling observation</span>
         <h3>${escapeHtml(item.title)}</h3>
         <p><strong>Why it has been identified:</strong> ${escapeHtml(item.why)}</p>
         <p><strong>Estimated modelling impact:</strong> ${escapeHtml(item.impact)}</p>
@@ -14177,7 +14194,7 @@
   function reportCategoryWinners(metrics) {
     if (!metrics.length) return {};
     return {
-      "Best cashflow": pickWinner(metrics, (item) => item.monthlyCashflow),
+      "Largest modelled cashflow": pickWinner(metrics, (item) => item.monthlyCashflow),
       "Earliest Financial Freedom": pickWinner(metrics, (item) => item.financialFreedomAgeNumber, true),
       "Highest projected net worth": pickWinner(metrics, (item) => item.netWorth10),
       "Highest accessible investments": pickWinner(metrics, (item) => item.investments10),
@@ -14227,7 +14244,6 @@
         <td>${escapeHtml(currentValue)}</td>
         <td>${escapeHtml(comparedValue)}</td>
         <td>${escapeHtml(difference.diff)}</td>
-        <td>${escapeHtml(difference.better)}</td>
       </tr>
     `;
   }
@@ -14244,9 +14260,7 @@
     const currentMetrics = reportScenarioMetrics("Current Plan", "Current unsaved working plan.", CALC.clonePlan(plan), "current");
     const savedMetrics = scenarios.map((scenario) => reportScenarioMetrics(scenario.name || "Saved scenario", scenario.notes || "", scenario.plan, "saved"));
     const allMetrics = [currentMetrics, ...savedMetrics];
-    const winners = reportCategoryWinners(allMetrics);
-    const bestOverall = reportBestOverall(allMetrics, winners);
-    const compared = bestOverall.source === "current" ? savedMetrics[0] : bestOverall;
+    const compared = savedMetrics[0];
     const cashflowDiff = reportMoneyDifference(currentMetrics.monthlyCashflow, compared.monthlyCashflow);
     const ageDiff = reportAgeDifference(currentMetrics, compared);
     const netWorthDiff = reportMoneyDifference(currentMetrics.netWorth10, compared.netWorth10);
@@ -14254,22 +14268,17 @@
     const superDiff = reportMoneyDifference(currentMetrics.super10, compared.super10);
     const debtDiff = reportMoneyDifference(currentMetrics.debt10, compared.debt10, true);
     const longTermDiff = reportMoneyDifference(currentMetrics.netWorthLongTerm, compared.netWorthLongTerm);
-    const winnerCards = [
-      ...Object.entries(winners).map(([label, winner]) => summaryTile(label, winner?.name || "Not estimated")),
-      summaryTile("Best overall balance", bestOverall.name),
-    ].join("");
     const comparedDebtChange = compared.debt10 - currentMetrics.debt10;
     const comparedWealthChange = compared.netWorthLongTerm - currentMetrics.netWorthLongTerm;
-    const tradeoff = `${compared.name} is compared with the current plan below. It ${ageDiff.better === "Compared scenario" ? "reaches the modelled Financial Freedom age earlier" : "does not reach the modelled Financial Freedom age earlier"} and shows ${money(Math.abs(comparedDebtChange))} ${comparedDebtChange > 0 ? "more" : "less"} estimated debt in 10 years, with ${money(Math.abs(comparedWealthChange))} ${comparedWealthChange > 0 ? "higher" : "lower"} long-term net worth. The preferred option may depend on whether the user values stronger cashflow, earlier accessibility, lower debt or maximum long-term wealth.`;
-    const warning = bestOverall.warning
-      ? `<p class="report-warning"><strong>Cashflow warning:</strong> The selected overall scenario has a negative final projected surplus, so it may not be affordable without other changes.</p>`
+    const tradeoff = `${compared.name} is compared with the current plan below. It ${ageDiff.better === "Compared scenario" ? "reaches the modelled Financial Freedom age earlier" : "does not reach the modelled Financial Freedom age earlier"} and shows ${money(Math.abs(comparedDebtChange))} ${comparedDebtChange > 0 ? "more" : "less"} estimated debt in 10 years, with ${money(Math.abs(comparedWealthChange))} ${comparedWealthChange > 0 ? "higher" : "lower"} long-term net worth. These are modelled differences, not an endorsement of either scenario.`;
+    const warning = compared.warning
+      ? `<p class="report-warning"><strong>Cashflow warning:</strong> The compared scenario has a negative final projected surplus, so it may not be affordable without other changes.</p>`
       : "";
     return `
       <div class="report-note">
         <strong>Scenario comparison approach</strong>
-        <p>The report compares saved scenarios using visible category winners rather than relying only on a hidden score. Negative cashflow is treated as a warning before describing a scenario as preferable.</p>
+        <p>The first saved scenario is compared with the current plan in saved order. Differences describe the modelled outcomes; no scenario is selected as a winner.</p>
       </div>
-      <div class="summary-grid mt-4">${winnerCards}</div>
       ${warning}
       <div class="comparison-table-wrap report-table-wrap mt-4">
         <table class="comparison-table report-comparison-table">
@@ -14279,7 +14288,6 @@
               <th>Current Plan</th>
               <th>${escapeHtml(compared.name)}</th>
               <th>Difference</th>
-              <th>Better Result</th>
             </tr>
           </thead>
           <tbody>
@@ -14322,7 +14330,7 @@
             <div><span>Investment balance</span><strong>${money(metrics.investments10)}</strong></div>
             <div><span>Superannuation balance</span><strong>${money(metrics.super10)}</strong></div>
             <div><span>Financial Freedom progress</span><strong>${plainPercent(metrics.progress)}</strong></div>
-            <div><span>Estimated Financial Freedom age</span><strong>${escapeHtml(metrics.financialFreedomAge)}</strong></div>
+            <div><span>Modelled Financial Freedom age</span><strong>${escapeHtml(metrics.financialFreedomAge)}</strong></div>
           </div>
         </article>
       `;
@@ -14337,33 +14345,33 @@
     const gap = Math.max(0, (Number(result.targetCapital) || 0) - (Number(result.financialIndependenceAssets) || 0));
     const creditCardBalance = Number(result.plan.liabilities.creditCardBalance) || 0;
 
-    if (finalSurplus < 0) immediate.push("Review the projected cashflow shortfall before increasing wealth-building contributions.");
+    if (finalSurplus < 0) immediate.push("The model shows a cashflow shortfall after entered contributions.");
     if (creditCardBalance > 0) immediate.push("Review high-interest debt and test whether extra repayments improve the modelled outcome.");
-    if (result.accessibleInvestmentAssets <= 0 && result.targetCapital > 0) immediate.push("Start building accessible investments outside superannuation for flexibility before age 60.");
-    if (!immediate.length) immediate.push("Keep the positive monthly cash buffer visible and decide whether it should support investments, debt reduction or reserves.");
+    if (result.accessibleInvestmentAssets <= 0 && result.targetCapital > 0) immediate.push("No accessible investment balance is entered before the modelled super access age.");
+    if (!immediate.length) immediate.push("The model shows a positive monthly cash surplus after entered spending and contributions.");
 
     nextYear.push(...recommendations.slice(0, 2).map((item) => item.title));
-    if (Number(result.annualInvestmentContributions) > 0) nextYear.push("Check that the annual investing target remains affordable after tax, STSL compulsory repayments, expenses and debt repayments.");
-    if (Number(result.annualExtraSuperContributions) > 0) nextYear.push("Review extra super contributions for affordability and access timing.");
+    if (Number(result.annualInvestmentContributions) > 0) nextYear.push("The annual investing amount is subject to modelled cashflow affordability after tax, STSL, expenses and debt repayments.");
+    if (Number(result.annualExtraSuperContributions) > 0) nextYear.push("Entered extra super contributions affect cashflow and projected super balances.");
     if (!nextYear.length) nextYear.push("Update the plan with income, expenses, assets and debt details, then regenerate this report.");
 
-    if (gap > 0) longTerm.push(`Continue building Financial Independence assets toward the estimated target gap of ${money(gap)}.`);
-    longTerm.push("Review assumptions at least annually or after major changes to income, expenses, interest rates or investment returns.");
+    if (gap > 0) longTerm.push(`The model shows an FI asset gap of ${money(gap)}.`);
+    longTerm.push("Projected outcomes can change when income, expenses, interest rates, inflation or investment returns change.");
     longTerm.push("Use saved scenarios inside the app to compare trade-offs, while keeping this report focused on the current plan.");
 
     const list = (items) => `<ul class="report-action-list">${items.slice(0, 4).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
     return `
       <div class="report-action-plan-grid">
         <article class="report-action-column">
-          <h3>Immediate priorities</h3>
+          <h3>Current observations</h3>
           ${list(immediate)}
         </article>
         <article class="report-action-column">
-          <h3>Next 12 months</h3>
+          <h3>Items to review</h3>
           ${list(nextYear)}
         </article>
         <article class="report-action-column">
-          <h3>Long-term strategy</h3>
+          <h3>Long-term modelling</h3>
           ${list(longTerm)}
         </article>
       </div>
@@ -14442,13 +14450,13 @@
 
   function reportReviewActions(result) {
     const surplus = result.finalProjectedCashSurplus;
-    const action = (title, why, test) => `<article class="report-review-action"><h4>${escapeHtml(title)}</h4><p><strong>Why:</strong> ${escapeHtml(why)}</p><p><strong>Scenario to test:</strong> ${escapeHtml(test)}</p></article>`;
-    return `${reportGroup("Immediate priorities", action(surplus < 0 ? "Cashflow shortfall" : "Remaining cash buffer",
-      `The plan shows ${money(surplus)} remaining each year after spending and contributions.`, "Compare different spending and contribution levels while checking affordability."))}
-      ${reportGroup("Next 12 months", action("Investing affordability", `The model allocates ${money(result.annualInvestmentContributions)} to annual investing from an entered target of ${money(result.configuredInvestmentContribution)}.`, "Compare the entered target with a lower contribution and inspect the remaining surplus.")
-        + action("Debt and interest assumptions", `Outstanding liabilities total ${money(result.totalLiabilities)}. Rates and repayment details affect the estimates.`, "Check loan details, then compare a changed interest rate or repayment."))}
-      ${reportGroup("Long-term review", action("Financial Independence target", `The model shows a remaining target gap of ${money(result.fiTargetRemaining)}.`, "Compare different lifestyle spending and retirement ages.")
-        + action("Access to retirement savings", `Superannuation totals ${money(result.superannuationBalance)}; access is assessed separately for each person.`, "Compare accessible savings and super contributions in a saved retirement scenario."))}
+    const action = (title, why, test) => `<article class="report-review-action"><h4>${escapeHtml(title)}</h4><p><strong>Modelled observation:</strong> ${escapeHtml(why)}</p><p><strong>Scenario modelling:</strong> ${escapeHtml(test)}</p></article>`;
+    return `${reportGroup("Current observations", action(surplus < 0 ? "Cashflow shortfall" : "Remaining cash buffer",
+      `The plan shows ${money(surplus)} remaining each year after spending and contributions.`, "Different spending and contribution assumptions produce different projected outcomes."))}
+      ${reportGroup("Items to review", action("Investing affordability", `The model allocates ${money(result.annualInvestmentContributions)} to annual investing from an entered target of ${money(result.configuredInvestmentContribution)}.`, "Saved scenarios can illustrate how different contributions affect projected surplus.")
+        + action("Debt and interest assumptions", `Outstanding liabilities total ${money(result.totalLiabilities)}. Rates and repayment details affect the estimates.`, "Interest rates and repayment inputs affect projected balances."))}
+      ${reportGroup("Long-term modelling", action("Financial Independence target", `The model shows a remaining target gap of ${money(result.fiTargetRemaining)}.`, "Saved scenarios can illustrate different lifestyle spending and selected retirement ages.")
+        + action("Access to retirement savings", `Superannuation totals ${money(result.superannuationBalance)}; access is assessed separately for each person.`, "Saved retirement scenarios can illustrate different accessible savings and super contributions."))}
       <p class="report-small-note">These are prompts for review, not instructions to implement a strategy. Compare saved scenarios separately; this report describes the current plan.</p>`;
   }
 
@@ -14461,23 +14469,21 @@
     const tax = result.taxEstimate;
     const cashRows = [
       ["Household cash income before tax", result.annualGrossIncome],
-      [`Income tax (${tax.taxYear})`, -tax.incomeTax],
-      ["Medicare levy", -tax.medicareLevy],
+      [`Estimated income tax (${tax.taxYear})`, -tax.incomeTax],
+      ["Estimated Medicare levy", -tax.medicareLevy],
       ["Medicare levy surcharge", -tax.medicareLevySurcharge],
-      ...(result.helpRepaymentEstimate.annualRepayment > 0 ? [["STSL compulsory repayments", -result.helpRepaymentEstimate.annualRepayment]] : []),
+      ...(result.helpRepaymentEstimate.annualRepayment > 0 ? [["Estimated STSL compulsory repayments", -result.helpRepaymentEstimate.annualRepayment]] : []),
       ["Living expenses", -result.annualLivingExpenses], ["Debt cashflow deductions", -result.annualDebtRepayments],
       ["Annual investing (affordable amount)", -result.annualInvestmentContributions],
       ...(result.annualExtraSuperContributions > 0 ? [["Extra super contributions", -result.annualExtraSuperContributions]] : []),
       ["Remaining annual cash surplus", annual],
     ];
     const annualExplain = "After modelled tax, Medicare, STSL, living costs, debt deductions, investing and extra super.";
-    const disclaimer = `<div class="report-disclaimer"><h3>Important disclaimer</h3>
-      <p>This report is provided for education and financial modelling purposes only. It is not personal financial, taxation, legal or investment advice.</p>
-      <p>The results are estimates based on the information and assumptions entered. Actual outcomes may vary due to changes in income, expenses, investment returns, inflation, interest rates, taxation, legislation and personal circumstances.</p>
-      <p>Consider obtaining professional advice before making significant financial decisions.</p></div>`;
+    const disclaimer = `<div class="report-disclaimer"><h3>Important disclaimer</h3><p>${escapeHtml(modellingCopy().full)}</p><p>Actual outcomes may differ due to changes in income, expenses, investment returns, inflation, interest rates, taxation, legislation and personal circumstances.</p></div>`;
     return `
       <div class="report-opening">
         <article class="report-title-card"><p class="brand-kicker">Current plan · Educational modelling</p><h1>Financial Freedom Report</h1><p>Generated ${escapeHtml(generatedDate)}. Based on the information and assumptions entered; this is not a saved retirement scenario.</p></article>
+        <div class="report-small-note"><strong>About this report.</strong> This educational modelling summary illustrates estimated outcomes from the information and assumptions entered. It does not recommend a financial product or strategy. Projections are not guarantees. Consider obtaining appropriately licensed financial advice before decisions about financial products or significant strategies.</div>
         ${reportSection("Executive Summary", "Your position today and the target the model is working towards.", `
           <div class="report-narrative-box"><p>Your net worth is approximately <strong>${money(result.currentNetWorth)}</strong>. Of this, <strong>${money(result.accessibleFiAssets)}</strong> counts as accessible Financial Independence (FI) assets under the model.</p>
           <p>Annual lifestyle spending of <strong>${money(result.targetAnnualLifestyleSpendingToday)}</strong>, adjusted for inflation to your target age, produces an estimated FI target of <strong>${money(result.targetCapital)}</strong>. Current FI assets represent <strong>${plainPercent(progress)}</strong> of that target.</p>
@@ -14490,7 +14496,7 @@
             m("Current liabilities", money(result.totalLiabilities), "All modelled liabilities, including any STSL balance."),
             m("Target FI assets", money(result.targetCapital), "Inflation-adjusted target spending divided by the withdrawal assumption."),
             m("Estimated FI age", fi.age ? `Age ${fi.age}` : "Beyond 30 years", "The app's 75% FI milestone: reached now or first reached in the forecast."),
-            m("Estimated Financial Freedom age", targetAgeOutcome(result), "First forecast year reaching 100% of that year's spending-based FI target."),
+            m("Modelled Financial Freedom age", targetAgeOutcome(result), "First forecast year reaching 100% of that year's spending-based FI target. " + modellingCopy().fiAge),
           ].join(""))}
         `, "report-executive")}
       </div>
@@ -14531,7 +14537,7 @@
         <div class="report-metrics report-columns-3 report-target-bridge">${m("Current FI assets", money(result.financialIndependenceAssets), "Accessible assets counted by the model.", true)}${m("Gap to target", money(result.fiTargetRemaining), "Additional assets needed under these assumptions.")}${m("Target FI assets", money(result.targetCapital), "Capital needed for the target lifestyle.")}</div>
         <p class="report-progress-label">${plainPercent(progress)} of the estimated target</p>${reportProgressBar(progress)}
         ${reportGroup("What is supporting wealth creation?", [
-          m("Estimated sustainable income", `${money(result.estimatedSustainableIncomeFromCurrentFiAssets)} p.a.`, "Current FI assets multiplied by the model's withdrawal assumption; not guaranteed cash income."),
+          m("Modelled annual withdrawal amount", `${money(result.estimatedSustainableIncomeFromCurrentFiAssets)} p.a.`, modellingCopy().withdrawal),
           m("Current Passive Cash Income", `${money(result.annualPassiveIncome)} p.a.`, "Non-salary cash income, with rental income after interest but before principal."),
           m("Projected Financial Investment Growth", `${money(result.projectedFinancialInvestmentGrowth)} p.a.`, result.investmentReturnSummary ? "Return retained in financial assets; configured cash distributions are excluded. Reinvested income remains within this amount." : "Eligible financial investments excluding cash and offset, multiplied by the entered investment return."),
           m("Projected Property Growth", `${money(result.projectedPropertyGrowth)} p.a.`, "Investment property gross value growth using its property assumptions; excludes the home."),
@@ -14544,7 +14550,7 @@
         ${result.investmentPropertyDebt > 0 ? '<p class="report-warning"><strong>Projection limit:</strong> The existing future net-worth and debt forecasts omit investment-property loan balances. They can overstate net worth and understate debt. Current liabilities and investment-property equity do include this debt.</p>' : ""}
         ${reportGroup("Near term", m("1-year projected net worth", money(netWorthAtYear(result,1))) + m("2-year projected net worth", money(netWorthAtYear(result,2))))}
         ${reportGroup("10-year outlook", m("Projected net worth", money(netWorthAtYear(result,10)), "Projected household assets less modelled liabilities.", true) + m("Projected FI assets", money(projectedFiAssetsAtYear(result,10)), "Includes super only when each person reaches the modelled access age.") + m("Projected investment portfolio", money(investmentAtYear(result,10)), "Non-super portfolio after modelled growth and affordable contributions.") + m("Projected debt", money(projectedDebtAtYear(result,10)), "Existing report estimate from the loan schedule, STSL and other entered debts."))}
-        ${reportGroup("Long term", m("30-year projected net worth", money(netWorthAtYear(result,30))) + m("Estimated Financial Freedom age", targetAgeOutcome(result), "First forecast year reaching the full spending-based target."))}
+        ${reportGroup("Long term", m("30-year projected net worth", money(netWorthAtYear(result,30))) + m("Modelled Financial Freedom age", targetAgeOutcome(result), "First forecast year reaching the full spending-based target."))}
         <p class="report-narrative">Over 10 years, the model estimates net worth of ${money(netWorthAtYear(result,10))}, an investment portfolio of ${money(investmentAtYear(result,10))} and debt of ${money(projectedDebtAtYear(result,10))}. Actual returns, tax, income, spending and inflation will vary.</p>
       `, "report-page-break")}
       ${reportSection("Progress and Wealth Over Time", "Future progress uses each year's inflation-adjusted spending target and includes super as it becomes accessible.", `
@@ -14559,23 +14565,24 @@
         <div class="report-milestone-grid">${reportMilestoneRows(result)}</div>
         <p class="report-small-note">Estimated timing is shown using the first person's age. “Projected within forecast” means the threshold is reached within 30 years; it does not mean the entered target age is met.</p>
       `, "report-page-break")}
-      ${reportSection("Personalised Action Plan", "Observations and scenarios worth reviewing, based on the current plan.", reportReviewActions(result), "report-page-break")}
-      ${reportSection("Important Assumptions", "The inputs that drive the model, rather than predictions of future conditions.", `
+      ${reportSection("Planning Review", "Modelled observations based on the information and assumptions entered. These identify areas you may wish to explore using scenarios.", reportReviewActions(result), "report-page-break")}
+      ${reportSection("Important Assumptions", "The inputs that drive the model, rather than predictions of future conditions.", `<p class="report-small-note">${escapeHtml(modellingCopy().assumptions)}</p>
         <div class="report-metrics report-columns-2">
-          ${result.investmentReturnSummary ? result.investmentReturnSummary.assets.map(asset=>m(`Expected total investment return — ${asset.name || "Investment"}`,`${Number(asset.expectedTotalReturnPct).toFixed(1)}%`,`${Number(asset.expectedIncomeYieldPct).toFixed(1)}% income yield; ${asset.incomeTreatment === "cash" ? "paid as cash" : "reinvested"}. Includes capital growth and income. Income yield remains taxable in either treatment.`)).join("") : m("Investment return", `${Number(p.investing.expectedInvestmentReturnPct || 0).toFixed(1)}%`, "Legacy full return compounded in the non-super portfolio; separately entered passive income is not automatically reinvested.")}
+          ${result.investmentReturnSummary ? result.investmentReturnSummary.assets.map(asset=>m(`Assumed annual total investment return — ${asset.name || "Investment"}`,`${Number(asset.expectedTotalReturnPct).toFixed(1)}%`,`${Number(asset.expectedIncomeYieldPct).toFixed(1)}% income yield; ${asset.incomeTreatment === "cash" ? "paid as cash" : "reinvested"}. Includes capital growth and income. Income yield remains taxable in either treatment.`)).join("") : m("Investment return", `${Number(p.investing.expectedInvestmentReturnPct || 0).toFixed(1)}%`, "Legacy full return compounded in the non-super portfolio; separately entered passive income is not automatically reinvested.")}
           ${m("Inflation", `${Number(p.investing.inflationPct || 0).toFixed(1)}%`, "Increases target lifestyle spending in future-year FI calculations; current cashflow expenses remain entered amounts.")}
           ${m("Super growth", `${Number(p.investing.expectedSuperReturnPct || 0).toFixed(1)}%`, "Annual return used for super balances, alongside modelled net contributions.")}
           ${m("Target retirement age", `Age ${p.personal.fullRetirementAge || "not set"}`, "Used to set the inflation horizon for the current FI capital target, capped at 30 years.")}
-          ${m("Withdrawal assumption", `${(Number(p.investing.safeWithdrawalRatePct) > 0 ? Number(p.investing.safeWithdrawalRatePct) : 4).toFixed(1)}%`, "Used for FI targets and sustainable income; the model defaults to 4% when a positive rate is not entered.")}
+          ${m("Modelled withdrawal rate", `${(Number(p.investing.safeWithdrawalRatePct) > 0 ? Number(p.investing.safeWithdrawalRatePct) : 4).toFixed(1)}%`, "Used for FI targets and modelled withdrawals; the model defaults to 4% when a positive rate is not entered.")}
           ${m("Annual target lifestyle spending", money(result.targetAnnualLifestyleSpendingToday), "Today's spending target, inflated for future FI requirements.")}
-          ${m("Super access", `Age ${result.superAccessAge}`, "Applied separately to each person's age in the current plan; saved retirement scenarios can differ.")}
+          ${m("Modelled super access age", `Age ${result.superAccessAge}`, "Applied separately to each person's age in the current plan; saved retirement scenarios can differ.")}
           ${m("Projection period", "30 years", "The current-plan forecast horizon. Milestones outside it are not estimated.")}
         </div>
       `, "report-page-break")}
       ${reportSection("Important Modelling Information", "Read the results alongside these limits.", `
+        <h3>Model limitations</h3><p class="report-small-note">${escapeHtml(modellingCopy().limitations)}</p><p class="report-small-note">${escapeHtml(modellingCopy().tax)}</p><p class="report-small-note">${escapeHtml(modellingCopy().super)}</p><p class="report-small-note"><strong>Age Pension not included.</strong> ${escapeHtml(modellingCopy().pension)}</p>
         ${reportGroup("Loan rates in this plan", reportLoanAssumptions(result))}
         <p class="report-small-note">Loans can have different rates. A single home-loan rate is not a household borrowing rate. The net-worth and debt charts use the home-loan schedule; linked rental loans are assessed separately for cashflow and FI property equity.</p>
-        <div class="report-narrative-box"><p>This is a current-plan report. Saved retirement scenarios keep their own inputs and outcomes and must be compared separately.</p><p>Property equity and locked super are not immediately available spending money. No property sale or release of home equity should be assumed unless explicitly modelled.</p><p>Projections use simplified tax, debt and return assumptions. Different views may use different timing or debt schedules; review the underlying loan details before relying on projected balances.</p></div>
+        <div class="report-narrative-box"><p>This is a current-plan report. Saved retirement scenarios keep their own inputs and outcomes and must be compared separately.</p><p>Property equity and locked super are not immediately available spending money. No property sale or release of home equity should be assumed unless explicitly modelled.</p></div>
         ${disclaimer}
         <footer class="report-footer"><span>Financial Freedom Report</span><span>Generated ${escapeHtml(generatedDate)}</span></footer>
       `, "report-page-break report-final-section")}
@@ -14648,7 +14655,7 @@
       { label: "Financial Freedom progress", value: plainPercent(percent) },
       { label: "Current stage", value: stage.name },
       { label: "Accessible investments", value: money(result.accessibleInvestmentAssets) },
-      { label: `Super available from age ${result.superAccessAge}`, value: money(result.superannuationBalance), infoKey: "superAvailability" },
+      { label: `Modelled super access age ${result.superAccessAge}`, value: money(result.superannuationBalance), infoKey: "superAvailability" },
       { label: "Annual household cash income (net rent)", value: money(result.householdCashflow.totalHouseholdCashIncome) },
       { label: "Net income after tax, Medicare and STSL", value: money(result.netIncomeAfterTaxHelp) },
       { label: "Annual Living Expenses", value: money(result.annualLivingExpenses) },
@@ -15140,7 +15147,7 @@
       : change.kind === "percent" ? `${value}%` : change.kind === "money" ? `${money(value)}${change.annual ? " p.a." : ""}`
       : typeof value === "boolean" ? (value ? "Enabled" : "Not enabled") : String(value).replace(/-/g, " ");
     const list = items => `<ul>${items.map(change => `<li>${escapeHtml(change.label)}: ${escapeHtml(format(change.before, change))} → ${escapeHtml(format(change.after, change))}</li>`).join("")}</ul>`;
-    return `<h4>What changed from your current plan</h4>${changes.length ? list(changes.slice(0, 4)) : '<p class="scenario-muted">No settings differ from your current plan.</p>'}
+    return `<h4>Changes from the current plan</h4>${changes.length ? list(changes.slice(0, 4)) : '<p class="scenario-muted">No settings differ from your current plan.</p>'}
       ${changes.length > 4 ? `<details><summary>View all ${changes.length} changes</summary>${list(changes.slice(4))}</details>` : ""}
       ${changes.length ? `<p class="scenario-muted">${changes.length} change${changes.length === 1 ? "" : "s"} from your current plan</p>` : ""}`;
   }
@@ -15323,7 +15330,7 @@
     const worse = lowerIsBetter ? diff > 0 : diff < 0;
     return {
       text: `${diff >= 0 ? "+" : ""}${money(diff)}`,
-      tone: better ? "better" : worse ? "worse" : "",
+      tone: "",
     };
   }
 
@@ -15335,7 +15342,7 @@
           <th>${escapeHtml(label)}</th>
           <td>${escapeHtml(currentValue)}</td>
           <td>${escapeHtml(scenarioValue)}</td>
-          <td class="${changed ? "better" : ""}">${changed ? "Changed" : "No change"}</td>
+          <td class="">${changed ? "Changed" : "No change"}</td>
         </tr>
       `;
     }
@@ -15661,10 +15668,10 @@
         ${scenario.notes ? `<p class="scenario-note">${escapeHtml(scenario.notes)}</p>` : ""}
         ${stale ? `<p class="scenario-note" role="status"><strong>Based on an earlier version of your plan</strong><br>Opening this scenario will apply its saved settings to your current plan.</p>` : ""}
         <div class="scenario-card-grid${type === "retirement" ? " saved-retirement-card-grid" : ""}">
-          ${type === "retirement" ? `<section class="scenario-card-section"><h4>Key outcome</h4>${savedRetirementOutcomeHtml(keySnapshot)}</section>
+          ${type === "retirement" ? `<section class="scenario-card-section"><h4>Key modelled outcome</h4>${savedRetirementOutcomeHtml(keySnapshot)}</section>
           <section class="scenario-card-section">${savedRetirementChangesHtml(scenario)}</section>` : `
-          <section class="scenario-card-section"><h4>What changed</h4>${changedInputsListHtml(typedChanges, 4)}</section>
-          <section class="scenario-card-section"><h4>Key outcome</h4>${keyResultsListHtml(keySnapshot, 3)}</section>`}
+          <section class="scenario-card-section"><h4>Changes from the current plan</h4>${changedInputsListHtml(typedChanges, 4)}</section>
+          <section class="scenario-card-section"><h4>Key modelled outcome</h4>${keyResultsListHtml(keySnapshot, 3)}</section>`}
         </div>
         <div class="scenario-actions">
           <button class="btn btn-primary" type="button" data-open-scenario="${scenario.id}">Open</button>
@@ -15936,7 +15943,7 @@
     safeRenderModule("What If", () => renderWhatIf(result));
     safeRenderModule("AI Insights modal", () => renderAiInsightsModal());
     safeRenderModule("Disclaimer", () => {
-      document.getElementById("disclaimer").textContent = DATA.disclaimer;
+      document.getElementById("disclaimer").textContent = modellingCopy().short;
     });
     if (hasOpenedWorkspace) document.getElementById("appWorkspace").classList.remove("hidden");
   }

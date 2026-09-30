@@ -1550,16 +1550,16 @@ test("Stage G3 Retirement Planning nav label keeps the existing page heading", (
 });
 
 test("Stage G4 Decision Engine presents opportunities with details collapsed", () => {
-  assert.match(indexSource, /Your strongest opportunities/);
+  assert.match(indexSource, /Scenario comparisons/);
   const snippet = sourceBetween(appSource, "function renderDecision", "function updateSemiRetirementDraftFromInput");
-  assert.match(snippet, /result\.decisionOptions\.map/);
+  assert.match(snippet, /\[\.\.\.result\.decisionOptions\]\.sort/);
   assert.match(snippet, /Potential tax benefit/);
   assert.match(snippet, /Estimated annual wealth benefit/);
   assert.match(snippet, /Annual comparison using the current rates and tax assumptions/);
   assert.match(snippet, /<details class="decision-details mt-3">/);
   assert.match(snippet, /<summary>View details<\/summary>/);
   assert.match(snippet, /Cashflow impact/);
-  assert.match(snippet, /Priority score/);
+  assert.doesNotMatch(snippet, /Priority score/);
 });
 
 test("Stage G5 Quick What-Ifs and custom scenario controls are progressively disclosed", () => {
@@ -1610,8 +1610,8 @@ test("Stage G9 Scenario library filters and card actions are present", () => {
   ["data-open-scenario", "data-compare-scenario", "data-duplicate-scenario", "data-rename-scenario", "data-delete-scenario"].forEach((attribute) => {
     assert.match(snippet, new RegExp(attribute));
   });
-  assert.match(snippet, /What changed/);
-  assert.match(snippet, /Key outcome/);
+  assert.match(snippet, /Changes from the current plan/);
+  assert.match(snippet, /Key modelled outcome/);
 });
 
 test("Stage G10 Opening and comparing saved scenarios do not mutate the Financial Plan", () => {
@@ -2029,7 +2029,7 @@ test("Stage G2F advanced assumptions are behind a collapsed disclosure", () => {
 
 test("Stage G2F result hierarchy answers funding before detailed workings", () => {
   const snippet = sourceBetween(appSource, "function renderSemiRetirementScenarioResultHtml", "function renderSemiRetirementScenario(result)");
-  assert.match(snippet, /Your Retirement Plan Results/);
+  assert.match(snippet, /Modelled Retirement Results/);
   assert.match(snippet, /renderSemiRetirementSnapshotHtml\(viewModel\)[\s\S]*renderSemiRetirementTimelineHtml\(viewModel\)[\s\S]*renderSemiRetirementLongevityHtml\(viewModel\)[\s\S]*renderSemiRetirementFundingHtml\(viewModel\)[\s\S]*renderSemiRetirementPassiveIncomeHtml\(viewModel\)[\s\S]*renderSemiRetirementDebtPropertyHtml\(viewModel\)[\s\S]*renderSemiRetirementAnnualProjectionHtml\(viewModel\)[\s\S]*renderSemiRetirementAssumptionsHtml\(viewModel\)/);
 });
 

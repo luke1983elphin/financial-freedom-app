@@ -9163,3 +9163,21 @@ body.scenario-save-modal-open {
   #financialReportBody thead { display: table-header-group; }
   #financialReportBody tr { break-inside: avoid; }
 }
+
+/* Wording disclosures remain secondary and wrap within narrow cards. */
+.modelling-information { margin-top: 16px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; font-size: 13px; line-height: 1.5; min-width: 0; }
+.modelling-information summary { cursor: pointer; font-weight: 700; padding-block: 8px; }
+.modelling-information p { margin-top: 10px; }
+@media print {
+  /* Fit the early modelling notice without shrinking report typography. */
+  #financialReportBody .report-opening { padding-block: 2mm; }
+  #financialReportBody .report-opening .report-title-card { padding-bottom: 2mm !important; margin-bottom: 2mm; }
+  #financialReportBody .report-opening .report-stage-heading { padding-bottom: 1mm; margin-bottom: 2mm; }
+  #financialReportBody .report-opening .report-metrics { gap: 2mm; }
+  #financialReportBody .report-opening .report-metric { padding: 2mm; }
+  #financialReportBody .report-opening .report-metric p { margin-top: 1mm; }
+  #financialReportBody .report-opening .report-narrative-box { padding: 2mm; }
+  #financialReportBody .report-opening .report-group { margin-top: 2mm; }
+}
+
+.decision-model-notice { grid-column: 1 / -1; }

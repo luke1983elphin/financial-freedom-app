@@ -186,12 +186,12 @@ test("Stage G2H comparison PDF report is presentation-only and includes required
   assert.match(snippet, /Financial Freedom/);
   assert.match(snippet, /Retirement Scenario Comparison/);
   assert.match(snippet, /Main differences/);
-  assert.match(snippet, /Key outcomes/);
+  assert.match(snippet, /Key modelled outcomes/);
   assert.match(snippet, /Detailed breakdowns/);
   assert.match(snippet, /Key assumptions/);
   assert.match(snippet, /This report illustrates projected outcomes based on the information and assumptions entered/);
   assert.match(snippet, /Property equity contributes to projected net worth/);
-  assert.match(snippet, /Super access ages used in this report/);
+  assert.match(snippet, /Modelled super access ages used in this report/);
   assert.doesNotMatch(snippet, /runSemiRetirementProjection|projectRetirementScenario/);
 });
 

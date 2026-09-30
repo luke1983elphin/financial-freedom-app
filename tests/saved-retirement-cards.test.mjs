@@ -94,7 +94,7 @@ test('new semi retirement distinguishes unset from configured and preserves pers
 test('card ordering, arrows, escaping and shortened stale notice',()=>{
  const p=household(CALC);ctx.plan=p;const draft=UI.buildSemiRetirementScenarioDefaults(p,CALC.calculatePlan(p)).draft;draft.people[0].fullRetirementAge=70;
  const scenario={id:'s',scenarioType:'retirement',name:'<script>name</script>',scenarioInputSnapshot:draft,keyResultSnapshot:outcome().snapshot};
- const html=ctx.scenarioCardHtml(scenario);assert.ok(html.indexOf('Key outcome')<html.indexOf('What changed from your current plan'));assert.match(html,/→ Age 70/);assert.match(html,/Based on an earlier version/);assert.doesNotMatch(html,/<script>/);assert.match(html,/data-duplicate-scenario/);
+ const html=ctx.scenarioCardHtml(scenario);assert.ok(html.indexOf('Key modelled outcome')<html.indexOf('Changes from the current plan'));assert.match(html,/→ Age 70/);assert.match(html,/Based on an earlier version/);assert.doesNotMatch(html,/<script>/);assert.match(html,/data-duplicate-scenario/);
 });
 test('retirement comparison contains expanded snapshot rows beyond old eight-row limit',()=>{
  const snapshot=outcome().snapshot,s={scenarioType:'retirement',keyResultSnapshot:snapshot};assert.match(ctx.scenarioComparisonRows(s,s),/Projection continues to/);
