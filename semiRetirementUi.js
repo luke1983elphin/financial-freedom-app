@@ -1,4 +1,11 @@
 (function attachSemiRetirementUi(global) {
+
+  // New drafts share this default; explicit plan/scenario choices always take precedence.
+  const DEFAULT_WORKING_PHASE_SURPLUS_DESTINATION = "enjoyment";
+  function defaultWorkingPhaseSurplusDestination(plan = {}) {
+    return plan.projectionSettings?.workingPhaseSurplusDestination ?? DEFAULT_WORKING_PHASE_SURPLUS_DESTINATION;
+  }
+
   function number(value, fallback = 0) {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
@@ -604,7 +611,7 @@
 
   function basePlanSourceKey(plan = {}, result = {}) {
     return JSON.stringify({
-      workingPhaseSurplusDestination: plan.projectionSettings?.workingPhaseSurplusDestination ?? "accessible-investments",
+      workingPhaseSurplusDestination: defaultWorkingPhaseSurplusDestination(plan),
       personal: {
         person1Name: plan.personal?.person1Name || "",
         person2Name: plan.personal?.person2Name || "",
@@ -747,7 +754,7 @@
         oneOffIncomeEvents: [],
         plannedConcessionalContributions: [],
         downsizeHomeEvent: defaultDownsizeHomeEvent(people, assets, currentYear()),
-        workingPhaseSurplusDestination: plan.projectionSettings?.workingPhaseSurplusDestination ?? "accessible-investments",
+        workingPhaseSurplusDestination: defaultWorkingPhaseSurplusDestination(plan),
         surplusDestination: "enjoyment",
         minimumAccessibleBalance: 0,
         minimumEstateBalanceAtEndAge: 0,
@@ -2288,6 +2295,7 @@
   }
 
   global.FFSSemiRetirementUi = {
+    defaultWorkingPhaseSurplusDestination,
     buildSemiRetirementScenarioDefaults,
     buildSavedRetirementOutcome,
     savedRetirementChanges,

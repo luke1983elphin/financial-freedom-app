@@ -32,6 +32,8 @@ function coupleWithStsl() {
 function releaseMetrics(plan) {
   const result = CALC.calculatePlan(plan);
   const defaults = UI.buildSemiRetirementScenarioDefaults(plan, result);
+  // Preserve the explicit investment assumption of these historical parity fixtures.
+  defaults.draft.scenario.workingPhaseSurplusDestination = "accessible-investments";
   const outcome = UI.runSemiRetirementProjection(ENGINE, defaults.draft);
   assert.equal(outcome.validation?.isValid, true);
   const view = UI.buildSemiRetirementResultsViewModel(outcome.result, outcome.inputs, defaults.draft);

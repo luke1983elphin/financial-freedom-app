@@ -65,7 +65,7 @@ function loadAppBackupHooks({ withStorageCoordinator = true, initialStorage = {}
   context.window = context;
   context.globalThis = context;
   vm.createContext(context);
-  const files = ["security.js", ...(withStorageCoordinator ? ["storage.js"] : []), "calculator.js", "weekly-plan.js", "app.js"];
+  const files = ["security.js", ...(withStorageCoordinator ? ["storage.js"] : []), "calculator.js", "weekly-plan.js", "semiRetirementUi.js", "app.js"];
   for (const file of files) {
     vm.runInContext(read(file), context, { filename: file });
   }

@@ -58,6 +58,8 @@ for(const fixture of JSON.parse(readFileSync(new URL('./fixtures/investment-ux-p
  const c={console};c.globalThis=c;c.Date=class extends Date{constructor(...args){super(...(args.length?args:['2026-09-29T00:00:00Z']));}static now(){return Date.parse('2026-09-29T00:00:00Z');}};
  for(const f of ['calculator.js','semiRetirementProjection.js','semiRetirementUi.js'])vm.runInNewContext(readFileSync(new URL('../'+f,import.meta.url),'utf8'),c);
  const calc=c.FFSCalculator.calculatePlan(fixture.plan),{draft}=c.FFSSemiRetirementUi.buildSemiRetirementScenarioDefaults(fixture.plan,calc);
+  // Historical parity fixture explicitly models working surplus invested.
+  draft.scenario.workingPhaseSurplusDestination = "accessible-investments";
  const records=JSON.parse(JSON.stringify({calc,draft,retirement:c.FFSSemiRetirementUi.runSemiRetirementProjection(c.FFSSemiRetirementProjection,draft)}));
  assert.equal(createHash('sha256').update(JSON.stringify(records)).digest('hex'),fixture.sha256);
 });
