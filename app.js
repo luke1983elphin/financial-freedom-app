@@ -605,6 +605,8 @@
   let selectedSamplePlanId = DATA.samplePlans?.[1]?.id || DATA.samplePlans?.[0]?.id || "";
   const savedDraft = loadDraft();
   let userState = loadUserState(savedDraft);
+  // Viewing age is session-only UI state, never a saved financial assumption.
+  let futureYouSelectedAge = null;
   let plan = ensureCurrentPlanIdentity(migratePlanData(savedDraft || newUserPlan()));
   let activeView = restoredDraftUi.activeView || "dashboard";
   let activeWizardStep = normaliseWizardStep(restoredDraftUi.activeWizardStep);
@@ -1270,10 +1272,8 @@
   }
 
   function futureYouPreview(result) {
-    const engagement = engagementData();
-    const fallbackAge = Number(plan.personal.fullRetirementAge || plan.personal.semiRetirementAge || plan.personal.workOptionalAge) || ((Number(plan.personal.person1Age) || 0) + 10);
-    const requestedAge = Number(engagement.futureYouAge || fallbackAge);
     const currentAge = Number(plan.personal.person1Age || plan.personal.person2Age) || 0;
+    const requestedAge = Number(futureYouSelectedAge ?? currentAge);
     const useCurrentPosition = currentAge > 0 && requestedAge <= currentAge;
     const investment = useCurrentPosition ? null : projectionRowAtAge(result.investmentProjection, requestedAge);
     const projectedAge = useCurrentPosition
@@ -4313,6 +4313,7 @@
     activePlanId = importedPlanId;
     isDemoMode = false;
     plan = importedPlan;
+    futureYouSelectedAge = null;
     generatedWeeklyPlanner = null;
     weeklyPlan = importedWeeklyPlan;
     restoredDraftUi = importedUi;
@@ -4803,6 +4804,7 @@
 
   function blankUserPlan() {
     const blank = newUserPlan();
+    futureYouSelectedAge = null;
     // A genuinely new plan must not inherit an edited projection from the previous plan.
     semiRetirementScenarioDraft = null;
     semiRetirementScenarioDirty = false;
@@ -6986,7 +6988,7 @@
   function updateDashboardFutureAge(value, options = {}) {
     const age = Math.max(0, Math.round(Number(value)));
     if (!Number.isFinite(age) || age <= 0) return;
-    engagementData().futureYouAge = age;
+    futureYouSelectedAge = age;
     const result = calculatePlan(plan);
     const future = futureYouPreview(result);
     document.querySelectorAll("[data-dashboard-future-age-label]").forEach((label) => {
@@ -6999,7 +7001,6 @@
       results.outerHTML = dashboardFutureMetricsHtml(future, { resultsId: results.id || null });
     });
     if (options.commit) {
-      saveDraft(`Future You preview set to age ${future.age}.`);
       updateSaveStatus(`Future You preview set to age ${future.age}.`);
     }
   }
@@ -15890,8 +15891,7 @@
         updateSaveStatus("Future You age was not changed.");
         return;
       }
-      engagementData().futureYouAge = age;
-      saveDraft(`Future You preview set to age ${age}.`);
+      futureYouSelectedAge = age;
       renderAll();
       updateSaveStatus(`Future You preview set to age ${age}.`);
       return;
@@ -15971,6 +15971,7 @@
     isDemoMode = true;
     activePlanId = DEMO_PLAN_ID;
     plan = ensurePlanIdentity(CALC.clonePlan(sample.plan), { source: "sample", samplePlanId: sample.id });
+    futureYouSelectedAge = null;
     generatedWeeklyPlanner = null;
     weeklyPlan = null;
     weeklyEditingWeek = null;
@@ -15992,6 +15993,7 @@
     isDemoMode = false;
     const saved = loadDraft();
     plan = ensurePlanIdentity(CALC.clonePlan(saved || newUserPlan()), { source: "personal", planId: activePlanId });
+    futureYouSelectedAge = null;
     weeklyPlan = loadWeeklyPlan();
     generatedWeeklyPlanner = null;
     engagementCelebration = null;
@@ -16036,6 +16038,7 @@
     const saved = loadDraft();
     if (saved) {
       plan = ensurePlanIdentity(CALC.clonePlan(saved), { source: "personal", planId: activePlanId });
+      futureYouSelectedAge = null;
       generatedWeeklyPlanner = null;
       weeklyPlan = loadWeeklyPlan();
       restoreDraftUiInputs();
@@ -17402,6 +17405,7 @@
     window.FFSWeeklyPlanUiTestHooks = {
       setPlan(nextPlan) {
         plan = CALC.clonePlan ? CALC.clonePlan(nextPlan) : JSON.parse(JSON.stringify(nextPlan || {}));
+        futureYouSelectedAge = null;
         return plan;
       },
       setWeeklyPlan(nextWeeklyPlan) {
@@ -17461,6 +17465,7 @@
     window.FFSStage1BrowserTestHooks = {
       setPlan(nextPlan, view = "dashboard") {
         plan = ensureCurrentPlanIdentity(CALC.clonePlan(nextPlan || blankUserPlan()));
+        futureYouSelectedAge = null;
         generatedWeeklyPlanner = null;
         renderAll();
         showWorkspace(view);
