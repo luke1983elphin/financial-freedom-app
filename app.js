@@ -605,7 +605,7 @@
   let selectedSamplePlanId = DATA.samplePlans?.[1]?.id || DATA.samplePlans?.[0]?.id || "";
   const savedDraft = loadDraft();
   let userState = loadUserState(savedDraft);
-  let plan = ensureCurrentPlanIdentity(migratePlanData(savedDraft || CALC.emptyPlan()));
+  let plan = ensureCurrentPlanIdentity(migratePlanData(savedDraft || newUserPlan()));
   let activeView = restoredDraftUi.activeView || "dashboard";
   let activeWizardStep = normaliseWizardStep(restoredDraftUi.activeWizardStep);
   let hasOpenedWorkspace = Boolean(savedDraft) || Boolean(restoredDraftUi.hasOpenedWorkspace);
@@ -4794,8 +4794,18 @@
     }
   }
 
+  // Only creation paths call this factory. Loading/importing old plans keeps legacy defaults.
+  function newUserPlan() {
+    const fresh = CALC.emptyPlan();
+    fresh.projectionSettings = { workingPhaseSurplusDestination: "enjoyment" };
+    return fresh;
+  }
+
   function blankUserPlan() {
-    const blank = CALC.emptyPlan();
+    const blank = newUserPlan();
+    // A genuinely new plan must not inherit an edited projection from the previous plan.
+    semiRetirementScenarioDraft = null;
+    semiRetirementScenarioDirty = false;
     blank.incomeItems = [];
     blank.assetItems = [];
     blank.liabilityItems = [];
@@ -9606,7 +9616,7 @@
           <div class="input-grid">
             ${semiRetirementComparisonInput({ label: "Semi-retirement spending", path: "household.semiRetirementLifestyleSpending", step: "1000", comparisonId: active.id })}
             ${semiRetirementComparisonInput({ label: "Retirement spending", path: "household.fullRetirementLifestyleSpending", step: "1000", comparisonId: active.id })}
-            ${semiRetirementComparisonInput({ label: "Extra money while working", path: "scenario.workingPhaseSurplusDestination", type: "select", options: [["accessible-investments", "Add to investments"], ["enjoyment", "Extra lifestyle / spending"], ["unallocated", "Leave as unallocated surplus"]], comparisonId: active.id })}
+            ${semiRetirementComparisonInput({ label: "Extra money while working", path: "scenario.workingPhaseSurplusDestination", type: "select", options: [["accessible-investments", "Add to investments"], ["enjoyment", "Extra lifestyle / enjoyment"], ["unallocated", "Leave as unallocated surplus"]], comparisonId: active.id })}
             ${semiRetirementComparisonInput({ label: "Money left over", path: "scenario.surplusDestination", type: "select", options: [["enjoyment", "Extra lifestyle / enjoyment"], ["super", "Add to super"], ["accessible-investments", "Add to investments"], ["unallocated", "Leave as unallocated surplus"]], comparisonId: active.id })}
           </div>
           <p class="semi-retirement-comparison-note">${escapeHtml(comparisonEventNote)}</p>
@@ -10602,7 +10612,7 @@
             <p>Choose the projection length and what happens to extra money.</p>
           </div>
           <div class="input-grid mt-4">
-            ${semiRetirementInput({ label: "What should happen to extra money while you're working?", path: "scenario.workingPhaseSurplusDestination", type: "select", options: [["accessible-investments", "Add to investments"], ["enjoyment", "Extra lifestyle / spending"], ["unallocated", "Leave as unallocated surplus"]], infoKey: "semiWorkingSurplusDestination", help: "Money remaining after normal spending, loan repayments and planned contributions." })}
+            ${semiRetirementInput({ label: "What should happen to extra money while you're working?", path: "scenario.workingPhaseSurplusDestination", type: "select", options: [["accessible-investments", "Add to investments"], ["enjoyment", "Extra lifestyle / enjoyment"], ["unallocated", "Leave as unallocated surplus"]], infoKey: "semiWorkingSurplusDestination", help: "Money remaining after normal spending, loan repayments and planned contributions." })}
             ${semiRetirementInput({ label: "What should happen if you have money left over?", path: "scenario.surplusDestination", type: "select", options: [["enjoyment", "Extra lifestyle / enjoyment"], ["super", "Add to super"], ["accessible-investments", "Add to investments"], ["unallocated", "Leave as unallocated surplus"]], infoKey: "semiSurplusDestination", help: "Money remaining after normal lifestyle spending and other modelled commitments." })}
             ${semiRetirementInput({ label: "Project to age", path: "projectionEndAge", step: "1", help: "For couples, the projection continues until the younger person reaches this age." })}
           </div>
@@ -15981,7 +15991,7 @@
     activePlanId = normalisePlanId(context.lastPersonalPlanId || userState.lastPersonalPlanId || DEFAULT_PERSONAL_PLAN_ID);
     isDemoMode = false;
     const saved = loadDraft();
-    plan = ensurePlanIdentity(CALC.clonePlan(saved || CALC.emptyPlan()), { source: "personal", planId: activePlanId });
+    plan = ensurePlanIdentity(CALC.clonePlan(saved || newUserPlan()), { source: "personal", planId: activePlanId });
     weeklyPlan = loadWeeklyPlan();
     generatedWeeklyPlanner = null;
     engagementCelebration = null;

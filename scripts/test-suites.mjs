@@ -1,6 +1,7 @@
 export const DEFAULT_SUITE_TIMEOUT_MS = 120_000;
 
 export const ACTIVE_TEST_SUITES = [
+  { id: "new-plan-projection-default", file: "tests/new-plan-projection-default.test.mjs", groups: ["all", "mjs", "presentation"] },
   { id: "educational-wording", file: "tests/educational-wording.test.mjs", groups: ["all", "mjs", "presentation"] },
   { id: "minor-presentation", file: "tests/minor-presentation.test.mjs", groups: ["all", "mjs", "presentation"] },
   { id: "investment-asset-ux", file: "tests/investment-asset-ux.test.mjs", groups: ["all", "mjs", "investment-return"] },
