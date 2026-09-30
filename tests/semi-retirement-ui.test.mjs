@@ -1997,7 +1997,7 @@ test("Stage G2F Retirement Plan source uses the simplified input labels and calc
     "Investments available before super",
     "Planned annual investing",
     "What should happen to extra money while you're working?",
-    "What should happen if you have money left over?",
+    "What should happen to extra money during retirement?",
     "Project to age",
     "Calculate Retirement Plan",
   ].forEach((label) => assert.match(snippet, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))));

@@ -10614,7 +10614,7 @@
           </div>
           <div class="input-grid mt-4">
             ${semiRetirementInput({ label: "What should happen to extra money while you're working?", path: "scenario.workingPhaseSurplusDestination", type: "select", options: [["accessible-investments", "Add to investments"], ["enjoyment", "Extra lifestyle / enjoyment"], ["unallocated", "Leave as unallocated surplus"]], infoKey: "semiWorkingSurplusDestination", help: "Money remaining after normal spending, loan repayments and planned contributions." })}
-            ${semiRetirementInput({ label: "What should happen if you have money left over?", path: "scenario.surplusDestination", type: "select", options: [["enjoyment", "Extra lifestyle / enjoyment"], ["super", "Add to super"], ["accessible-investments", "Add to investments"], ["unallocated", "Leave as unallocated surplus"]], infoKey: "semiSurplusDestination", help: "Money remaining after normal lifestyle spending and other modelled commitments." })}
+            ${semiRetirementInput({ label: "What should happen to extra money during retirement?", path: "scenario.surplusDestination", type: "select", options: [["enjoyment", "Extra lifestyle / enjoyment"], ["super", "Add to super"], ["accessible-investments", "Add to investments"], ["unallocated", "Leave as unallocated surplus"]], infoKey: "semiSurplusDestination", help: "Money remaining during retirement after lifestyle spending and other modelled commitments." })}
             ${semiRetirementInput({ label: "Project to age", path: "projectionEndAge", step: "1", help: "For couples, the projection continues until the younger person reaches this age." })}
           </div>
         </section>
