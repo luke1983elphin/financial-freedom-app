@@ -1,5 +1,5 @@
 {
-  "base": "http://127.0.0.1:50792",
+  "base": "http://127.0.0.1:53549",
   "checks": [
     "Normal URL retains existing Dashboard; journey URL renders experiment; complete calculator result identical for same plan.",
     "All existing navigation panels work; tab switching preserves plan and localStorage.",
@@ -11,5 +11,6 @@
     "limited: renders safely without overflow.",
     "large: renders safely without overflow."
   ],
-  "errors": []
+  "errors": [],
+  "resourceErrors": []
 }

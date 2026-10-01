@@ -14,10 +14,10 @@ const server=createServer((req,res)=>{
 });
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const base=process.env.FFS_PREVIEW_URL||'http://127.0.0.1:'+server.address().port;
-const browser=await chromium.launch({headless:true,channel:'msedge'}),checks=[],errors=[];
+const browser=await chromium.launch({headless:true,channel:'msedge'}),checks=[],errors=[],resourceErrors=[];
 try{
  const page=await browser.newPage({viewport:{width:1440,height:1100}});
- page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
+ page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error'){const detail={message:m.text(),url:m.location().url};if(detail.url.endsWith('/favicon.ico'))resourceErrors.push(detail);else errors.push(detail);}});
  await page.addInitScript(()=>window.FFS_STAGE1_BROWSER_TESTS_ENABLED=true);
  async function open(query,p){await page.goto(base+query);await page.waitForFunction(()=>window.FFSStage1BrowserTestHooks);await page.evaluate(p=>{FFSStage1BrowserTestHooks.setPlan(p);FFSStage1BrowserTestHooks.closeDurabilityDialog();},p);await page.locator('[data-view-panel="dashboard"]').scrollIntoViewIfNeeded();}
  const fixture=investmentReturnFixture(false);
@@ -70,5 +70,5 @@ try{
   checks.push(name+': renders safely without overflow.');
  }
  assert.deepEqual(errors,[]);
- writeFileSync(resolve(out,'verification.json'),JSON.stringify({base,checks,errors},null,2));console.log(JSON.stringify({base,checks,errors},null,2));
+ writeFileSync(resolve(out,'verification.json'),JSON.stringify({base,checks,errors,resourceErrors},null,2));console.log(JSON.stringify({base,checks,errors,resourceErrors},null,2));
 }finally{await browser.close();await new Promise(r=>server.close(r));}
