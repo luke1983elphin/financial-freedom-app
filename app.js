@@ -4921,6 +4921,7 @@
       else button.removeAttribute("aria-current");
     });
     if (view === "setup") renderWizardStep();
+    if (view === "dashboard") renderJourneyDashboard();
     return true;
   }
 
@@ -7005,7 +7006,53 @@
     }
   }
 
+  let journeyDashboardResult = null;
+  function renderJourneyDashboard(result = journeyDashboardResult) {
+    if (!window.FFSJourneyDashboard?.enabled(window.location.search) || !result) return;
+    journeyDashboardResult = result;
+    const panel = document.querySelector('[data-view-panel="dashboard"]');
+    let container = document.getElementById("journeyDashboard");
+    if (!container) {
+      container = document.createElement("div");
+      container.id = "journeyDashboard";
+      panel.prepend(container);
+      const stylesheet = document.createElement("link");
+      stylesheet.rel = "stylesheet";
+      stylesheet.href = "journey-dashboard.css";
+      document.head.append(stylesheet);
+    }
+    panel.classList.add("journey-mode");
+    document.body.classList.add("journey-experiment");
+    const personal = plan.personal || {};
+    const readiness = personalisedResultsReadiness(plan, result);
+    const ready = readiness.readyForPersonalisedResults;
+    const age = Number(personal.person1Age);
+    const secondAge = Number(personal.person2Age);
+    const couple = secondAge > 0;
+    const ageLabel = age > 0 ? (couple ? `${personal.person1Name || "Person 1"}: ${age} · ${personal.person2Name || "Person 2"}: ${secondAge}` : `Age ${age}`) : "Add your details";
+    const superRow = age < 60 ? result.superProjection?.find(row => Number(row.age) === 60) : null;
+    const horizon = result.financialFreedomProgressProjection?.at(-1);
+    const milestones = [{ title: "Today", value: ageLabel, note: "Your starting point" }];
+    if (ready) milestones.push({ title: "Growing wealth", value: money(result.accessibleFiAssets), note: "Accessible FI assets today" });
+    // Retirement Planning is a separate scenario, never a substitute for base-plan amounts.
+    const elected = (semiRetirementScenarioDraft?.people || []).filter(person => person.hasSemiRetirement === true && Number(person.semiRetirementAge) > 0 && Number(person.semiRetirementAge) < Number(person.fullRetirementAge));
+    if (ready && elected.length) milestones.push({ title: "Semi-retirement", value: elected.map(person => `${person.name || person.id}: age ${person.semiRetirementAge}`).join(" · "), note: "Retirement Planning scenario setting" });
+    if (ready && Number(personal.fullRetirementAge) > 0) milestones.push({ title: "Full retirement target", value: `Age ${personal.fullRetirementAge}`, note: couple ? "Main plan target · Person 1 age" : "Your main plan target" });
+    if (ready && Number(horizon?.age) > 0) milestones.push({ title: "Projection horizon", value: `Age ${horizon.age}`, note: couple ? "Main projection · Person 1 age" : "End of the main projection" });
+    container.innerHTML = window.FFSJourneyDashboard.html({
+      ready, readinessMessage: readiness.message, progress: freedomPercent(result),
+      lifestyle: lifestyleTarget(result), netWorth: result.currentNetWorth,
+      accessible: result.accessibleFiAssets, surplus: estimatedCashflow(result),
+      superBalance: superRow ? Number(superRow.closingBalance) : result.superannuationBalance,
+      superLabel: superRow ? (couple ? "Super when Person 1 is 60" : "Super at age 60") : "Current super",
+      superNote: superRow ? "Projected household balance · future dollars." : "Your current household super balance.",
+      retirementLabel: ready && Number(personal.fullRetirementAge) > 0 ? `Main plan retirement target: age ${personal.fullRetirementAge}${couple ? " (Person 1)" : ""}.` : "",
+      milestones,
+    }, { escapeHtml, money, plainPercent });
+  }
+
   function renderDashboard(result) {
+    renderJourneyDashboard(result);
     const names = [plan.personal.person1Name, plan.personal.person2Name].filter(Boolean).join(" and ");
     const percent = freedomPercent(result);
     const stageInfo = financialStageInfo(result);
@@ -15942,6 +15989,7 @@
     safeRenderModule("Goals", () => renderGoalsSummary(result));
     safeRenderModule("Decision Engine", () => renderDecision(result));
     safeRenderModule("Semi-Retirement", () => renderSemiRetirementScenario(result));
+    safeRenderModule("Journey Dashboard", () => renderJourneyDashboard(result));
     safeRenderModule("Saved Scenarios", () => renderScenarios());
     safeRenderModule("Reports", () => renderReports(result));
     safeRenderModule("Weekly Plan", () => renderWeeklyPlan(result));
@@ -17521,5 +17569,6 @@
   showPendingStorageIssues();
   maybeShowBackupReminder();
   loadAiInsightsConfig();
-  if (hasOpenedWorkspace) showWorkspace(activeView);
+  if (window.FFSJourneyDashboard?.enabled(window.location.search)) showWorkspace("dashboard", { scroll: false });
+  else if (hasOpenedWorkspace) showWorkspace(activeView);
 })();

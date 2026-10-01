@@ -1,0 +1,16 @@
+{
+  "base": "http://127.0.0.1:53549",
+  "checks": [
+    "Normal URL retains existing Dashboard; journey URL renders experiment; complete calculator result identical for same plan.",
+    "All existing navigation panels work; tab switching preserves plan and localStorage.",
+    "desktop: no page overflow; controls >=44px.",
+    "tablet: no page overflow; controls >=44px.",
+    "mobile: no page overflow; controls >=44px.",
+    "Enabled semi-retirement milestone uses explicit scenario age; disabled milestone is hidden after tab switching.",
+    "single: renders safely without overflow.",
+    "limited: renders safely without overflow.",
+    "large: renders safely without overflow."
+  ],
+  "errors": [],
+  "resourceErrors": []
+}
