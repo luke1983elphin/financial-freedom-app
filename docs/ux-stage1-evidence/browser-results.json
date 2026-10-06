@@ -1,0 +1,14 @@
+{
+  "checks": [
+    "Every underlying view ID retained; full browser calculation and quick-scenario inputs exactly match baseline.",
+    "1440px: five primary choices, every More route, disclosure Enter/Space/Escape/Tab, aria-current, 44px tap targets, no horizontal overflow, dashboard links and financial details work; no plan/storage/result changes.",
+    "375px: five primary choices, every More route, disclosure Enter/Space/Escape/Tab, aria-current, 44px tap targets, no horizontal overflow, dashboard links and financial details work; no plan/storage/result changes.",
+    "Future You renders identical outputs at ages 43, 55 and 65 without changing plan or storage.",
+    "Setup exit, dedicated Super link, Financial Progress detail route and calculated retirement timing card work.",
+    "Detailed custom scenario remains accessible; all quick scenarios and custom scenario rendered outcomes exactly match baseline.",
+    "Report progress link, report assumptions and saving/opening an existing Future scenario work.",
+    "Existing retirement-intent goal link opens Retirement Planning from setup.",
+    "375px Start My Plan/Load Sample Plan and Privacy work; Continue/backup controls retained; all fallback home journey links work under the existing legacy-home flag."
+  ],
+  "errors": []
+}

@@ -9181,3 +9181,39 @@ body.scenario-save-modal-open {
 }
 
 .decision-model-notice { grid-column: 1 / -1; }
+/* Stage 1: five primary destinations, with advanced views in a native disclosure. */
+#sideNav { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; }
+.workspace-nav { overflow: visible; }
+.nav-more { min-width: 0; }
+.nav-more-toggle { display: list-item; min-height: 44px; padding: 11px 14px; border-radius: 16px; color: #475569; font-size: 14px; font-weight: 750; cursor: pointer; }
+.nav-more-items { display: grid; gap: 4px; padding: 8px 0 0 12px; }
+.nav-more.has-active-view > summary { background: #e8f3ee; color: #0f6748; }
+#sideNav .nav-button { min-height: 44px; white-space: normal; }
+.nav-more-toggle:focus-visible, #sideNav button:focus-visible { outline: 3px solid #2563eb; outline-offset: 2px; }
+.dashboard-stage1-primary { display: grid; gap: 20px; }
+.dashboard-stage1-primary .dashboard-future-card { border-color: #bddbcc; background: #f5fbf8; }
+.dashboard-retirement-card { height: 100%; }
+.dashboard-retirement-card .dashboard-snapshot-grid { grid-template-columns: minmax(0, 1fr); }
+.dashboard-text-button { min-height: 44px; }
+.dashboard-age-control input[type="range"] { min-height: 44px; }
+@media (min-width: 920px) {
+  .dashboard-stage1-primary .dashboard-future-results { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 1023px) {
+  .workspace-nav { position: relative; top: auto; }
+  body[data-active-view="setup"] .workspace-nav { display: block; }
+  #sideNav { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; align-items: start; }
+  #sideNav > .nav-button { justify-content: center; padding: 8px 5px; }
+  .nav-more { grid-column: span 2; }
+  .nav-more-toggle { text-align: center; }
+  .nav-more-items { grid-template-columns: repeat(2, minmax(0, 1fr)); padding-left: 0; }
+  .nav-more-items .nav-button { padding: 8px; font-size: 13px; }
+}
+
+@media (min-width: 360px) and (max-width: 760px) {
+  #dashboardSimplified .dashboard-future-results,
+  #dashboardSimplified .dashboard-snapshot-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #dashboardSimplified .dashboard-retirement-card .dashboard-snapshot-grid { grid-template-columns: minmax(0, 1fr); }
+  #dashboardSimplified .summary-tile { padding: 12px; }
+  #dashboardSimplified .summary-tile strong { font-size: 18px; }
+}

@@ -146,16 +146,15 @@
               <h3>See Your Future</h3>
               <p>View forecasts, financial milestones and projected wealth growth.</p>
             </article>
-            <article class="step-card clickable-step" role="button" tabindex="0" data-home-step="reports">
+            <article class="step-card clickable-step" role="button" tabindex="0" data-home-step="semiretirement">
               <span>3</span>
-              <h3>Review Your Strategy</h3>
-              <p>Review reports, modelled observations and saved scenario comparisons.</p>
+              <h3>Explore Retirement</h3>
+              <p>Explore work-reduction timing and your retirement outlook.</p>
             </article>
-            <article class="step-card clickable-step step-card-featured" role="button" tabindex="0" data-home-step="weeklyplan">
+            <article class="step-card clickable-step step-card-featured" role="button" tabindex="0" data-home-step="decision">
               <span>4</span>
-              <h3>Follow Your Weekly Plan</h3>
-              <p>Model weekly cashflow and compare entered plans with recorded results.</p>
-              <button class="btn btn-primary mt-4" type="button" data-home-step-button="weeklyplan">Open Weekly Plan</button>
+              <h3>Try Changes</h3>
+              <p>See how a change could affect your future.</p>
             </article>
             <article class="step-card ai-insights-card hidden" id="aiInsightsHomeCard" data-ai-insights-card aria-disabled="true">
               <span class="ai-beta-label">Private Beta</span>
@@ -172,15 +171,20 @@
               <p class="nav-title">Plan workspace</p>
               <div class="grid gap-1" id="sideNav">
                 <button class="nav-button active" type="button" data-view="dashboard">Dashboard</button>
-                <button class="nav-button" type="button" data-view="setup" id="setupNavButton">Financial Plan</button>
-                <button class="nav-button" type="button" data-view="investments">Investments</button>
-                <button class="nav-button" type="button" data-view="super">Super</button>
-                <button class="nav-button" type="button" data-view="goals">Goals</button>
-                <button class="nav-button" type="button" data-view="decision">Decision Engine</button>
-                <button class="nav-button" type="button" data-view="semiretirement" data-semi-retirement-nav>Retirement Planning</button>
-                <button class="nav-button" type="button" data-view="reports">Reports</button>
-                <button class="nav-button" type="button" data-view="scenarios">Saved Scenarios</button>
-                <button class="nav-button nav-button-optional" type="button" data-view="weeklyplan">Weekly Plan</button>
+                <button class="nav-button" type="button" data-view="setup" id="setupNavButton">My Plan</button>
+                <button class="nav-button" type="button" data-view="decision">Future</button>
+                <button class="nav-button" type="button" data-view="semiretirement" data-semi-retirement-nav>Retirement</button>
+                <details class="nav-more" id="moreNavigation">
+                  <summary class="nav-more-toggle">More</summary>
+                  <div class="nav-more-items" aria-label="More destinations">
+                    <button class="nav-button" type="button" data-view="investments">Investments</button>
+                    <button class="nav-button" type="button" data-view="super">Super</button>
+                    <button class="nav-button" type="button" data-view="goals">Goals</button>
+                    <button class="nav-button" type="button" data-view="weeklyplan">Weekly Plan</button>
+                    <button class="nav-button" type="button" data-view="reports">Reports</button>
+                    <button class="nav-button" type="button" data-view="scenarios">Saved Scenarios</button>
+                  </div>
+                </details>
               </div>
             </nav>
 
@@ -268,6 +272,13 @@
               </section>
 
               <section class="view-section" data-view-panel="dashboard">
+                <div class="section-heading"><h2>Dashboard</h2><p>Your finances today, and the future you can explore.</p></div>
+
+                <div id="dashboardSimplified" class="dashboard-simplified mt-6"></div>
+
+                <details id="dashboardDetails" class="dashboard-details card mt-6">
+                  <summary>View Financial Details</summary>
+                  <div class="dashboard-detail-content mt-4">
                 <div class="premium-hero dashboard-hero">
                   <div>
                     <p class="brand-kicker text-sm font-bold uppercase text-success">Financial Freedom</p>
@@ -279,6 +290,7 @@
                     <strong id="heroScore">0%</strong>
                   </div>
                 </div>
+
 
                 <div class="freedom-progress-section mt-6">
                   <article class="freedom-stage-card">
@@ -299,11 +311,7 @@
 
                 <div id="dashboardMilestones" class="milestone-grid mt-6"></div>
 
-                <div id="dashboardSimplified" class="dashboard-simplified mt-6"></div>
-
-                <details id="dashboardDetails" class="dashboard-details card mt-6">
-                  <summary>View Financial Details</summary>
-                  <div class="dashboard-detail-content mt-4">
+                <div id="dashboardWeeklyMission"></div>
 
                 <div class="dashboard-hero-metrics mt-6" id="dashboardHeroMetrics"></div>
 
@@ -473,8 +481,8 @@
 
               <section class="view-section hidden" data-view-panel="decision">
                 <div class="section-heading">
-                  <h2>Decision Engine</h2>
-                  <p>Compare outcomes under different assumptions and save scenarios without changing your Financial Plan.</p>
+                  <h2>Try a change</h2>
+                  <p>See how changes to investing, debt, retirement timing or lifestyle could affect your future.</p>
                 </div>
                 <article class="card">
                   <div class="card-heading">
@@ -501,7 +509,7 @@
                 <details class="card mt-6 decision-accordion" id="customScenarioDetails">
                   <summary>
                     <div>
-                      <h3>Build a custom scenario</h3>
+                      <h3>More detailed scenario</h3>
                       <span>Adjust several assumptions together to test a more detailed scenario. Saving stores a separate scenario without changing your Financial Plan.</span>
                     </div>
                     <strong>Open</strong>
@@ -630,7 +638,7 @@
                     <div class="scenario-filter-bar" role="group" aria-label="Filter saved scenarios">
                       <button class="btn btn-primary" type="button" data-scenario-filter="all">All</button>
                       <button class="btn" type="button" data-scenario-filter="retirement">Retirement Planning</button>
-                      <button class="btn" type="button" data-scenario-filter="decision">Decision Engine</button>
+                      <button class="btn" type="button" data-scenario-filter="decision">Future</button>
                     </div>
                     <div id="scenarioList" class="grid gap-3"></div>
                   </div>

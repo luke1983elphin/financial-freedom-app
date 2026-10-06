@@ -82,18 +82,7 @@ test("Stage D exposes Semi-Retirement as a dedicated top-level workspace tab", (
   assert.doesNotMatch(nav, /class="nav-button hidden"[^>]*data-view="semiretirement"/);
 
   const order = navDataViewOrder();
-  assert.deepEqual(order, [
-    "dashboard",
-    "setup",
-    "investments",
-    "super",
-    "goals",
-    "decision",
-    "semiretirement",
-    "reports",
-    "scenarios",
-    "weeklyplan",
-  ]);
+  assert.deepEqual(order, ["dashboard", "setup", "decision", "semiretirement", "investments", "super", "goals", "weeklyplan", "reports", "scenarios"]);
 });
 
 test("Stage D keeps the Semi-Retirement UI out of the Decision Engine panel", () => {
@@ -148,11 +137,11 @@ test("Stage D Year-by-Year Projection keeps all projection columns available", (
   ].forEach((heading) => assert.match(appSource, new RegExp(heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))));
 });
 
-test("Stage D places Weekly Plan last and visually separates it as the ongoing operating tool", () => {
+test("Stage 1 keeps Weekly Plan reachable inside More", () => {
   const nav = workspaceNavSnippet();
   const order = navDataViewOrder();
-  assert.equal(order.at(-1), "weeklyplan");
-  assert.match(nav, /class="nav-button nav-button-optional" type="button" data-view="weeklyplan"/);
+  assert.ok(order.includes("weeklyplan"));
+  assert.match(nav, /class="nav-more"[\s\S]*data-view="weeklyplan"/);
   assert.match(stylesSource, /\.nav-button-optional\s*\{[^}]*box-shadow: inset 0 1px 0 #e2e8f0;/s);
 });
 
