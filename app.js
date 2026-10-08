@@ -5244,6 +5244,7 @@
   }
 
   function collectionShell({ title, description, addLabel, collection, body, actionsHtml = "", emptyText = "" }) {
+    const stickyActions = ["incomeItems", "expenseItems", "assetItems", "liabilityItems"].includes(collection);
     const addButton = addLabel
       ? `<button class="btn btn-primary add-button" type="button" data-add-collection="${collection}">${escapeHtml(addLabel)}</button>`
       : "";
@@ -5256,7 +5257,7 @@
           </div>
           ${addButton}
         </div>
-        ${actionsHtml ? `<div class="consumer-action-grid" aria-label="${escapeHtml(title)} actions">${actionsHtml}</div>` : ""}
+        ${actionsHtml ? `<div class="consumer-action-grid${stickyActions ? " collection-add-actions" : ""}" role="group" aria-label="${escapeHtml(title)} actions">${actionsHtml}</div>` : ""}
         <div class="collection-list">${body || `<p class="empty-collection-note">${escapeHtml(emptyText || "Nothing added yet. Choose an option above when it applies to you.")}</p>`}</div>
         ${addButton ? `<div class="collection-footer">${addButton}</div>` : ""}
       </section>
@@ -17505,6 +17506,22 @@
 
   bindEvents();
   renderAll();
+  // Keep entry actions below the header and the optional sample-plan banner.
+  const stickyHeader = document.querySelector("body > div > header");
+  const stickyBanner = document.getElementById("demoModeBanner");
+  const updateCollectionActionOffset = () => {
+    const headerHeight = stickyHeader?.getBoundingClientRect().height || 0;
+    const bannerHeight = stickyBanner?.getBoundingClientRect().height || 0;
+    document.documentElement.style.setProperty("--app-header-height", `${headerHeight}px`);
+    document.documentElement.style.setProperty("--collection-actions-top", `${headerHeight + bannerHeight + 8}px`);
+  };
+  updateCollectionActionOffset();
+  if (typeof ResizeObserver !== "undefined") {
+    const collectionHeaderObserver = new ResizeObserver(updateCollectionActionOffset);
+    if (stickyHeader) collectionHeaderObserver.observe(stickyHeader);
+    if (stickyBanner) collectionHeaderObserver.observe(stickyBanner);
+  }
+  window.addEventListener("resize", updateCollectionActionOffset);
   if (window.FFS_STAGE1_BROWSER_TESTS_ENABLED === true) {
     window.FFSStage1BrowserTestHooks = {
       setPlan(nextPlan, view = "dashboard") {
