@@ -1,0 +1,94 @@
+{
+  "date": "2026-10-06",
+  "workingDirectory": "C:/Users/luket/Documents/GitHub/financial-freedom-app",
+  "branch": "ux-simplification-stage-1",
+  "baseMainSha": "bd23b2aa9016c8c8be70a16c9de5bea74a38a5b2",
+  "sourceReviewCopy": "C:/Users/luket/Documents/ChatGPT/Financial Freedom/ux-stage1-work",
+  "conflicts": [],
+  "transferAdjustment": "Restored original line endings after Git converted them during patch application; no source content or model adjustments.",
+  "staged": false,
+  "committed": false,
+  "pushed": false,
+  "changedFiles": [
+    "UX-SIMPLIFICATION-STAGE-1.md",
+    "app.js",
+    "docs/ux-stage1-evidence/after-1440.png",
+    "docs/ux-stage1-evidence/after-375.png",
+    "docs/ux-stage1-evidence/before-1440.png",
+    "docs/ux-stage1-evidence/before-375.png",
+    "docs/ux-stage1-evidence/browser-results.json",
+    "docs/ux-stage1-evidence/dashboard-1440.png",
+    "docs/ux-stage1-evidence/dashboard-375.png",
+    "docs/ux-stage1-evidence/more-1440.png",
+    "docs/ux-stage1-evidence/more-375.png",
+    "docs/ux-stage1-evidence/parity-results.json",
+    "docs/ux-stage1-evidence/regression-results.json",
+    "index.html",
+    "scripts/test-suites.mjs",
+    "scripts/ux-stage1-parity.mjs",
+    "scripts/verify-ux-stage1-browser.mjs",
+    "styles.css",
+    "tests/fixtures/ux-stage1-before.json.gz",
+    "tests/fixtures/ux-stage1-protected.json",
+    "tests/integrated-release-candidate-r6.test.mjs",
+    "tests/sample-plans-multi-comparison-g2h.test.mjs",
+    "tests/semi-retirement-debt-property-stage-d.test.mjs",
+    "tests/semi-retirement-ui.test.mjs",
+    "tests/ux-stage1.test.mjs"
+  ],
+  "final": {
+    "targeted": {
+      "stage1Passed": 8,
+      "stage1Failed": 0,
+      "includingSourceAdapterFollowupPassed": 47
+    },
+    "test": {
+      "command": "pnpm test",
+      "exitCode": 0,
+      "suites": 52,
+      "passed": 1095,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0,
+      "total": 1095
+    },
+    "verify": {
+      "command": "pnpm run verify",
+      "exitCode": 0,
+      "suites": 52,
+      "passed": 1095,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0,
+      "total": 1095
+    },
+    "security": {
+      "command": "pnpm run security:scan",
+      "exitCode": 0,
+      "findings": 0
+    },
+    "browser": {
+      "command": "node scripts/verify-ux-stage1-browser.mjs",
+      "exitCode": 0,
+      "widths": [
+        1440,
+        375
+      ],
+      "checks": [
+        "Every underlying view ID retained; full browser calculation and quick-scenario inputs exactly match baseline.",
+        "1440px: five primary choices, every More route, disclosure Enter/Space/Escape/Tab, aria-current, 44px tap targets, no horizontal overflow, dashboard links and financial details work; no plan/storage/result changes.",
+        "375px: five primary choices, every More route, disclosure Enter/Space/Escape/Tab, aria-current, 44px tap targets, no horizontal overflow, dashboard links and financial details work; no plan/storage/result changes.",
+        "Future You renders identical outputs at ages 43, 55 and 65 without changing plan or storage.",
+        "Setup exit, dedicated Super link, Financial Progress detail route and calculated retirement timing card work.",
+        "Detailed custom scenario remains accessible; all quick scenarios and custom scenario rendered outcomes exactly match baseline.",
+        "Report progress link, report assumptions and saving/opening an existing Future scenario work.",
+        "Existing retirement-intent goal link opens Retirement Planning from setup.",
+        "375px Start My Plan/Load Sample Plan and Privacy work; Continue/backup controls retained; all fallback home journey links work under the existing legacy-home flag."
+      ],
+      "errors": []
+    }
+  },
+  "logsDirectory": "C:/Users/luket/Documents/ChatGPT/Financial Freedom/ux-stage1-transfer-evidence"
+}

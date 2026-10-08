@@ -104,9 +104,9 @@ test("R6 release candidate exposes the complete navigation and export inventory"
   const html = read("index.html");
   const app = read("app.js");
   for (const [view, label] of [
-    ["dashboard", "Dashboard"], ["setup", "Financial Plan"], ["investments", "Investments"],
-    ["super", "Super"], ["goals", "Goals"], ["decision", "Decision Engine"],
-    ["semiretirement", "Retirement Planning"], ["reports", "Reports"],
+    ["dashboard", "Dashboard"], ["setup", "My Plan"], ["investments", "Investments"],
+    ["super", "Super"], ["goals", "Goals"], ["decision", "Future"],
+    ["semiretirement", "Retirement"], ["reports", "Reports"],
     ["scenarios", "Saved Scenarios"], ["weeklyplan", "Weekly Plan"],
   ]) assert.match(html, new RegExp(`data-view="${view}"[^>]*>${label}`));
   assert.match(app, /Export comparison PDF/);

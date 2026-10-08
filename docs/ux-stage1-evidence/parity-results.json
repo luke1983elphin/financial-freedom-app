@@ -1,0 +1,59 @@
+{
+  "fixtures": 9,
+  "numericalDifferences": 0,
+  "sha256": "ce7cd3bf25813288fc8821835f6ba7f69324561e0b2984514a90bf5d9d3dfb75",
+  "workingDirectory": "C:/Users/luket/Documents/GitHub/financial-freedom-app",
+  "branch": "ux-simplification-stage-1",
+  "baselineCommit": "bd23b2aa9016c8c8be70a16c9de5bea74a38a5b2",
+  "fixedTime": "2026-10-06T00:00:00Z",
+  "numericLeaves": 328780,
+  "protectedFiles": 16,
+  "protectedAppFunctionSections": 773,
+  "fixtureResults": [
+    {
+      "name": "young-professional",
+      "retirementValid": true,
+      "scenarioValid": true
+    },
+    {
+      "name": "young-couple",
+      "retirementValid": true,
+      "scenarioValid": true
+    },
+    {
+      "name": "growing-family",
+      "retirementValid": true,
+      "scenarioValid": true
+    },
+    {
+      "name": "established-family-wealth-building",
+      "retirementValid": true,
+      "scenarioValid": true
+    },
+    {
+      "name": "pre-retirement",
+      "retirementValid": true,
+      "scenarioValid": true
+    },
+    {
+      "name": "semi-retirement",
+      "retirementValid": true,
+      "scenarioValid": true
+    },
+    {
+      "name": "retirement-ready",
+      "retirementValid": true,
+      "scenarioValid": true
+    },
+    {
+      "name": "single",
+      "retirementValid": true,
+      "scenarioValid": true
+    },
+    {
+      "name": "couple-property-offset",
+      "retirementValid": true,
+      "scenarioValid": true
+    }
+  ]
+}

@@ -2047,7 +2047,7 @@
 
   function updateSetupNavigationLabel() {
     const button = document.getElementById("setupNavButton");
-    if (button) button.textContent = "Financial Plan";
+    if (button) button.textContent = "My Plan";
   }
 
   function updateFieldLabel(path, label) {
@@ -4920,6 +4920,13 @@
       if (isActive) button.setAttribute("aria-current", "page");
       else button.removeAttribute("aria-current");
     });
+    const moreNavigation = document.getElementById("moreNavigation");
+    if (moreNavigation) {
+      if (moreNavigation.contains(document.activeElement)) moreNavigation.querySelector("summary")?.focus();
+      moreNavigation.open = false;
+      moreNavigation.classList.toggle("has-active-view", Boolean(moreNavigation.querySelector('[aria-current="page"]')));
+    }
+    if (view === "dashboard") renderDashboardRetirementCard();
     if (view === "setup") renderWizardStep();
     return true;
   }
@@ -4929,7 +4936,7 @@
     document.querySelectorAll("[data-semi-retirement-nav]").forEach((button) => {
       button.classList.toggle("hidden", !enabled);
       button.disabled = !enabled;
-      button.textContent = "Retirement Planning";
+      button.textContent = "Retirement";
       button.setAttribute("aria-hidden", enabled ? "false" : "true");
     });
     if (!enabled && activeView === "semiretirement") setView("decision");
@@ -5237,6 +5244,7 @@
   }
 
   function collectionShell({ title, description, addLabel, collection, body, actionsHtml = "", emptyText = "" }) {
+    const stickyActions = ["incomeItems", "expenseItems", "assetItems", "liabilityItems"].includes(collection);
     const addButton = addLabel
       ? `<button class="btn btn-primary add-button" type="button" data-add-collection="${collection}">${escapeHtml(addLabel)}</button>`
       : "";
@@ -5249,7 +5257,7 @@
           </div>
           ${addButton}
         </div>
-        ${actionsHtml ? `<div class="consumer-action-grid" aria-label="${escapeHtml(title)} actions">${actionsHtml}</div>` : ""}
+        ${actionsHtml ? `<div class="consumer-action-grid${stickyActions ? " collection-add-actions" : ""}" role="group" aria-label="${escapeHtml(title)} actions">${actionsHtml}</div>` : ""}
         <div class="collection-list">${body || `<p class="empty-collection-note">${escapeHtml(emptyText || "Nothing added yet. Choose an option above when it applies to you.")}</p>`}</div>
         ${addButton ? `<div class="collection-footer">${addButton}</div>` : ""}
       </section>
@@ -6894,7 +6902,7 @@
     if (!readyState.readyForPersonalisedResults) {
       return `
         <article class="dashboard-compact-card dashboard-future-card">
-          <span class="metric-label">Future You</span>
+          <span class="metric-label">Your Future</span>
           <h3>Complete your financial plan to see Future You</h3>
           <p>This preview will show projected wealth, passive income and Financial Freedom progress at the age you select.</p>
           <button class="btn" type="button" data-engagement-action="setup">Continue Setup</button>
@@ -6908,7 +6916,7 @@
       <article class="dashboard-compact-card dashboard-future-card">
         <div class="dashboard-card-heading-row">
           <div>
-            <span class="metric-label">Future You</span>
+            <span class="metric-label">Your Future</span>
             <h3 id="${escapeHtml(labelId)}" data-dashboard-future-age-label>Age ${escapeHtml(value)}</h3>
           </div>
           <button class="btn" type="button" data-engagement-action="decision">View Projection</button>
@@ -6927,9 +6935,9 @@
     if (!readyState.readyForPersonalisedResults) {
       return `
         <article class="dashboard-compact-card dashboard-snapshot-card">
-          <span class="metric-label">Snapshot</span>
+          <span class="metric-label">Where you are now</span>
           <h3>Your key figures will appear here after setup</h3>
-          <p>Net worth, Financial Freedom progress, weekly surplus and passive income will update once the plan has enough information.</p>
+          <p>Financial Freedom progress, accessible FI assets, net worth and annual surplus will update once the plan has enough information.</p>
         </article>
       `;
     }
@@ -6937,16 +6945,16 @@
       <article class="dashboard-compact-card dashboard-snapshot-card">
         <div class="dashboard-card-heading-row">
           <div>
-            <span class="metric-label">Snapshot</span>
-            <h3>Four numbers to watch</h3>
+            <span class="metric-label">Where you are now</span>
+            <h3>Your financial position</h3>
           </div>
           <button class="dashboard-text-button" type="button" data-dashboard-detail-open>View Financial Details</button>
         </div>
         <div class="dashboard-snapshot-grid">
-          ${summaryTile("Net Worth", money(result.currentNetWorth))}
           ${summaryTile("Financial Freedom %", plainPercent(percent), "", "financialFreedomProgress")}
-          ${summaryTile("Weekly Surplus", money(annualSurplus / 52))}
-          ${summaryTile("Passive Income", `${money(passiveIncome)} pa`, "", "passiveIncome")}
+          ${summaryTile("Accessible FI assets", money(result.accessibleFiAssets), "", "futureAccessibleFiAssets")}
+          ${summaryTile("Net worth", money(result.currentNetWorth))}
+          ${summaryTile("Annual surplus", money(annualSurplus))}
         </div>
       </article>
     `;
@@ -6966,15 +6974,42 @@
     return aiOpeningInsightHtml().replace("engagement-card engagement-ai-card", "dashboard-compact-card dashboard-ai-card");
   }
 
+  function dashboardRetirementHtml() {
+    const resultDraft = semiRetirementScenarioResultDraft || semiRetirementScenarioDraft;
+    const viewModel = semiRetirementScenarioResult && window.FFSSemiRetirementUi?.buildSemiRetirementResultsViewModel?.(semiRetirementScenarioResult, semiRetirementScenarioInputs, resultDraft);
+    const timing = viewModel?.isAvailable ? viewModel.retirementTiming : null;
+    return `
+      <article class="dashboard-compact-card dashboard-retirement-card">
+        <span class="metric-label">When work could become optional</span>
+        <h3>Your retirement outlook</h3>
+        ${timing ? `<div class="dashboard-snapshot-grid">
+          ${timing.hasElectedPersonalSemiRetirement && timing.personalSemiRetirementValue ? summaryTile("Reduce work — scenario age", timing.personalSemiRetirementValue) : ""}
+          ${timing.fullRetirementValue ? summaryTile("Full retirement — scenario age", timing.fullRetirementValue) : ""}
+        </div><p>These ages come from your calculated retirement scenario. Explore the plan to review whether spending is funded.</p>` : "<p>Explore when you could reduce work or retire, and how long your modelled retirement funding could last.</p>"}
+        <button class="btn" type="button" data-view="semiretirement">Explore retirement plan</button>
+      </article>
+    `;
+  }
+
+  function renderDashboardRetirementCard() {
+    const card = document.getElementById("dashboardRetirementCard");
+    if (card) card.innerHTML = dashboardRetirementHtml();
+  }
+
   function dashboardSimplifiedHtml(result, context) {
     return `
-      <div class="dashboard-simplified-grid">
-        ${dashboardMissionHtml(result, context.readyState)}
+      <div class="dashboard-stage1-primary">
+        ${dashboardSnapshotHtml(result, context.readyState, context.percent, context.annualSurplus, context.passiveIncome)}
         ${dashboardFutureYouHtml(result, context.readyState)}
       </div>
       <div class="dashboard-simplified-grid dashboard-simplified-grid-secondary">
-        ${dashboardSnapshotHtml(result, context.readyState, context.percent, context.annualSurplus, context.passiveIncome)}
-        ${dashboardAiCoachHtml(context.readyState)}
+        <div id="dashboardRetirementCard">${dashboardRetirementHtml()}</div>
+        <article class="dashboard-compact-card dashboard-change-card">
+          <span class="metric-label">Try a change</span>
+          <h3>See what could change</h3>
+          <p>See what happens if you invest more, repay debt faster, retire earlier, work less or change your lifestyle target.</p>
+          <button class="btn btn-primary" type="button" data-view="decision">Try a change</button>
+        </article>
       </div>
     `;
   }
@@ -6983,6 +7018,8 @@
     const container = document.getElementById("dashboardSimplified");
     if (!container) return;
     container.innerHTML = dashboardSimplifiedHtml(result, context);
+    const mission = document.getElementById("dashboardWeeklyMission");
+    if (mission) mission.innerHTML = dashboardMissionHtml(result, context.readyState);
   }
 
   function updateDashboardFutureAge(value, options = {}) {
@@ -7772,7 +7809,7 @@
           <div class="engagement-hero-copy">
             <span class="metric-label">Financial journey</span>
             <h2>Build your financial journey</h2>
-              <p>Complete your plan or load the sample to see your progress, Weekly Mission, Future You and personalised AI coaching.</p>
+              <p>Build your plan, see your future, explore retirement and try changes. Start with your own details or load a sample plan.</p>
               <div class="engagement-button-row">
               <button class="btn btn-primary" type="button" data-engagement-action="setup">Continue Setup</button>
               <button class="btn" type="button" data-engagement-action="sample">Load Sample Plan</button>
@@ -9770,7 +9807,7 @@
         ` : `
           <div class="semi-retirement-comparison-empty">
             <strong>Choose scenarios to compare</strong>
-            <p>Add a temporary comparison or choose a saved Retirement Planning scenario. Decision Engine scenarios stay in the Saved Scenarios comparison area.</p>
+            <p>Add a temporary comparison or choose a saved Retirement Planning scenario. Future scenarios stay in the Saved Scenarios comparison area.</p>
           </div>
         `}
       </section>
@@ -15448,7 +15485,7 @@
         <div class="card-heading">
           <div>
             <h3>Scenario Comparison</h3>
-            <span>Save a Decision Engine or Retirement Planning scenario to compare alternatives here.</span>
+            <span>Save a Future or Retirement Planning scenario to compare alternatives here.</span>
           </div>
         </div>
       `;
@@ -15465,7 +15502,7 @@
               <span>Different scenario types cannot be compared directly.</span>
             </div>
           </div>
-          <p class="tax-note mt-4">Choose two Decision Engine scenarios or two Retirement Planning scenarios for a like-for-like comparison. Opening or comparing a scenario does not change your Financial Plan.</p>
+          <p class="tax-note mt-4">Choose two Future scenarios or two Retirement Planning scenarios for a like-for-like comparison. Opening or comparing a scenario does not change your Financial Plan.</p>
         `;
         return;
       }
@@ -15518,7 +15555,7 @@
         </div>
       </div>
       <div class="summary-grid mt-4">
-        ${summaryTile("Decision Engine scenarios", String(counts.decision || 0))}
+        ${summaryTile("Future scenarios", String(counts.decision || 0))}
         ${summaryTile("Retirement Planning scenarios", String(counts.retirement || 0))}
         ${summaryTile("Financial Plan snapshots", String((counts["financial-plan"] || 0) + (counts.legacy || 0)))}
       </div>
@@ -15709,7 +15746,7 @@
     const list = document.getElementById("scenarioList");
     if (!list) return;
     if (!scenarios.length) {
-      list.innerHTML = `<p class="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">No saved scenarios yet. Save a Decision Engine scenario, Retirement Planning scenario or Financial Plan snapshot to build your scenario library.</p>`;
+      list.innerHTML = `<p class="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">No saved scenarios yet. Save a Future scenario, Retirement Planning scenario or Financial Plan snapshot to build your scenario library.</p>`;
       return;
     }
     if (!filteredScenarios.length) {
@@ -16832,6 +16869,13 @@
     });
 
     document.addEventListener("keydown", (event) => {
+      const more = document.getElementById("moreNavigation");
+      if (event.key === "Escape" && more?.open && more.contains(event.target)) {
+        more.open = false;
+        more.querySelector("summary")?.focus();
+        event.preventDefault();
+        return;
+      }
       const target = event.target;
       if (event.key === "Enter" && (target.dataset.weeklyActual !== undefined || target.dataset.weeklyOpeningBalance !== undefined)) {
         event.preventDefault();
@@ -16935,6 +16979,7 @@
         const details = document.getElementById("dashboardDetails");
         if (details) {
           details.open = true;
+          details.querySelector("summary")?.focus({ preventScroll: true });
           details.scrollIntoView({ behavior: "smooth", block: "start" });
         }
         return;
@@ -17461,6 +17506,22 @@
 
   bindEvents();
   renderAll();
+  // Keep entry actions below the header and the optional sample-plan banner.
+  const stickyHeader = document.querySelector("body > div > header");
+  const stickyBanner = document.getElementById("demoModeBanner");
+  const updateCollectionActionOffset = () => {
+    const headerHeight = stickyHeader?.getBoundingClientRect().height || 0;
+    const bannerHeight = stickyBanner?.getBoundingClientRect().height || 0;
+    document.documentElement.style.setProperty("--app-header-height", `${headerHeight}px`);
+    document.documentElement.style.setProperty("--collection-actions-top", `${headerHeight + bannerHeight + 8}px`);
+  };
+  updateCollectionActionOffset();
+  if (typeof ResizeObserver !== "undefined") {
+    const collectionHeaderObserver = new ResizeObserver(updateCollectionActionOffset);
+    if (stickyHeader) collectionHeaderObserver.observe(stickyHeader);
+    if (stickyBanner) collectionHeaderObserver.observe(stickyBanner);
+  }
+  window.addEventListener("resize", updateCollectionActionOffset);
   if (window.FFS_STAGE1_BROWSER_TESTS_ENABLED === true) {
     window.FFSStage1BrowserTestHooks = {
       setPlan(nextPlan, view = "dashboard") {

@@ -1520,20 +1520,20 @@ test("Stage G1 Plan Workspace navigation uses the simplified order", () => {
   const items = [...navSnippet.matchAll(/data-view="([^"]+)"[^>]*>([^<]+)</g)].map((match) => `${match[1]}:${match[2].trim()}`);
   assert.deepEqual(items, [
     "dashboard:Dashboard",
-    "setup:Financial Plan",
+    "setup:My Plan",
+    "decision:Future",
+    "semiretirement:Retirement",
     "investments:Investments",
     "super:Super",
     "goals:Goals",
-    "decision:Decision Engine",
-    "semiretirement:Retirement Planning",
+    "weeklyplan:Weekly Plan",
     "reports:Reports",
     "scenarios:Saved Scenarios",
-    "weeklyplan:Weekly Plan",
   ]);
-  assert.match(navSnippet, /data-view="setup"[^>]*id="setupNavButton"[^>]*>Financial Plan<\/button>/);
+  assert.match(navSnippet, /data-view="setup"[^>]*id="setupNavButton"[^>]*>My Plan<\/button>/);
   assert.doesNotMatch(navSnippet, /Setup Wizard/);
   assert.match(indexSource, /data-view-panel="setup"/);
-  assert.match(appSource, /button\.textContent = "Financial Plan"/);
+  assert.match(appSource, /button\.textContent = "My Plan"/);
 });
 
 test("Stage G2 AI Coach is removed from Plan Workspace navigation but AI feature remains available", () => {
@@ -1544,9 +1544,9 @@ test("Stage G2 AI Coach is removed from Plan Workspace navigation but AI feature
 });
 
 test("Stage G3 Retirement Planning nav label keeps the existing page heading", () => {
-  assert.match(indexSource, /data-view="semiretirement"[^>]*>Retirement Planning<\/button>/);
+  assert.match(indexSource, /data-view="semiretirement"[^>]*>Retirement<\/button>/);
   assert.match(indexSource, /<h2>Retirement Plan<\/h2>/);
-  assert.match(appSource, /button\.textContent = "Retirement Planning"/);
+  assert.match(appSource, /button\.textContent = "Retirement"/);
 });
 
 test("Stage G4 Decision Engine presents opportunities with details collapsed", () => {
@@ -1630,7 +1630,7 @@ test("Stage G10 Opening and comparing saved scenarios do not mutate the Financia
 
 test("Stage G11 Different scenario types cannot be compared directly", () => {
   assert.match(appSource, /Different scenario types cannot be compared directly/);
-  assert.match(appSource, /Choose two Decision Engine scenarios or two Retirement Planning scenarios/);
+  assert.match(appSource, /Choose two Future scenarios or two Retirement Planning scenarios/);
 });
 
 test("Stage G12 Retirement Planning scenarios reuse the existing projection and comparison state", () => {

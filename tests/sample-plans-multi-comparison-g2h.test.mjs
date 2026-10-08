@@ -141,7 +141,7 @@ test("Stage G2H saved Retirement Planning scenarios can be added to Retirement c
   assert.match(compareSnippet, /addSavedRetirementScenarioToComparison\(selected\)/);
   assert.match(appSource, /function selectedSavedRetirementScenarios/);
   assert.match(appSource, /normaliseSavedScenarioType\(scenario\.scenarioType\) === "retirement"/);
-  assert.match(appSource, /Decision Engine scenarios stay in the Saved Scenarios comparison area/);
+  assert.match(appSource, /Future scenarios stay in the Saved Scenarios comparison area/);
 });
 
 test("Stage G2H retirement outcome components reconcile to authoritative annual rows", () => {
