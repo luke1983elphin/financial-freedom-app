@@ -9218,36 +9218,85 @@ body.scenario-save-modal-open {
   #dashboardSimplified .summary-tile strong { font-size: 18px; }
 }
 
-/* Keep collection add controls available while entering a long list. */
-.collection-add-actions {
-  position: sticky;
-  top: var(--collection-actions-top, 8px);
-  z-index: 24;
-  align-self: start;
+/* Compact collection add menu: one clear trigger above and below populated lists. */
+.collection-add-position {
+  display: flex;
+  margin: 12px 0;
   min-width: 0;
+}
+
+.collection-add-position-bottom {
+  margin-top: 16px;
+}
+
+.collection-add-menu {
+  position: relative;
+  width: min(100%, 420px);
+  min-width: 0;
+}
+
+.collection-add-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 112px;
+  min-height: 44px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.collection-add-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.collection-add-menu[open] .collection-add-toggle {
+  border-bottom-left-radius: 10px;
+  border-bottom-right-radius: 10px;
+}
+
+.collection-add-menu-items {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  margin-top: 8px;
   padding: 10px;
   border: 1px solid #dbeafe;
   border-radius: 14px;
-  background: #f5f9ff;
-  box-shadow: 0 4px 12px rgba(15, 39, 66, 0.1);
+  background: #f8fbff;
+  box-shadow: 0 8px 24px rgba(15, 39, 66, 0.12);
+  min-width: 0;
 }
 
-@media (max-width: 1023px), (max-height: 600px) {
-  .collection-add-actions {
-    display: flex;
-    overflow-x: auto;
-    gap: 8px;
-    scrollbar-width: thin;
+.collection-add-menu-items .btn {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  justify-content: flex-start;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 760px) {
+  .collection-add-menu-items {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1023px) {
+  .collection-add-menu {
+    width: 100%;
   }
 
-  .collection-add-actions .btn {
-    flex: 0 0 auto;
-    width: auto;
-    max-width: 240px;
-    min-height: 44px;
+  .collection-add-toggle {
+    width: 100%;
+  }
+
+  .collection-add-menu-items {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
 @media print {
-  .collection-add-actions { display: none; }
+  .collection-add-position { display: none; }
 }
