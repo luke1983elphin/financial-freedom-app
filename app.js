@@ -5244,10 +5244,16 @@
   }
 
   function collectionShell({ title, description, addLabel, collection, body, actionsHtml = "", emptyText = "" }) {
-    const stickyActions = ["incomeItems", "expenseItems", "assetItems", "liabilityItems"].includes(collection);
     const addButton = addLabel
       ? `<button class="btn btn-primary add-button" type="button" data-add-collection="${collection}">${escapeHtml(addLabel)}</button>`
       : "";
+    const addMenu = actionsHtml
+      ? `<details class="collection-add-menu">
+          <summary class="btn btn-primary collection-add-toggle">+ Add</summary>
+          <div class="consumer-action-grid collection-add-menu-items" role="group" aria-label="Add to ${escapeHtml(title)}">${actionsHtml}</div>
+        </details>`
+      : "";
+    const hasItems = Boolean(body);
     return `
       <section class="collection-section">
         <div class="collection-heading">
@@ -5257,8 +5263,9 @@
           </div>
           ${addButton}
         </div>
-        ${actionsHtml ? `<div class="consumer-action-grid${stickyActions ? " collection-add-actions" : ""}" role="group" aria-label="${escapeHtml(title)} actions">${actionsHtml}</div>` : ""}
-        <div class="collection-list">${body || `<p class="empty-collection-note">${escapeHtml(emptyText || "Nothing added yet. Choose an option above when it applies to you.")}</p>`}</div>
+        ${addMenu ? `<div class="collection-add-position collection-add-position-top">${addMenu}</div>` : ""}
+        <div class="collection-list">${body || `<p class="empty-collection-note">${escapeHtml(emptyText || "Nothing added yet. Choose Add when it applies to you.")}</p>`}</div>
+        ${addMenu && hasItems ? `<div class="collection-add-position collection-add-position-bottom">${addMenu}</div>` : ""}
         ${addButton ? `<div class="collection-footer">${addButton}</div>` : ""}
       </section>
     `;
