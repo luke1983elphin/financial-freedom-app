@@ -6967,6 +6967,41 @@
     `;
   }
 
+  function dashboardJourneyHtml(result, readyState, percent) {
+    if (!readyState.readyForPersonalisedResults) {
+      return `
+        <article class="dashboard-compact-card dashboard-journey-card">
+          <span class="metric-label">Your Journey</span>
+          <h3>Your progress will appear here after setup</h3>
+          <p>Complete your Financial Plan to see your current stage and progress toward Financial Freedom.</p>
+          <button class="btn" type="button" data-engagement-action="setup">Continue Setup</button>
+        </article>
+      `;
+    }
+    const stageInfo = financialStageInfo(result);
+    const progressWidth = Math.min(100, Math.max(0, Number(percent) || 0));
+    return `
+      <article class="dashboard-compact-card dashboard-journey-card">
+        <div class="dashboard-card-heading-row">
+          <div>
+            <span class="metric-label">Your Journey</span>
+            <h3>${escapeHtml(stageInfo.stage.name)}</h3>
+          </div>
+          <strong>${plainPercent(progressWidth)}</strong>
+        </div>
+        <div class="progress-track progress-track-large" aria-label="Financial Freedom journey progress ${plainPercent(progressWidth)}">
+          <span style="width:${progressWidth}%"></span>
+        </div>
+        <p>${escapeHtml(stageInfo.stage.explanation)}</p>
+        <div class="dashboard-current-action">
+          <span class="metric-label">Current observation</span>
+          <strong>${escapeHtml(stageInfo.actions[0] || stageInfo.stage.priority || "")}</strong>
+        </div>
+        <button class="btn" type="button" data-view="goals">View goals</button>
+      </article>
+    `;
+  }
+
   function dashboardAiCoachHtml(readyState) {
     if (!readyState.readyForPersonalisedResults) {
       return `
@@ -7007,16 +7042,9 @@
     return `
       <div class="dashboard-stage1-primary">
         ${dashboardSnapshotHtml(result, context.readyState, context.percent, context.annualSurplus, context.passiveIncome)}
+        ${dashboardMissionHtml(result, context.readyState)}
+        ${dashboardJourneyHtml(result, context.readyState, context.percent)}
         ${dashboardFutureYouHtml(result, context.readyState)}
-      </div>
-      <div class="dashboard-simplified-grid dashboard-simplified-grid-secondary">
-        <div id="dashboardRetirementCard">${dashboardRetirementHtml()}</div>
-        <article class="dashboard-compact-card dashboard-change-card">
-          <span class="metric-label">Try a change</span>
-          <h3>See what could change</h3>
-          <p>See what happens if you invest more, repay debt faster, retire earlier, work less or change your lifestyle target.</p>
-          <button class="btn btn-primary" type="button" data-view="decision">Try a change</button>
-        </article>
       </div>
     `;
   }
@@ -7025,8 +7053,8 @@
     const container = document.getElementById("dashboardSimplified");
     if (!container) return;
     container.innerHTML = dashboardSimplifiedHtml(result, context);
-    const mission = document.getElementById("dashboardWeeklyMission");
-    if (mission) mission.innerHTML = dashboardMissionHtml(result, context.readyState);
+    const legacyMission = document.getElementById("dashboardWeeklyMission");
+    if (legacyMission) legacyMission.innerHTML = "";
   }
 
   function updateDashboardFutureAge(value, options = {}) {
