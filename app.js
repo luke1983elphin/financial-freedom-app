@@ -4936,7 +4936,7 @@
     document.querySelectorAll("[data-semi-retirement-nav]").forEach((button) => {
       button.classList.toggle("hidden", !enabled);
       button.disabled = !enabled;
-      button.textContent = "Retirement";
+      // Preserve the icon and Future label in the five-tab navigation.
       button.setAttribute("aria-hidden", enabled ? "false" : "true");
     });
     if (!enabled && activeView === "semiretirement") setView("decision");
