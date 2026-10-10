@@ -610,7 +610,7 @@
   let plan = ensureCurrentPlanIdentity(migratePlanData(savedDraft || newUserPlan()));
   let activeView = restoredDraftUi.activeView || "dashboard";
   let activeWizardStep = normaliseWizardStep(restoredDraftUi.activeWizardStep);
-  let hasOpenedWorkspace = Boolean(savedDraft) || Boolean(restoredDraftUi.hasOpenedWorkspace);
+  let hasOpenedWorkspace = false; // Always show welcome on a fresh page load; retain saved plan and wizard progress.
   let activeWhatIfId = whatIfActions[0].id;
   let generatedWeeklyPlanner = null;
   let weeklyPlan = loadWeeklyPlan();
