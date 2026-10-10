@@ -9320,3 +9320,14 @@ body.scenario-save-modal-open {
   #sideNav .nav-primary { font-size: 10px; }
   #sideNav .nav-primary svg { width: 19px; height: 19px; }
 }
+
+/* Compact mobile navigation refinement */
+@media (max-width: 1023px) {
+  #sideNav { gap: 2px; }
+  #sideNav .nav-primary-row { width: 100%; gap: 2px; }
+  #sideNav .nav-primary { box-sizing: border-box; width: 100%; min-height: 66px; padding: 8px 0; gap: 5px; font-size: clamp(10px, 2.7vw, 12px); white-space: nowrap; }
+  #sideNav .nav-primary svg { width: 22px; height: 22px; }
+  #sideNav .nav-more { margin: 0; padding: 0; }
+  #sideNav .nav-more-toggle { justify-content: flex-start; width: max-content; min-height: 30px; padding: 4px 8px; font-size: 11px; }
+  #sideNav .nav-more-items { padding: 3px 0 0; }
+}
