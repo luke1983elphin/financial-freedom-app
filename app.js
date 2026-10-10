@@ -6533,7 +6533,26 @@
     renderExpenseCollection("wizardExpensesForm");
     const superCheckpoint = document.getElementById("wizardSuperCheckpoint");
     if (superCheckpoint) superCheckpoint.innerHTML = superCheckpointHtml();
-    renderForm("wizardGoalsForm", goalFields);
+    // Keep all three underlying model ages and their existing defaults. Only the
+    // work-optional goal is presented as the primary question in guided setup.
+    const wizardGoals = document.getElementById("wizardGoalsForm");
+    if (wizardGoals) {
+      const workOptional = goalFields.find((item) => item.path === "personal.semiRetirementAge");
+      const flexibility = goalFields.find((item) => item.path === "personal.workOptionalAge");
+      const longTerm = goalFields.find((item) => item.path === "personal.fullRetirementAge");
+      const remaining = goalFields.filter((item) => ![workOptional, flexibility, longTerm].includes(item));
+      wizardGoals.innerHTML = `
+        <div class="goal-intro"><h3>What would you like your money to help you achieve?</h3><p>Choose when you'd like more freedom and the lifestyle you're aiming for. We'll compare your goals with your financial projections.</p></div>
+        ${field({ ...workOptional, label: "At what age would you ideally like work to become optional?", infoKey: null, help: "The age you'd like investments and other income to potentially cover your living costs, even if you choose to keep working." })}
+        <p class="field-help">This is a goal, not a prediction. You can change it later.</p>
+        <details class="goal-optional-milestones"><summary>Set more milestones (optional)</summary><p class="field-help">These ages are already filled with starting assumptions. You can leave them as they are; the app will continue using them in its projections.</p>
+          ${field({ ...flexibility, label: "At what age would you like more financial flexibility?", infoKey: null, help: "For example, working fewer hours or having more choice about how you spend your time." })}
+          ${field({ ...longTerm, label: "At what age would you like to be financially secure for the long term?", infoKey: null, help: "Your longer-term goal for supporting your desired lifestyle with less reliance on employment income." })}
+        </details>
+        <p class="field-help">Why these ages? We use them as milestones for your plan, not as guaranteed outcomes or recommended retirement ages.</p>
+        ${remaining.map(field).join("")}
+      `;
+    }
     appendEmployerSuperPanel("wizardGoalsForm");
     renderGoalCollection("wizardGoalExamples");
     renderDownsizingForm("wizardDownsizingForm", downsizingFields);
