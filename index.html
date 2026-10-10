@@ -189,6 +189,12 @@
             </nav>
 
             <div class="grid gap-6">
+              <!-- Shared home overview remains visible above every workspace tab. -->
+              <section id="persistentHomeOverview" class="card" aria-label="Your financial overview">
+                <div class="section-heading"><h2>Your financial overview</h2><p>Summary, this week's mission, your journey and your future.</p></div>
+                <div id="dashboardSimplified" class="dashboard-simplified mt-6"></div>
+              </section>
+
               <section class="view-section hidden" data-view-panel="setup">
                 <div class="wizard-shell">
                   <div class="wizard-progress">
@@ -274,7 +280,7 @@
               <section class="view-section" data-view-panel="dashboard">
                 <div class="section-heading"><h2>Dashboard</h2><p>Your finances today, and the future you can explore.</p></div>
 
-                <div id="dashboardSimplified" class="dashboard-simplified mt-6"></div>
+                
 
                 <details id="dashboardDetails" class="dashboard-details card mt-6">
                   <summary>View Financial Details</summary>
