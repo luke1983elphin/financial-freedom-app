@@ -157,7 +157,7 @@
       instruction: "What do you own? Add only the home, savings, property or investments you have.",
     },
     {
-      title: "Liabilities / Loans",
+      title: "Loans",
       instruction: "What do you owe? Add only your current loans and debts.",
     },
     {
@@ -6748,22 +6748,24 @@
   }
 
   function renderWizardStep() {
+    const inputSections = 7;
     const step = wizardSteps[activeWizardStep];
-    const percent = Math.round(((activeWizardStep + 1) / wizardSteps.length) * 100);
-    document.getElementById("wizardStepLabel").textContent = `Step ${activeWizardStep + 1} of ${wizardSteps.length}`;
-    document.getElementById("wizardStepTitle").textContent = step.title;
-    document.getElementById("wizardHeading").textContent = step.title;
-    document.getElementById("wizardInstruction").textContent = step.instruction;
-    document.getElementById("wizardPercent").textContent = `${percent}% Complete`;
+    const inSetup = activeWizardStep < inputSections;
+    const percent = Math.round((Math.min(activeWizardStep + 1, inputSections) / inputSections) * 100);
+    document.getElementById("wizardStepLabel").textContent = inSetup ? `Section ${activeWizardStep + 1} of ${inputSections}` : "Your plan is ready";
+    document.getElementById("wizardStepTitle").textContent = inSetup ? step.title : activeWizardStep === 7 ? "Review Your Plan" : "Explore Your Results";
+    document.getElementById("wizardHeading").textContent = inSetup ? step.title : activeWizardStep === 7 ? "Review Your Plan" : "Explore Your Results";
+    document.getElementById("wizardInstruction").textContent = inSetup ? step.instruction : activeWizardStep === 7 ? "Your seven sections are complete. Check the assumptions used in your projections, or continue to your results." : "Explore your financial outlook. You can return to edit your plan at any time.";
+    document.getElementById("wizardPercent").textContent = inSetup ? `${percent}% Complete` : "Setup complete";
     document.getElementById("wizardProgressBar").style.width = `${percent}%`;
     document.querySelectorAll("[data-wizard-panel]").forEach((panel) => {
       panel.classList.toggle("hidden", Number(panel.dataset.wizardPanel) !== activeWizardStep);
     });
     document.getElementById("wizardPrevButton").disabled = activeWizardStep === 0;
-    document.getElementById("wizardNextButton").textContent = activeWizardStep === wizardSteps.length - 1 ? "View Dashboard ->" : "Next Step ->";
+    document.getElementById("wizardNextButton").textContent = activeWizardStep === 6 ? "Review My Plan →" : activeWizardStep === 7 ? "Explore My Results →" : activeWizardStep === 8 ? "Open Dashboard →" : "Continue →";
     const chips = document.getElementById("wizardStepChips");
     if (chips) {
-      chips.innerHTML = wizardSteps.map((item, index) => `
+      chips.innerHTML = wizardSteps.slice(0, inputSections).map((item, index) => `
         <button class="wizard-step-chip ${index === activeWizardStep ? "active" : ""}" type="button" data-wizard-step="${index}">
           <span>${index + 1}</span>${escapeHtml(item.title)}
         </button>
@@ -6771,7 +6773,8 @@
     }
     const select = document.getElementById("wizardStepSelect");
     if (select) {
-      select.innerHTML = wizardSteps.map((item, index) => `<option value="${index}"${index === activeWizardStep ? " selected" : ""}>Step ${index + 1} of ${wizardSteps.length} · ${escapeHtml(item.title)}</option>`).join("");
+      select.innerHTML = wizardSteps.slice(0, inputSections).map((item, index) => `<option value="${index}"${index === activeWizardStep ? " selected" : ""}>${escapeHtml(item.title)}</option>`).join("");
+      if (!inSetup) select.selectedIndex = -1;
     }
   }
 
