@@ -6740,28 +6740,37 @@
 
   function renderWizardResults(result) {
     const percent = freedomPercent(result);
-    const stageInfo = financialStageInfo(result);
-    const stage = stageInfo.stage;
     const passive = annualPassiveIncome(result);
-    const target = lifestyleTarget(result);
-    const milestone = nextMilestone(result, percent);
+    const goalAge = Number(plan.personal?.semiRetirementAge) || 0;
+    const netWorth = Number(result.currentNetWorth);
+    const annualSurplus = estimatedCashflow(result);
+    const ready = personalisedResultsReadiness(plan, result).readyForPersonalisedResults;
     const container = document.getElementById("wizardResultsSummary");
     if (!container) return;
     container.innerHTML = `
       <article class="freedom-stage-card">
-        <span class="metric-label">Your current financial stage</span>
-        <strong>${escapeHtml(stage.name)}</strong>
-        <p>${escapeHtml(stage.explanation)}</p>
-        <p><strong>${stageInfo.nextStage ? plainPercent(stageInfo.progressToNext) : "100%"}</strong> ${stageInfo.nextStage ? `toward ${escapeHtml(stageInfo.nextStage.name)}` : "Financial Freedom achieved"}.</p>
-        <div class="progress-track progress-track-large" aria-label="${stageInfo.nextStage ? `${plainPercent(stageInfo.progressToNext)} progress toward ${stageInfo.nextStage.name}` : "Financial Freedom achieved"}"><span style="width:${stageInfo.nextStage ? stageInfo.progressToNext : 100}%"></span></div>
+        <span class="metric-label">Your financial outlook</span>
+        <h3>Here's what your plan could mean for your future</h3>
+        <p>Based on the details you've entered, see where you stand and how your goals compare with your projections.</p>
+      </article>
+      <article class="metric-card mt-4">
+        <span class="metric-label">Your main goal</span>
+        <h3>When would you like work to become optional?</h3>
+        <strong>${goalAge > 0 ? `Age ${goalAge}` : "Not set"}</strong>
+        <p>Your chosen age is a goal, not a forecast. Whether you can reduce or stop work depends on your retirement cashflow, access to super and available investments.</p>
+        <p>Explore the Retirement tab to test how your plan may support this goal.</p>
       </article>
       <div class="dashboard-card-grid mt-4">
-        ${metricCard("Current stage", stage.name)}
-        ${metricCard("Passive Cash Income", money(passive), "", "Recurring income from passive sources, separate from unrealised growth.", "passiveIncome")}
-        ${metricCard("Annual Lifestyle Target", money(target), "", "The estimated yearly amount you want investments to support once you reach Financial Freedom.", "annualLifestyleTarget")}
-        ${metricCard("Financial Freedom progress", plainPercent(percent), "", "Current net FI assets divided by target FI assets.", "financialFreedomProgress")}
+        ${metricCard("Net worth today", ready && Number.isFinite(netWorth) ? money(netWorth) : "Complete your plan", "", "Your assets less your debts.")}
+        ${metricCard("Financial Freedom progress", ready ? plainPercent(percent) : "Complete your plan", "", "Your accessible FI assets relative to your modelled financial freedom target.", "financialFreedomProgress")}
+        ${metricCard("Estimated annual surplus", ready && Number.isFinite(annualSurplus) ? money(annualSurplus) : "Complete your plan", "", "Estimated annual cashflow remaining after modelled expenses and commitments.")}
+        ${metricCard("Annual passive cash income", ready ? money(passive) : "Complete your plan", "", "Recurring passive cash income, excluding unrealised investment growth.", "passiveIncome")}
       </div>
-      <button class="btn btn-primary mt-4 w-full justify-center" type="button" data-view="dashboard">View Dashboard</button>
+      <article class="metric-card mt-4">
+        <h3>What could you explore next?</h3>
+        <p>See how changing your work-optional age, investment contributions or lifestyle spending affects your future.</p>
+      </article>
+      <button class="btn btn-primary mt-4 w-full justify-center" type="button" data-view="dashboard">Explore My Dashboard</button>
       ${agePensionExclusionHtml()}<p class="field-help">${escapeHtml(modellingCopy().medium)}</p>
     `;
   }
