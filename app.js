@@ -157,7 +157,7 @@
       instruction: "What do you own? Add only the home, savings, property or investments you have.",
     },
     {
-      title: "Liabilities / Loans",
+      title: "Loans",
       instruction: "What do you owe? Add only your current loans and debts.",
     },
     {
@@ -2047,7 +2047,7 @@
 
   function updateSetupNavigationLabel() {
     const button = document.getElementById("setupNavButton");
-    if (button) button.textContent = "My Plan";
+    if (button) { const label = button.querySelector("span"); if (label) label.textContent = "My Plan"; }
   }
 
   function updateFieldLabel(path, label) {
@@ -4936,7 +4936,7 @@
     document.querySelectorAll("[data-semi-retirement-nav]").forEach((button) => {
       button.classList.toggle("hidden", !enabled);
       button.disabled = !enabled;
-      button.textContent = "Retirement";
+      // Preserve the icon and Future label in the five-tab navigation.
       button.setAttribute("aria-hidden", enabled ? "false" : "true");
     });
     if (!enabled && activeView === "semiretirement") setView("decision");
@@ -5244,10 +5244,16 @@
   }
 
   function collectionShell({ title, description, addLabel, collection, body, actionsHtml = "", emptyText = "" }) {
-    const stickyActions = ["incomeItems", "expenseItems", "assetItems", "liabilityItems"].includes(collection);
     const addButton = addLabel
       ? `<button class="btn btn-primary add-button" type="button" data-add-collection="${collection}">${escapeHtml(addLabel)}</button>`
       : "";
+    const addMenu = actionsHtml
+      ? `<details class="collection-add-menu">
+          <summary class="btn btn-primary collection-add-toggle">+ Add</summary>
+          <div class="consumer-action-grid collection-add-menu-items" role="group" aria-label="Add to ${escapeHtml(title)}">${actionsHtml}</div>
+        </details>`
+      : "";
+    const hasItems = Boolean(body);
     return `
       <section class="collection-section">
         <div class="collection-heading">
@@ -5257,8 +5263,9 @@
           </div>
           ${addButton}
         </div>
-        ${actionsHtml ? `<div class="consumer-action-grid${stickyActions ? " collection-add-actions" : ""}" role="group" aria-label="${escapeHtml(title)} actions">${actionsHtml}</div>` : ""}
-        <div class="collection-list">${body || `<p class="empty-collection-note">${escapeHtml(emptyText || "Nothing added yet. Choose an option above when it applies to you.")}</p>`}</div>
+        ${addMenu ? `<div class="collection-add-position collection-add-position-top">${addMenu}</div>` : ""}
+        <div class="collection-list">${body || `<p class="empty-collection-note">${escapeHtml(emptyText || "Nothing added yet. Choose Add when it applies to you.")}</p>`}</div>
+        ${addMenu && hasItems ? `<div class="collection-add-position collection-add-position-bottom">${addMenu}</div>` : ""}
         ${addButton ? `<div class="collection-footer">${addButton}</div>` : ""}
       </section>
     `;
@@ -6526,7 +6533,26 @@
     renderExpenseCollection("wizardExpensesForm");
     const superCheckpoint = document.getElementById("wizardSuperCheckpoint");
     if (superCheckpoint) superCheckpoint.innerHTML = superCheckpointHtml();
-    renderForm("wizardGoalsForm", goalFields);
+    // Keep all three underlying model ages and their existing defaults. Only the
+    // work-optional goal is presented as the primary question in guided setup.
+    const wizardGoals = document.getElementById("wizardGoalsForm");
+    if (wizardGoals) {
+      const workOptional = goalFields.find((item) => item.path === "personal.semiRetirementAge");
+      const flexibility = goalFields.find((item) => item.path === "personal.workOptionalAge");
+      const longTerm = goalFields.find((item) => item.path === "personal.fullRetirementAge");
+      const remaining = goalFields.filter((item) => ![workOptional, flexibility, longTerm].includes(item));
+      wizardGoals.innerHTML = `
+        <div class="goal-intro"><h3>What would you like your money to help you achieve?</h3><p>Choose when you'd like more freedom and the lifestyle you're aiming for. We'll compare your goals with your financial projections.</p></div>
+        ${field({ ...workOptional, label: "At what age would you ideally like work to become optional?", infoKey: null, help: "The age you'd like investments and other income to potentially cover your living costs, even if you choose to keep working." })}
+        <p class="field-help">This is a goal, not a prediction. You can change it later.</p>
+        <details class="goal-optional-milestones"><summary>Set more milestones (optional)</summary><p class="field-help">These ages are already filled with starting assumptions. You can leave them as they are; the app will continue using them in its projections.</p>
+          ${field({ ...flexibility, label: "At what age would you like more financial flexibility?", infoKey: null, help: "For example, working fewer hours or having more choice about how you spend your time." })}
+          ${field({ ...longTerm, label: "At what age would you like to be financially secure for the long term?", infoKey: null, help: "Your longer-term goal for supporting your desired lifestyle with less reliance on employment income." })}
+        </details>
+        <p class="field-help">Why these ages? We use them as milestones for your plan, not as guaranteed outcomes or recommended retirement ages.</p>
+        ${remaining.map(field).join("")}
+      `;
+    }
     appendEmployerSuperPanel("wizardGoalsForm");
     renderGoalCollection("wizardGoalExamples");
     renderDownsizingForm("wizardDownsizingForm", downsizingFields);
@@ -6714,49 +6740,60 @@
 
   function renderWizardResults(result) {
     const percent = freedomPercent(result);
-    const stageInfo = financialStageInfo(result);
-    const stage = stageInfo.stage;
     const passive = annualPassiveIncome(result);
-    const target = lifestyleTarget(result);
-    const milestone = nextMilestone(result, percent);
+    const goalAge = Number(plan.personal?.semiRetirementAge) || 0;
+    const netWorth = Number(result.currentNetWorth);
+    const annualSurplus = estimatedCashflow(result);
+    const ready = personalisedResultsReadiness(plan, result).readyForPersonalisedResults;
     const container = document.getElementById("wizardResultsSummary");
     if (!container) return;
     container.innerHTML = `
       <article class="freedom-stage-card">
-        <span class="metric-label">Your current financial stage</span>
-        <strong>${escapeHtml(stage.name)}</strong>
-        <p>${escapeHtml(stage.explanation)}</p>
-        <p><strong>${stageInfo.nextStage ? plainPercent(stageInfo.progressToNext) : "100%"}</strong> ${stageInfo.nextStage ? `toward ${escapeHtml(stageInfo.nextStage.name)}` : "Financial Freedom achieved"}.</p>
-        <div class="progress-track progress-track-large" aria-label="${stageInfo.nextStage ? `${plainPercent(stageInfo.progressToNext)} progress toward ${stageInfo.nextStage.name}` : "Financial Freedom achieved"}"><span style="width:${stageInfo.nextStage ? stageInfo.progressToNext : 100}%"></span></div>
+        <span class="metric-label">Your financial outlook</span>
+        <h3>Here's what your plan could mean for your future</h3>
+        <p>Based on the details you've entered, see where you stand and how your goals compare with your projections.</p>
+      </article>
+      <article class="metric-card mt-4">
+        <span class="metric-label">Your main goal</span>
+        <h3>When would you like work to become optional?</h3>
+        <strong>${goalAge > 0 ? `Age ${goalAge}` : "Not set"}</strong>
+        <p>Your chosen age is a goal, not a forecast. Whether you can reduce or stop work depends on your retirement cashflow, access to super and available investments.</p>
+        <p>Explore the Retirement tab to test how your plan may support this goal.</p>
       </article>
       <div class="dashboard-card-grid mt-4">
-        ${metricCard("Current stage", stage.name)}
-        ${metricCard("Passive Cash Income", money(passive), "", "Recurring income from passive sources, separate from unrealised growth.", "passiveIncome")}
-        ${metricCard("Annual Lifestyle Target", money(target), "", "The estimated yearly amount you want investments to support once you reach Financial Freedom.", "annualLifestyleTarget")}
-        ${metricCard("Financial Freedom progress", plainPercent(percent), "", "Current net FI assets divided by target FI assets.", "financialFreedomProgress")}
+        ${metricCard("Net worth today", ready && Number.isFinite(netWorth) ? money(netWorth) : "Complete your plan", "", "Your assets less your debts.")}
+        ${metricCard("Financial Freedom progress", ready ? plainPercent(percent) : "Complete your plan", "", "Your accessible FI assets relative to your modelled financial freedom target.", "financialFreedomProgress")}
+        ${metricCard("Estimated annual surplus", ready && Number.isFinite(annualSurplus) ? money(annualSurplus) : "Complete your plan", "", "Estimated annual cashflow remaining after modelled expenses and commitments.")}
+        ${metricCard("Annual passive cash income", ready ? money(passive) : "Complete your plan", "", "Recurring passive cash income, excluding unrealised investment growth.", "passiveIncome")}
       </div>
-      <button class="btn btn-primary mt-4 w-full justify-center" type="button" data-view="dashboard">View Dashboard</button>
+      <article class="metric-card mt-4">
+        <h3>What could you explore next?</h3>
+        <p>See how changing your work-optional age, investment contributions or lifestyle spending affects your future.</p>
+      </article>
+      <button class="btn btn-primary mt-4 w-full justify-center" type="button" data-view="dashboard">Explore My Dashboard</button>
       ${agePensionExclusionHtml()}<p class="field-help">${escapeHtml(modellingCopy().medium)}</p>
     `;
   }
 
   function renderWizardStep() {
+    const inputSections = 7;
     const step = wizardSteps[activeWizardStep];
-    const percent = Math.round(((activeWizardStep + 1) / wizardSteps.length) * 100);
-    document.getElementById("wizardStepLabel").textContent = `Step ${activeWizardStep + 1} of ${wizardSteps.length}`;
-    document.getElementById("wizardStepTitle").textContent = step.title;
-    document.getElementById("wizardHeading").textContent = step.title;
-    document.getElementById("wizardInstruction").textContent = step.instruction;
-    document.getElementById("wizardPercent").textContent = `${percent}% Complete`;
+    const inSetup = activeWizardStep < inputSections;
+    const percent = Math.round((Math.min(activeWizardStep + 1, inputSections) / inputSections) * 100);
+    document.getElementById("wizardStepLabel").textContent = inSetup ? `Section ${activeWizardStep + 1} of ${inputSections}` : "Your plan is ready";
+    document.getElementById("wizardStepTitle").textContent = inSetup ? step.title : activeWizardStep === 7 ? "Review Your Plan" : "Explore Your Results";
+    document.getElementById("wizardHeading").textContent = inSetup ? step.title : activeWizardStep === 7 ? "Review Your Plan" : "Explore Your Results";
+    document.getElementById("wizardInstruction").textContent = inSetup ? step.instruction : activeWizardStep === 7 ? "Your seven sections are complete. Check the assumptions used in your projections, or continue to your results." : "Explore your financial outlook. You can return to edit your plan at any time.";
+    document.getElementById("wizardPercent").textContent = inSetup ? `${percent}% Complete` : "Setup complete";
     document.getElementById("wizardProgressBar").style.width = `${percent}%`;
     document.querySelectorAll("[data-wizard-panel]").forEach((panel) => {
       panel.classList.toggle("hidden", Number(panel.dataset.wizardPanel) !== activeWizardStep);
     });
     document.getElementById("wizardPrevButton").disabled = activeWizardStep === 0;
-    document.getElementById("wizardNextButton").textContent = activeWizardStep === wizardSteps.length - 1 ? "View Dashboard ->" : "Next Step ->";
+    document.getElementById("wizardNextButton").textContent = activeWizardStep === 6 ? "Review My Plan →" : activeWizardStep === 7 ? "Explore My Results →" : activeWizardStep === 8 ? "Open Dashboard →" : "Continue →";
     const chips = document.getElementById("wizardStepChips");
     if (chips) {
-      chips.innerHTML = wizardSteps.map((item, index) => `
+      chips.innerHTML = wizardSteps.slice(0, inputSections).map((item, index) => `
         <button class="wizard-step-chip ${index === activeWizardStep ? "active" : ""}" type="button" data-wizard-step="${index}">
           <span>${index + 1}</span>${escapeHtml(item.title)}
         </button>
@@ -6764,7 +6801,8 @@
     }
     const select = document.getElementById("wizardStepSelect");
     if (select) {
-      select.innerHTML = wizardSteps.map((item, index) => `<option value="${index}"${index === activeWizardStep ? " selected" : ""}>Step ${index + 1} of ${wizardSteps.length} · ${escapeHtml(item.title)}</option>`).join("");
+      select.innerHTML = wizardSteps.slice(0, inputSections).map((item, index) => `<option value="${index}"${index === activeWizardStep ? " selected" : ""}>${escapeHtml(item.title)}</option>`).join("");
+      if (!inSetup) select.selectedIndex = -1;
     }
   }
 
@@ -6960,6 +6998,41 @@
     `;
   }
 
+  function dashboardJourneyHtml(result, readyState, percent) {
+    if (!readyState.readyForPersonalisedResults) {
+      return `
+        <article class="dashboard-compact-card dashboard-journey-card">
+          <span class="metric-label">Your Journey</span>
+          <h3>Your progress will appear here after setup</h3>
+          <p>Complete your Financial Plan to see your current stage and progress toward Financial Freedom.</p>
+          <button class="btn" type="button" data-engagement-action="setup">Continue Setup</button>
+        </article>
+      `;
+    }
+    const stageInfo = financialStageInfo(result);
+    const progressWidth = Math.min(100, Math.max(0, Number(percent) || 0));
+    return `
+      <article class="dashboard-compact-card dashboard-journey-card">
+        <div class="dashboard-card-heading-row">
+          <div>
+            <span class="metric-label">Your Journey</span>
+            <h3>${escapeHtml(stageInfo.stage.name)}</h3>
+          </div>
+          <strong>${plainPercent(progressWidth)}</strong>
+        </div>
+        <div class="progress-track progress-track-large" aria-label="Financial Freedom journey progress ${plainPercent(progressWidth)}">
+          <span style="width:${progressWidth}%"></span>
+        </div>
+        <p>${escapeHtml(stageInfo.stage.explanation)}</p>
+        <div class="dashboard-current-action">
+          <span class="metric-label">Current observation</span>
+          <strong>${escapeHtml(stageInfo.actions[0] || stageInfo.stage.priority || "")}</strong>
+        </div>
+        <button class="btn" type="button" data-view="goals">View goals</button>
+      </article>
+    `;
+  }
+
   function dashboardAiCoachHtml(readyState) {
     if (!readyState.readyForPersonalisedResults) {
       return `
@@ -7000,16 +7073,9 @@
     return `
       <div class="dashboard-stage1-primary">
         ${dashboardSnapshotHtml(result, context.readyState, context.percent, context.annualSurplus, context.passiveIncome)}
+        ${dashboardMissionHtml(result, context.readyState)}
+        ${dashboardJourneyHtml(result, context.readyState, context.percent)}
         ${dashboardFutureYouHtml(result, context.readyState)}
-      </div>
-      <div class="dashboard-simplified-grid dashboard-simplified-grid-secondary">
-        <div id="dashboardRetirementCard">${dashboardRetirementHtml()}</div>
-        <article class="dashboard-compact-card dashboard-change-card">
-          <span class="metric-label">Try a change</span>
-          <h3>See what could change</h3>
-          <p>See what happens if you invest more, repay debt faster, retire earlier, work less or change your lifestyle target.</p>
-          <button class="btn btn-primary" type="button" data-view="decision">Try a change</button>
-        </article>
       </div>
     `;
   }
@@ -7018,8 +7084,8 @@
     const container = document.getElementById("dashboardSimplified");
     if (!container) return;
     container.innerHTML = dashboardSimplifiedHtml(result, context);
-    const mission = document.getElementById("dashboardWeeklyMission");
-    if (mission) mission.innerHTML = dashboardMissionHtml(result, context.readyState);
+    const legacyMission = document.getElementById("dashboardWeeklyMission");
+    if (legacyMission) legacyMission.innerHTML = "";
   }
 
   function updateDashboardFutureAge(value, options = {}) {
