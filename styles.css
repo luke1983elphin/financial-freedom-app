@@ -9300,3 +9300,23 @@ body.scenario-save-modal-open {
 @media print {
   .collection-add-position { display: none; }
 }
+
+/* Five-icon navigation preview: keep the active content visible on narrow screens. */
+#sideNav { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+#sideNav .nav-primary-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 3px; min-width: 0; }
+#sideNav .nav-primary { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; min-width: 0; min-height: 60px; padding: 7px 1px; border-radius: 12px; font-size: 11px; font-weight: 750; line-height: 1.2; text-align: center; white-space: nowrap; }
+#sideNav .nav-primary svg { display: block; width: 21px; height: 21px; flex-shrink: 0; }
+#sideNav .nav-primary span { display: block; }
+#sideNav .nav-more { grid-column: auto; min-width: 0; }
+#sideNav .nav-more-toggle { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 35px; padding: 5px 12px; font-size: 12px; border-radius: 10px; }
+#sideNav .nav-more-items { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 7px 0 0; }
+#sideNav .nav-more-items .nav-button { min-height: 40px; padding: 7px; font-size: 12px; text-align: center; }
+@media (min-width: 1024px) {
+  #sideNav .nav-primary-row { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  #sideNav .nav-primary { min-height: 76px; font-size: 13px; }
+  #sideNav .nav-primary svg { width: 23px; height: 23px; }
+}
+@media (max-width: 359px) {
+  #sideNav .nav-primary { font-size: 10px; }
+  #sideNav .nav-primary svg { width: 19px; height: 19px; }
+}
