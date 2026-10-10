@@ -168,19 +168,21 @@
         <section id="appWorkspace" class="hidden border-t border-line bg-mist">
           <div class="mx-auto grid max-w-7xl gap-6 px-4 py-6 lg:grid-cols-[250px_1fr]">
             <nav class="workspace-nav rounded-3xl border border-line bg-white p-3 shadow-soft lg:sticky lg:top-24 lg:h-fit">
-              <p class="nav-title">Plan workspace</p>
-              <div class="grid gap-1" id="sideNav">
-                <button class="nav-button active" type="button" data-view="dashboard">Dashboard</button>
-                <button class="nav-button" type="button" data-view="setup" id="setupNavButton">My Plan</button>
-                <button class="nav-button" type="button" data-view="goals">Goals</button>
-                <button class="nav-button" type="button" data-view="semiretirement" data-semi-retirement-nav>Retirement</button>
+              <p class="nav-title">Your workspace</p>
+              <div id="sideNav">
+                <div class="nav-primary-row" aria-label="Main navigation">
+                <button class="nav-button nav-primary active" type="button" data-view="dashboard" ><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg><span>Home</span></button>
+                <button class="nav-button nav-primary" type="button" data-view="setup" id="setupNavButton"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 9h18M7 15h5"/></svg><span>My Plan</span></button>
+                <button class="nav-button nav-primary" type="button" data-view="goals" ><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4m0 1c5-4 9 4 15 0v10c-6 4-10-4-15 0"/></svg><span>Goals</span></button>
+                <button class="nav-button nav-primary" type="button" data-view="semiretirement" data-semi-retirement-nav><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17 9 11l4 4 8-9"/><path d="M15 6h6v6"/></svg><span>Future</span></button>
+                <button class="nav-button nav-primary" type="button" data-view="weeklyplan" ><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="m8 10 1.5 1.5L12 9M8 16h8"/></svg><span>Weekly</span></button>
+                </div>
                 <details class="nav-more" id="moreNavigation">
-                  <summary class="nav-more-toggle">More</summary>
+                  <summary class="nav-more-toggle">More tools <span aria-hidden="true">⌄</span></summary>
                   <div class="nav-more-items" aria-label="More destinations">
-                    <button class="nav-button" type="button" data-view="decision">Future / Try a Change</button>
+                    <button class="nav-button" type="button" data-view="decision">Try a Change</button>
                     <button class="nav-button" type="button" data-view="investments">Investments</button>
                     <button class="nav-button" type="button" data-view="super">Super</button>
-                    <button class="nav-button" type="button" data-view="weeklyplan">Weekly Plan</button>
                     <button class="nav-button" type="button" data-view="reports">Reports</button>
                     <button class="nav-button" type="button" data-view="scenarios">Saved Scenarios</button>
                   </div>
