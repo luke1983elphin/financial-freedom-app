@@ -7796,13 +7796,12 @@
     const snapshotHeading = document.querySelector(".home-snapshot-heading");
     const snapshotGrid = document.querySelector(".home-snapshot-grid");
     const oldSteps = document.querySelector("#homeView > .steps-grid");
-    const enabled = engagementJourneyIsEnabled();
-    if (snapshotHeading) snapshotHeading.classList.toggle("hidden", enabled);
-    if (snapshotGrid) snapshotGrid.classList.toggle("hidden", enabled);
-    if (oldSteps) oldSteps.classList.toggle("hidden", enabled);
-    if (!container) return;
-    container.classList.toggle("hidden", !enabled);
-    if (!enabled) return;
+    // The welcome page now uses the four-section overview exclusively.
+    if (snapshotHeading) snapshotHeading.classList.add("hidden");
+    if (snapshotGrid) snapshotGrid.classList.add("hidden");
+    if (oldSteps) oldSteps.classList.add("hidden");
+    if (container) container.classList.add("hidden");
+    return;
 
     const progress = engagementProgress(result);
     const stageInfo = engagementStageInfo(result);
