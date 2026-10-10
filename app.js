@@ -2047,7 +2047,7 @@
 
   function updateSetupNavigationLabel() {
     const button = document.getElementById("setupNavButton");
-    if (button) button.textContent = "My Plan";
+    if (button) { const label = button.querySelector("span"); if (label) label.textContent = "My Plan"; }
   }
 
   function updateFieldLabel(path, label) {
