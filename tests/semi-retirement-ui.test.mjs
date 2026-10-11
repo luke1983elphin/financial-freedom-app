@@ -1275,7 +1275,7 @@ test("Stage F2 scenario workspace renders one main page title", () => {
   const snippet = sourceBetween(appSource, "function renderSemiRetirementScenario(result)", "function renderDecision(result)");
   assert.match(indexSource, /<h2>Retirement Plan<\/h2>/);
   assert.doesNotMatch(snippet, /Semi-Retirement & Retirement Scenario/);
-  assert.match(snippet, /Changes here apply to this scenario only and won't change your Financial Plan/);
+  assert.match(snippet, /Retirement timing is saved to your plan and used in Future/);
 });
 
 test("Stage F3 selected conceptual info buttons are wired into scenario fields", () => {
@@ -1991,7 +1991,7 @@ test("Stage G2F Retirement Plan source uses the simplified input labels and calc
     "People & retirement timing",
     "Lifestyle spending",
     "Current spending",
-    "Semi-retirement spending",
+    "Spending while work changes",
     "Retirement spending",
     "Investments & super",
     "Investments available before super",

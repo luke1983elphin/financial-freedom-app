@@ -1,6 +1,7 @@
 export const DEFAULT_SUITE_TIMEOUT_MS = 120_000;
 
 export const ACTIVE_TEST_SUITES = [
+  { id: "retirement-goals-redesign", file: "tests/retirement-goals-redesign.test.mjs", groups: ["all", "mjs", "semi-retirement"] },
   { id: "ux-stage1", file: "tests/ux-stage1.test.mjs", groups: ["all", "mjs", "presentation"] },
   { id: "future-you-default", file: "tests/future-you-default.test.mjs", groups: ["all", "mjs", "presentation"] },
   { id: "new-plan-projection-default", file: "tests/new-plan-projection-default.test.mjs", groups: ["all", "mjs", "presentation"] },
