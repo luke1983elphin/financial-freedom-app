@@ -2676,7 +2676,7 @@
       {
         label: "Financial Freedom",
         description: "Your investments are projected to fully support your chosen lifestyle over the long term.",
-        age: nonNegative(plan.personal.fullRetirementAge),
+        age: nonNegative(plan.personal.financialFreedomMilestoneAge) || nonNegative(plan.personal.fullRetirementAge),
         coverage: 1,
       },
     ].map((item) => {
@@ -3061,6 +3061,8 @@
     principalResidenceGrowthRateForAsset,
     calculateNetFiAssetSummary,
     selectFiWealthAtAge,
+    simulateRetirement,
+    maximumLifestyleDraw,
     householdLoanCashflow,
     canonicalLiabilityItems,
     hasStructuredLiabilityAuthority,

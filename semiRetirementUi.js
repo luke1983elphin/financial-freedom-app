@@ -617,6 +617,7 @@
         person2Name: plan.personal?.person2Name || "",
         person1Age: number(plan.personal?.person1Age),
         person2Age: number(plan.personal?.person2Age),
+        ...(plan.personal?.retirementTiming ? { retirementTiming: plan.personal.retirementTiming } : {}),
         fullRetirementAge: number(plan.personal?.fullRetirementAge),
         semiRetirementAge: number(plan.personal?.semiRetirementAge),
         targetAnnualSpending: number(plan.personal?.targetAnnualSpending),
@@ -665,6 +666,46 @@
     return nonNegative(plan.personal?.targetAnnualSpending);
   }
 
+  // Optional persisted timing; old plans remain unchanged until timing is edited.
+  function retirementTimingForPerson(plan, index, fallbackAge) {
+    const saved = plan.personal?.retirementTiming?.people?.find(person => person.id === personId(index));
+    const currentAge = nonNegative(plan.personal?.[`person${index}Age`]);
+    if (!saved) return {};
+    const fullRetirementAge = saved.alreadyRetired ? currentAge : Math.max(currentAge, number(saved.fullRetirementAge));
+    return { ...saved, fullRetirementAge,
+      hasSemiRetirement: !saved.alreadyRetired && Boolean(saved.hasSemiRetirement),
+      semiRetirementAge: saved.hasSemiRetirement && !saved.alreadyRetired ? Math.max(currentAge, Math.min(fullRetirementAge, number(saved.semiRetirementAge))) : fullRetirementAge };
+  }
+
+  function saveRetirementTiming(plan, people, mode = "individual") {
+    plan.personal ||= {};
+    plan.personal.financialFreedomMilestoneAge ??= plan.personal.fullRetirementAge;
+    plan.personal.retirementTiming = { version: 1, mode, people: people.map(person => ({
+      id: person.id, alreadyRetired: Boolean(person.alreadyRetired), hasSemiRetirement: Boolean(person.hasSemiRetirement),
+      semiRetirementAge: number(person.semiRetirementAge), fullRetirementAge: number(person.fullRetirementAge),
+      semiRetirementGrossIncome: nonNegative(person.semiRetirementGrossIncome),
+    })) };
+    // Compatibility for existing reports and milestone consumers, on person one's age axis.
+    plan.personal.fullRetirementAge = number(people[0]?.fullRetirementAge);
+    return plan.personal.retirementTiming;
+  }
+
+  function retirementJourney(people = []) {
+    const events = [];
+    people.forEach(person => {
+      if (person.alreadyRetired || number(person.fullRetirementAge) <= number(person.currentAge)) {
+        events.push({ offset: 0, label: `${person.name} is already retired`, detail: "Employment income stops from the start of this plan." });
+      } else {
+        if (person.hasSemiRetirement && number(person.semiRetirementAge) < number(person.fullRetirementAge)) events.push({
+          offset: Math.max(0, number(person.semiRetirementAge) - number(person.currentAge)),
+          label: `${person.name} reduces work — age ${person.semiRetirementAge}`, detail: `Annual gross employment income becomes $${nonNegative(person.semiRetirementGrossIncome).toLocaleString("en-AU")}.`,
+        });
+        events.push({ offset: number(person.fullRetirementAge) - number(person.currentAge), label: `${person.name} stops working — age ${person.fullRetirementAge}`, detail: "The plan adjusts household income and withdrawals." });
+      }
+    });
+    return events.sort((a, b) => a.offset - b.offset);
+  }
+
   function personDefaults(plan = {}, result = {}, index = 1) {
     const currentAge = nonNegative(plan.personal?.[`person${index}Age`]);
     const fullRetirementAge = defaultFullRetirementAge(plan, index);
@@ -686,10 +727,11 @@
       superReturnAfterRetirementPct: Math.max(0, superReturnPct - 1),
       superAnnualFeesRatePct: 0,
       employerSuperRatePct,
-      existingAdditionalConcessionalContributions: 0,
-      additionalContributionsStopAge: fullRetirementAge,
+      existingAdditionalConcessionalContributions: plan.personal?.retirementTiming ? nonNegative(plan.investing?.extraSuperContributions) * (nonNegative(result.people?.[personId(index)]?.taxableIncome) / Math.max(1, nonNegative(result.people?.person1?.taxableIncome) + nonNegative(result.people?.person2?.taxableIncome))) : 0,
+      additionalContributionsStopAge: retirementTimingForPerson(plan, index, fullRetirementAge).fullRetirementAge ?? fullRetirementAge,
       stslOpeningBalance: stslForPerson(result, index),
       hasPrivateHealthCover: result.people?.[personId(index)]?.privateHealth?.hasAppropriateHospitalCover !== false,
+      ...retirementTimingForPerson(plan, index, fullRetirementAge),
     };
   }
 
@@ -730,7 +772,7 @@
       household: {
         currentLifestyleSpending: lifestyleSpending,
         semiRetirementLifestyleSpending: lifestyleSpending,
-        fullRetirementLifestyleSpending: lifestyleSpending,
+        fullRetirementLifestyleSpending: plan.personal?.retirementTiming ? nonNegative(plan.personal?.targetAnnualSpending) : lifestyleSpending,
         annualLoanPrincipalRepayments: 0,
         otherAnnualIncome,
       },
@@ -740,7 +782,7 @@
         openingOffsetBalance: Math.min(nonNegative(result.accessibleInvestmentAssets), nonNegative(result.offsetFiAssets ?? plan.assets?.offsetBalance)),
         annualReturnRatePct: number(plan.investing?.expectedInvestmentReturnPct, 7),
         annualFeesRatePct: 0,
-        externalAnnualAccessibleContribution: 0,
+        externalAnnualAccessibleContribution: plan.personal?.retirementTiming ? nonNegative(result.actualAffordableInvestmentContribution) : 0,
       },
       assumptions: {
         inflationRatePct: number(plan.investing?.inflationPct, 2.5),
@@ -769,6 +811,76 @@
     return {
       sourceKey: basePlanSourceKey(plan, result),
       draft,
+    };
+  }
+
+  // Present the existing retirement engine's rows to every main-plan future view.
+  // Legacy plans keep their existing calculations until retirement timing is saved.
+  const retirementForecastCache = new Map();
+  function applyRetirementForecast(plan, result, engine = global.FFSSemiRetirementProjection) {
+    if (!plan.personal?.retirementTiming?.people?.length || !engine) return result;
+    const draft = buildSemiRetirementScenarioDefaults(plan, result).draft;
+    const cacheKey = JSON.stringify(draft);
+    let outcome = retirementForecastCache.get(cacheKey);
+    if (!outcome) {
+      outcome = runSemiRetirementProjection(engine, draft);
+      if (retirementForecastCache.size >= 8) retirementForecastCache.clear();
+      retirementForecastCache.set(cacheKey, outcome);
+    }
+    if (!outcome.validation?.isValid || !outcome.result?.validation?.isValid) return result;
+    const rate = number(plan.investing?.safeWithdrawalRatePct, 4) / 100 || .04;
+    const currentAge = number(plan.personal?.person1Age);
+    const rows = outcome.result.years.filter(row => number(row.person1Age) > currentAge);
+    const investmentProjection = rows.map(row => ({ year: number(row.person1Age) - currentAge, age: number(row.person1Age),
+      openingBalance: row.household.openingAccessibleInvestmentBalance, annualContribution: row.household.accessibleInvestmentContribution,
+      growth: row.household.accessibleInvestmentEarnings, closingBalance: Math.max(0, row.household.totalAccessibleAssets - row.household.offsetClosingBalance),
+      passiveIncome: row.household.totalAccessibleAssets * rate }));
+    const superProjection = rows.map(row => ({ year: number(row.person1Age) - currentAge, age: number(row.person1Age),
+      closingBalance: row.household.totalSuperBalance, annualContribution: row.people.reduce((total, person) => total + person.netEmployerSuperContribution + person.netAdditionalSuperContribution, 0) }));
+    const fiRows = rows.map(row => {
+      const year = number(row.person1Age) - currentAge;
+      const accessibleSuper = row.people.filter(person => person.age >= person.superAccessAge).reduce((total, person) => total + person.closingSuperBalance, 0);
+      const investmentDebt = row.liabilities.filter(debt => ["investmentLoan", "shareInvestmentLoan", "managedFundLoan"].includes(debt.type)).reduce((total, debt) => total + debt.closingBalance, 0);
+      const accessibleFiAssets = Math.max(0, row.household.totalAccessibleAssets - investmentDebt) + accessibleSuper;
+      const investmentPropertyEquity = row.properties.filter(property => ["investment-property", "other-property"].includes(propertyTypeGroup(property.type))).reduce((total, property) => total + property.propertyEquity, 0);
+      const principalResidenceEquity = row.properties.filter(property => propertyTypeGroup(property.type) === "principal-residence").reduce((total, property) => total + property.propertyEquity, 0);
+      const spending = nonNegative(plan.personal?.targetAnnualSpending) * Math.pow(1 + number(plan.investing?.inflationPct) / 100, year);
+      const requiredCapital = spending / rate;
+      return { year, age: number(row.person1Age), accessibleFiAssets, netFiAssets: accessibleFiAssets, accessibleSuper,
+        inaccessibleSuper: row.household.totalSuperBalance - accessibleSuper, investmentPropertyEquity, principalResidenceEquity,
+        totalFiWealth: accessibleFiAssets + investmentPropertyEquity, estimatedSustainableIncome: accessibleFiAssets * rate,
+        inflatedAnnualLifestyleSpending: spending, requiredCapital, progress: requiredCapital > 0 ? Math.min(200, accessibleFiAssets / requiredCapital * 100) : 0 };
+    });
+    const targetAge = number(plan.personal.fullRetirementAge);
+    const targetRow = fiRows.find(row => row.age >= targetAge) || result.fiWealthProjection[0];
+    const startRow = fiRows.find(row => row.age >= result.sustainabilityStartAge) || fiRows.at(-1);
+    const totalRetirementAssets = startRow?.accessibleFiAssets || 0;
+    const retirementSustainability = result.retirementSustainability.map(illustration => {
+      const expectedReturn = number(plan.investing?.expectedInvestmentReturnPct) / 100;
+      const inflation = number(plan.investing?.inflationPct) / 100;
+      const firstYearDraw = illustration.label === "Capital preserved" ? totalRetirementAssets * rate
+        : illustration.label === "Maximum lifestyle" ? global.FFSCalculator.maximumLifestyleDraw(totalRetirementAssets, expectedReturn, inflation)
+        : nonNegative(plan.personal.targetAnnualSpending) * Math.pow(1 + inflation, Math.max(0, targetAge - currentAge));
+      return global.FFSCalculator.simulateRetirement({ label: illustration.label, startingAge: targetAge, startingBalance: totalRetirementAssets, expectedReturn, inflation, firstYearDraw });
+    });
+    return { ...result, retirementProjection: outcome.result, investmentProjection, superProjection,
+      totalRetirementAssets, retirementSustainability,
+      targetAgeNetFiAssets: targetRow?.accessibleFiAssets || 0, targetAgeEstimatedSustainableIncome: (targetRow?.accessibleFiAssets || 0) * rate,
+      targetAgeSuperIncludedInNetFiAssets: (targetRow?.accessibleSuper || 0) > 0,
+      accumulationCashflowProjection: rows.map(row => ({ year: number(row.person1Age) - currentAge, age: number(row.person1Age),
+        netHouseholdCashIncome: row.household.netHouseholdCashIncome, livingExpenses: row.household.applicableLifestyleSpending,
+        requiredDebtRepayments: row.household.totalDebtRepayments, actualInvesting: row.household.accessibleInvestmentContribution,
+        investmentContribution: row.household.accessibleInvestmentContribution, remainingSurplus: row.household.surplusAvailableForEnjoyment + row.household.unallocatedSurplus })),
+      netWorthProjection: rows.map(row => ({ year: number(row.person1Age) - currentAge, age: number(row.person1Age), closingBalance: row.household.totalNetWorth })),
+      financialFreedomProgressProjection: fiRows, fiWealthProjection: [result.fiWealthProjection[0], ...fiRows],
+      milestones: result.milestones.map(milestone => {
+        const row = fiRows.find(item => item.age >= milestone.age);
+        if (!row) return milestone;
+        const requiredCapital = row.requiredCapital * milestone.coverage;
+        return { ...milestone, projectedFiAssets: row.accessibleFiAssets, passiveIncomeEstimate: row.estimatedSustainableIncome,
+          requiredCapital, inflatedAnnualLifestyleSpending: row.inflatedAnnualLifestyleSpending, targetCapital: row.requiredCapital,
+          status: requiredCapital <= 0 ? "amber" : row.accessibleFiAssets >= requiredCapital ? "green" : row.accessibleFiAssets >= requiredCapital * .8 ? "amber" : "red" };
+      }),
     };
   }
 
@@ -808,7 +920,7 @@
       if (person.hasSemiRetirement && semiRetirementAge < currentAge) add(`${prefix}.semiRetirementAge`, "Semi-retirement age cannot be earlier than your current age.");
       if (fullRetirementAge < currentAge) add(`${prefix}.fullRetirementAge`, "Full-retirement age cannot be earlier than your current age.");
       if (person.hasSemiRetirement && fullRetirementAge < semiRetirementAge) add(`${prefix}.fullRetirementAge`, "Full-retirement age cannot be earlier than semi-retirement age.");
-      if (number(person.superAccessAge) < currentAge) add(`${prefix}.superAccessAge`, "Assumed super access age cannot be earlier than your current age.");
+      if (number(person.superAccessAge) < 0) add(`${prefix}.superAccessAge`, "Assumed super access age cannot be negative.");
       [
         ["currentGrossEmploymentIncome", "Annual income cannot be negative."],
         ["semiRetirementGrossIncome", "Annual income cannot be negative."],
@@ -2295,6 +2407,10 @@
   }
 
   global.FFSSemiRetirementUi = {
+    applyRetirementForecast,
+    retirementTimingForPerson,
+    saveRetirementTiming,
+    retirementJourney,
     defaultWorkingPhaseSurplusDestination,
     buildSemiRetirementScenarioDefaults,
     buildSavedRetirementOutcome,

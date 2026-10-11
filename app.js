@@ -1267,6 +1267,10 @@
   function mortgageBalanceAtAge(result, age) {
     const years = projectionYearForAge(age);
     if (years <= 0) return Number(result.effectiveMortgageBalance) || 0;
+    if (result.retirementProjection?.years?.length) {
+      const row = result.retirementProjection.years.find(item => Number(item.person1Age) >= Number(age)) || result.retirementProjection.years.at(-1);
+      return row.liabilities.filter(debt => ["homeLoan", "mortgage", "mortgageLoan", "home_loan"].includes(debt.type)).reduce((total, debt) => total + Number(debt.closingBalance || 0), 0);
+    }
     const month = years * 12;
     const row = result.loan?.schedule?.find((item) => Number(item.month) >= month) || result.loan?.schedule?.at(-1);
     return Math.max(0, Number(row?.closingBalance ?? result.loan?.finalBalance ?? 0));
@@ -1295,7 +1299,7 @@
       investmentBalance: Number(investment?.closingBalance ?? result.investmentBalance ?? 0),
       superBalance: Number(superRow?.closingBalance ?? result.superannuationBalance ?? 0),
       mortgageBalance,
-      netWorth: year <= 0 ? result.currentNetWorth : Number(netWorthRow?.closingBalance) || result.currentNetWorth || 0,
+      netWorth: year <= 0 ? result.currentNetWorth : Number(netWorthRow?.closingBalance ?? result.currentNetWorth ?? 0),
       projectedFiAssets: effectiveProjectedFiAssets,
       accessibleFiAssets: effectiveProjectedFiAssets,
       investmentPropertyEquity: Number(fiWealth.investmentPropertyEquity ?? 0),
@@ -2288,7 +2292,9 @@
   }
 
   function calculatePlan(sourcePlan = plan) {
-    return CALC.calculatePlan(legacyCalculationProjection(sourcePlan));
+    const projectionPlan = legacyCalculationProjection(sourcePlan);
+    const result = CALC.calculatePlan(projectionPlan);
+    return window.FFSSemiRetirementUi?.applyRetirementForecast?.(projectionPlan, result) || result;
   }
 
   function escapeHtml(value) {
@@ -6429,6 +6435,53 @@
     </section>`;
   }
 
+  function renderRetirementGoals(containerId, goalFields) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const currentAge = Number(plan.personal.person1Age) || 0;
+    const goalAge = plan.personal.workOptionalGoalAge ?? plan.personal.semiRetirementAge;
+    const timing = plan.personal.retirementTiming;
+    const retired = timing?.people?.[0]?.alreadyRetired;
+    const path = timing?.people?.some(person => person.hasSemiRetirement) ? "reduced" : "stop";
+    container.innerHTML = `<section class="retirement-goal-intro">
+      <h3>When would you like work to become optional?</h3>
+      <p>${currentAge >= 60 ? "Plan from where you are now, whether you're still working, working less or already retired." : "Choose one goal age. Your actual work changes are managed in Retirement."}</p>
+      ${!retired ? `<label><span class="field-label">Work becomes optional at age</span><input class="field-input" type="number" min="${currentAge}" max="110" step="1" value="${escapeHtml(goalAge || "")}" data-retirement-goal-age><small class="field-help">Your aspiration, rather than a prediction or a required retirement date.</small></label>` : `<p class="tax-note">You're already retired. Future will model funding your lifestyle from today.</p>`}
+      <label class="mt-4"><span class="field-label">What does retirement look like for you?</span><select class="field-input" data-retirement-goal-path>
+        ${optionList([["stop", "Stop working completely"], ["reduced", "Work less before retiring"], ["retired", "I'm already retired"]], retired ? "retired" : path)}
+      </select></label>
+      <p class="field-help">${timing ? "Your saved retirement timing is used in Future. Changing the goal age does not move your chosen retirement dates." : "Retirement starts with your existing ages. Review the timing when you're ready."}</p>
+      <button class="btn mt-4" type="button" data-view="semiretirement">${timing?.people?.length > 1 ? "Review both partners' retirement timing" : "Review retirement timing"}</button>
+    </section>
+    <details class="goal-optional-milestones"><summary>Building Wealth and Financial Freedom milestones (optional)</summary><p class="field-help">These are progress milestones, not additional retirement dates. Your saved ages are retained.</p>
+      ${field(goalFields[0])}
+      ${field({ ...goalFields[2], path: "personal.financialFreedomMilestoneAge", label: "Financial Freedom milestone age", placeholder: String(plan.personal.fullRetirementAge || ""), help: "Leave blank to use your retirement age." })}
+    </details>
+    <div class="input-grid">${goalFields.slice(3).map(field).join("")}</div>`;
+  }
+
+  function commitRetirementTiming() {
+    if (String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:")) return false;
+    const people = semiRetirementScenarioDraft?.people || [];
+    if (!people.length || people.some(person => !Number.isFinite(Number(person.fullRetirementAge)) || Number(person.fullRetirementAge) < Number(person.currentAge)
+      || Number(person.fullRetirementAge) > 110 || !Number.isFinite(Number(person.semiRetirementAge)) || !Number.isFinite(Number(person.semiRetirementGrossIncome)) || Number(person.semiRetirementGrossIncome) < 0
+      || (person.hasSemiRetirement && (Number(person.semiRetirementAge) < Number(person.currentAge) || Number(person.semiRetirementAge) > Number(person.fullRetirementAge))))) return false;
+    window.FFSSemiRetirementUi.saveRetirementTiming(plan, people, plan.personal?.retirementTiming?.mode || "shared");
+    semiRetirementScenarioSourceKey = window.FFSSemiRetirementUi.basePlanSourceKey(plan, calculatePlan(plan));
+    autosavePlan();
+    return true;
+  }
+
+  function retirementJourneyHtml(draft) {
+    const events = window.FFSSemiRetirementUi.retirementJourney(draft.people);
+    const bothRetired = draft.people.every(person => person.alreadyRetired || Number(person.fullRetirementAge) <= Number(person.currentAge));
+    return `<section class="retirement-journey"><h3>Your retirement journey</h3>
+      <p>${bothRetired ? "Your plan starts in retirement." : "Income, contributions and withdrawals adjust as each person reduces or stops work."}</p>
+      <ol>${events.map(event => `<li><strong>${escapeHtml(event.label)}</strong><small>${escapeHtml(event.detail)}</small></li>`).join("")}
+      ${draft.people.length > 1 && !bothRetired ? `<li><strong>Both fully retired</strong><small>From ${draft.projectionStartYear + Math.max(...draft.people.map(person => Math.max(0, Number(person.fullRetirementAge) - Number(person.currentAge))))}, the plan funds your household lifestyle from assets and continuing income.</small></li>` : ""}</ol>
+    </section>`;
+  }
+
   function renderForms() {
     ensureCollectionData();
     const aboutFields = [
@@ -6505,7 +6558,7 @@
       },
     ];
 
-    renderForm("personalForm", [...aboutFields, ...goalFields]);
+    renderRetirementGoals("personalForm", goalFields);
     appendEmployerSuperPanel("personalForm");
     renderAssetCollection("assetsForm");
     renderLiabilityCollection("liabilitiesForm");
@@ -6534,26 +6587,7 @@
     renderExpenseCollection("wizardExpensesForm");
     const superCheckpoint = document.getElementById("wizardSuperCheckpoint");
     if (superCheckpoint) superCheckpoint.innerHTML = superCheckpointHtml();
-    // Keep all three underlying model ages and their existing defaults. Only the
-    // work-optional goal is presented as the primary question in guided setup.
-    const wizardGoals = document.getElementById("wizardGoalsForm");
-    if (wizardGoals) {
-      const workOptional = goalFields.find((item) => item.path === "personal.semiRetirementAge");
-      const flexibility = goalFields.find((item) => item.path === "personal.workOptionalAge");
-      const longTerm = goalFields.find((item) => item.path === "personal.fullRetirementAge");
-      const remaining = goalFields.filter((item) => ![workOptional, flexibility, longTerm].includes(item));
-      wizardGoals.innerHTML = `
-        <div class="goal-intro"><h3>What would you like your money to help you achieve?</h3><p>Choose when you'd like more freedom and the lifestyle you're aiming for. We'll compare your goals with your financial projections.</p></div>
-        ${field({ ...workOptional, label: "At what age would you ideally like work to become optional?", infoKey: null, help: "The age you'd like investments and other income to potentially cover your living costs, even if you choose to keep working." })}
-        <p class="field-help">This is a goal, not a prediction. You can change it later.</p>
-        <details class="goal-optional-milestones"><summary>Set more milestones (optional)</summary><p class="field-help">These ages are already filled with starting assumptions. You can leave them as they are; the app will continue using them in its projections.</p>
-          ${field({ ...flexibility, label: "At what age would you like more financial flexibility?", infoKey: null, help: "For example, working fewer hours or having more choice about how you spend your time." })}
-          ${field({ ...longTerm, label: "At what age would you like to be financially secure for the long term?", infoKey: null, help: "Your longer-term goal for supporting your desired lifestyle with less reliance on employment income." })}
-        </details>
-        <p class="field-help">Why these ages? We use them as milestones for your plan, not as guaranteed outcomes or recommended retirement ages.</p>
-        ${remaining.map(field).join("")}
-      `;
-    }
+    renderRetirementGoals("wizardGoalsForm", goalFields);
     appendEmployerSuperPanel("wizardGoalsForm");
     renderGoalCollection("wizardGoalExamples");
     renderDownsizingForm("wizardDownsizingForm", downsizingFields);
@@ -6965,7 +6999,7 @@
           <input id="${escapeHtml(inputId)}" type="range" min="${bounds.min}" max="${bounds.max}" step="1" value="${value}" data-dashboard-future-age aria-label="Select Future You age">
         </label>
         ${dashboardFutureMetricsHtml(future, { resultsId })}
-        <p class="field-help">Figures come from the app's existing projection row for the selected age.</p>
+        <p class="field-help">${plan.personal?.retirementTiming ? "Figures use your saved retirement timing, including reduced income and retirement withdrawals." : "Figures use the current wealth-building projection. Set your retirement timing to include work changes and withdrawals."}</p>
       </article>
     `;
   }
@@ -8372,6 +8406,7 @@
     if (!window.FFSSemiRetirementUi) return null;
     const defaults = window.FFSSemiRetirementUi.buildSemiRetirementScenarioDefaults(plan, result);
     const shouldReset = options.force
+      || (plan.personal?.retirementTiming && !String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:") && semiRetirementScenarioSourceKey !== defaults.sourceKey)
       || !semiRetirementScenarioDraft
       || (!semiRetirementScenarioDirty && semiRetirementScenarioSourceKey !== defaults.sourceKey);
     if (shouldReset) {
@@ -8753,10 +8788,11 @@
         <div class="input-grid semi-retirement-person-core mt-4">
           ${semiRetirementInput({ label: "Current age", path: `${prefix}.currentAge`, readonly: true, help: "From Financial Plan." })}
           ${semiRetirementInput({ label: "Current income", path: `${prefix}.currentGrossEmploymentIncome`, step: "1000", help: "Gross employment income from the current Financial Plan, editable for this scenario only." })}
-          ${semiRetirementInput({ label: "Do you plan to semi-retire?", path: `${prefix}.hasSemiRetirement`, type: "boolean", help: "Choose Yes to model a period of reduced work before full retirement." })}
+          ${semiRetirementInput({ label: "I’m already retired", path: `${prefix}.alreadyRetired`, type: "boolean", help: "Start retirement from your current age." })}
+          ${!person.alreadyRetired ? semiRetirementInput({ label: "Work less before retiring?", path: `${prefix}.hasSemiRetirement`, type: "boolean", help: "Include a period of reduced work before stopping completely." }) : ""}
           ${hasSemi ? semiRetirementInput({ label: "Semi-retire at", path: `${prefix}.semiRetirementAge`, step: "1" }) : ""}
           ${hasSemi ? semiRetirementInput({ label: "Employment income after semi-retiring", path: `${prefix}.semiRetirementGrossIncome`, step: "1000", help: "Gross income you expect to earn from work each year after semi-retiring." }) : ""}
-          ${semiRetirementInput({ label: "Full-retirement age", path: `${prefix}.fullRetirementAge`, step: "1" })}
+          ${!person.alreadyRetired ? semiRetirementInput({ label: Number(person.currentAge) >= 60 ? "When do you expect to stop working? (age)" : "Stop working completely at age", path: `${prefix}.fullRetirementAge`, step: "1" }) : ""}
         </div>
         <details class="semi-retirement-input-details mt-4">
           <summary>More assumptions</summary>
@@ -10654,12 +10690,13 @@
       return;
     }
     const draft = ensureSemiRetirementScenarioDraft(result);
+    if (plan.personal?.retirementTiming && !String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:") && !semiRetirementScenarioResult && !semiRetirementScenarioErrors.length) ensureSemiRetirementBaseResult();
     container.classList.remove("hidden");
     container.innerHTML = `
       <section class="semi-retirement-scenario card" data-semi-retirement-scenario>
         <div class="semi-retirement-scenario-note">
-          <strong>Scenario only</strong>
-          <p>Changes here apply to this scenario only and won't change your Financial Plan.</p>
+          <strong>${String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:") ? "Saved scenario comparison" : "Your retirement plan"}</strong>
+          <p>${String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:") ? "This saved scenario remains separate from your Financial Plan." : "Retirement timing is saved to your plan and used in Future. Other adjustments here let you explore this scenario."}</p>
         </div>
         <details class="semi-retirement-disclaimer">
           <summary>About this projection</summary>${modellingInformationHtml()}
@@ -10672,6 +10709,8 @@
             <h4>People & retirement timing</h4>
             <p>Choose when work reduces and when employment income stops.</p>
           </div>
+          ${draft.people.length > 1 && !String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:") ? `<label><span class="field-label">How would you like to plan together?</span><select class="field-input" data-retirement-couple-mode>${optionList([["shared", "Simple shared retirement plan"], ["individual", "Different timing for each partner"]], plan.personal?.retirementTiming?.mode || "shared")}</select><small class="field-help">A shared plan stops work in the same calendar year. Either partner can switch to their own timing.</small></label>` : ""}
+          ${draft.people.length > 1 || draft.people.some(person => person.hasSemiRetirement || person.alreadyRetired) ? retirementJourneyHtml(draft) : ""}
           <div class="semi-retirement-grid mt-4">
             ${draft.people.map((person, index) => semiRetirementPersonPanel(person, index)).join("")}
           </div>
@@ -10683,7 +10722,7 @@
           </div>
           <div class="input-grid semi-retirement-lifestyle-grid mt-4">
             ${semiRetirementInput({ label: "Current spending", path: "household.currentLifestyleSpending", step: "1000", help: "Current household living expenses used as the starting point.", afterHtml: semiRetirementLivingExpenseSourceHtml(result) })}
-            ${semiRetirementInput({ label: "Semi-retirement spending", path: "household.semiRetirementLifestyleSpending", step: "1000", infoKey: "semiRetirementLifestyleSpending", help: "Normal household spending while work is reduced." })}
+            ${draft.people.some(person => person.hasSemiRetirement) || new Set(draft.people.map(person => Number(person.fullRetirementAge) - Number(person.currentAge))).size > 1 ? semiRetirementInput({ label: "Spending while work changes", path: "household.semiRetirementLifestyleSpending", step: "1000", infoKey: "semiRetirementLifestyleSpending", help: "Household spending during reduced work or while one partner is still working." }) : ""}
             ${semiRetirementInput({ label: "Retirement spending", path: "household.fullRetirementLifestyleSpending", step: "1000", infoKey: "fullRetirementLifestyleSpending", help: "Normal household spending once everyone is fully retired." })}
           </div>
           ${semiRetirementOneOffLifestyleEventsHtml(draft)}
@@ -10724,7 +10763,7 @@
         </section>
         <div class="planner-actions mt-4">
           <button class="btn btn-primary" type="button" data-semi-action="calculate">Calculate Retirement Plan</button>
-          <button class="btn" type="button" data-semi-action="reset">Reset Scenario</button>
+          <button class="btn" type="button" data-semi-action="reset">${String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:") ? "Return to my retirement plan" : "Reset scenario adjustments"}</button>
         </div>
         ${renderSemiRetirementScenarioResultHtml()}
       </section>
@@ -10810,7 +10849,6 @@
       semiRetirementScenarioInputs = null;
       semiRetirementScenarioResultDraft = null;
       semiRetirementScenarioDirty = true;
-      renderSemiRetirementScenario(calculatePlan(plan));
       return;
     }
     if (path === "scenario.downsizeHomeEvent.enabled" || path === "scenario.downsizeHomeEvent.allocation") {
@@ -16636,7 +16674,9 @@
         updateSemiRetirementComparisonDraftFromInput(target);
         return;
       }
+      if (target.dataset.retirementGoalAge !== undefined || target.dataset.retirementGoalPath !== undefined || target.dataset.retirementCoupleMode !== undefined) return;
       if (target.dataset.semiInput !== undefined) {
+        if (target.tagName === "SELECT") return;
         updateSemiRetirementDraftFromInput(target);
         return;
       }
@@ -16891,6 +16931,64 @@
 
     document.addEventListener("change", (event) => {
       const target = event.target;
+      if (target.dataset.retirementGoalAge !== undefined) {
+        const age = Number(target.value);
+        if (!Number.isFinite(age) || age <= 0 || !Number.isInteger(age) || age < Number(plan.personal.person1Age) || age > 110) { target.setCustomValidity("Enter an age from your current age to 110."); target.reportValidity(); return; }
+        plan.personal.workOptionalGoalAge = age;
+        plan.personal.semiRetirementAge = age;
+        target.setCustomValidity(""); autosavePlan(); renderForms(); renderOutputs(); return;
+      }
+      if (target.dataset.retirementGoalPath !== undefined || target.dataset.retirementCoupleMode !== undefined) {
+        // Choosing a main-plan path never adopts a saved comparison snapshot.
+        if (String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:")) ensureSemiRetirementScenarioDraft(calculatePlan(plan), { force: true });
+        const draft = ensureSemiRetirementScenarioDraft(calculatePlan(plan));
+        if (target.dataset.retirementCoupleMode !== undefined) {
+          plan.personal.retirementTiming ||= { mode: "shared" };
+          plan.personal.retirementTiming.mode = target.value;
+          if (target.value === "shared") {
+            const first = draft.people[0];
+            draft.people.slice(1).forEach(person => {
+              person.alreadyRetired = first.alreadyRetired;
+              person.hasSemiRetirement = first.hasSemiRetirement;
+              person.fullRetirementAge = Number(person.currentAge) + Math.max(0, Number(first.fullRetirementAge) - Number(first.currentAge));
+              person.semiRetirementAge = Number(person.currentAge) + Math.max(0, Number(first.semiRetirementAge) - Number(first.currentAge));
+            });
+          }
+        } else {
+          const first = draft.people[0];
+          first.alreadyRetired = target.value === "retired";
+          first.hasSemiRetirement = target.value === "reduced";
+          if (first.alreadyRetired) { first.fullRetirementAge = first.currentAge; first.semiRetirementAge = first.currentAge; }
+          else if (first.hasSemiRetirement) first.semiRetirementAge = Math.max(Number(first.currentAge), Math.min(Number(first.fullRetirementAge), Number(plan.personal.workOptionalGoalAge ?? plan.personal.semiRetirementAge) || Number(first.currentAge)));
+          else first.semiRetirementAge = first.fullRetirementAge;
+          if (draft.people.length > 1) {
+            plan.personal.retirementTiming ||= {};
+            plan.personal.retirementTiming.mode = "individual";
+          }
+        }
+        semiRetirementScenarioDirty = true; semiRetirementScenarioResult = null;
+        commitRetirementTiming(); ensureSemiRetirementBaseResult(); renderForms(); renderOutputs(); return;
+      }
+      if (target.dataset.semiInput !== undefined) {
+        updateSemiRetirementDraftFromInput(target);
+        const match = target.dataset.semiInput.match(/^people\.(\d+)\.(alreadyRetired|hasSemiRetirement|semiRetirementAge|fullRetirementAge|semiRetirementGrossIncome)$/);
+        if (match) {
+          const index = Number(match[1]), person = semiRetirementScenarioDraft.people[index];
+          if (match[2] === "alreadyRetired" && person.alreadyRetired) { person.hasSemiRetirement = false; person.fullRetirementAge = person.currentAge; person.semiRetirementAge = person.currentAge; }
+          if (index === 0 && (plan.personal?.retirementTiming?.mode || "shared") === "shared" && !String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:")) {
+            semiRetirementScenarioDraft.people.slice(1).forEach(partner => {
+              partner.alreadyRetired = person.alreadyRetired; partner.hasSemiRetirement = person.hasSemiRetirement;
+              partner.fullRetirementAge = Number(partner.currentAge) + Math.max(0, Number(person.fullRetirementAge) - Number(person.currentAge));
+              partner.semiRetirementAge = Number(partner.currentAge) + Math.max(0, Number(person.semiRetirementAge) - Number(person.currentAge));
+            });
+          } else if (index > 0 && match[2] !== "semiRetirementGrossIncome" && !String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:")) {
+            plan.personal.retirementTiming ||= {}; plan.personal.retirementTiming.mode = "individual";
+          }
+          commitRetirementTiming(); ensureSemiRetirementBaseResult(); renderForms(); renderOutputs();
+        } else renderSemiRetirementScenario(calculatePlan(plan));
+        return;
+      }
+
       if(target.dataset.collection === "assetItems" && ["expectedTotalReturnPct","expectedIncomeYieldPct","value"].includes(target.dataset.key) && target.validity.valid) {
         renderForms();renderOutputs();return;
       }

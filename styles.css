@@ -9367,3 +9367,14 @@ body.scenario-save-modal-open {
 .what-if-forecast-row span,.what-if-forecast-row b { text-align: right; }
 .what-if-forecast-head { color: #577265; font-size: .75rem; }
 @media(max-width:480px) { .what-if-stage { padding: 12px; } .what-if-allocations { grid-template-columns: 1fr 1fr; } }
+
+/* Simple goals and an always-visible retirement journey. */
+.retirement-goal-intro, #personalForm > .goal-optional-milestones, #personalForm > .input-grid { grid-column: 1 / -1; }
+.retirement-goal-intro { max-width: 720px; }
+.retirement-goal-intro h3, .retirement-journey h3 { font-weight: 800; font-size: 1.2rem; color: var(--navy, #14304a); }
+.retirement-goal-intro p { margin: .7rem 0; }
+.retirement-goal-intro label { display: block; }
+.retirement-journey { margin-top: 1.25rem; padding: 1.25rem; border: 1px solid #dbe6ed; border-radius: 14px; background: #f6fafb; }
+.retirement-journey ol { margin-top: 1rem; padding-left: 1.5rem; }
+.retirement-journey li { padding: .5rem 0; }
+.retirement-journey small { display: block; color: #526579; margin-top: .25rem; }
