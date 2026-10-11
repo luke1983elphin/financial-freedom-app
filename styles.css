@@ -9347,3 +9347,23 @@ body.scenario-save-modal-open {
 #sideNav .nav-more-icon span { display: block; overflow-wrap: anywhere; }
 #sideNav .nav-more-icon.active { background: #d4ebdd; color: #115b40; box-shadow: inset 0 0 0 1px #b9ddc8; }
 @media (min-width: 1024px) { #sideNav .nav-more-items { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Guided Try a Change preview */
+.what-if-flow { display: grid; gap: 18px; width: 100%; grid-column: 1 / -1; }
+.what-if-stage { padding: 18px; border: 1px solid #d9e7df; border-radius: 16px; background: #f8fcf9; min-width: 0; }
+.what-if-stage h4 { font-size: 1.12rem; font-weight: 800; color: #153b30; margin-bottom: 8px; }
+.what-if-metrics { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; margin: 14px 0; }
+.what-if-metrics>div { padding: 12px 6px; background: white; border: 1px solid #d9e7df; border-radius: 12px; text-align: center; min-width: 0; }
+.what-if-metrics small { display: block; color: #5b7168; font-size: .77rem; }
+.what-if-metrics strong { display: block; font-size: clamp(.95rem,3vw,1.3rem); color: #106443; overflow-wrap: anywhere; }
+.what-if-allocations { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px; margin-top: 12px; }
+.what-if-allocation { text-align: left; padding: 13px; background: white; border: 1px solid #d6e3db; border-radius: 12px; color: #173f32; }
+.what-if-allocation strong,.what-if-allocation small { display: block; }
+.what-if-allocation small { font-size: .78rem; color: #5a6e63; margin-top: 4px; }
+.what-if-allocation.selected { background: #d9efe2; border-color: #77ba95; box-shadow: inset 0 0 0 1px #77ba95; }
+.what-if-allocation:disabled { opacity: .45; }
+.what-if-forecast { overflow-x: auto; margin: 14px 0; }
+.what-if-forecast-row { display: grid; grid-template-columns: minmax(125px,1.6fr) repeat(3,minmax(90px,1fr)); gap: 10px; align-items: center; min-width: 480px; padding: 10px 4px; border-bottom: 1px solid #dce9e1; font-size: .85rem; }
+.what-if-forecast-row span,.what-if-forecast-row b { text-align: right; }
+.what-if-forecast-head { color: #577265; font-size: .75rem; }
+@media(max-width:480px) { .what-if-stage { padding: 12px; } .what-if-allocations { grid-template-columns: 1fr 1fr; } }
