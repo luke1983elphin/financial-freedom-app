@@ -10305,6 +10305,7 @@
       { label: "Replacement home value", value: `(${semiRetirementMoney(downsizeEvent.projectedReplacementHomeValue)})` },
       { label: "Purchase costs", value: `(${semiRetirementMoney(downsizeEvent.purchaseCosts)})` },
       { label: "Net cash released", value: semiRetirementSignedMoney(downsizeEvent.netCashReleased) },
+      Number(downsizeEvent.linkedHomeDebtRemaining || 0) > 0 ? { label: "Home loan remaining after downsizing", value: semiRetirementMoney(downsizeEvent.linkedHomeDebtRemaining) } : null,
       ...downsizeContributionRows,
       Number(downsizeEvent.accessibleInvestmentContribution || 0) > 0 ? { label: "Added to accessible investments", value: semiRetirementMoney(downsizeEvent.accessibleInvestmentContribution) } : null,
       Number(downsizeEvent.additionalFundsRequired || 0) > 0 ? { label: "Additional cash required", value: semiRetirementMoney(downsizeEvent.additionalFundsRequired) } : null,
