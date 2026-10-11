@@ -5103,7 +5103,6 @@
           ${summaryCard(`${person1Name} estimated employer super`, money(employerSuper.person1Amount || 0))}
           ${summaryCard(`${person2Name} estimated employer super`, money(employerSuper.person2Amount || 0))}
           ${summaryCard("Household estimated employer super", money(employerSuper.totalEffective || 0), "household-super-card")}
-          ${summaryCard("Maximum contribution base", money(employerSuper.maximumContributionBase || result.taxConfiguration?.employerSuperMaximumContributionBase || 0))}
         </div>
         ${capWarnings.length ? `<p class="tax-note mt-3"><strong>Contribution cap warning:</strong> ${escapeHtml(capWarnings.join(" "))}</p>` : ""}
         ${employerSuper.hasOverride ? `<p class="field-help mt-3">Manual override is active. Calculated amount before override: ${money(employerSuper.totalCalculated || 0)}.</p>` : ""}
@@ -10746,8 +10745,8 @@
               ${semiRetirementInput({ label: "Investment property growth (%)", path: "assumptions.investmentPropertyCapitalGrowthRatePct", step: "0.1", help: "Scenario-only assumption used for rental and investment properties unless a property-specific rate has been entered." })}
             </div>
             ${semiRetirementPlannedConcessionalContributionsHtml(draft)}
-            ${semiRetirementDownsizeHomeEventHtml(draft)}
           </details>
+          ${semiRetirementDownsizeHomeEventHtml(draft)}
           <p class="field-help mt-3">For global assumptions used elsewhere in the app, update the main Financial Plan assumptions. These assumptions apply only to this scenario and do not change your main Financial Plan.</p>
         </section>
         <section class="semi-retirement-input-section">
@@ -10853,7 +10852,7 @@
     }
     if (path === "scenario.downsizeHomeEvent.enabled" || path === "scenario.downsizeHomeEvent.allocation") {
       captureSemiRetirementDetailsState();
-      markSemiRetirementDetailsOpen("advancedAssumptions", "downsizeHome");
+      markSemiRetirementDetailsOpen("downsizeHome");
       clearSemiRetirementAdjustmentState();
       clearSemiRetirementComparisonState();
       semiRetirementScenarioResult = null;
