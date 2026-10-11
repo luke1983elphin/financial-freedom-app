@@ -611,7 +611,8 @@
   let activeView = restoredDraftUi.activeView || "dashboard";
   let activeWizardStep = normaliseWizardStep(restoredDraftUi.activeWizardStep);
   let hasOpenedWorkspace = false; // Always show welcome on a fresh page load; retain saved plan and wizard progress.
-  let activeWhatIfId = whatIfActions[0].id;
+  let activeWhatIfId = "expenses-500";
+  let whatIfAllocation = "unallocated";
   let generatedWeeklyPlanner = null;
   let weeklyPlan = loadWeeklyPlan();
   let activeWeeklyPlanTab = restoredDraftUi.activeWeeklyPlanTab || "thisWeek";
@@ -14934,22 +14935,54 @@
       output.innerHTML = readinessGateHtml(readiness, "quick comparisons");
       return;
     }
-    actions.innerHTML = whatIfActions.map((action) => `
-      <button class="btn what-if-button ${activeWhatIfId === action.id ? "btn-primary" : ""}" type="button" data-what-if="${action.id}">${escapeHtml(action.label)}</button>
-    `).join("");
     const active = whatIfActions.find((action) => action.id === activeWhatIfId) || whatIfActions[0];
-    const adjustedPlan = applyScenarioAdjustments(plan, active.adjustments(result));
-    const adjustedResult = calculatePlan(adjustedPlan);
-    const currentMonthly = estimatedCashflow(result) / 12;
-    const adjustedMonthly = estimatedCashflow(adjustedResult) / 12;
-    output.innerHTML = [
-      summaryTile("Scenario simulation", active.label),
-      summaryTile("Monthly final surplus", `${money(currentMonthly)} -> ${money(adjustedMonthly)}`, adjustedMonthly >= currentMonthly ? "status-green" : "status-amber"),
-      summaryTile("1-year net worth", `${money(netWorthAtYear(result, 1))} -> ${money(netWorthAtYear(adjustedResult, 1))}`),
-      summaryTile("2-year net worth", `${money(netWorthAtYear(result, 2))} -> ${money(netWorthAtYear(adjustedResult, 2))}`),
-      summaryTile("Long-term net worth", `${money(longTermNetWorth(result))} -> ${money(longTermNetWorth(adjustedResult))}`),
-      summaryTile("Financial Freedom progress", `${plainPercent(freedomPercent(result))} -> ${plainPercent(freedomPercent(adjustedResult))}`),
-    ].join("");
+    actions.innerHTML = whatIfActions.map(action =>
+      `<button class="btn what-if-button ${active.id === action.id ? "btn-primary" : ""}" type="button" data-what-if="${action.id}">${escapeHtml(action.label)}</button>`
+    ).join("");
+    const baseAdjustments = active.adjustments(result);
+    const firstResult = calculatePlan(applyScenarioAdjustments(plan, baseAdjustments));
+    const annualDifference = estimatedCashflow(firstResult) - estimatedCashflow(result);
+    const allocatable = Math.max(0, annualDifference);
+    const choices = [
+      ["unallocated", "Keep it available", "Do not assume this extra money is invested"],
+      ["investments", "Invest it", "Add available cash to annual investments"],
+      ["debt", "Repay home loan", "Increase home-loan repayments"],
+      ["lifestyle", "Enjoy it", "Use the available amount for additional spending"]
+    ];
+    const canAllocate = allocatable > 0.01;
+    const selection = canAllocate ? whatIfAllocation : "unallocated";
+    const allocationAdjustments = { ...baseAdjustments };
+    if (canAllocate && selection === "investments") allocationAdjustments.investmentContributionChange = (Number(allocationAdjustments.investmentContributionChange) || 0) + allocatable;
+    if (canAllocate && selection === "debt") allocationAdjustments.loanRepaymentChangeMonthly = (Number(allocationAdjustments.loanRepaymentChangeMonthly) || 0) + allocatable / 12;
+    if (canAllocate && selection === "lifestyle") allocationAdjustments.expenseChange = (Number(allocationAdjustments.expenseChange) || 0) + allocatable;
+    const adjustedResult = calculatePlan(applyScenarioAdjustments(plan, allocationAdjustments));
+    const fmtDelta = amount => `${amount >= 0 ? "+" : "−"}${money(Math.abs(amount))}`;
+    const forecastRow = (label, before, after) => `<div class="what-if-forecast-row"><strong>${label}</strong><span>${money(before)}</span><span>${money(after)}</span><b>${fmtDelta(after - before)}</b></div>`;
+    output.innerHTML = `
+      <section class="what-if-flow">
+        <div class="what-if-stage"><h4>1. What changes in your cashflow?</h4>
+          <p class="field-help">Compared with your existing plan, after the modelled tax, debt and investing effects of this change.</p>
+          <div class="what-if-metrics">
+            <div><small>Per week</small><strong>${fmtDelta(annualDifference / 52)}</strong></div>
+            <div><small>Per month</small><strong>${fmtDelta(annualDifference / 12)}</strong></div>
+            <div><small>Per year</small><strong>${fmtDelta(annualDifference)}</strong></div>
+          </div>
+          <p class="field-help">${annualDifference < 0 ? "This change requires more cash than your current plan. No additional money is available to allocate." : "This is the estimated change in cash remaining after the selected action, before choosing how to use any extra money."}</p>
+        </div>
+        <div class="what-if-stage"><h4>2. What would you do with the extra money?</h4>
+          <p class="field-help">${canAllocate ? `Choose how to direct up to ${money(allocatable / 12)} a month. Only the extra cash from this change is allocated.` : "No additional cash is available from this change. The forecast below still shows its modelled effect."}</p>
+          <div class="what-if-allocations">${choices.map(([id,label,description]) => `<button type="button" data-what-if-allocation="${id}" class="what-if-allocation ${selection === id ? "selected" : ""}" ${!canAllocate && id !== "unallocated" ? "disabled" : ""}><strong>${label}</strong><small>${description}</small></button>`).join("")}</div>
+        </div>
+        <div class="what-if-stage"><h4>3. What could this mean for your future?</h4>
+          <p class="field-help">Indicative results from the existing projection model. They are not guaranteed outcomes.</p>
+          <div class="what-if-forecast"><div class="what-if-forecast-row what-if-forecast-head"><strong>Measure</strong><span>Current</span><span>Changed</span><b>Difference</b></div>
+          ${forecastRow("Net worth after 1 year", netWorthAtYear(result,1),netWorthAtYear(adjustedResult,1))}
+          ${forecastRow("Net worth after 5 years", netWorthAtYear(result,5),netWorthAtYear(adjustedResult,5))}
+          ${forecastRow("Net worth after 10 years", netWorthAtYear(result,10),netWorthAtYear(adjustedResult,10))}
+          </div>
+          <p class="field-help">Remaining annual cash after your choice: ${money(estimatedCashflow(adjustedResult))}. A negative result means the revised plan may require additional funding. Unallocated cash is not automatically treated as an investment.</p>
+        </div>
+      </section>`;
   }
 
   function normaliseSavedScenarioType(type = "") {
@@ -17329,7 +17362,15 @@
       const whatIfButton = event.target.closest("[data-what-if]");
       if (whatIfButton) {
         activeWhatIfId = whatIfButton.dataset.whatIf;
+        whatIfAllocation = "unallocated";
         renderOutputs();
+        return;
+      }
+
+      const allocationButton = event.target.closest("[data-what-if-allocation]");
+      if (allocationButton) {
+        whatIfAllocation = allocationButton.dataset.whatIfAllocation;
+        renderWhatIf(calculatePlan(plan));
         return;
       }
 
