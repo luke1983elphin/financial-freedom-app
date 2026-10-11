@@ -673,7 +673,7 @@
     if (["rentalNetCashIncome", "rental_net_profit", "rentalNetProfit", "rental"].includes(text)) return "rentalNetCashIncome";
     if (["distribution_income", "distributionIncome", "distributions"].includes(text)) return "distributions";
     if (["other_taxable_income", "otherTaxableIncome", "other"].includes(text)) return "other";
-    if (["interest", "dividends"].includes(text)) return text;
+    if (["interest", "dividends", "taxFree"].includes(text)) return text;
     return index < 2 ? "salaryWages" : "other";
   }
 
@@ -927,6 +927,7 @@
   }
 
   function incomeTaxableAnnualAmount(item = {}) {
+    if (normaliseIncomeType(item.type || item.incomeType) === "taxFree") return 0;
     if (item.derivedInvestmentIncome === true) return roundCurrency(item.investmentTaxableIncome);
     const type = normaliseIncomeType(item.type || item.incomeType);
     if (type === "salaryWages") return salaryCashEarningsAnnualAmount(item);

@@ -9369,7 +9369,12 @@ body.scenario-save-modal-open {
 @media(max-width:480px) { .what-if-stage { padding: 12px; } .what-if-allocations { grid-template-columns: 1fr 1fr; } }
 
 /* Simple goals and an always-visible retirement journey. */
-.retirement-goal-intro, #personalForm > .goal-optional-milestones, #personalForm > .input-grid { grid-column: 1 / -1; }
+#personalForm, #wizardGoalsForm { grid-template-columns: minmax(0, 1fr); }
+#personalForm > *, #wizardGoalsForm > * { min-width: 0; grid-column: 1 / -1; }
+#personalForm > .input-grid, #wizardGoalsForm > .input-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+}
+.goal-optional-milestones > label { display: grid; margin-top: 16px; }
 .retirement-goal-intro { max-width: 720px; }
 .retirement-goal-intro h3, .retirement-journey h3 { font-weight: 800; font-size: 1.2rem; color: var(--navy, #14304a); }
 .retirement-goal-intro p { margin: .7rem 0; }

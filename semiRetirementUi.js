@@ -120,9 +120,11 @@
     const startYear = Math.round(number(draft.projectionStartYear, currentYear()));
     const yearIndex = Math.max(0, Math.round(number(year) - startYear));
     return (draft.people || []).map((person, index) => {
-      const age = number(person.currentAge) + yearIndex;
+      const currentAge = finiteNumberOrNull(person.currentAge ?? person.age);
+      if (currentAge === null || currentAge <= 0) return "";
+      const age = currentAge + yearIndex;
       return `${person.name || `Person ${index + 1}`} age ${age}`;
-    }).join(" / ");
+    }).filter(Boolean).join(" / ");
   }
 
   function financialYearLabel(year) {
@@ -546,7 +548,7 @@
   function projectionPassiveIncomeFromPlan(plan = {}) {
     return normalisedIncomeItems(plan)
       .filter((item) => {
-        if (PASSIVE_TAXABLE_INCOME_TYPES.has(item.type)) return true;
+        if (PASSIVE_TAXABLE_INCOME_TYPES.has(item.type) || item.type === "taxFree") return true;
         return item.type === "other" && (item.isPassiveIncome === true || item.passiveIncome === true || item.isPassive === true);
       })
       .map((item, index) => {
@@ -1591,6 +1593,7 @@
       rentalTaxableIncome: "Rental taxable income",
       otherPassive: "Other passive income",
       otherTaxableIncome: "Other taxable income",
+      taxFree: "Tax-free income",
     };
     return labels[type] || String(type || "Passive income");
   }
@@ -1603,7 +1606,7 @@
       || years.find((row) => row.householdPhase === "semi-retirement")
       || years[0];
     const passiveRows = asArray(displayRow?.passiveIncome);
-    const sourceRows = ["interest", "dividends", "rentalTaxableIncome", "distributions", "otherPassive", "otherTaxableIncome"]
+    const sourceRows = ["interest", "dividends", "rentalTaxableIncome", "distributions", "otherPassive", "otherTaxableIncome", "taxFree"]
       .map((type) => ({
         type,
         label: passiveIncomeTypeLabel(type),
