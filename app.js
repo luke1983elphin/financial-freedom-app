@@ -211,6 +211,7 @@
     ["dividends", "Dividends"],
     ["distributions", "Distribution income"],
     ["other", "Other taxable income"],
+    ["taxFree", "Tax-free income"],
   ];
   const incomeTypeLabels = Object.fromEntries(incomeTypeOptions);
   const investmentLoanAssetCategoryOptions = [
@@ -5530,8 +5531,9 @@
           ${dynamicInput("incomeItems", item, "type", "Income type", { type: "select", options: incomeTypeOptions })}
           ${dynamicInput("incomeItems", item, "owner", "Income owner", { type: "select", options: incomeOwnerOptions(type) })}
           ${incomeAllocationFields(item, owner)}
-          ${dynamicInput("incomeItems", item, "amount", salaryPresentation?.label || "Gross amount", { step: "100", placeholder: type === "salaryWages" ? salaryPresentation.label : "Amount for the selected frequency" })}
+          ${dynamicInput("incomeItems", item, "amount", salaryPresentation?.label || (type === "taxFree" ? "Tax-free amount" : "Gross amount"), { step: "100", placeholder: type === "salaryWages" ? salaryPresentation.label : "Amount for the selected frequency" })}
           ${type === "salaryWages" ? salaryAnnualEquivalentHtml(item) : ""}
+          ${type === "taxFree" ? `<p class="field-help">Included in cashflow and retirement forecasts, with no income tax or employer super modelled on this amount.</p>` : ""}
           ${dynamicInput("incomeItems", item, "frequency", "Frequency", { type: "select", options: frequencies })}
           ${dividendTaxFields(item, type)}
           ${type === "other" ? dynamicInput("incomeItems", item, "isPassiveIncome", "Passive income", { type: "checkbox", infoKey: "passiveIncome" }) : ""}
@@ -8418,6 +8420,13 @@
       semiRetirementScenarioErrors = [];
       semiRetirementScenarioDirty = false;
     }
+    const savedScenario = String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:");
+    (semiRetirementScenarioDraft.people || []).forEach((person, index) => {
+      if (savedScenario && Number(person.currentAge) > 0) return;
+      const key = person.id === "person2" ? "person2" : person.id === "person1" ? "person1" : `person${index + 1}`;
+      const age = Number(plan.personal?.[`${key}Age`]);
+      if (Number.isFinite(age) && age > 0) person.currentAge = age;
+    });
     return semiRetirementScenarioDraft;
   }
 

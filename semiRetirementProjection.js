@@ -544,6 +544,7 @@
 
   function normaliseIncomeType(value) {
     const text = String(value || "").trim();
+    if (text === "taxFree") return "taxFree";
     if (["interest", "bankInterest"].includes(text)) return "interest";
     if (["dividends", "dividend", "frankedDividends"].includes(text)) return "dividends";
     if (["distributions", "distributionIncome", "distribution_income", "trustDistribution"].includes(text)) return "distributions";
@@ -593,7 +594,7 @@
       owner: normaliseIncomeOwner(item.owner || item.incomeOwner),
       shares: ownershipShares(item),
       annualCashIncome: roundCurrency(Math.max(0, number(cashSource))),
-      annualTaxableIncome: roundCurrency(Math.max(0, number(taxableSource))),
+      annualTaxableIncome: type === "taxFree" ? 0 : roundCurrency(Math.max(0, number(taxableSource))),
       annualCashGrowthRate: number(item.annualCashGrowthRate ?? item.cashGrowthRate),
       annualTaxableGrowthRate: number(item.annualTaxableGrowthRate ?? item.taxableGrowthRate),
       linkedAssetId: String(item.linkedAssetId || item.linkedPropertyAssetId || item.assetId || ""),

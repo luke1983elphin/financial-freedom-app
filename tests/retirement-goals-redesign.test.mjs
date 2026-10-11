@@ -69,3 +69,57 @@ test('Goals renders one main age and optional milestones for both normal and gui
  vm.runInNewContext(extract('renderRetirementGoals'),ctx);ctx.renderRetirementGoals('personalForm',[{path:'personal.workOptionalAge'},{path:'personal.semiRetirementAge'},{path:'personal.fullRetirementAge'},{path:'personal.targetAnnualSpending'}]);
  const html=elements.personalForm.innerHTML;assert.equal((html.match(/data-retirement-goal-age/g)||[]).length,1);assert.match(html,/<details class="goal-optional-milestones">/);assert.doesNotMatch(html,/data-path="personal.fullRetirementAge"/);assert.match(html,/data-view="semiretirement"/);
 });
+
+test('event age labels use actual partner ages and never invent age zero',()=>{
+ const d=defaults(fixture(43,41)),year=d.projectionStartYear;
+ assert.equal(U.eventAgeLabel(d,year),'Alex age 43 / Sam age 41');
+ assert.equal(U.eventAgeLabel(d,year+5),'Alex age 48 / Sam age 46');
+ assert.equal(U.eventAgeLabel({projectionStartYear:year,people:[{name:'Alex',age:43}]},year+1),'Alex age 44');
+ assert.equal(U.eventAgeLabel({projectionStartYear:year,people:[{name:'Alex',currentAge:0}]},year+1),'');
+});
+test('dirty main retirement drafts refresh read-only ages without losing one-off events',()=>{
+ const p=fixture(43,41),d=defaults(p);d.people.forEach(person=>person.currentAge=0);
+ d.scenario.oneOffLifestyleEvents=[{id:'expense',year:d.projectionStartYear+2,amountTodayDollars:5000}];
+ d.scenario.oneOffIncomeEvents=[{id:'income',year:d.projectionStartYear+3,amountTodayDollars:7000}];
+ const before=JSON.stringify(d.scenario);
+ const ctx={window:{FFSSemiRetirementUi:U},plan:p,semiRetirementScenarioDraft:d,semiRetirementScenarioDirty:true,semiRetirementScenarioSourceKey:'old',cloneScenarioDraft:clone};
+ vm.runInNewContext(extract('ensureSemiRetirementScenarioDraft'),ctx);
+ ctx.ensureSemiRetirementScenarioDraft(C.calculatePlan(p));
+ assert.deepEqual(Array.from(d.people,person=>person.currentAge),[43,41]);assert.equal(JSON.stringify(d.scenario),before);
+ assert.equal(U.eventAgeLabel(d,d.projectionStartYear+2),'Alex age 45 / Sam age 43');
+ ctx.semiRetirementScenarioSourceKey='saved-scenario:test';d.people[0].currentAge=50;
+ ctx.ensureSemiRetirementScenarioDraft(C.calculatePlan(p));assert.equal(d.people[0].currentAge,50);
+ d.people[1].currentAge=0;ctx.ensureSemiRetirementScenarioDraft(C.calculatePlan(p));assert.equal(d.people[1].currentAge,41);
+});
+test('tax-free income adds cash without changing personal tax, HELP or employer super',()=>{
+ for(const owner of ['person1','person2','joint']){
+  const p=fixture(),baseline=C.calculatePlan(p);
+  p.incomeItems.push({id:'free',name:'Tax-free income',type:'taxFree',owner,amount:500,frequency:'fortnightly',person1AllocationPercentage:70,person2AllocationPercentage:30});
+  const loaded=context.FFSPlanSchema.migrate(clone(p)).plan;
+  assert.equal(loaded.incomeItems.find(i=>i.id==='free').type,'taxFree');
+  const r=C.calculatePlan(loaded);
+  assert.equal(r.annualGrossIncome-baseline.annualGrossIncome,13000);
+  assert.equal(r.netIncomeAfterTaxHelp-baseline.netIncomeAfterTaxHelp,13000);
+  assert.equal(JSON.stringify(r.taxEstimate),JSON.stringify(baseline.taxEstimate));
+  assert.equal(r.people.person1.taxableIncome,baseline.people.person1.taxableIncome);
+  assert.equal(r.people.person2.taxableIncome,baseline.people.person2.taxableIncome);
+  assert.equal(r.helpRepaymentEstimate.annualRepayment,baseline.helpRepaymentEstimate.annualRepayment);
+  assert.equal(r.employerSuperContributions.totalCalculated,baseline.employerSuperContributions.totalCalculated);
+ }
+});
+test('tax-free income survives retirement mapping and remains untaxed after work stops',()=>{
+ const p=fixture(65,63);p.incomeItems=[{id:'free',name:'Tax-free income',type:'taxFree',owner:'joint',amount:20000,frequency:'annually',person1AllocationPercentage:70,person2AllocationPercentage:30}];
+ const d=defaults(p);d.people.forEach(person=>{person.alreadyRetired=true;person.fullRetirementAge=person.currentAge;person.semiRetirementAge=person.currentAge;});
+ const mapped=d.passiveIncome.find(i=>i.sourceIncomeId==='free');assert.equal(mapped.annualCashIncome,20000);assert.equal(mapped.annualTaxableIncome,0);assert.equal(d.household.otherAnnualIncome,0);
+ const outcome=U.runSemiRetirementProjection(E,d);assert.equal(outcome.validation.isValid,true);
+ for(const row of outcome.result.years){
+  assert.equal(row.household.totalPassiveCashIncome,20000);assert.equal(row.household.totalPassiveTaxableIncome,0);
+  assert.equal(row.people[0].totalCashIncomeBeforeTax,14000);assert.equal(row.people[1].totalCashIncomeBeforeTax,6000);
+  assert.ok(row.people.every(person=>person.totalTaxableIncome===0 && person.incomeTax===0 && person.medicareLevy===0));
+ }
+ const view=U.buildSemiRetirementResultsViewModel(outcome.result,outcome.inputs,d);
+ assert.ok(JSON.stringify(view).includes('Tax-free income'));
+ // Direct engine inputs also honor the tax-free type even if an old taxable amount is present.
+ outcome.inputs.passiveIncome[0].annualTaxableIncome=20000;
+ assert.equal(E.projectRetirementScenario(outcome.inputs).years[0].household.totalPassiveTaxableIncome,0);
+});
