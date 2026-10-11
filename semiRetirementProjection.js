@@ -756,14 +756,20 @@
     const saleCosts = roundCurrency(projectedSaleValue * Math.max(0, event.saleCostRate));
     const purchaseCosts = roundCurrency(projectedReplacementHomeValue * Math.max(0, event.purchaseCostRate));
     const linkedDebtRows = linkedHomeLoanRowsForPrincipalResidence(null, liabilityRows, homeRow.id);
-    const linkedHomeDebtRepaid = roundCurrency(linkedDebtRows.reduce((total, debt) => total + number(debt.closingBalance), 0));
+    // Reserve the replacement home and transaction costs before reducing debt.
+    const replacementHomeCashRequirement = roundCurrency(projectedReplacementHomeValue + purchaseCosts);
+    const cashAvailableForDebt = roundCurrency(Math.max(0, projectedSaleValue - saleCosts - replacementHomeCashRequirement));
+    const linkedHomeDebtBeforeDownsize = roundCurrency(linkedDebtRows.reduce((total, debt) => total + number(debt.closingBalance), 0));
+    const linkedHomeDebtRepaid = roundCurrency(Math.min(linkedHomeDebtBeforeDownsize, cashAvailableForDebt));
+    let remainingDebtRepayment = linkedHomeDebtRepaid;
 
     linkedDebtRows.forEach((debt) => {
-      const repaid = roundCurrency(number(debt.closingBalance));
+      const repaid = roundCurrency(Math.min(number(debt.closingBalance), remainingDebtRepayment));
+      remainingDebtRepayment = roundCurrency(remainingDebtRepayment - repaid);
       debt.downsizeDischargedBalance = repaid;
-      debt.closingBalance = 0;
-      debt.paidOffThisYear = debt.openingBalance > 0 || repaid > 0;
-      liabilityStates[debt.id] = 0;
+      debt.closingBalance = roundCurrency(Math.max(0, number(debt.closingBalance) - repaid));
+      debt.paidOffThisYear = debt.closingBalance === 0 && (debt.openingBalance > 0 || repaid > 0);
+      liabilityStates[debt.id] = debt.closingBalance;
       if (debt.paidOffThisYear && !debtPayoffRecorded.has(debt.id)) {
         summary.debtPayoffMilestones.push({
           liabilityId: debt.id,
@@ -777,8 +783,8 @@
       }
     });
 
+    const linkedHomeDebtRemaining = roundCurrency(linkedHomeDebtBeforeDownsize - linkedHomeDebtRepaid);
     const netSaleProceeds = roundCurrency(projectedSaleValue - saleCosts - linkedHomeDebtRepaid);
-    const replacementHomeCashRequirement = roundCurrency(projectedReplacementHomeValue + purchaseCosts);
     const netCashReleased = roundCurrency(netSaleProceeds - replacementHomeCashRequirement);
     const positiveReleasedCash = roundCurrency(Math.max(0, netCashReleased));
     let remainingReleasedCash = positiveReleasedCash;
@@ -844,6 +850,7 @@
       projectedSaleValue,
       saleCosts,
       linkedHomeDebtRepaid,
+      linkedHomeDebtRemaining,
       netSaleProceeds,
       projectedReplacementHomeValue,
       purchaseCosts,

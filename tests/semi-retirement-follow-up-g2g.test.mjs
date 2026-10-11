@@ -273,6 +273,64 @@ test("Stage G2G replacement home continues as the principal residence after down
   approxMoney(nextHome.closingValue, roundCurrency(replacementValue * 1.03));
 });
 
+test("Downsizing reserves the replacement home and carries the remaining loan forward", () => {
+  const { FFSSemiRetirementProjection: engine } = loadRuntime();
+  const result = engine.projectRetirementScenario(deterministicDownsizeInput({
+    assumptions: { principalResidenceCapitalGrowthRate: 0 },
+    accessibleInvestments: { openingBalance: 3510 },
+    household: { otherAnnualIncome: 40000 },
+    liabilities: [{
+      id: "home-loan", name: "Home loan", type: "homeLoan", linkedAssetId: "home",
+      openingBalance: 681389, annualInterestRate: 0.05, repaymentAmount: undefined,
+      repaymentFrequency: "annually", repaymentType: "interestOnly", remainingTermYears: 30,
+    }],
+    scenario: { downsizeHomeEvent: {
+      year: 2026, currentHomeSaleValueToday: 1900000, replacementHomeValueToday: 1300000,
+      allocation: "accessible-investments", downsizerContributions: { person1: 0, person2: 0 },
+    } },
+  }));
+  assert.equal(result.validation.isValid, true, JSON.stringify(result.validation.errors));
+  const row = rowForYear(result, 2026);
+  const event = row.household.downsizeHomeEvent;
+  const debt = row.liabilities.find(debt => debt.id === "home-loan");
+  approxMoney(event.linkedHomeDebtRepaid, 494000);
+  approxMoney(event.linkedHomeDebtRemaining, 187389);
+  approxMoney(debt.closingBalance, 187389);
+  assert.equal(debt.paidOffThisYear, false);
+  assert.equal(result.summary.debtPayoffMilestones.some(m => m.liabilityId === "home-loan"), false);
+  approxMoney(event.netCashReleased, 0);
+  approxMoney(event.additionalFundsRequired, 0);
+  approxMoney(event.unfundedShortfall || 0, 0);
+  approxMoney(event.accessibleWithdrawal || 0, 0);
+  const nextDebt = rowForYear(result, 2027).liabilities.find(debt => debt.id === "home-loan");
+  approxMoney(nextDebt.openingBalance, 187389);
+  approxMoney(nextDebt.interestCharged, roundCurrency(187389 * 0.05));
+});
+
+test("Downsizing caps total repayments across linked loans and leaves unrelated debt unchanged", () => {
+  const { FFSSemiRetirementProjection: engine } = loadRuntime();
+  const loan = (id, balance, linkedAssetId = "home") => ({
+    id, name: id, type: "homeLoan", linkedAssetId, openingBalance: balance,
+    annualInterestRate: 0, repaymentAmount: 0, repaymentFrequency: "annually",
+    repaymentType: "interestOnly", remainingTermYears: 30,
+  });
+  const result = engine.projectRetirementScenario(deterministicDownsizeInput({
+    assumptions: { principalResidenceCapitalGrowthRate: 0 },
+    liabilities: [loan("first", 300000), loan("second", 381389), loan("other", 100000, "")],
+    scenario: { downsizeHomeEvent: {
+      year: 2026, currentHomeSaleValueToday: 1900000, replacementHomeValueToday: 1300000,
+      allocation: "accessible-investments", downsizerContributions: { person1: 0, person2: 0 },
+    } },
+  }));
+  assert.equal(result.validation.isValid, true, JSON.stringify(result.validation.errors));
+  const row = rowForYear(result, 2026);
+  approxMoney(row.liabilities.find(d => d.id === "first").closingBalance, 0);
+  approxMoney(row.liabilities.find(d => d.id === "second").closingBalance, 187389);
+  approxMoney(row.liabilities.find(d => d.id === "other").closingBalance, 100000);
+  assert.equal(row.liabilities.find(d => d.id === "first").paidOffThisYear, true);
+  assert.equal(row.liabilities.find(d => d.id === "second").paidOffThisYear, false);
+});
+
 test("Stage G2G negative downsizing release does not manufacture cash and warns about any shortfall", () => {
   const { FFSSemiRetirementProjection: engine } = loadRuntime();
   const input = deterministicDownsizeInput({
