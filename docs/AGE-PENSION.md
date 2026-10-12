@@ -86,14 +86,15 @@ depreciation and other differing deductions are not reconstructed.
 Pension cash is added once to each recipient's cash income before the existing
 funding waterfall. Taxable pension is added once to tax and STSL income, with
 tax and MLS recalculated. The tax-exempt supplement component is excluded.
-Existing ordinary tax assumptions remain: SAPTO, pensioner Medicare thresholds
-and offset transfers are not calculated, so net pension funding can be understated.
-The [ATO SAPTO guidance](https://www.ato.gov.au/myTax25OffsetsSAPTO) requires
-rebate income, eligibility and partner-transfer information not fully represented
-by this model. The ordinary tax model also does not index future income-tax
-brackets. These limits can overstate future shortfalls even when pension and
-spending both increase at CPI. They are disclosed in Advanced assumptions and
-the returned projection assumptions; results are not precise pensioner tax advice.
+SAPTO is now included for ordinary eligible seniors when Age Pension modelling
+is enabled, with an Advanced assumptions option to exclude it. Modelled
+concessional super contributions and net investment losses are added back for
+rebate income. Unentered fringe benefits and other adjustments are assumed zero;
+exclude SAPTO if these or eligibility need specialist review. Eligible spouse
+transfers use the statutory transfer formula and recalculate the recipient's
+threshold. The offset is non-refundable and changes income tax only.
+Pensioner Medicare concessions remain unsupported, and future income-tax rules
+are held at the latest supported year without CPI indexation. See SAPTO.md.
 No pension is added to investment earnings. Reduced shortfalls flow through to
 withdrawals, balances and exhaustion. Private asset depletion does not mean
 pension ceases or all spending becomes unfunded.

@@ -2,7 +2,7 @@
   "baseline": "bd23b2a",
   "files": {
     "calculator.js": "1b1d4d9dcf6c085ea08a3eb5085fcfb294be8f2c7a1f51877c53dd9bced1234f",
-    "semiRetirementProjection.js": "667937e0c52ebe3a1376bf2de8abb30a5b0acb34a329a349e79b070ff480b230",
+    "semiRetirementProjection.js": "8b6e533e4203270ba8f13b5b1070318329ef9ee1540a4bde52014232d935dbc5",
     "semiRetirementUi.js": "0cdb98bd3aa7e99189c0c2e513661f2180ae7b2c851645b530e3adb6954dc65d",
     "v2-data.js": "935fb66f828874f0ccc267d99d611a47113a85315cb983e45ff49390a84d8baa",
     "storage.js": "c85374d3b59ad306de5d3657d8ff44c12eb69c1f4d4e1b71228656228a4ff58d",
@@ -17,7 +17,7 @@
     "weekly-plan.js": "0aaf2710b38adbacba8b9abf12fa6e9e2e42f42138c017de053237cde481bcb5",
     "trust-readiness.js": "cef502262c2e3281dc17711f9b4b8aeebf78081b744080a4c808c263fbf938a4",
     "api/ai-insights.js": "4655a2038cbddd4c7bf8547b31d63fd2f8c59227fd7df094dac37152b41e5d30",
-    "agePensionEstimate.js": "a3f28120e6c2fd71a92469176c5a66f8be22d1633b56fb6304aeb2e48e0dc64c"
+    "agePensionEstimate.js": "9f5d57f2c527b41e758dfb0592bceaeb364f1d197737611fcdf5759c25284003"
   },
   "appFunctions": {
     "storageGetItem": "f9ce7d6d5ddc7b5609a30943066fd784328d32064b0b2ce42e390792558a4f0c",
@@ -503,13 +503,13 @@
     "renderSemiRetirementPropertyCard": "93599bdc0dd4fc3db1d99e08ce78481c9a0c7550bdcd53289c2c388f40de8eed",
     "renderSemiRetirementDebtPropertyHtml": "c395d82492151ec11c828c1a492b11dc11d134ebd9dcbb25624b2fb2645bb94c",
     "semiRetirementDetailRows": "c82b30c0477c1e16a6d58225004693105e5f9d28c01c21d9862b5e64572b5115",
-    "renderSemiRetirementAnnualDetailHtml": "f3277e6347fbbeffe1a501f2ecf19c6f3688ffdd1015a89b7806dc009c6759c2",
+    "renderSemiRetirementAnnualDetailHtml": "a8e9125dd2ef781bf4415534a5d79306fe9a02fb9f767248cb1c2ef5ea5c1da6",
     "renderSemiRetirementAnnualProjectionHtml": "60d827b5062bc9810fac512dfe9bc7c3c5c49251dfafafd2b9ed95ddac3dc04e",
     "renderSemiRetirementAssumptionsHtml": "5a6418aad62d266dd836ee35eef20c14d24a65e2f37d9cc59dc5255f2fb50b7a",
     "renderSemiRetirementWarningsHtml": "c4220c2d3d0bae77514b15f72adba882efa97cfc2653d74500dafca69fcd0234",
     "renderSemiRetirementDisclosureHtml": "d6927c28c17cc857625d1a706aeee1e4ecb87b0216c7b217bbbcdf4213ad9cae",
     "renderSemiRetirementScenarioResultHtml": "4914553650e0ce22127fb6bbd3eecfbd4f5a8ca21062806689958ef4d051ceb7",
-    "renderSemiRetirementScenario": "bb6b5224ee3cd05bb8e183f284d69e6e098f6a46c2cc28a4d1dc7f3b87808112",
+    "renderSemiRetirementScenario": "46b82ec1a65fa85fda5adfb29ac15b22a17df9ff72485a7c33b9c1019ef54e4c",
     "renderDecision": "dde7b6a51e36e3d63590e995620ddd189d17364a666a2f28afdaccf231806b99",
     "updateSemiRetirementDraftFromInput": "c17cf716f6647e99b3d580a9738ed5110d2cd11ff9f4e08dca89346bdee7e4fd",
     "clearSemiRetirementComparisonState": "e37368478db9b8caab727b20f35096672b1c76843218a2754dbc1bb6efcff3fd",
@@ -981,6 +981,37 @@
         "mergedMainHash": "d2e3e9ef42d441d6ea35491c3b93abd94a7421cfc0c10b750340545a3da5c4cb",
         "approvedHash": "d2e3e9ef42d441d6ea35491c3b93abd94a7421cfc0c10b750340545a3da5c4cb",
         "reason": "Previously merged behavior on main"
+      }
+    ]
+  },
+  "saptoRevision": {
+    "date": "2026-10-13",
+    "base": "df61e9eccdccf48e66120dca9ed9d62e8a8ffe78",
+    "reason": "User-requested SAPTO implementation; all prior guards and numerical fixtures retained",
+    "changes": [
+      {
+        "group": "files",
+        "key": "semiRetirementProjection.js",
+        "previousHash": "667937e0c52ebe3a1376bf2de8abb30a5b0acb34a329a349e79b070ff480b230",
+        "approvedHash": "8b6e533e4203270ba8f13b5b1070318329ef9ee1540a4bde52014232d935dbc5"
+      },
+      {
+        "group": "files",
+        "key": "agePensionEstimate.js",
+        "previousHash": "a3f28120e6c2fd71a92469176c5a66f8be22d1633b56fb6304aeb2e48e0dc64c",
+        "approvedHash": "9f5d57f2c527b41e758dfb0592bceaeb364f1d197737611fcdf5759c25284003"
+      },
+      {
+        "group": "appFunctions",
+        "key": "renderSemiRetirementAnnualDetailHtml",
+        "previousHash": "f3277e6347fbbeffe1a501f2ecf19c6f3688ffdd1015a89b7806dc009c6759c2",
+        "approvedHash": "a8e9125dd2ef781bf4415534a5d79306fe9a02fb9f767248cb1c2ef5ea5c1da6"
+      },
+      {
+        "group": "appFunctions",
+        "key": "renderSemiRetirementScenario",
+        "previousHash": "bb6b5224ee3cd05bb8e183f284d69e6e098f6a46c2cc28a4d1dc7f3b87808112",
+        "approvedHash": "46b82ec1a65fa85fda5adfb29ac15b22a17df9ff72485a7c33b9c1019ef54e4c"
       }
     ]
   }

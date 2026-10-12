@@ -10429,6 +10429,7 @@
               { label: "Taxable income before modelled concessional contributions", value: semiRetirementMoney(person.taxableIncomeBeforeModelledConcessionalContributions ?? person.totalTaxableIncome) },
               { label: "Modelled concessional contribution taxable-income reduction", value: semiRetirementMoney(person.modelledConcessionalContributionTaxableIncomeReduction) },
               { label: "Total taxable income", value: semiRetirementMoney(person.totalTaxableIncome) },
+              ...(person.sapto ? [{ label: "SAPTO applied (tax reduction)", value: semiRetirementMoney(person.sapto.applied) }, { label: "SAPTO rebate income", value: semiRetirementMoney(person.sapto.rebateIncome) }] : []),
               { label: "Income tax", value: semiRetirementMoney(person.incomeTax) },
               { label: "Medicare", value: semiRetirementMoney(person.medicareLevy) },
               { label: "Medicare Levy Surcharge", value: semiRetirementMoney(person.medicareLevySurcharge) },
@@ -10791,7 +10792,8 @@
             <details class="mt-3" data-semi-detail-state="agePensionAdvanced"${semiRetirementDetailsOpenAttr("agePensionAdvanced")}>
               <summary>Advanced assumptions</summary>
               <p class="field-help">Base rules: 20 September 2026. Deeming rates stay at 1.75% / 3.75%; tapers, pension age, Energy Supplement and Work Bonus stay fixed. Your home is excluded; savings and eligible super are assessed.</p>
-              <p class="field-help">SAPTO and pensioner Medicare concessions are not modelled. Estimated after-tax income may be understated and funding shortfalls overstated.</p>
+              <p class="field-help">SAPTO is estimated from age 67, including eligible spouse transfers. Australian tax residency and ordinary eligibility are assumed, with no unentered fringe benefits or other rebate-income adjustments. Tax rules are held at the last supported year, without CPI indexation. Pensioner Medicare concessions are not modelled, so after-tax income may be understated.</p>
+              <label class="toggle-field mt-3"><input type="checkbox" data-semi-input="scenario.agePension.excludeSapto" data-semi-type="checkbox"${draft.scenario?.agePension?.excludeSapto ? " checked" : ""}> Exclude SAPTO (eligibility or rebate income needs review)</label>
             <label class="toggle-field mt-3"><input type="checkbox" data-semi-input="scenario.agePension.incomeStreamSuper" data-semi-type="checkbox"${draft.scenario?.agePension?.incomeStreamSuper ? " checked" : ""}> Super under age 67 pays an account-based pension</label>
             <p class="field-help">Otherwise younger partner super is assumed to stay in accumulation, with lump-sum withdrawals. Older or defined-benefit income streams need specialist assessment.</p>
             <label class="toggle-field mt-3"><input type="checkbox" data-semi-input="scenario.agePension.unsupported" data-semi-type="checkbox"${draft.scenario?.agePension?.unsupported ? " checked" : ""}> Complex circumstances apply (trusts, companies, gifting, overseas residence or other income streams)</label>

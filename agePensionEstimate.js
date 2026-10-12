@@ -102,5 +102,57 @@
       hasComplexCentrelinkAssets: unsupported || assets.some(asset => /trust|company|business/i.test(asset.type)) }, rates),
       assessableAssets, assessableAnnualIncome, deemedAnnualIncome, financialAssets, rates };
   }
-  global.FFSAgePension = Object.freeze({ RATES, INDEXED_THRESHOLDS, validateRates, ratesForProjectionYear, deemedIncome, estimateAnnualPension, assessProjectionYear });
+  // Income Tax Assessment (1936 Act) Regulations 2025, ss 9–12.
+  // The $445, $37,000 and 1.5% constants are statutory SAPTO formula inputs,
+  // not the current LITO. Do not replace them with current LITO settings.
+  function saptoThreshold(base, financialYear) {
+    const config = global.FFSCalculator.resolveFinancialYearConfig(financialYear).config;
+    if (!config) throw new Error("Unsupported SAPTO tax year.");
+    const [, first, second] = config.taxBrackets;
+    let threshold = first.threshold + (445 + base) / first.rate;
+    if (threshold > 37000) threshold = (first.threshold * first.rate + 445 + base
+      + 37000 * (0.015 + second.rate - first.rate)) / (0.015 + second.rate);
+    return Math.ceil(threshold);
+  }
+  function estimateSapto(people, financialYear) {
+    if (!Array.isArray(people) || people.length < 1 || people.length > 2) throw new Error("SAPTO requires one or two people.");
+    const partnered = people.length === 2, base = partnered ? 1602 : 2230;
+    const threshold = saptoThreshold(base, financialYear);
+    const cutoff = Math.ceil(threshold + base / 0.125);
+    const rows = people.map(person => {
+      const taxableIncome = positive(person.taxableIncome);
+      const rebateIncome = round(taxableIncome + positive(person.reportableSuperContributions)
+        + positive(person.netInvestmentLoss) + positive(person.adjustedFringeBenefits));
+      const tax = global.FFSCalculator.individualTaxBreakdown(taxableIncome, { financialYear });
+      return { taxableIncome, rebateIncome, eligible: person.eligible === true, tax,
+        baseRebate: base, transferredBaseReceived: 0, transferredBaseGiven: 0, baseReduction: 0 };
+    });
+    const combined = rows.reduce((sum, row) => sum + row.rebateIncome, 0);
+    for (const row of rows) row.eligible = row.eligible && (partnered ? combined < 2 * cutoff : row.rebateIncome < cutoff);
+    if (partnered && rows.every(row => row.eligible)) {
+      for (const [index, donor] of rows.entries()) {
+        const receiver = rows[1 - index];
+        // Transfer changes the recipient's base AND rebate threshold. It is
+        // not simply their spouse's offset remaining after LITO.
+        if (donor.tax.incomeTaxBeforeOffsets < base && receiver.rebateIncome > threshold) {
+          const transfer = round(Math.max(0, base - Math.max(0, donor.taxableIncome - 6000) * 0.15));
+          donor.transferredBaseGiven = transfer;
+          donor.baseReduction = round(base - donor.tax.incomeTaxBeforeOffsets);
+          receiver.transferredBaseReceived = transfer;
+        }
+      }
+    }
+    return rows.map(row => {
+      const adjustedBase = row.baseRebate + row.transferredBaseReceived - row.baseReduction;
+      const adjustedThreshold = saptoThreshold(adjustedBase, financialYear);
+      const entitlement = row.eligible ? round(Math.max(0, adjustedBase - Math.max(0, row.rebateIncome - adjustedThreshold) * 0.125)) : 0;
+      const applied = round(Math.min(row.tax.incomeTax, entitlement));
+      return { eligible: row.eligible, rebateIncome: row.rebateIncome, combinedRebateIncome: combined,
+        entitlement, applied, transferredBaseReceived: row.transferredBaseReceived,
+        transferredBaseGiven: row.transferredBaseGiven, rebateThreshold: adjustedThreshold,
+        individualCutoff: cutoff, incomeTaxBeforeSapto: row.tax.incomeTax,
+        incomeTax: round(Math.max(0, row.tax.incomeTax - applied)) };
+    });
+  }
+  global.FFSAgePension = Object.freeze({ RATES, INDEXED_THRESHOLDS, validateRates, ratesForProjectionYear, deemedIncome, estimateAnnualPension, assessProjectionYear, saptoThreshold, estimateSapto });
 })(globalThis);
