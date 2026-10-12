@@ -2183,7 +2183,10 @@
     const depletion = (field, milestone, withdrawal) => {
       const canonical = milestone?.calendarYear && rows.find(row => row.calendarYear === milestone.calendarYear);
       if (canonical) return { ...point(canonical), alreadyZero: false };
-      const depleted = rows.find(row => Number(row.household[field]) === 0 && Number(row.household[withdrawal]) > 0);
+      const depleted = rows.find((row, index) => Number(row.household[field]) === 0 && (
+        Number(row.household[withdrawal]) > 0
+        || (index > 0 && Number(rows[index - 1].household[field]) > 0)
+      ));
       if (depleted) return { ...point(depleted), alreadyZero: false };
       if (full && Number(full.household[field]) === 0) return { ...point(full), alreadyZero: true };
       if (rows.every(row => Number(row.household[field]) === 0)) return { ...point(rows[0]), alreadyZero: true };

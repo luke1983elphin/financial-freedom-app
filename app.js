@@ -8970,7 +8970,17 @@
 
   function semiRetirementAccessibleLastLabel(viewModel) {
     const accessible = viewModel.longevity?.accessibleFundsExhausted;
-    if (!accessible?.calendarYear) return semiRetirementProjectionEndLabel(viewModel);
+    if (!accessible?.calendarYear) {
+      const depletion = window.FFSSemiRetirementUi?.buildSavedRetirementOutcome?.(viewModel)?.accessibleExhaustion;
+      if (depletion) {
+        const ages = depletion.ages || [];
+        return {
+          value: depletion.alreadyZero ? "None available" : semiRetirementFirstAgeLabel(ages),
+          note: `${depletion.calendarYear}${ages.length ? ` - ${semiRetirementAgeList(ages)}` : ""}${depletion.alreadyZero ? ". No accessible investments at this point." : ""}`,
+        };
+      }
+      return semiRetirementProjectionEndLabel(viewModel);
+    }
     const ages = milestoneAgesFromObject(accessible, viewModel.people);
     return {
       value: semiRetirementFirstAgeLabel(ages),
