@@ -32,8 +32,38 @@ test('asset and income tests select lower, zero entitlement and non-homeowner',(
  assert.equal(estimate({homeowner:false,assessableAssets:600000}).annualPension,32180.2);
 });
 test('deeming uses verified tiers not investment return',()=>{
- assert.equal(P.deemedIncome(66800,false),835); assert.equal(P.deemedIncome(166800,false),4085);
- assert.equal(P.deemedIncome(110600,true),1382.5); assert.equal(P.deemedIncome(210600,true),4632.5);
+ assert.equal(P.deemedIncome(66800,false),1169); assert.equal(P.deemedIncome(166800,false),4919);
+ assert.equal(P.deemedIncome(110600,true),1935.5); assert.equal(P.deemedIncome(210600,true),5685.5);
+});
+
+test('annual CPI compounds monetary rates and thresholds, leaving fixed policy parameters unchanged',()=>{
+ const base=JSON.stringify(P.RATES), future=P.ratesForProjectionYear(2036,0.025);
+ const cents=n=>Math.round(n*100)/100;
+ for(const key of P.INDEXED_THRESHOLDS) assert.equal(future[key],cents(P.RATES[key]*1.025**10),key);
+ for(const suffix of ['Single','CoupleEach']) for(const prefix of ['maximumAnnual','taxExemptAnnual']) {
+   const energy=P.RATES['energyAnnual'+suffix];
+   assert.equal(future[prefix+suffix],cents((P.RATES[prefix+suffix]-energy)*1.025**10+energy));
+ }
+ for(const key of ['deemingLowerRate','deemingUpperRate','incomeTaperSingle','incomeTaperCoupleEach','annualAssetTaperPerThousandSingle','annualAssetTaperPerThousandCoupleEach','energyAnnualSingle','energyAnnualCoupleEach','workBonusAnnual','pensionAge']) assert.equal(future[key],P.RATES[key],key);
+ for(const [year,cpi] of [[2026,0.025],[2040,0],[2040,-0.02]]) for(const [key,value] of Object.entries(P.RATES)) assert.equal(P.ratesForProjectionYear(year,cpi)[key],value,key);
+ assert.equal(JSON.stringify(P.RATES),base);
+ assert.ok(Object.isFrozen(future));
+ assert.throws(()=>P.ratesForProjectionYear(2030,NaN));
+});
+
+test('future means tests are recalculated, including new eligibility; pension is not merely multiplied',()=>{
+ const future=P.ratesForProjectionYear(2027,0.10);
+ // A $760,000 homeowner has no pension in 2026 but qualifies in 2027.
+ const assets={person1Age:68,homeowner:true,assessableAssets:760000,assessableAnnualIncome:0};
+ assert.equal(P.estimateAnnualPension(assets).annualPension,0);
+ assert.equal(future.maximumAnnualSingle,35361.56);
+ assert.equal(future.assetFreeAreaSingleHomeowner,366300);
+ assert.equal(P.estimateAnnualPension(assets,future).annualPension,4652.96);
+ const income={...assets,assessableAssets:0,assessableAnnualIncome:20000};
+ assert.equal(future.incomeFreeAreaSingleAnnual,6463.60);
+ assert.equal(P.estimateAnnualPension(income,future).annualPension,28593.36);
+ assert.notEqual(P.estimateAnnualPension(income,future).annualPension,Math.round(P.estimateAnnualPension(income).annualPension*1.1*100)/100);
+ assert.equal(P.deemedIncome(173480,false,future),5035.9);
 });
 const assessment=overrides=>P.assessProjectionYear({people:[{age:67,openingSuperBalance:100000,grossEmploymentIncome:0},{age:63,openingSuperBalance:800000,grossEmploymentIncome:0}],assets:[{id:'home',type:'home',openingValue:2000000}],liabilities:[],accessibleBalance:50000,...overrides});
 test('younger accumulation super exempt; income stream and age 67 assessed',()=>{
@@ -69,6 +99,30 @@ test('depletion reassessed annually and pension continues after private assets e
  const empty=E.projectRetirementScenario(input(0));
  assert.ok(empty.years[0].household.estimatedAgePension>0);
  assert.ok(empty.years[0].household.unmetRequiredLifestyleSpending>0);
+});
+
+test('projection CPI drives future pension cash once, and spending shortfall milestones remain consistent',()=>{
+ const i=input(0);i.inflationRate=0.025;
+ i.household.fullRetirementLifestyleSpending=25000;
+ const on=E.projectRetirementScenario(i),off=E.projectRetirementScenario({...i,scenario:{...i.scenario,agePension:{enabled:false}}});
+ assert.equal(on.validation.isValid,true);
+ assert.equal(off.summary.firstUnfundedSpendingYear,2026);
+ assert.equal(on.summary.firstUnfundedSpendingYear,null);
+ for(const [index,row] of on.years.entries()) {
+   const pension=row.household.estimatedAgePension;
+   assert.equal(row.household.agePension.rates.projectionYear,row.calendarYear);
+   assert.equal(row.household.agePension.rates.annualIndexationRate,0.025);
+   assert.equal(pension,Math.round(((32180.2-366.6)*1.025**index+366.6)*100)/100);
+   assert.equal(Math.round((row.people[0].totalCashIncomeBeforeTax-off.years[index].people[0].totalCashIncomeBeforeTax)*100),Math.round(pension*100));
+   assert.equal(row.household.unmetRequiredLifestyleSpending,0);
+ }
+ const costly=input(0);costly.inflationRate=0.025;costly.household.fullRetirementLifestyleSpending=28000;
+ const shortfall=E.projectRetirementScenario(costly);
+ assert.equal(shortfall.summary.firstUnfundedSpendingYear,2049);
+ assert.equal(shortfall.summary.firstUnfundedSpendingYear,shortfall.years.find(y=>y.household.unmetRequiredLifestyleSpending>0).calendarYear);
+ assert.equal(shortfall.summary.withoutAgePension.firstUnfundedYear,2026);
+ assert.match(on.assumptions.agePension,/not a legislative forecast/);
+ assert.match(on.assumptions.agePension,/SAPTO and pensioner Medicare concessions not modelled/);
 });
 test('downsizing released cash assessed in same year, replacement home exempt',()=>{
  const i=input(100000);i.scenario.downsizeHomeEvent={enabled:true,year:2026,currentHomeSaleValueToday:900000,replacementHomeValueToday:400000,saleCostRate:0,purchaseCostRate:0,allocation:'accessible-investments'};

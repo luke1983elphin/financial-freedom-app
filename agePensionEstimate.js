@@ -7,19 +7,48 @@
   const RATES = Object.freeze({
     effectiveFrom: "2026-09-20", verifiedOn: "2026-10-13", pensionAge: 67,
     maximumAnnualSingle: 1237.70 * 26, maximumAnnualCoupleEach: 933 * 26,
-    taxExemptAnnualSingle: (88.20 - 30.70 + 14.10) * 26,
-    taxExemptAnnualCoupleEach: (66.50 - 25.30 + 10.60) * 26,
+    energyAnnualSingle: 14.10 * 26, energyAnnualCoupleEach: 10.60 * 26,
+    taxExemptAnnualSingle: round((88.20 - 30.70 + 14.10) * 26),
+    taxExemptAnnualCoupleEach: round((66.50 - 25.30 + 10.60) * 26),
     assetFreeAreaSingleHomeowner: 333000, assetFreeAreaSingleNonHomeowner: 600000,
     assetFreeAreaCoupleHomeowner: 499000, assetFreeAreaCoupleNonHomeowner: 766000,
     annualAssetTaperPerThousandSingle: 78, annualAssetTaperPerThousandCoupleEach: 39,
     incomeFreeAreaSingleAnnual: 226 * 26, incomeFreeAreaCoupleAnnual: 396 * 26,
     incomeTaperSingle: 0.5, incomeTaperCoupleEach: 0.25,
     deemingThresholdSingle: 66800, deemingThresholdCouple: 110600,
-    deemingLowerRate: 0.0125, deemingUpperRate: 0.0325, workBonusAnnual: 300 * 26,
+    deemingLowerRate: 0.0175, deemingUpperRate: 0.0375, workBonusAnnual: 300 * 26,
   });
+  // Only these monetary thresholds are indexed. Percentages, tapers, age,
+  // Energy Supplement and Work Bonus are fixed policy parameters.
+  const INDEXED_THRESHOLDS = Object.freeze([
+    "assetFreeAreaSingleHomeowner", "assetFreeAreaSingleNonHomeowner",
+    "assetFreeAreaCoupleHomeowner", "assetFreeAreaCoupleNonHomeowner",
+    "incomeFreeAreaSingleAnnual", "incomeFreeAreaCoupleAnnual",
+    "deemingThresholdSingle", "deemingThresholdCouple",
+  ]);
   function validateRates(rates) {
     if (!rates?.effectiveFrom || Object.keys(RATES).some(key => typeof RATES[key] === "number"
       && (!Number.isFinite(rates[key]) || rates[key] < 0))) throw new Error("A dated, complete Age Pension rate schedule is required.");
+  }
+  function ratesForProjectionYear(calendarYear, annualIndexationRate, base = RATES) {
+    validateRates(base);
+    if (!Number.isInteger(calendarYear) || !Number.isFinite(annualIndexationRate) || annualIndexationRate < -1) {
+      throw new Error("Age Pension indexation requires a calendar year and finite scenario CPI.");
+    }
+    const years = Math.max(0, calendarYear - Number(base.effectiveFrom.slice(0, 4)));
+    // No nominal reductions. This annual CPI proxy is not the statutory
+    // March/September CPI/PBLCI and wages benchmark or July threshold rounding.
+    const rate = Math.max(0, annualIndexationRate);
+    const factor = (1 + rate) ** years;
+    const projected = { ...base, projectionYear: calendarYear, annualIndexationRate: rate, indexationYears: years };
+    for (const key of INDEXED_THRESHOLDS) projected[key] = round(base[key] * factor);
+    for (const suffix of ["Single", "CoupleEach"]) {
+      const energy = base[`energyAnnual${suffix}`];
+      projected[`maximumAnnual${suffix}`] = round((base[`maximumAnnual${suffix}`] - energy) * factor + energy);
+      projected[`taxExemptAnnual${suffix}`] = round((base[`taxExemptAnnual${suffix}`] - energy) * factor + energy);
+    }
+    validateRates(projected);
+    return Object.freeze(projected);
   }
   function deemedIncome(financialAssets, partnered, rates = RATES) {
     validateRates(rates);
@@ -53,9 +82,10 @@
   }
   const isHome = asset => ["home", "principalResidence", "principal_residence"].includes(asset.type);
   function assessProjectionYear({ people, assets, liabilities, accessibleBalance, otherIncome = 0, rentalIncome = 0,
-    incomeStreamSuper = false, unsupported = false }) {
+    incomeStreamSuper = false, unsupported = false, calendarYear = 2026, annualIndexationRate = 0 }) {
+    const rates = ratesForProjectionYear(calendarYear, annualIndexationRate);
     const partnered = people.length === 2;
-    const superAssets = people.reduce((sum, person) => sum + (person.age >= RATES.pensionAge || incomeStreamSuper
+    const superAssets = people.reduce((sum, person) => sum + (person.age >= rates.pensionAge || incomeStreamSuper
       ? positive(person.openingSuperBalance) + positive(person.downsizerSuperContribution) : 0), 0);
     const financialAssets = positive(accessibleBalance) + superAssets;
     // The aggregate accessible balance already includes cash, offsets and investments.
@@ -63,14 +93,14 @@
       .reduce((sum, asset) => sum + Math.max(0, positive(asset.openingValue)
         - liabilities.filter(debt => debt.linkedAssetId === asset.id).reduce((n, debt) => n + positive(debt.openingBalance), 0)), 0);
     const employmentIncome = people.reduce((sum, person) => sum + Math.max(0, positive(person.grossEmploymentIncome)
-      - (person.age >= RATES.pensionAge ? RATES.workBonusAnnual : 0)), 0);
-    const deemedAnnualIncome = deemedIncome(financialAssets, partnered);
+      - (person.age >= rates.pensionAge ? rates.workBonusAnnual : 0)), 0);
+    const deemedAnnualIncome = deemedIncome(financialAssets, partnered, rates);
     const assessableAssets = round(financialAssets + otherAssets);
     const assessableAnnualIncome = round(deemedAnnualIncome + employmentIncome + positive(otherIncome) + positive(rentalIncome));
     return { ...estimateAnnualPension({ partnered, person1Age: people[0]?.age, person2Age: people[1]?.age,
       homeowner: assets.some(isHome), assessableAssets, assessableAnnualIncome,
-      hasComplexCentrelinkAssets: unsupported || assets.some(asset => /trust|company|business/i.test(asset.type)) }),
-      assessableAssets, assessableAnnualIncome, deemedAnnualIncome, financialAssets };
+      hasComplexCentrelinkAssets: unsupported || assets.some(asset => /trust|company|business/i.test(asset.type)) }, rates),
+      assessableAssets, assessableAnnualIncome, deemedAnnualIncome, financialAssets, rates };
   }
-  global.FFSAgePension = Object.freeze({ RATES, validateRates, deemedIncome, estimateAnnualPension, assessProjectionYear });
+  global.FFSAgePension = Object.freeze({ RATES, INDEXED_THRESHOLDS, validateRates, ratesForProjectionYear, deemedIncome, estimateAnnualPension, assessProjectionYear });
 })(globalThis);

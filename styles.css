@@ -9383,3 +9383,11 @@ body.scenario-save-modal-open {
 .retirement-journey ol { margin-top: 1rem; padding-left: 1.5rem; }
 .retirement-journey li { padding: .5rem 0; }
 .retirement-journey small { display: block; color: #526579; margin-top: .25rem; }
+
+/* Compact pension figures remain available on phones as well as desktop. */
+.age-pension-table-wrap { max-width: 100%; max-height: 22rem; overflow: auto; }
+.age-pension-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.age-pension-table caption { text-align: left; padding: .5rem 0; font-size: .8rem; color: #475569; }
+.age-pension-table th, .age-pension-table td { padding: .4rem .65rem; border-bottom: 1px solid #e2e8f0; text-align: left; }
+.age-pension-table td, .age-pension-table th:last-child { text-align: right; }
+.age-pension-table thead { position: sticky; top: 0; background: white; }

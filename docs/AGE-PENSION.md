@@ -8,9 +8,19 @@ fields and preserves the original calculation path.
 ## Dated rules
 
 Verified 13 October 2026; normal domestic rates effective 20 September 2026.
-Amounts are annualised using 26 fortnights. Future rates, thresholds and deeming
-rates are held fixed in nominal dollars: **no assumed future indexation**. This is
-a conservative scenario assumption, not a prediction of future government rates.
+Amounts are annualised using 26 fortnights. Future basic pension, Pension
+Supplement, asset/income free areas and deeming balance thresholds compound at
+the scenario CPI rate, once for each calendar year after 2026. Each year's
+underlying schedule is indexed **before** the assets and income tests are run.
+This can change eligibility; it does not simply multiply a prior pension result.
+Energy Supplement, Work Bonus, deeming percentages, taper rates and pension age
+remain fixed. Negative CPI does not reduce pension rates or thresholds. Amounts
+are rounded to cents. Zero CPI holds the schedule constant.
+
+This is a projection assumption, not a legislative forecast. Actual pension
+indexation occurs in March/September, uses CPI/PBLCI and a wages benchmark;
+thresholds have their own dates and statutory rounding. The annual CPI proxy
+does not attempt to forecast those indices, ministerial decisions or legislation.
 Current rates are also used for the first annual 2026 projection period, rather
 than retrospectively prorating the financial year. Reverify this schedule before
 using a future release as a current entitlement calculator.
@@ -25,7 +35,9 @@ using a future release as a current entitlement calculator.
 | Income taper | 50% | 25% each eligible person |
 | Deeming lower-tier balance | $66,800 | $110,600 combined |
 
-Deeming rates are 1.25% below the tier and 3.25% above it. The regular Work Bonus
+Deeming rates are **1.75% below the tier and 3.75% above it**, effective
+20 September 2026, confirmed by Services Australia and the Australian Government
+Actuary's record of the ministerial determination. The regular Work Bonus
 is annualised as $7,800 against each pension-age person's employment income.
 No opening credit, banking or uneven fortnightly earnings are assumed.
 
@@ -34,6 +46,9 @@ Sources:
 - [Assets test](https://www.servicesaustralia.gov.au/assets-test-for-age-pension?context=22526)
 - [Income test](https://www.servicesaustralia.gov.au/income-test-for-age-pension?context=22526)
 - [Deeming](https://www.servicesaustralia.gov.au/deeming?context=22526)
+- [AGA September 2026 deeming determination](https://aga.gov.au/publications/deeming-rate-recommendation-september-2026)
+- [DSS pension indexation provisions](https://guides.dss.gov.au/social-security-guide/5/1/8/50)
+- [DSS indexation register](https://www.dss.gov.au/income-support-payments/social-security-indexation)
 - [Superannuation and younger partners](https://www.servicesaustralia.gov.au/superannuation?context=22526)
 - [Work Bonus](https://www.servicesaustralia.gov.au/how-work-bonus-works?context=22561)
 - [DSS assets taper](https://guides.dss.gov.au/social-security-guide/4/2/3)
@@ -73,6 +88,12 @@ funding waterfall. Taxable pension is added once to tax and STSL income, with
 tax and MLS recalculated. The tax-exempt supplement component is excluded.
 Existing ordinary tax assumptions remain: SAPTO, pensioner Medicare thresholds
 and offset transfers are not calculated, so net pension funding can be understated.
+The [ATO SAPTO guidance](https://www.ato.gov.au/myTax25OffsetsSAPTO) requires
+rebate income, eligibility and partner-transfer information not fully represented
+by this model. The ordinary tax model also does not index future income-tax
+brackets. These limits can overstate future shortfalls even when pension and
+spending both increase at CPI. They are disclosed in Advanced assumptions and
+the returned projection assumptions; results are not precise pensioner tax advice.
 No pension is added to investment earnings. Reduced shortfalls flow through to
 withdrawals, balances and exhaustion. Private asset depletion does not mean
 pension ceases or all spending becomes unfunded.
@@ -90,11 +111,14 @@ The regression fixture records SHA-256 hashes of the **entire original engine
 result** at PR head `b904d6182ca8029476dc98c35ffee5a974c3da00` for 30 fixed
 households. Each is tested with both omitted and explicitly disabled options.
 The unit suite covers means tests, mixed ages, super, home loans, deeming,
-depletion, downsizing, funding, tax and unsupported cases. Run:
+depletion, downsizing, funding, tax, compounded indexation, fixed parameters,
+new future eligibility, shortfall milestones and unsupported cases. Specialist
+checkboxes are under collapsed Advanced assumptions. Annual results use a
+scrollable two-column table, with future-dollar and before-tax labels. Run:
 
 ```
 node scripts/run-tests.mjs
-pnpm run syntax
+pnpm run verify
 node --test tests/age-pension-browser.mjs
 ```
 

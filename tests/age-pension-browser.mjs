@@ -90,8 +90,9 @@ async function evaluate(expression) {
 }
 
 async function key(key, modifiers = 0) {
-  await cdp.send("Input.dispatchKeyEvent", { type: "keyDown", key, modifiers });
-  await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key, modifiers });
+  const code = key === 'Enter' ? { code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, text: '\r', unmodifiedText: '\r' } : {};
+  await cdp.send("Input.dispatchKeyEvent", { type: "keyDown", key, modifiers, ...code });
+  await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key, modifiers, ...code });
 }
 
 async function navigate() {
@@ -156,16 +157,31 @@ after(async () => {
 
 
 for (const width of [1366, 375]) test('Age Pension browser placement and interaction at '+width+'px', async () => {
+  await evaluate('localStorage.clear(); sessionStorage.clear()');
+  await navigate();
   await cdp.send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<600});
   await evaluate("FFSStage1BrowserTestHooks.setPlan(FFS_DATA.samplePlans[1].plan,'semiretirement')");
   await waitFor(()=>evaluate(`Boolean(document.querySelector('[data-semi-input="scenario.agePension.enabled"]'))`));
   const state=await evaluate(`(()=>{const pension=document.querySelector('[data-semi-detail-state="agePension"]'); const down=document.querySelector('[data-semi-detail-state="downsizeHome"]');const setting=[...document.querySelectorAll('h4')].find(x=>x.textContent==='Projection settings'); return {collapsed:!pension.open, checked:pension.querySelector('input').checked, ordered:!!(pension.compareDocumentPosition(setting)&Node.DOCUMENT_POSITION_FOLLOWING), width:document.documentElement.scrollWidth,viewport:innerWidth};})()`);
   assert.equal(state.collapsed,true); assert.equal(state.checked,false); assert.equal(state.ordered,true);
+  assert.ok(await evaluate(`(()=>{const pension=document.querySelector('[data-semi-detail-state="agePension"]');const down=document.querySelector('[data-semi-detail-state="downsizeHome"]');const advanced=pension.querySelector('[data-semi-detail-state="agePensionAdvanced"]');return pension.previousElementSibling===down && !advanced.open && advanced.querySelectorAll('input[type="checkbox"]').length===2;})()`));
   assert.ok(state.width<=state.viewport+1,JSON.stringify(state));
   await evaluate(`document.querySelector('[data-semi-detail-state="agePension"] summary').click();document.querySelector('[data-semi-input="scenario.agePension.enabled"]').click();document.querySelector('[data-semi-action="calculate"]').click();`);
   await waitFor(()=>evaluate(`document.body.textContent.includes('Before-tax pension over this projection')`));
   assert.equal(await evaluate(`document.querySelector('[data-semi-input="scenario.agePension.enabled"]').checked`),true);
   assert.ok(await evaluate(`document.body.textContent.includes('without. First unfunded year without pension:')`));
+  const table=await evaluate(`(()=>{const table=document.querySelector('.age-pension-table');return {caption:table.caption.textContent,rows:table.tBodies[0].rows.length,columns:table.tHead.rows[0].cells.length,collapsed:!table.closest('details').open,advancedCollapsed:!document.querySelector('[data-semi-detail-state="agePensionAdvanced"]').open};})()`);
+  assert.match(table.caption,/before tax, in future dollars/);assert.ok(table.rows>20);assert.equal(table.columns,2);assert.equal(table.collapsed,true);assert.equal(table.advancedCollapsed,true);
+  await evaluate(`(()=>{const table=document.querySelector('.age-pension-table');let ancestor=table.parentElement;while(ancestor){if(ancestor.tagName==='DETAILS'&&ancestor!==table.closest('details'))ancestor.open=true;ancestor=ancestor.parentElement;}table.closest('details').querySelector('summary').focus();})()`);
+  await key('Enter');
+  await waitFor(()=>evaluate("document.querySelector('.age-pension-table').closest('details').open"));
+  assert.ok(await evaluate(`document.querySelector('.age-pension-table').getBoundingClientRect().width>0 && document.querySelector('.age-pension-table').closest('details').open`));
+  assert.ok(await evaluate(`document.documentElement.scrollWidth<=innerWidth+1`));
+  await evaluate(`document.querySelector('[data-semi-detail-state="agePensionAdvanced"] summary').click();document.querySelector('[data-semi-input="scenario.agePension.unsupported"]').click();document.querySelector('[data-semi-action="calculate"]').click();`);
+  assert.ok(await evaluate(`document.querySelector('.age-pension-table tbody').textContent.includes('Not estimated')`));
+  await evaluate(`document.querySelector('[data-semi-input="scenario.agePension.unsupported"]').click()`);
   await evaluate(`document.querySelector('[data-semi-input="scenario.agePension.enabled"]').click();document.querySelector('[data-semi-action="calculate"]').click();`);
   assert.equal(await evaluate(`document.body.textContent.includes('Before-tax pension over this projection')`),false);
+  assert.equal(await evaluate(`Boolean(document.querySelector('.age-pension-table'))`),false);
+  assert.deepEqual(browserMessages,[],'no browser errors or warnings');
 });

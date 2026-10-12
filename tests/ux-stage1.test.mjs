@@ -1,3 +1,4 @@
+import { workspaceNavigation, PRIMARY_NAVIGATION, MORE_NAVIGATION } from './helpers/workspace-navigation.mjs';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {readFileSync} from 'node:fs';
@@ -10,25 +11,27 @@ const extract=name=>{const start=source.indexOf('  function '+name+'(');assert.o
 const summaryTile=(label,value)=>`<dt>${label}</dt><dd>${value}</dd>`;
 function renderer(values={}) {
   const ctx={summaryTile,semiRetirementScenarioResult:null,semiRetirementScenarioDraft:{},semiRetirementScenarioResultDraft:null,semiRetirementScenarioInputs:{},window:{},money:n=>`$${n}`,plainPercent:n=>`${n}%`,...values};
-  vm.runInNewContext(['dashboardRetirementHtml','dashboardSimplifiedHtml','dashboardSnapshotHtml'].map(extract).join('\n'),ctx);
+  vm.runInNewContext(['dashboardRetirementHtml','dashboardSimplifiedHtml','dashboardSnapshotHtml','dashboardMissionHtml','dashboardJourneyHtml'].map(extract).join('\n'),ctx);
   return ctx;
 }
 test('five primary choices preserve all ten existing destination IDs',()=>{
-  const nav=html.slice(html.indexOf('id="sideNav"'),html.indexOf('</nav>',html.indexOf('id="sideNav"')));
-  assert.deepEqual([...nav.slice(0,nav.indexOf('<details')).matchAll(/data-view="(.*?)"/g)].map(m=>m[1]),['dashboard','setup','decision','semiretirement']);
-  assert.match(nav,/<summary class="nav-more-toggle">More<\/summary>/);
-  assert.deepEqual([...nav.slice(nav.indexOf('<details')).matchAll(/data-view="(.*?)"/g)].map(m=>m[1]),['investments','super','goals','weeklyplan','reports','scenarios']);
+  const {nav,primary,more}=workspaceNavigation(html);
+  assert.deepEqual(primary,PRIMARY_NAVIGATION);
+  assert.deepEqual(more,MORE_NAVIGATION);
+  assert.ok(nav.includes('<summary class="nav-more-toggle">More tools <span aria-hidden="true">⌄</span></summary>'));
   for(const view of ['dashboard','setup','decision','semiretirement','investments','super','goals','weeklyplan','reports','scenarios']) assert.match(html,new RegExp(`data-view-panel="${view}"`));
 });
 test('dashboard hierarchy replaces only the AI card, retaining AI code and weekly mission access',()=>{
   const ctx=renderer({dashboardSnapshotHtml:()=>'',dashboardFutureYouHtml:()=>''});
   const output=ctx.dashboardSimplifiedHtml({},{readyState:{readyForPersonalisedResults:false}});
-  assert.match(output,/data-view="decision">Try a change/);
-  assert.match(output,/data-view="semiretirement">Explore retirement plan/);
+  assert.match(output,/Weekly Mission/);
+  assert.match(output,/data-engagement-action="setup">Continue Setup/);
+  assert.match(output,/Your Journey/);
   assert.doesNotMatch(output,/AI coaching|dashboard-ai-card/);
   assert.match(source,/function dashboardAiCoachHtml/);
   assert.match(html,/id="dashboardWeeklyMission"/);
-  assert.match(extract('renderDashboardSimplified'),/dashboardMissionHtml/);
+  assert.match(extract('dashboardSimplifiedHtml'),/dashboardMissionHtml/);
+  assert.match(extract('renderDashboardSimplified'),/dashboardSimplifiedHtml/);
 });
 test('snapshot displays only supplied current values and offers financial details',()=>{
   const output=renderer().dashboardSnapshotHtml({currentNetWorth:123,accessibleFiAssets:45},{readyForPersonalisedResults:true},67,89,999);
@@ -56,7 +59,7 @@ test('Future You keeps its age input and every existing output',()=>{
 test('exact parity for full results across nine deterministic financial fixtures',()=>{
   assert.equal(verify().numericalDifferences,0);
 });
-test('protected models, data, persistence and non-presentation app functions remain unchanged',()=>{
+test('protected models, data, persistence and app functions match the audited approved revision',()=>{
   const guard=JSON.parse(readFileSync(new URL('fixtures/ux-stage1-protected.json',import.meta.url)));
   const hash=s=>createHash('sha256').update(s).digest('hex');
   for(const [file,expected] of Object.entries(guard.files)) assert.equal(hash(readFileSync(new URL('../'+file,import.meta.url),'utf8').replaceAll('\r\n','\n')),expected,file);

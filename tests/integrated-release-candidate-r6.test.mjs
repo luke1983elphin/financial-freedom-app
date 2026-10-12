@@ -1,3 +1,4 @@
+import { workspaceNavigation, PRIMARY_NAVIGATION, MORE_NAVIGATION } from './helpers/workspace-navigation.mjs';
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -103,12 +104,10 @@ test("R6 sample plans keep accessible investments, super and debt separately cla
 test("R6 release candidate exposes the complete navigation and export inventory", () => {
   const html = read("index.html");
   const app = read("app.js");
-  for (const [view, label] of [
-    ["dashboard", "Dashboard"], ["setup", "My Plan"], ["investments", "Investments"],
-    ["super", "Super"], ["goals", "Goals"], ["decision", "Future"],
-    ["semiretirement", "Retirement"], ["reports", "Reports"],
-    ["scenarios", "Saved Scenarios"], ["weeklyplan", "Weekly Plan"],
-  ]) assert.match(html, new RegExp(`data-view="${view}"[^>]*>${label}`));
+  const nav=workspaceNavigation(html);
+  assert.deepEqual(nav.primary,PRIMARY_NAVIGATION);
+  assert.deepEqual(nav.more,MORE_NAVIGATION);
+  for (const item of nav.items) assert.ok(html.includes('data-view-panel="'+item.split(':')[0]+'"'));
   assert.match(app, /Export comparison PDF/);
   assert.match(html, /Export complete backup/);
   assert.match(html, /id="weeklyPlanBackupExportButton">Export backup/);

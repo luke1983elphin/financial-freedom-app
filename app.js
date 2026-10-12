@@ -10501,7 +10501,20 @@
     const pensionRows = rows.filter(row => row.household?.agePension);
     return `
       ${viewModel.agePensionComparison ? `<p class="field-help">End-of-projection investments and super: ${semiRetirementMoney(viewModel.agePensionComparison.withPensionEndAssets)} with estimated pension; ${semiRetirementMoney(viewModel.agePensionComparison.totalInvestableAssetsAtEndAge)} without. First unfunded year without pension: ${viewModel.agePensionComparison.firstUnfundedYear ?? "none in projection"}.</p>` : ""}
-      ${pensionRows.length ? `<section class="semi-retirement-results-section"><h4>Estimated Age Pension</h4><p>Before-tax pension over this projection: ${semiRetirementMoney(pensionRows.reduce((sum, row) => sum + Number(row.household.estimatedAgePension || 0), 0))}. Pension supports spending after private savings are depleted; private savings exhaustion and unfunded spending are different milestones.</p><details><summary>Annual pension estimates</summary><ul>${pensionRows.map(row => `<li>${escapeHtml(String(row.calendarYear))}: ${row.household.agePension.unsupported ? "Not estimated — complex circumstances" : semiRetirementMoney(row.household.estimatedAgePension)}</li>`).join("")}</ul></details></section>` : ""}
+      ${pensionRows.length ? `
+        <section class="semi-retirement-results-section">
+          <h4>Estimated Age Pension</h4>
+          <p>${pensionRows.some(row => row.household.agePension.unsupported) ? "No pension is included where circumstances are unsupported." : `Before-tax pension over this projection: ${semiRetirementMoney(pensionRows.reduce((sum, row) => sum + Number(row.household.estimatedAgePension || 0), 0))}.`} Private savings exhaustion and unfunded spending are different milestones.</p>
+          <details class="mt-3"><summary>Annual pension estimates</summary>
+            <div class="age-pension-table-wrap" role="region" aria-label="Annual Age Pension estimates" tabindex="0">
+              <table class="age-pension-table">
+                <caption>Projected annual pension before tax, in future dollars</caption>
+                <thead><tr><th scope="col">Year</th><th scope="col">Estimated pension</th></tr></thead>
+                <tbody>${pensionRows.map(row => `<tr><th scope="row">${escapeHtml(String(row.calendarYear))}</th><td>${row.household.agePension.unsupported ? "Not estimated" : semiRetirementMoney(row.household.estimatedAgePension)}</td></tr>`).join("")}</tbody>
+              </table>
+            </div>
+          </details>
+        </section>` : ""}
       <details class="semi-retirement-results-section semi-retirement-annual-projection">
         <summary>
           <span><strong>Year-by-Year Projection</strong><small>${rows.length} annual periods from the projection engine output</small></span>
@@ -10774,11 +10787,16 @@
           <details class="semi-retirement-input-details mt-4" data-semi-detail-state="agePension"${semiRetirementDetailsOpenAttr("agePension")}>
             <summary>Age Pension</summary>
             <label class="toggle-field mt-4"><input type="checkbox" data-semi-input="scenario.agePension.enabled" data-semi-type="checkbox"${draft.scenario?.agePension?.enabled === true ? " checked" : ""} aria-describedby="age-pension-help"> Include estimated Australian Age Pension</label>
-            <p id="age-pension-help" class="field-help">Indicative estimate from age 67, assuming Australian residence and normal eligibility. Uses 20 September 2026 rates held fixed, with no future indexation. Reassessed annually. Your home is excluded; savings and eligible super are assessed. Pensioner tax concessions are not modelled, so available income may be understated.</p>
+            <p id="age-pension-help" class="field-help">Indicative estimate from age 67, assuming residency and normal eligibility. Pension rates and thresholds grow with scenario CPI (${escapeHtml(String(Math.max(0, Number(draft.assumptions?.inflationRatePct) || 0)))}% a year), then eligibility is reassessed. This is a projection assumption, not a legislative forecast.</p>
+            <details class="mt-3" data-semi-detail-state="agePensionAdvanced"${semiRetirementDetailsOpenAttr("agePensionAdvanced")}>
+              <summary>Advanced assumptions</summary>
+              <p class="field-help">Base rules: 20 September 2026. Deeming rates stay at 1.75% / 3.75%; tapers, pension age, Energy Supplement and Work Bonus stay fixed. Your home is excluded; savings and eligible super are assessed.</p>
+              <p class="field-help">SAPTO and pensioner Medicare concessions are not modelled. Estimated after-tax income may be understated and funding shortfalls overstated.</p>
             <label class="toggle-field mt-3"><input type="checkbox" data-semi-input="scenario.agePension.incomeStreamSuper" data-semi-type="checkbox"${draft.scenario?.agePension?.incomeStreamSuper ? " checked" : ""}> Super under age 67 pays an account-based pension</label>
             <p class="field-help">Otherwise younger partner super is assumed to stay in accumulation, with lump-sum withdrawals. Older or defined-benefit income streams need specialist assessment.</p>
             <label class="toggle-field mt-3"><input type="checkbox" data-semi-input="scenario.agePension.unsupported" data-semi-type="checkbox"${draft.scenario?.agePension?.unsupported ? " checked" : ""}> Complex circumstances apply (trusts, companies, gifting, overseas residence or other income streams)</label>
             <p class="field-help">If selected, no pension is included. Rent Assistance, transitional rates, illness-separated couples and Work Bonus bank balances are not modelled. <a href="https://www.servicesaustralia.gov.au/age-pension" target="_blank" rel="noopener noreferrer">Check eligibility with Services Australia</a>.</p>
+            </details>
           </details>
           <p class="field-help mt-3">For global assumptions used elsewhere in the app, update the main Financial Plan assumptions. These assumptions apply only to this scenario and do not change your main Financial Plan.</p>
         </section>

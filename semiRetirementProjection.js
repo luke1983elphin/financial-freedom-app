@@ -2189,6 +2189,7 @@
       if (normalised.scenario.agePension?.enabled === true) {
         if (!global.FFSAgePension) throw new Error("Age Pension estimator is unavailable.");
         agePension = global.FFSAgePension.assessProjectionYear({
+          calendarYear, annualIndexationRate: normalised.inflationRate,
           people: peopleYear, assets: assetRows, liabilities: liabilityRows,
           accessibleBalance: Math.max(0, accessibleOpening + unallocatedSurplusBalance
             + oneOffIncomeAccessibleContribution + number(downsizeHomeEvent.accessibleInvestmentContribution)
@@ -2829,7 +2830,7 @@
       const without = projectRetirementScenario({ ...inputs, scenario: { ...inputs.scenario, agePension: { enabled: false } } });
       summary.withoutAgePension = { totalInvestableAssetsAtEndAge: without.summary.totalInvestableAssetsAtEndAge,
         firstUnfundedYear: without.years.find(row => row.household.unmetRequiredLifestyleSpending > 0)?.calendarYear ?? null };
-      assumptions.agePension = "Indicative domestic normal rates dated 20 September 2026, held fixed in nominal dollars (no future indexation). Annual opening balances, plus same-year downsizing and lump sums. Younger partner super assumed accumulation unless income-stream option selected. Residency and other eligibility assumed, not verified. Ordinary tax model; SAPTO and pensioner Medicare concessions not modelled.";
+      assumptions.agePension = `Indicative domestic normal rates dated 20 September 2026. Future basic pension, Pension Supplement and means-test thresholds grow annually at scenario CPI (${Math.max(0, normalised.inflationRate) * 100}%), then each year's means tests are recalculated. Deeming percentages, tapers, Energy Supplement, Work Bonus and pension age stay fixed. Annual CPI indexation is a projection assumption, not a legislative forecast. Annual opening balances include same-year downsizing and lump sums. Younger partner super assumed accumulation unless income-stream option selected. Residency and other eligibility assumed, not verified. Ordinary tax model; SAPTO and pensioner Medicare concessions not modelled, so after-tax funding may be understated and shortfalls overstated.`;
       assumptions.limitations = assumptions.limitations.map(text => text.replace("No Age Pension, ", "No "));
     }
     const result = {

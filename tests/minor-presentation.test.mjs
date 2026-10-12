@@ -6,7 +6,7 @@ import {load} from '../scripts/fi-cashflow-fixture.mjs';
 import {investmentReturnFixture} from '../scripts/investment-return-fixture.mjs';
 const {CALC}=load();
 const source=readFileSync(new URL('../app.js',import.meta.url),'utf8');
-const names=['investmentYieldDisplay','dynamicInput','linkedSetupInput','infoButtonHtml','summaryTile','agePensionExclusionHtml','modellingCopy','modellingInformationHtml','renderAssumptions','renderSetupSummary','renderWizardResults','dashboardFutureMetricsHtml'];
+const names=['estimatedCashflow','investmentYieldDisplay','dynamicInput','linkedSetupInput','infoButtonHtml','summaryTile','agePensionExclusionHtml','modellingCopy','modellingInformationHtml','renderAssumptions','renderSetupSummary','renderWizardResults','dashboardFutureMetricsHtml'];
 const code=names.map(name=>{const a=source.indexOf('  function '+name+'(');assert.ok(a>=0,name);return source.slice(a,source.indexOf('\n  function ',a+5));}).join('\n');
 const copyStart=source.indexOf('  const goalInfoCopy =');
 const copyCode=source.slice(copyStart,source.indexOf('\n  };',copyStart)+5)+'\nthis.copy=goalInfoCopy;';
