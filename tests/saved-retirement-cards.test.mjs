@@ -114,3 +114,27 @@ test('new and legacy snapshots still compare their common saved balances',()=>{
  const fresh={scenarioType:'retirement',keyResultSnapshot:outcome().snapshot};
  for(const [a,b] of [[legacy,fresh],[fresh,legacy]]){const html=ctx.scenarioComparisonRows(a,b);assert.match(html,/\$123/);assert.match(html,/\$456/);assert.match(html,/Super at full retirement/);}
 });
+
+vm.runInNewContext(functions(['milestoneAgesFromObject','semiRetirementFirstAgeLabel','semiRetirementProjectionEndLabel','semiRetirementAccessibleLastLabel']),ctx);
+test('retirement snapshot does not report age 90+ when accessible investments are already zero',()=>{
+ const {view,result}=outcome(i=>{
+  i.accessibleInvestments.openingBalance=0;
+  i.assets.push({id:'caravan',name:'Caravan',type:'vehicle',openingValue:150000,annualGrowthRate:0});
+ });
+ assert.equal(result.summary.accessibleFundsExhausted.calendarYear,null);
+ const label=ctx.semiRetirementAccessibleLastLabel(view);
+ assert.equal(label.value,'None available');assert.match(label.note,/No accessible investments/);
+ assert.ok(view.retainedAssets.assets.some(a=>a.name==='Home'));
+ assert.ok(view.retainedAssets.assets.some(a=>a.name==='Caravan'));
+ assert.ok(result.summary.firstUnfundedSpending.calendarYear);
+});
+test('retirement snapshot reports the depletion age even when its summary milestone is missing',()=>{
+ const {view}=outcome();view.longevity.accessibleFundsExhausted=null;
+ const row=view.annualRows.find(r=>r.household.closingAccessibleInvestmentBalance===0 && r.household.totalAccessibleWithdrawal>0);
+ const label=ctx.semiRetirementAccessibleLastLabel(view);
+ assert.equal(label.value,`Age ${row.people[0].age}`);assert.ok(label.note.startsWith(String(row.calendarYear)));
+});
+test('retirement snapshot retains age 90+ when accessible investments remain funded',()=>{
+ const {view}=outcome(i=>{i.accessibleInvestments.openingBalance=5000000;});
+ assert.equal(ctx.semiRetirementAccessibleLastLabel(view).value,'Age 90+');
+});
