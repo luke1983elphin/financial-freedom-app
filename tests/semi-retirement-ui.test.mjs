@@ -1,3 +1,4 @@
+import { workspaceNavigation, PRIMARY_NAVIGATION, MORE_NAVIGATION } from './helpers/workspace-navigation.mjs';
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -1516,41 +1517,30 @@ test("Stage F1-H current and comparison projections remain identical for identic
 });
 
 test("Stage G1 Plan Workspace navigation uses the simplified order", () => {
-  const navSnippet = sourceBetween(indexSource, '<div class="grid gap-1" id="sideNav">', "</nav>");
-  const items = [...navSnippet.matchAll(/data-view="([^"]+)"[^>]*>([^<]+)</g)].map((match) => `${match[1]}:${match[2].trim()}`);
-  assert.deepEqual(items, [
-    "dashboard:Dashboard",
-    "setup:My Plan",
-    "decision:Future",
-    "semiretirement:Retirement",
-    "investments:Investments",
-    "super:Super",
-    "goals:Goals",
-    "weeklyplan:Weekly Plan",
-    "reports:Reports",
-    "scenarios:Saved Scenarios",
-  ]);
-  assert.match(navSnippet, /data-view="setup"[^>]*id="setupNavButton"[^>]*>My Plan<\/button>/);
+  const {nav:navSnippet,primary,more}=workspaceNavigation(indexSource);
+  assert.deepEqual(primary,PRIMARY_NAVIGATION);
+  assert.deepEqual(more,MORE_NAVIGATION);
+  assert.match(navSnippet, /data-view="setup"[^>]*id="setupNavButton"[\s\S]*?<span>My Plan<\/span><\/button>/);
   assert.doesNotMatch(navSnippet, /Setup Wizard/);
   assert.match(indexSource, /data-view-panel="setup"/);
-  assert.match(appSource, /button\.textContent = "My Plan"/);
+  assert.match(appSource, /const label = button\.querySelector\("span"\); if \(label\) label\.textContent = "My Plan"/);
 });
 
 test("Stage G2 AI Coach is removed from Plan Workspace navigation but AI feature remains available", () => {
-  const navSnippet = sourceBetween(indexSource, '<div class="grid gap-1" id="sideNav">', "</nav>");
+  const navSnippet = workspaceNavigation(indexSource).nav;
   assert.doesNotMatch(navSnippet, /AI Coach|data-view="ai/i);
   assert.match(appSource, /function openAiInsights/);
   assert.match(appSource, /data-ai-insights-card/);
 });
 
 test("Stage G3 Retirement Planning nav label keeps the existing page heading", () => {
-  assert.match(indexSource, /data-view="semiretirement"[^>]*>Retirement<\/button>/);
+  assert.ok(workspaceNavigation(indexSource).primary.includes("semiretirement:Retirement"));
   assert.match(indexSource, /<h2>Retirement Plan<\/h2>/);
-  assert.match(appSource, /button\.textContent = "Retirement"/);
+  assert.doesNotMatch(appSource.slice(appSource.indexOf("function updateSemiRetirementNavigation()"), appSource.indexOf("function optionsHtml(")), /textContent\s*=/);
 });
 
 test("Stage G4 Decision Engine presents opportunities with details collapsed", () => {
-  assert.match(indexSource, /Scenario comparisons/);
+  assert.match(indexSource, /Compare financial approaches/);
   const snippet = sourceBetween(appSource, "function renderDecision", "function updateSemiRetirementDraftFromInput");
   assert.match(snippet, /\[\.\.\.result\.decisionOptions\]\.sort/);
   assert.match(snippet, /Potential tax benefit/);
@@ -1563,7 +1553,8 @@ test("Stage G4 Decision Engine presents opportunities with details collapsed", (
 });
 
 test("Stage G5 Quick What-Ifs and custom scenario controls are progressively disclosed", () => {
-  assert.match(indexSource, /<h3>Quick What-Ifs<\/h3>/);
+  assert.match(indexSource, /<h3>Try a change to your plan<\/h3>/);
+  assert.match(indexSource, /id="whatIfActions"/);
   assert.match(indexSource, /Saving stores a separate scenario without changing your Financial Plan/);
   assert.match(indexSource, /<details class="card mt-6 decision-accordion" id="customScenarioDetails">/);
   assert.doesNotMatch(indexSource, /<details class="card mt-6 decision-accordion" id="customScenarioDetails" open>/);

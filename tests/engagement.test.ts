@@ -1,3 +1,4 @@
+import { workspaceNavigation, PRIMARY_NAVIGATION, MORE_NAVIGATION } from './helpers/workspace-navigation.mjs';
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -145,10 +146,9 @@ test("weekly plan keeps live balance check inside completion step only", () => {
 });
 
 test("workspace navigation includes the prominent dashboard destinations", () => {
-  assert.match(indexSource, /data-view="dashboard">Dashboard/);
-  assert.match(indexSource, /data-view="weeklyplan">Weekly Plan/);
-  assert.match(indexSource, /data-view="investments">Investments/);
-  assert.match(indexSource, /data-view="goals">Goals/);
+  const nav=workspaceNavigation(indexSource);
+  assert.deepEqual(nav.primary,PRIMARY_NAVIGATION);
+  assert.deepEqual(nav.more,MORE_NAVIGATION);
   assert.doesNotMatch(indexSource, /data-view="ai"|>AI Coach<\/button>/);
   assert.match(appSource, /data-engagement-action="ai">Ask a Question/);
   assert.match(appSource, /data-engagement-action="ai">See Full Insight/);
