@@ -1,4 +1,7 @@
-# Age Pension verification — 13 October 2026
+# PR #33 Age Pension verification — 13 October 2026
+
+Historical release record. The subsequent SAPTO implementation and updated tax
+assumptions are documented in SAPTO.md.
 
 ## Baseline comparison
 

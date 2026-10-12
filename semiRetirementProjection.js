@@ -2211,9 +2211,17 @@
             person.stslRepaymentIncome = stslRepaymentIncomeForPerson(person.totalTaxableIncome, person.modelledTaxReducingConcessionalContribution);
           });
           const pensionMls = calculateMls(peopleYear, normalised, financialYear);
+          const sapto = global.FFSAgePension.estimateSapto(peopleYear.map(person => ({
+            eligible: person.age >= 67 && normalised.scenario.agePension.excludeSapto !== true,
+            taxableIncome: person.totalTaxableIncome,
+            reportableSuperContributions: person.modelledTaxReducingConcessionalContribution,
+            netInvestmentLoss: Math.max(0, -person.rentalTaxableIncome)
+              + Math.max(0, -(person.interestIncome + person.dividendIncome + person.distributionIncome)),
+          })), financialYear);
           peopleYear.forEach((person, index) => {
             const tax = CALC.individualTaxBreakdown(person.totalTaxableIncome, { financialYear });
-            person.incomeTax = roundCurrency(tax.incomeTax);
+            person.sapto = sapto[index];
+            person.incomeTax = sapto[index].incomeTax;
             person.medicareLevy = roundCurrency(tax.medicareLevy);
             person.medicareLevySurcharge = roundCurrency(index === 0 ? pensionMls.person1Surcharge : pensionMls.person2Surcharge);
             person.stslRepayment = roundCurrency(Math.min(person.stslOpeningBalance, estimateStslRepayment(person.stslRepaymentIncome, person.stslOpeningBalance)));
@@ -2574,7 +2582,7 @@
           age: person.age,
           employmentPhase: person.employmentPhase,
           superAccessAge: person.superAccessAge,
-          ...(agePension ? { estimatedAgePension: person.estimatedAgePension || 0, taxableAgePension: person.taxableAgePension || 0 } : {}),
+          ...(agePension ? { estimatedAgePension: person.estimatedAgePension || 0, taxableAgePension: person.taxableAgePension || 0, ...(person.sapto ? { sapto: person.sapto } : {}) } : {}),
           grossEmploymentIncome: roundCurrency(person.grossEmploymentIncome),
           employmentIncome: roundCurrency(person.employmentIncome),
           interestIncome: person.interestIncome,
@@ -2830,7 +2838,7 @@
       const without = projectRetirementScenario({ ...inputs, scenario: { ...inputs.scenario, agePension: { enabled: false } } });
       summary.withoutAgePension = { totalInvestableAssetsAtEndAge: without.summary.totalInvestableAssetsAtEndAge,
         firstUnfundedYear: without.years.find(row => row.household.unmetRequiredLifestyleSpending > 0)?.calendarYear ?? null };
-      assumptions.agePension = `Indicative domestic normal rates dated 20 September 2026. Future basic pension, Pension Supplement and means-test thresholds grow annually at scenario CPI (${Math.max(0, normalised.inflationRate) * 100}%), then each year's means tests are recalculated. Deeming percentages, tapers, Energy Supplement, Work Bonus and pension age stay fixed. Annual CPI indexation is a projection assumption, not a legislative forecast. Annual opening balances include same-year downsizing and lump sums. Younger partner super assumed accumulation unless income-stream option selected. Residency and other eligibility assumed, not verified. Ordinary tax model; SAPTO and pensioner Medicare concessions not modelled, so after-tax funding may be understated and shortfalls overstated.`;
+      assumptions.agePension = `Indicative domestic normal rates dated 20 September 2026. Future basic pension, Pension Supplement and means-test thresholds grow annually at scenario CPI (${Math.max(0, normalised.inflationRate) * 100}%), then each year's means tests are recalculated. Deeming percentages, tapers, Energy Supplement, Work Bonus and pension age stay fixed. Annual CPI indexation is a projection assumption, not a legislative forecast. Annual opening balances include same-year downsizing and lump sums. Younger partner super assumed accumulation unless income-stream option selected. Residency and other eligibility assumed, not verified. SAPTO applies from age 67 under assumed ordinary eligibility unless excluded, including modelled reportable super and investment-loss add-backs and eligible spouse transfers. No unentered fringe benefits or other rebate-income adjustments assumed. SAPTO uses enacted tax-year formulas, not CPI indexation. Pensioner Medicare concessions remain unmodelled; after-tax funding may be understated.`;
       assumptions.limitations = assumptions.limitations.map(text => text.replace("No Age Pension, ", "No "));
     }
     const result = {
