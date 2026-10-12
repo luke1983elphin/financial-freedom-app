@@ -1128,6 +1128,7 @@
         };
       }),
       scenario: {
+        ...(draft.scenario?.agePension?.enabled === true ? { agePension: { ...draft.scenario.agePension } } : {}),
         oneOffLifestyleEvents: normaliseOneOffLifestyleEvents(draft.scenario?.oneOffLifestyleEvents),
         oneOffIncomeEvents: normaliseOneOffIncomeEvents(draft.scenario?.oneOffIncomeEvents),
         plannedConcessionalContributions: normalisePlannedConcessionalContributions(draft.scenario?.plannedConcessionalContributions),
@@ -2165,6 +2166,7 @@
       },
       passiveIncome,
       debtProperty,
+      ...(summary.withoutAgePension ? { agePensionComparison: { ...summary.withoutAgePension, withPensionEndAssets: summary.totalInvestableAssetsAtEndAge } } : {}),
       annualRows,
       assumptions: {
         rows: buildAssumptionRows(projection, inputs),

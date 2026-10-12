@@ -1,6 +1,7 @@
 export const DEFAULT_SUITE_TIMEOUT_MS = 120_000;
 
 export const ACTIVE_TEST_SUITES = [
+  { id: "age-pension", file: "tests/age-pension.test.mjs", groups: ["all", "mjs", "semi-retirement"] },
   { id: "retirement-goals-redesign", file: "tests/retirement-goals-redesign.test.mjs", groups: ["all", "mjs", "semi-retirement"] },
   { id: "ux-stage1", file: "tests/ux-stage1.test.mjs", groups: ["all", "mjs", "presentation"] },
   { id: "future-you-default", file: "tests/future-you-default.test.mjs", groups: ["all", "mjs", "presentation"] },
@@ -57,6 +58,8 @@ export const ACTIVE_TEST_SUITES = [
 ];
 
 export const SYNTAX_CHECK_FILES = [
+  "agePensionEstimate.js",
+  "tests/age-pension.test.mjs",
   "app.js",
   "security.js",
   "api/ai-insights.js",

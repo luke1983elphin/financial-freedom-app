@@ -1,0 +1,1610 @@
+{
+  "commit": "b904d6182ca8029476dc98c35ffee5a974c3da00",
+  "cases": [
+    {
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 90,
+        "inflationRate": 0.025,
+        "household": {
+          "currentLifestyleSpending": 55000,
+          "semiRetirementLifestyleSpending": 50000,
+          "fullRetirementLifestyleSpending": 45000,
+          "otherAnnualIncome": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 0,
+          "annualReturnRate": 0.04,
+          "annualFeesRate": 0.003
+        },
+        "people": [
+          {
+            "id": "person1",
+            "currentAge": 45,
+            "currentGrossEmploymentIncome": 100000,
+            "semiRetirementAge": 60,
+            "fullRetirementAge": 65,
+            "superAccessAge": 60,
+            "openingSuperBalance": 0,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "assets": [
+          {
+            "id": "home",
+            "type": "home",
+            "value": 900000,
+            "includeInNetWorth": true,
+            "annualGrowthRate": 0.03
+          }
+        ],
+        "scenario": {
+          "workingPhaseSurplusDestination": "accessible-investments",
+          "surplusDestination": "enjoyment"
+        }
+      },
+      "sha256": "51db32469df92592273c980773c60410fc9397326696b8853972970cdf3f5fc8"
+    },
+    {
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 90,
+        "inflationRate": 0.025,
+        "household": {
+          "currentLifestyleSpending": 55000,
+          "semiRetirementLifestyleSpending": 50000,
+          "fullRetirementLifestyleSpending": 45000,
+          "otherAnnualIncome": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 250000,
+          "annualReturnRate": 0.04,
+          "annualFeesRate": 0.003
+        },
+        "people": [
+          {
+            "id": "person1",
+            "currentAge": 45,
+            "currentGrossEmploymentIncome": 100000,
+            "semiRetirementAge": 60,
+            "fullRetirementAge": 65,
+            "superAccessAge": 60,
+            "openingSuperBalance": 125000,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "assets": [
+          {
+            "id": "home",
+            "type": "home",
+            "value": 900000,
+            "includeInNetWorth": true,
+            "annualGrowthRate": 0.03
+          }
+        ],
+        "scenario": {
+          "workingPhaseSurplusDestination": "accessible-investments",
+          "surplusDestination": "enjoyment"
+        }
+      },
+      "sha256": "dd8a0d61253c343ea5dc184dfb56d6d75e596bc298aa7f91ee8b8d329740e842"
+    },
+    {
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 90,
+        "inflationRate": 0.025,
+        "household": {
+          "currentLifestyleSpending": 55000,
+          "semiRetirementLifestyleSpending": 50000,
+          "fullRetirementLifestyleSpending": 45000,
+          "otherAnnualIncome": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 1200000,
+          "annualReturnRate": 0.04,
+          "annualFeesRate": 0.003
+        },
+        "people": [
+          {
+            "id": "person1",
+            "currentAge": 45,
+            "currentGrossEmploymentIncome": 100000,
+            "semiRetirementAge": 60,
+            "fullRetirementAge": 65,
+            "superAccessAge": 60,
+            "openingSuperBalance": 600000,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "assets": [
+          {
+            "id": "home",
+            "type": "home",
+            "value": 900000,
+            "includeInNetWorth": true,
+            "annualGrowthRate": 0.03
+          }
+        ],
+        "scenario": {
+          "workingPhaseSurplusDestination": "accessible-investments",
+          "surplusDestination": "enjoyment"
+        }
+      },
+      "sha256": "8d8e4ab76e4b6b5f9eefbe2131f1186726e489bc2ed143744062bf92f3dc15cd"
+    },
+    {
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 90,
+        "inflationRate": 0.025,
+        "household": {
+          "currentLifestyleSpending": 55000,
+          "semiRetirementLifestyleSpending": 50000,
+          "fullRetirementLifestyleSpending": 45000,
+          "otherAnnualIncome": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 0,
+          "annualReturnRate": 0.04,
+          "annualFeesRate": 0.003
+        },
+        "people": [
+          {
+            "id": "person1",
+            "currentAge": 45,
+            "currentGrossEmploymentIncome": 100000,
+            "semiRetirementAge": 60,
+            "fullRetirementAge": 65,
+            "superAccessAge": 60,
+            "openingSuperBalance": 0,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          },
+          {
+            "id": "person2",
+            "currentAge": 41,
+            "currentGrossEmploymentIncome": 100000,
+            "semiRetirementAge": 60,
+            "fullRetirementAge": 65,
+            "superAccessAge": 60,
+            "openingSuperBalance": 0,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "assets": [
+          {
+            "id": "home",
+            "type": "home",
+            "value": 900000,
+            "includeInNetWorth": true,
+            "annualGrowthRate": 0.03
+          }
+        ],
+        "scenario": {
+          "workingPhaseSurplusDestination": "accessible-investments",
+          "surplusDestination": "enjoyment"
+        }
+      },
+      "sha256": "c546ffc0e148eeacbd7b5037224e4842d503af3eeef14f329a6047065a3da967"
+    },
+    {
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 90,
+        "inflationRate": 0.025,
+        "household": {
+          "currentLifestyleSpending": 55000,
+          "semiRetirementLifestyleSpending": 50000,
+          "fullRetirementLifestyleSpending": 45000,
+          "otherAnnualIncome": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 250000,
+          "annualReturnRate": 0.04,
+          "annualFeesRate": 0.003
+        },
+        "people": [
+          {
+            "id": "person1",
+            "currentAge": 45,
+            "currentGrossEmploymentIncome": 100000,
+            "semiRetirementAge": 60,
+            "fullRetirementAge": 65,
+            "superAccessAge": 60,
+            "openingSuperBalance": 125000,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          },
+          {
+            "id": "person2",
+            "currentAge": 41,
+            "currentGrossEmploymentIncome": 100000,
+            "semiRetirementAge": 60,
+            "fullRetirementAge": 65,
+            "superAccessAge": 60,
+            "openingSuperBalance": 125000,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "assets": [
+          {
+            "id": "home",
+            "type": "home",
+            "value": 900000,
+            "includeInNetWorth": true,
+            "annualGrowthRate": 0.03
+          }
+        ],
+        "scenario": {
+          "workingPhaseSurplusDestination": "accessible-investments",
+          "surplusDestination": "enjoyment"
+        }
+      },
+      "sha256": "23be402025b672b0af36d2286c583370e811eb858409276489870c1409cb7116"
+    },
+    {
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 90,
+        "inflationRate": 0.025,
+        "household": {
+          "currentLifestyleSpending": 55000,
+          "semiRetirementLifestyleSpending": 50000,
+          "fullRetirementLifestyleSpending": 45000,
+          "otherAnnualIncome": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 1200000,
+          "annualReturnRate": 0.04,
+          "annualFeesRate": 0.003
+        },
+        "people": [
+          {
+            "id": "person1",
+            "currentAge": 45,
+            "currentGrossEmploymentIncome": 100000,
+            "semiRetirementAge": 60,
+            "fullRetirementAge": 65,
+            "superAccessAge": 60,
+            "openingSuperBalance": 600000,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          },
+          {
+            "id": "person2",
+            "currentAge": 41,
+            "currentGrossEmploymentIncome": 100000,
+            "semiRetirementAge": 60,
+            "fullRetirementAge": 65,
+            "superAccessAge": 60,
+            "openingSuperBalance": 600000,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "assets": [
+          {
+            "id": "home",
+            "type": "home",
+            "value": 900000,
+            "includeInNetWorth": true,
+            "annualGrowthRate": 0.03
+          }
+        ],
+        "scenario": {
+          "workingPhaseSurplusDestination": "accessible-investments",
+          "surplusDestination": "enjoyment"
+        }
+      },
+      "sha256": "2647c4b034575cee45e5b05623148fbab109e21a97f44d1b767262aba6f3d02d"
+    },
+    {
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 90,
+        "inflationRate": 0.025,
+        "household": {
+          "currentLifestyleSpending": 55000,
+          "semiRetirementLifestyleSpending": 50000,
+          "fullRetirementLifestyleSpending": 45000,
+          "otherAnnualIncome": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 0,
+          "annualReturnRate": 0.04,
+          "annualFeesRate": 0.003
+        },
+        "people": [
+          {
+            "id": "person1",
+            "currentAge": 60,
+            "currentGrossEmploymentIncome": 0,
+            "semiRetirementAge": 60,
+            "fullRetirementAge": 65,
+            "superAccessAge": 60,
+            "openingSuperBalance": 0,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "assets": [
+          {
+            "id": "home",
+            "type": "home",
+            "value": 900000,
+            "includeInNetWorth": true,
+            "annualGrowthRate": 0.03
+          }
+        ],
+        "scenario": {
+          "workingPhaseSurplusDestination": "accessible-investments",
+          "surplusDestination": "enjoyment"
+        }
+      },
+      "sha256": "0ae9326b3e76f67b582383947b2b84f138d92ae538d08c701c03d85a1a7144b5"
+    },
+    {
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 90,
+        "inflationRate": 0.025,
+        "household": {
+          "currentLifestyleSpending": 55000,
+          "semiRetirementLifestyleSpending": 50000,
+          "fullRetirementLifestyleSpending": 45000,
+          "otherAnnualIncome": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 250000,
+          "annualReturnRate": 0.04,
+          "annualFeesRate": 0.003
+        },
+        "people": [
+          {
+            "id": "person1",
+            "currentAge": 60,
+            "currentGrossEmploymentIncome": 0,
+            "semiRetirementAge": 60,
+            "fullRetirementAge": 65,
+            "superAccessAge": 60,
+            "openingSuperBalance": 125000,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "assets": [
+          {
+            "id": "home",
+            "type": "home",
+            "value": 900000,
+            "includeInNetWorth": true,
+            "annualGrowthRate": 0.03
+          }
+        ],
+        "scenario": {
+          "workingPhaseSurplusDestination": "accessible-investments",
+          "surplusDestination": "enjoyment"
+        }
+      },
+      "sha256": "c692e434862d570168e23bd9a2d8e50b8d8e226d43576fea9db8d7e37263b6e5"
+    },
+    {
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 90,
+        "inflationRate": 0.025,
+        "household": {
+          "currentLifestyleSpending": 55000,
+          "semiRetirementLifestyleSpending": 50000,
+          "fullRetirementLifestyleSpending": 45000,
+          "otherAnnualIncome": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 1200000,
+          "annualReturnRate": 0.04,
+          "annualFeesRate": 0.003
+        },
+        "people": [
+          {
+            "id": "person1",
+            "currentAge": 60,
+            "currentGrossEmploymentIncome": 0,
+            "semiRetirementAge": 60,
+            "fullRetirementAge": 65,
+            "superAccessAge": 60,
+            "openingSuperBalance": 600000,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "assets": [
+          {
+            "id": "home",
+            "type": "home",
+            "value": 900000,
+            "includeInNetWorth": true,
+            "annualGrowthRate": 0.03
+          }
+        ],
+        "scenario": {
+          "workingPhaseSurplusDestination": "accessible-investments",
+          "surplusDestination": "enjoyment"
+        }
+      },
+      "sha256": "6e1189c6438f5a5d986154f41d3c21b172eb7f11921a3ba6fefdc708feca9968"
+    },
+    {
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 90,
+        "inflationRate": 0.025,
+        "household": {
+          "currentLifestyleSpending": 55000,
+          "semiRetirementLifestyleSpending": 50000,
+          "fullRetirementLifestyleSpending": 45000,
+          "otherAnnualIncome": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 0,
+          "annualReturnRate": 0.04,
+          "annualFeesRate": 0.003
+        },
+        "people": [
+          {
+            "id": "person1",
+            "currentAge": 60,
+            "currentGrossEmploymentIncome": 0,
+            "semiRetirementAge": 60,
+            "fullRetirementAge": 65,
+            "superAccessAge": 60,
+            "openingSuperBalance": 0,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          },
+          {
+            "id": "person2",
+            "currentAge": 56,
+            "currentGrossEmploymentIncome": 0,
+            "semiRetirementAge": 60,
+            "fullRetirementAge": 65,
+            "superAccessAge": 60,
+            "openingSuperBalance": 0,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "assets": [
+          {
+            "id": "home",
+            "type": "home",
+            "value": 900000,
+            "includeInNetWorth": true,
+            "annualGrowthRate": 0.03
+          }
+        ],
+        "scenario": {
+          "workingPhaseSurplusDestination": "accessible-investments",
+          "surplusDestination": "enjoyment"
+        }
+      },
+      "sha256": "ad52f3ae4bacca06ab004b73e478bb087477a683983e4ce86e7a84c9e03faf77"
+    },
+    {
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 90,
+        "inflationRate": 0.025,
+        "household": {
+          "currentLifestyleSpending": 55000,
+          "semiRetirementLifestyleSpending": 50000,
+          "fullRetirementLifestyleSpending": 45000,
+          "otherAnnualIncome": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 250000,
+          "annualReturnRate": 0.04,
+          "annualFeesRate": 0.003
+        },
+        "people": [
+          {
+            "id": "person1",
+            "currentAge": 60,
+            "currentGrossEmploymentIncome": 0,
+            "semiRetirementAge": 60,
+            "fullRetirementAge": 65,
+            "superAccessAge": 60,
+            "openingSuperBalance": 125000,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          },
+          {
+            "id": "person2",
+            "currentAge": 56,
+            "currentGrossEmploymentIncome": 0,
+            "semiRetirementAge": 60,
+            "fullRetirementAge": 65,
+            "superAccessAge": 60,
+            "openingSuperBalance": 125000,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "assets": [
+          {
+            "id": "home",
+            "type": "home",
+            "value": 900000,
+            "includeInNetWorth": true,
+            "annualGrowthRate": 0.03
+          }
+        ],
+        "scenario": {
+          "workingPhaseSurplusDestination": "accessible-investments",
+          "surplusDestination": "enjoyment"
+        }
+      },
+      "sha256": "07d353124c4f93f7c2671bdd067527ca65226558f7d2d89272bdb2eacd70def3"
+    },
+    {
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 90,
+        "inflationRate": 0.025,
+        "household": {
+          "currentLifestyleSpending": 55000,
+          "semiRetirementLifestyleSpending": 50000,
+          "fullRetirementLifestyleSpending": 45000,
+          "otherAnnualIncome": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 1200000,
+          "annualReturnRate": 0.04,
+          "annualFeesRate": 0.003
+        },
+        "people": [
+          {
+            "id": "person1",
+            "currentAge": 60,
+            "currentGrossEmploymentIncome": 0,
+            "semiRetirementAge": 60,
+            "fullRetirementAge": 65,
+            "superAccessAge": 60,
+            "openingSuperBalance": 600000,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          },
+          {
+            "id": "person2",
+            "currentAge": 56,
+            "currentGrossEmploymentIncome": 0,
+            "semiRetirementAge": 60,
+            "fullRetirementAge": 65,
+            "superAccessAge": 60,
+            "openingSuperBalance": 600000,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "assets": [
+          {
+            "id": "home",
+            "type": "home",
+            "value": 900000,
+            "includeInNetWorth": true,
+            "annualGrowthRate": 0.03
+          }
+        ],
+        "scenario": {
+          "workingPhaseSurplusDestination": "accessible-investments",
+          "surplusDestination": "enjoyment"
+        }
+      },
+      "sha256": "9a0790b164969239f3845ca50e3e0da63c78e288c417b598a94fa061d7289156"
+    },
+    {
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 90,
+        "inflationRate": 0.025,
+        "household": {
+          "currentLifestyleSpending": 55000,
+          "semiRetirementLifestyleSpending": 50000,
+          "fullRetirementLifestyleSpending": 45000,
+          "otherAnnualIncome": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 0,
+          "annualReturnRate": 0.04,
+          "annualFeesRate": 0.003
+        },
+        "people": [
+          {
+            "id": "person1",
+            "currentAge": 66,
+            "currentGrossEmploymentIncome": 0,
+            "semiRetirementAge": 66,
+            "fullRetirementAge": 66,
+            "superAccessAge": 60,
+            "openingSuperBalance": 0,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "assets": [
+          {
+            "id": "home",
+            "type": "home",
+            "value": 900000,
+            "includeInNetWorth": true,
+            "annualGrowthRate": 0.03
+          }
+        ],
+        "scenario": {
+          "workingPhaseSurplusDestination": "accessible-investments",
+          "surplusDestination": "enjoyment"
+        }
+      },
+      "sha256": "1790b4d57851c7b5912c3152ffcf44bb9bcc8485400d794b81a69624479ae627"
+    },
+    {
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 90,
+        "inflationRate": 0.025,
+        "household": {
+          "currentLifestyleSpending": 55000,
+          "semiRetirementLifestyleSpending": 50000,
+          "fullRetirementLifestyleSpending": 45000,
+          "otherAnnualIncome": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 250000,
+          "annualReturnRate": 0.04,
+          "annualFeesRate": 0.003
+        },
+        "people": [
+          {
+            "id": "person1",
+            "currentAge": 66,
+            "currentGrossEmploymentIncome": 0,
+            "semiRetirementAge": 66,
+            "fullRetirementAge": 66,
+            "superAccessAge": 60,
+            "openingSuperBalance": 125000,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "assets": [
+          {
+            "id": "home",
+            "type": "home",
+            "value": 900000,
+            "includeInNetWorth": true,
+            "annualGrowthRate": 0.03
+          }
+        ],
+        "scenario": {
+          "workingPhaseSurplusDestination": "accessible-investments",
+          "surplusDestination": "enjoyment"
+        }
+      },
+      "sha256": "913c384bb55fa483b030e7457aefc36771a68edf70f4ae722f6c6de128df844e"
+    },
+    {
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 90,
+        "inflationRate": 0.025,
+        "household": {
+          "currentLifestyleSpending": 55000,
+          "semiRetirementLifestyleSpending": 50000,
+          "fullRetirementLifestyleSpending": 45000,
+          "otherAnnualIncome": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 1200000,
+          "annualReturnRate": 0.04,
+          "annualFeesRate": 0.003
+        },
+        "people": [
+          {
+            "id": "person1",
+            "currentAge": 66,
+            "currentGrossEmploymentIncome": 0,
+            "semiRetirementAge": 66,
+            "fullRetirementAge": 66,
+            "superAccessAge": 60,
+            "openingSuperBalance": 600000,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "assets": [
+          {
+            "id": "home",
+            "type": "home",
+            "value": 900000,
+            "includeInNetWorth": true,
+            "annualGrowthRate": 0.03
+          }
+        ],
+        "scenario": {
+          "workingPhaseSurplusDestination": "accessible-investments",
+          "surplusDestination": "enjoyment"
+        }
+      },
+      "sha256": "10bd55ab11ffe28461a8008044fb3f1111eb79beb4fb3adecaf7592c672c4d81"
+    },
+    {
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 90,
+        "inflationRate": 0.025,
+        "household": {
+          "currentLifestyleSpending": 55000,
+          "semiRetirementLifestyleSpending": 50000,
+          "fullRetirementLifestyleSpending": 45000,
+          "otherAnnualIncome": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 0,
+          "annualReturnRate": 0.04,
+          "annualFeesRate": 0.003
+        },
+        "people": [
+          {
+            "id": "person1",
+            "currentAge": 66,
+            "currentGrossEmploymentIncome": 0,
+            "semiRetirementAge": 66,
+            "fullRetirementAge": 66,
+            "superAccessAge": 60,
+            "openingSuperBalance": 0,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          },
+          {
+            "id": "person2",
+            "currentAge": 62,
+            "currentGrossEmploymentIncome": 0,
+            "semiRetirementAge": 66,
+            "fullRetirementAge": 66,
+            "superAccessAge": 60,
+            "openingSuperBalance": 0,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "assets": [
+          {
+            "id": "home",
+            "type": "home",
+            "value": 900000,
+            "includeInNetWorth": true,
+            "annualGrowthRate": 0.03
+          }
+        ],
+        "scenario": {
+          "workingPhaseSurplusDestination": "accessible-investments",
+          "surplusDestination": "enjoyment"
+        }
+      },
+      "sha256": "3d66a0d655839a4786bdaca4d020778621e3321fa27b069c5562f9b1c2362683"
+    },
+    {
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 90,
+        "inflationRate": 0.025,
+        "household": {
+          "currentLifestyleSpending": 55000,
+          "semiRetirementLifestyleSpending": 50000,
+          "fullRetirementLifestyleSpending": 45000,
+          "otherAnnualIncome": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 250000,
+          "annualReturnRate": 0.04,
+          "annualFeesRate": 0.003
+        },
+        "people": [
+          {
+            "id": "person1",
+            "currentAge": 66,
+            "currentGrossEmploymentIncome": 0,
+            "semiRetirementAge": 66,
+            "fullRetirementAge": 66,
+            "superAccessAge": 60,
+            "openingSuperBalance": 125000,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          },
+          {
+            "id": "person2",
+            "currentAge": 62,
+            "currentGrossEmploymentIncome": 0,
+            "semiRetirementAge": 66,
+            "fullRetirementAge": 66,
+            "superAccessAge": 60,
+            "openingSuperBalance": 125000,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "assets": [
+          {
+            "id": "home",
+            "type": "home",
+            "value": 900000,
+            "includeInNetWorth": true,
+            "annualGrowthRate": 0.03
+          }
+        ],
+        "scenario": {
+          "workingPhaseSurplusDestination": "accessible-investments",
+          "surplusDestination": "enjoyment"
+        }
+      },
+      "sha256": "a10bab6d2ec038d3186805823401e6cf8d5e3d5936fb9ba3e7f32120d6c92842"
+    },
+    {
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 90,
+        "inflationRate": 0.025,
+        "household": {
+          "currentLifestyleSpending": 55000,
+          "semiRetirementLifestyleSpending": 50000,
+          "fullRetirementLifestyleSpending": 45000,
+          "otherAnnualIncome": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 1200000,
+          "annualReturnRate": 0.04,
+          "annualFeesRate": 0.003
+        },
+        "people": [
+          {
+            "id": "person1",
+            "currentAge": 66,
+            "currentGrossEmploymentIncome": 0,
+            "semiRetirementAge": 66,
+            "fullRetirementAge": 66,
+            "superAccessAge": 60,
+            "openingSuperBalance": 600000,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          },
+          {
+            "id": "person2",
+            "currentAge": 62,
+            "currentGrossEmploymentIncome": 0,
+            "semiRetirementAge": 66,
+            "fullRetirementAge": 66,
+            "superAccessAge": 60,
+            "openingSuperBalance": 600000,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "assets": [
+          {
+            "id": "home",
+            "type": "home",
+            "value": 900000,
+            "includeInNetWorth": true,
+            "annualGrowthRate": 0.03
+          }
+        ],
+        "scenario": {
+          "workingPhaseSurplusDestination": "accessible-investments",
+          "surplusDestination": "enjoyment"
+        }
+      },
+      "sha256": "3e3e160848fca0c62e68dafc8d627d63b6d9088cea8fec7cb4e0f02e4faa1abb"
+    },
+    {
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 90,
+        "inflationRate": 0.025,
+        "household": {
+          "currentLifestyleSpending": 55000,
+          "semiRetirementLifestyleSpending": 50000,
+          "fullRetirementLifestyleSpending": 45000,
+          "otherAnnualIncome": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 0,
+          "annualReturnRate": 0.04,
+          "annualFeesRate": 0.003
+        },
+        "people": [
+          {
+            "id": "person1",
+            "currentAge": 67,
+            "currentGrossEmploymentIncome": 0,
+            "semiRetirementAge": 67,
+            "fullRetirementAge": 67,
+            "superAccessAge": 60,
+            "openingSuperBalance": 0,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "assets": [
+          {
+            "id": "home",
+            "type": "home",
+            "value": 900000,
+            "includeInNetWorth": true,
+            "annualGrowthRate": 0.03
+          }
+        ],
+        "scenario": {
+          "workingPhaseSurplusDestination": "accessible-investments",
+          "surplusDestination": "enjoyment"
+        }
+      },
+      "sha256": "4c0a425380690ad3a704e85ad900d365eb126912dabcf2bd9c84a2f7d5a803cd"
+    },
+    {
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 90,
+        "inflationRate": 0.025,
+        "household": {
+          "currentLifestyleSpending": 55000,
+          "semiRetirementLifestyleSpending": 50000,
+          "fullRetirementLifestyleSpending": 45000,
+          "otherAnnualIncome": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 250000,
+          "annualReturnRate": 0.04,
+          "annualFeesRate": 0.003
+        },
+        "people": [
+          {
+            "id": "person1",
+            "currentAge": 67,
+            "currentGrossEmploymentIncome": 0,
+            "semiRetirementAge": 67,
+            "fullRetirementAge": 67,
+            "superAccessAge": 60,
+            "openingSuperBalance": 125000,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "assets": [
+          {
+            "id": "home",
+            "type": "home",
+            "value": 900000,
+            "includeInNetWorth": true,
+            "annualGrowthRate": 0.03
+          }
+        ],
+        "scenario": {
+          "workingPhaseSurplusDestination": "accessible-investments",
+          "surplusDestination": "enjoyment"
+        }
+      },
+      "sha256": "84f4f8fa88a80b562b1983675f91570a9857c91ea17cad42f92c7bacd676ffcf"
+    },
+    {
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 90,
+        "inflationRate": 0.025,
+        "household": {
+          "currentLifestyleSpending": 55000,
+          "semiRetirementLifestyleSpending": 50000,
+          "fullRetirementLifestyleSpending": 45000,
+          "otherAnnualIncome": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 1200000,
+          "annualReturnRate": 0.04,
+          "annualFeesRate": 0.003
+        },
+        "people": [
+          {
+            "id": "person1",
+            "currentAge": 67,
+            "currentGrossEmploymentIncome": 0,
+            "semiRetirementAge": 67,
+            "fullRetirementAge": 67,
+            "superAccessAge": 60,
+            "openingSuperBalance": 600000,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "assets": [
+          {
+            "id": "home",
+            "type": "home",
+            "value": 900000,
+            "includeInNetWorth": true,
+            "annualGrowthRate": 0.03
+          }
+        ],
+        "scenario": {
+          "workingPhaseSurplusDestination": "accessible-investments",
+          "surplusDestination": "enjoyment"
+        }
+      },
+      "sha256": "03bcc7f788bcfd3e66cd1606aca61b491d249469ebb73c73b6e3b136f947fcdb"
+    },
+    {
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 90,
+        "inflationRate": 0.025,
+        "household": {
+          "currentLifestyleSpending": 55000,
+          "semiRetirementLifestyleSpending": 50000,
+          "fullRetirementLifestyleSpending": 45000,
+          "otherAnnualIncome": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 0,
+          "annualReturnRate": 0.04,
+          "annualFeesRate": 0.003
+        },
+        "people": [
+          {
+            "id": "person1",
+            "currentAge": 67,
+            "currentGrossEmploymentIncome": 0,
+            "semiRetirementAge": 67,
+            "fullRetirementAge": 67,
+            "superAccessAge": 60,
+            "openingSuperBalance": 0,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          },
+          {
+            "id": "person2",
+            "currentAge": 63,
+            "currentGrossEmploymentIncome": 0,
+            "semiRetirementAge": 67,
+            "fullRetirementAge": 67,
+            "superAccessAge": 60,
+            "openingSuperBalance": 0,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "assets": [
+          {
+            "id": "home",
+            "type": "home",
+            "value": 900000,
+            "includeInNetWorth": true,
+            "annualGrowthRate": 0.03
+          }
+        ],
+        "scenario": {
+          "workingPhaseSurplusDestination": "accessible-investments",
+          "surplusDestination": "enjoyment"
+        }
+      },
+      "sha256": "54a7c41c10f1ebd0807d4488f03019b532655c19353dd747e17929e49b60fdce"
+    },
+    {
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 90,
+        "inflationRate": 0.025,
+        "household": {
+          "currentLifestyleSpending": 55000,
+          "semiRetirementLifestyleSpending": 50000,
+          "fullRetirementLifestyleSpending": 45000,
+          "otherAnnualIncome": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 250000,
+          "annualReturnRate": 0.04,
+          "annualFeesRate": 0.003
+        },
+        "people": [
+          {
+            "id": "person1",
+            "currentAge": 67,
+            "currentGrossEmploymentIncome": 0,
+            "semiRetirementAge": 67,
+            "fullRetirementAge": 67,
+            "superAccessAge": 60,
+            "openingSuperBalance": 125000,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          },
+          {
+            "id": "person2",
+            "currentAge": 63,
+            "currentGrossEmploymentIncome": 0,
+            "semiRetirementAge": 67,
+            "fullRetirementAge": 67,
+            "superAccessAge": 60,
+            "openingSuperBalance": 125000,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "assets": [
+          {
+            "id": "home",
+            "type": "home",
+            "value": 900000,
+            "includeInNetWorth": true,
+            "annualGrowthRate": 0.03
+          }
+        ],
+        "scenario": {
+          "workingPhaseSurplusDestination": "accessible-investments",
+          "surplusDestination": "enjoyment"
+        }
+      },
+      "sha256": "177d5cd24fa33de6b9cd57bc800fe10bc63526acdbe4d9904c2ce485418e1ab1"
+    },
+    {
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 90,
+        "inflationRate": 0.025,
+        "household": {
+          "currentLifestyleSpending": 55000,
+          "semiRetirementLifestyleSpending": 50000,
+          "fullRetirementLifestyleSpending": 45000,
+          "otherAnnualIncome": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 1200000,
+          "annualReturnRate": 0.04,
+          "annualFeesRate": 0.003
+        },
+        "people": [
+          {
+            "id": "person1",
+            "currentAge": 67,
+            "currentGrossEmploymentIncome": 0,
+            "semiRetirementAge": 67,
+            "fullRetirementAge": 67,
+            "superAccessAge": 60,
+            "openingSuperBalance": 600000,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          },
+          {
+            "id": "person2",
+            "currentAge": 63,
+            "currentGrossEmploymentIncome": 0,
+            "semiRetirementAge": 67,
+            "fullRetirementAge": 67,
+            "superAccessAge": 60,
+            "openingSuperBalance": 600000,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "assets": [
+          {
+            "id": "home",
+            "type": "home",
+            "value": 900000,
+            "includeInNetWorth": true,
+            "annualGrowthRate": 0.03
+          }
+        ],
+        "scenario": {
+          "workingPhaseSurplusDestination": "accessible-investments",
+          "surplusDestination": "enjoyment"
+        }
+      },
+      "sha256": "d49775dd657386bbd770f37c87702219431caa865187e566cde4db0fe7ae544b"
+    },
+    {
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 90,
+        "inflationRate": 0.025,
+        "household": {
+          "currentLifestyleSpending": 55000,
+          "semiRetirementLifestyleSpending": 50000,
+          "fullRetirementLifestyleSpending": 45000,
+          "otherAnnualIncome": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 0,
+          "annualReturnRate": 0.04,
+          "annualFeesRate": 0.003
+        },
+        "people": [
+          {
+            "id": "person1",
+            "currentAge": 72,
+            "currentGrossEmploymentIncome": 0,
+            "semiRetirementAge": 72,
+            "fullRetirementAge": 72,
+            "superAccessAge": 60,
+            "openingSuperBalance": 0,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "assets": [
+          {
+            "id": "home",
+            "type": "home",
+            "value": 900000,
+            "includeInNetWorth": true,
+            "annualGrowthRate": 0.03
+          }
+        ],
+        "scenario": {
+          "workingPhaseSurplusDestination": "accessible-investments",
+          "surplusDestination": "enjoyment"
+        }
+      },
+      "sha256": "bdc810474bfa04d85adaeb2eb6660cc50fef8905d685e5e8bd7d37cca6ce84f4"
+    },
+    {
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 90,
+        "inflationRate": 0.025,
+        "household": {
+          "currentLifestyleSpending": 55000,
+          "semiRetirementLifestyleSpending": 50000,
+          "fullRetirementLifestyleSpending": 45000,
+          "otherAnnualIncome": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 250000,
+          "annualReturnRate": 0.04,
+          "annualFeesRate": 0.003
+        },
+        "people": [
+          {
+            "id": "person1",
+            "currentAge": 72,
+            "currentGrossEmploymentIncome": 0,
+            "semiRetirementAge": 72,
+            "fullRetirementAge": 72,
+            "superAccessAge": 60,
+            "openingSuperBalance": 125000,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "assets": [
+          {
+            "id": "home",
+            "type": "home",
+            "value": 900000,
+            "includeInNetWorth": true,
+            "annualGrowthRate": 0.03
+          }
+        ],
+        "scenario": {
+          "workingPhaseSurplusDestination": "accessible-investments",
+          "surplusDestination": "enjoyment"
+        }
+      },
+      "sha256": "eedc01cab546ea9570bfce7f11c3600baa654a2681c00892770a36b9bdaec1d4"
+    },
+    {
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 90,
+        "inflationRate": 0.025,
+        "household": {
+          "currentLifestyleSpending": 55000,
+          "semiRetirementLifestyleSpending": 50000,
+          "fullRetirementLifestyleSpending": 45000,
+          "otherAnnualIncome": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 1200000,
+          "annualReturnRate": 0.04,
+          "annualFeesRate": 0.003
+        },
+        "people": [
+          {
+            "id": "person1",
+            "currentAge": 72,
+            "currentGrossEmploymentIncome": 0,
+            "semiRetirementAge": 72,
+            "fullRetirementAge": 72,
+            "superAccessAge": 60,
+            "openingSuperBalance": 600000,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "assets": [
+          {
+            "id": "home",
+            "type": "home",
+            "value": 900000,
+            "includeInNetWorth": true,
+            "annualGrowthRate": 0.03
+          }
+        ],
+        "scenario": {
+          "workingPhaseSurplusDestination": "accessible-investments",
+          "surplusDestination": "enjoyment"
+        }
+      },
+      "sha256": "6509555d7e313ab02879ff055353d4052e5b7c0b5dc55f37101175aae3c84d8d"
+    },
+    {
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 90,
+        "inflationRate": 0.025,
+        "household": {
+          "currentLifestyleSpending": 55000,
+          "semiRetirementLifestyleSpending": 50000,
+          "fullRetirementLifestyleSpending": 45000,
+          "otherAnnualIncome": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 0,
+          "annualReturnRate": 0.04,
+          "annualFeesRate": 0.003
+        },
+        "people": [
+          {
+            "id": "person1",
+            "currentAge": 72,
+            "currentGrossEmploymentIncome": 0,
+            "semiRetirementAge": 72,
+            "fullRetirementAge": 72,
+            "superAccessAge": 60,
+            "openingSuperBalance": 0,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          },
+          {
+            "id": "person2",
+            "currentAge": 68,
+            "currentGrossEmploymentIncome": 0,
+            "semiRetirementAge": 72,
+            "fullRetirementAge": 72,
+            "superAccessAge": 60,
+            "openingSuperBalance": 0,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "assets": [
+          {
+            "id": "home",
+            "type": "home",
+            "value": 900000,
+            "includeInNetWorth": true,
+            "annualGrowthRate": 0.03
+          }
+        ],
+        "scenario": {
+          "workingPhaseSurplusDestination": "accessible-investments",
+          "surplusDestination": "enjoyment"
+        }
+      },
+      "sha256": "81dbba048b995f91fe18ba40ec52a85309a3a5748d94f3e3f0a013bde78cdbeb"
+    },
+    {
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 90,
+        "inflationRate": 0.025,
+        "household": {
+          "currentLifestyleSpending": 55000,
+          "semiRetirementLifestyleSpending": 50000,
+          "fullRetirementLifestyleSpending": 45000,
+          "otherAnnualIncome": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 250000,
+          "annualReturnRate": 0.04,
+          "annualFeesRate": 0.003
+        },
+        "people": [
+          {
+            "id": "person1",
+            "currentAge": 72,
+            "currentGrossEmploymentIncome": 0,
+            "semiRetirementAge": 72,
+            "fullRetirementAge": 72,
+            "superAccessAge": 60,
+            "openingSuperBalance": 125000,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          },
+          {
+            "id": "person2",
+            "currentAge": 68,
+            "currentGrossEmploymentIncome": 0,
+            "semiRetirementAge": 72,
+            "fullRetirementAge": 72,
+            "superAccessAge": 60,
+            "openingSuperBalance": 125000,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "assets": [
+          {
+            "id": "home",
+            "type": "home",
+            "value": 900000,
+            "includeInNetWorth": true,
+            "annualGrowthRate": 0.03
+          }
+        ],
+        "scenario": {
+          "workingPhaseSurplusDestination": "accessible-investments",
+          "surplusDestination": "enjoyment"
+        }
+      },
+      "sha256": "ef08cea2814e19235d13257a3c5563671eac7c702ae1d60587af0b5c6aa2ae93"
+    },
+    {
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 90,
+        "inflationRate": 0.025,
+        "household": {
+          "currentLifestyleSpending": 55000,
+          "semiRetirementLifestyleSpending": 50000,
+          "fullRetirementLifestyleSpending": 45000,
+          "otherAnnualIncome": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 1200000,
+          "annualReturnRate": 0.04,
+          "annualFeesRate": 0.003
+        },
+        "people": [
+          {
+            "id": "person1",
+            "currentAge": 72,
+            "currentGrossEmploymentIncome": 0,
+            "semiRetirementAge": 72,
+            "fullRetirementAge": 72,
+            "superAccessAge": 60,
+            "openingSuperBalance": 600000,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          },
+          {
+            "id": "person2",
+            "currentAge": 68,
+            "currentGrossEmploymentIncome": 0,
+            "semiRetirementAge": 72,
+            "fullRetirementAge": 72,
+            "superAccessAge": 60,
+            "openingSuperBalance": 600000,
+            "superReturnBeforeRetirement": 0.05,
+            "superReturnAfterRetirement": 0.04,
+            "employerSuperRate": 0.12,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "assets": [
+          {
+            "id": "home",
+            "type": "home",
+            "value": 900000,
+            "includeInNetWorth": true,
+            "annualGrowthRate": 0.03
+          }
+        ],
+        "scenario": {
+          "workingPhaseSurplusDestination": "accessible-investments",
+          "surplusDestination": "enjoyment"
+        }
+      },
+      "sha256": "67fb803c2f29a76aa90ece8995c0eecb160e6257035601e020e3351b42959077"
+    }
+  ]
+}

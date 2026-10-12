@@ -1,50 +1,76 @@
-/* Optional Age Pension estimate — isolated from the retirement engine.
- * Not connected to production forecasts until validated and explicitly enabled.
- * Rates must be supplied from a dated, verified Services Australia schedule.
- */
+/* Indicative annual Australian Age Pension. Pure, opt-in, normal domestic rates.
+ * Source register and modelling limits: docs/AGE-PENSION.md. */
 (function attachAgePension(global) {
   "use strict";
-  const money = (value) => Math.max(0, Number.isFinite(Number(value)) ? Number(value) : 0);
-  const finite = (value) => Number.isFinite(value) && value >= 0;
+  const round = value => Math.round(value * 100) / 100;
+  const positive = value => Math.max(0, Number(value) || 0);
+  const RATES = Object.freeze({
+    effectiveFrom: "2026-09-20", verifiedOn: "2026-10-13", pensionAge: 67,
+    maximumAnnualSingle: 1237.70 * 26, maximumAnnualCoupleEach: 933 * 26,
+    taxExemptAnnualSingle: (88.20 - 30.70 + 14.10) * 26,
+    taxExemptAnnualCoupleEach: (66.50 - 25.30 + 10.60) * 26,
+    assetFreeAreaSingleHomeowner: 333000, assetFreeAreaSingleNonHomeowner: 600000,
+    assetFreeAreaCoupleHomeowner: 499000, assetFreeAreaCoupleNonHomeowner: 766000,
+    annualAssetTaperPerThousandSingle: 78, annualAssetTaperPerThousandCoupleEach: 39,
+    incomeFreeAreaSingleAnnual: 226 * 26, incomeFreeAreaCoupleAnnual: 396 * 26,
+    incomeTaperSingle: 0.5, incomeTaperCoupleEach: 0.25,
+    deemingThresholdSingle: 66800, deemingThresholdCouple: 110600,
+    deemingLowerRate: 0.0125, deemingUpperRate: 0.0325, workBonusAnnual: 300 * 26,
+  });
   function validateRates(rates) {
-    const required = ["pensionAge", "maximumAnnualSingle", "maximumAnnualCoupleEach",
-      "assetFreeAreaSingleHomeowner", "assetFreeAreaCoupleHomeowner",
-      "assetFreeAreaSingleNonHomeowner", "assetFreeAreaCoupleNonHomeowner",
-      "annualAssetTaperPerThousandSingle", "annualAssetTaperPerThousandCouple",
-      "incomeFreeAreaSingleAnnual", "incomeFreeAreaCoupleAnnual",
-      "incomeTaperSingle", "incomeTaperCouple"];
-    if (!rates || !rates.effectiveFrom || required.some((key) => !finite(rates[key]))) {
-      throw new Error("Age Pension requires a verified, dated rates schedule.");
-    }
+    if (!rates?.effectiveFrom || Object.keys(RATES).some(key => typeof RATES[key] === "number"
+      && (!Number.isFinite(rates[key]) || rates[key] < 0))) throw new Error("A dated, complete Age Pension rate schedule is required.");
   }
-  function estimateAnnualPension(input, rates) {
+  function deemedIncome(financialAssets, partnered, rates = RATES) {
     validateRates(rates);
-    const household = input || {};
-    const partnered = Boolean(household.partnered);
-    const eligibleCount = partnered
-      ? [household.person1Age, household.person2Age].filter((age) => Number(age) >= rates.pensionAge).length
-      : (Number(household.person1Age) >= rates.pensionAge ? 1 : 0);
-    if (!eligibleCount) return { annualPension: 0, assetTestAnnual: 0, incomeTestAnnual: 0, eligibleCount: 0, effectiveFrom: rates.effectiveFrom };
-    if (household.hasComplexCentrelinkAssets) {
-      return { annualPension: null, eligibleCount, unsupported: true, reason: "Complex Centrelink asset attribution requires specialist assessment.", effectiveFrom: rates.effectiveFrom };
-    }
-    const maximum = partnered ? rates.maximumAnnualCoupleEach * eligibleCount : rates.maximumAnnualSingle;
-    const assetFree = partnered
-      ? (household.homeowner ? rates.assetFreeAreaCoupleHomeowner : rates.assetFreeAreaCoupleNonHomeowner)
-      : (household.homeowner ? rates.assetFreeAreaSingleHomeowner : rates.assetFreeAreaSingleNonHomeowner);
-    const assetTaper = partnered ? rates.annualAssetTaperPerThousandCouple : rates.annualAssetTaperPerThousandSingle;
-    const incomeFree = partnered ? rates.incomeFreeAreaCoupleAnnual : rates.incomeFreeAreaSingleAnnual;
-    const incomeTaper = partnered ? rates.incomeTaperCouple : rates.incomeTaperSingle;
-    // Caller must supply Centrelink-assessable assets and income, after exclusions/deeming.
-    // Never substitute portfolio returns for Centrelink deemed income.
-    if (!finite(household.assessableAssets) || !finite(household.assessableAnnualIncome)) {
-      return { annualPension: null, eligibleCount, unsupported: true, reason: "Centrelink-assessable assets and income are required.", effectiveFrom: rates.effectiveFrom };
-    }
-    const assetTestAnnual = Math.max(0, maximum - Math.max(0, household.assessableAssets - assetFree) / 1000 * assetTaper);
-    const incomeTestAnnual = Math.max(0, maximum - Math.max(0, household.assessableAnnualIncome - incomeFree) * incomeTaper);
-    return { annualPension: Math.round(Math.min(maximum, assetTestAnnual, incomeTestAnnual) * 100) / 100,
-      assetTestAnnual, incomeTestAnnual, eligibleCount, effectiveFrom: rates.effectiveFrom,
-      indicativeOnly: true };
+    const threshold = partnered ? rates.deemingThresholdCouple : rates.deemingThresholdSingle;
+    return round(Math.min(positive(financialAssets), threshold) * rates.deemingLowerRate
+      + Math.max(0, positive(financialAssets) - threshold) * rates.deemingUpperRate);
   }
-  global.FFSAgePension = Object.freeze({ estimateAnnualPension, validateRates });
+  function estimateAnnualPension(input = {}, rates = RATES) {
+    validateRates(rates);
+    const partnered = input.partnered === true;
+    const ages = partnered ? [input.person1Age, input.person2Age] : [input.person1Age];
+    if (ages.some(age => !Number.isFinite(age) || age < 0)
+      || !Number.isFinite(input.assessableAssets) || input.assessableAssets < 0
+      || !Number.isFinite(input.assessableAnnualIncome) || input.assessableAnnualIncome < 0
+      || typeof input.homeowner !== "boolean" || input.hasComplexCentrelinkAssets) {
+      return { annualPension: null, unsupported: true, reason: "Complete ordinary household assessment required; complex circumstances are not supported.", effectiveFrom: rates.effectiveFrom };
+    }
+    const eligibleCount = ages.filter(age => age >= rates.pensionAge).length;
+    const maximumEach = partnered ? rates.maximumAnnualCoupleEach : rates.maximumAnnualSingle;
+    const assetFree = rates[`assetFreeArea${partnered ? "Couple" : "Single"}${input.homeowner ? "Homeowner" : "NonHomeowner"}`];
+    const assetTaper = partnered ? rates.annualAssetTaperPerThousandCoupleEach : rates.annualAssetTaperPerThousandSingle;
+    const incomeFree = partnered ? rates.incomeFreeAreaCoupleAnnual : rates.incomeFreeAreaSingleAnnual;
+    const incomeTaper = partnered ? rates.incomeTaperCoupleEach : rates.incomeTaperSingle;
+    const assetEach = Math.max(0, maximumEach - Math.max(0, input.assessableAssets - assetFree) / 1000 * assetTaper);
+    const incomeEach = Math.max(0, maximumEach - Math.max(0, input.assessableAnnualIncome - incomeFree) * incomeTaper);
+    const pensionEach = round(Math.min(maximumEach, assetEach, incomeEach));
+    return { annualPension: round(pensionEach * eligibleCount), pensionEach: eligibleCount ? pensionEach : 0,
+      taxableEach: eligibleCount ? round(Math.max(0, pensionEach - (partnered ? rates.taxExemptAnnualCoupleEach : rates.taxExemptAnnualSingle))) : 0,
+      assetTestAnnual: round(assetEach * eligibleCount), incomeTestAnnual: round(incomeEach * eligibleCount),
+      eligibleCount, effectiveFrom: rates.effectiveFrom, indicativeOnly: true };
+  }
+  const isHome = asset => ["home", "principalResidence", "principal_residence"].includes(asset.type);
+  function assessProjectionYear({ people, assets, liabilities, accessibleBalance, otherIncome = 0, rentalIncome = 0,
+    incomeStreamSuper = false, unsupported = false }) {
+    const partnered = people.length === 2;
+    const superAssets = people.reduce((sum, person) => sum + (person.age >= RATES.pensionAge || incomeStreamSuper
+      ? positive(person.openingSuperBalance) + positive(person.downsizerSuperContribution) : 0), 0);
+    const financialAssets = positive(accessibleBalance) + superAssets;
+    // The aggregate accessible balance already includes cash, offsets and investments.
+    const otherAssets = assets.filter(asset => !asset.isAccessibleAsset && !isHome(asset) && asset.type !== "super")
+      .reduce((sum, asset) => sum + Math.max(0, positive(asset.openingValue)
+        - liabilities.filter(debt => debt.linkedAssetId === asset.id).reduce((n, debt) => n + positive(debt.openingBalance), 0)), 0);
+    const employmentIncome = people.reduce((sum, person) => sum + Math.max(0, positive(person.grossEmploymentIncome)
+      - (person.age >= RATES.pensionAge ? RATES.workBonusAnnual : 0)), 0);
+    const deemedAnnualIncome = deemedIncome(financialAssets, partnered);
+    const assessableAssets = round(financialAssets + otherAssets);
+    const assessableAnnualIncome = round(deemedAnnualIncome + employmentIncome + positive(otherIncome) + positive(rentalIncome));
+    return { ...estimateAnnualPension({ partnered, person1Age: people[0]?.age, person2Age: people[1]?.age,
+      homeowner: assets.some(isHome), assessableAssets, assessableAnnualIncome,
+      hasComplexCentrelinkAssets: unsupported || assets.some(asset => /trust|company|business/i.test(asset.type)) }),
+      assessableAssets, assessableAnnualIncome, deemedAnnualIncome, financialAssets };
+  }
+  global.FFSAgePension = Object.freeze({ RATES, validateRates, deemedIncome, estimateAnnualPension, assessProjectionYear });
 })(globalThis);

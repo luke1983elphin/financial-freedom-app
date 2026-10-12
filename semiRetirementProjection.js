@@ -1370,6 +1370,7 @@
       },
       people,
       scenario: {
+        ...(input?.scenario?.agePension?.enabled === true ? { agePension: { ...input.scenario.agePension } } : {}),
         oneOffLifestyleEvents: Array.isArray(input?.scenario?.oneOffLifestyleEvents)
           ? input.scenario.oneOffLifestyleEvents.map(normaliseOneOffLifestyleEvent)
           : [],
@@ -2184,6 +2185,44 @@
       const oneOffIncomeAccessibleContribution = oneOffIncome.total;
       const oneOffIncomeTodayDollars = oneOffIncome.totalTodayDollars;
       const totalProjectedLifestyleSpending = roundCurrency(applicableLifestyleSpending + oneOffLifestyleSpending);
+      let agePension = null;
+      if (normalised.scenario.agePension?.enabled === true) {
+        if (!global.FFSAgePension) throw new Error("Age Pension estimator is unavailable.");
+        agePension = global.FFSAgePension.assessProjectionYear({
+          people: peopleYear, assets: assetRows, liabilities: liabilityRows,
+          accessibleBalance: Math.max(0, accessibleOpening + unallocatedSurplusBalance
+            + oneOffIncomeAccessibleContribution + number(downsizeHomeEvent.accessibleInvestmentContribution)
+            - number(downsizeHomeEvent.additionalFundsRequired)),
+          otherIncome: normalised.household.otherAnnualIncome
+            + passiveIncomeRows.filter(row => ["otherTaxableIncome", "otherPassive", "taxFree"].includes(row.type)).reduce((sum, row) => sum + number(row.taxableIncome), 0),
+          rentalIncome: propertyIncomeRows.reduce((sum, row) => sum + Math.max(0, number(row.taxableRentalIncome)), 0),
+          incomeStreamSuper: normalised.scenario.agePension.incomeStreamSuper === true,
+          unsupported: normalised.scenario.agePension.unsupported === true,
+        });
+        if (agePension.unsupported) {
+          warnings.push(calendarYear + ": Age Pension not included: " + agePension.reason);
+        } else {
+          peopleYear.forEach(person => {
+            person.estimatedAgePension = person.age >= 67 ? agePension.pensionEach : 0;
+            person.taxableAgePension = person.age >= 67 ? agePension.taxableEach : 0;
+            person.totalTaxableIncome = roundCurrency(person.totalTaxableIncome + person.taxableAgePension);
+            person.totalCashIncomeBeforeTax = roundCurrency(person.totalCashIncomeBeforeTax + person.estimatedAgePension);
+            person.stslRepaymentIncome = stslRepaymentIncomeForPerson(person.totalTaxableIncome, person.modelledTaxReducingConcessionalContribution);
+          });
+          const pensionMls = calculateMls(peopleYear, normalised, financialYear);
+          peopleYear.forEach((person, index) => {
+            const tax = CALC.individualTaxBreakdown(person.totalTaxableIncome, { financialYear });
+            person.incomeTax = roundCurrency(tax.incomeTax);
+            person.medicareLevy = roundCurrency(tax.medicareLevy);
+            person.medicareLevySurcharge = roundCurrency(index === 0 ? pensionMls.person1Surcharge : pensionMls.person2Surcharge);
+            person.stslRepayment = roundCurrency(Math.min(person.stslOpeningBalance, estimateStslRepayment(person.stslRepaymentIncome, person.stslOpeningBalance)));
+            person.stslClosingBalance = roundCurrency(Math.max(0, person.stslOpeningBalance - person.stslRepayment));
+            peopleStates[person.id].stslBalance = person.stslClosingBalance;
+            person.netEmploymentIncome = roundCurrency(Math.max(0, person.totalCashIncomeBeforeTax - person.incomeTax - person.medicareLevy - person.medicareLevySurcharge - person.stslRepayment));
+            person.netIncome = person.netEmploymentIncome;
+          });
+        }
+      }
       const totalNetEmploymentIncome = roundCurrency(peopleYear.reduce((total, person) => total + person.netEmploymentIncome, 0));
       const totalPassiveCashIncome = roundCurrency(passiveIncomeRows.reduce((total, income) => total + income.cashIncome, 0));
       const totalPassiveTaxableIncome = roundCurrency(passiveIncomeRows.reduce((total, income) => total + income.taxableIncome, 0));
@@ -2534,6 +2573,7 @@
           age: person.age,
           employmentPhase: person.employmentPhase,
           superAccessAge: person.superAccessAge,
+          ...(agePension ? { estimatedAgePension: person.estimatedAgePension || 0, taxableAgePension: person.taxableAgePension || 0 } : {}),
           grossEmploymentIncome: roundCurrency(person.grossEmploymentIncome),
           employmentIncome: roundCurrency(person.employmentIncome),
           interestIncome: person.interestIncome,
@@ -2580,6 +2620,7 @@
           superReconciliation: person.superReconciliation,
         })),
         household: {
+          ...(agePension ? { agePension, estimatedAgePension: agePension.annualPension } : {}),
           householdPhase: phase,
           applicableLifestyleSpending,
           totalNetEmploymentIncome,
@@ -2782,6 +2823,15 @@
     if (summary.accessibleBalanceWhenBothFullyRetired === null) summary.accessibleBalanceWhenBothFullyRetired = finalYear?.household.closingAccessibleInvestmentBalance ?? 0;
     if (summary.totalInvestableAssetsAtFullRetirement === null) summary.totalInvestableAssetsAtFullRetirement = finalYear?.household.totalInvestableAssets ?? 0;
 
+    if (normalised.scenario.agePension?.enabled === true) {
+      summary.estimatedAgePensionTotal = roundCurrency(years.reduce((sum, row) => sum + number(row.household.estimatedAgePension), 0));
+      summary.firstAgePensionYear = years.find(row => row.household.estimatedAgePension > 0)?.calendarYear ?? null;
+      const without = projectRetirementScenario({ ...inputs, scenario: { ...inputs.scenario, agePension: { enabled: false } } });
+      summary.withoutAgePension = { totalInvestableAssetsAtEndAge: without.summary.totalInvestableAssetsAtEndAge,
+        firstUnfundedYear: without.years.find(row => row.household.unmetRequiredLifestyleSpending > 0)?.calendarYear ?? null };
+      assumptions.agePension = "Indicative domestic normal rates dated 20 September 2026, held fixed in nominal dollars (no future indexation). Annual opening balances, plus same-year downsizing and lump sums. Younger partner super assumed accumulation unless income-stream option selected. Residency and other eligibility assumed, not verified. Ordinary tax model; SAPTO and pensioner Medicare concessions not modelled.";
+      assumptions.limitations = assumptions.limitations.map(text => text.replace("No Age Pension, ", "No "));
+    }
     const result = {
       years,
       summary,
