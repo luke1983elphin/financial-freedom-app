@@ -35,3 +35,20 @@ test('custom inputs use dedicated responsive form and preserve original-plan sce
   assert.match(source, /const firstResult = calculatePlan\(applyScenarioAdjustments\(plan, baseAdjustments\)\)/);
   assert.match(source, /const adjustedResult = calculatePlan\(applyScenarioAdjustments\(plan, allocationAdjustments\)\)/);
 });
+
+test('weekly to fortnightly to monthly expense reductions retain their distinct annual impacts', () => {
+  assert.deepEqual(adjustments('expenses', 300, 'weekly'), { expenseChange: -15600 });
+  assert.deepEqual(adjustments('expenses', 300, 'fortnightly'), { expenseChange: -7800 });
+  assert.deepEqual(adjustments('expenses', 300, 'monthly'), { expenseChange: -3600 });
+  assert.deepEqual(adjustments('expenses', 300, 'annually'), { expenseChange: -300 });
+});
+
+test('cashflow display distinguishes pre-investment saving from available-to-allocate cash', () => {
+  assert.match(source, /const annualCashflowImpact = isCashflowSaving/);
+  assert.match(source, /firstResult\.cashSurplusBeforeInvesting/);
+  assert.match(source, /result\.cashSurplusBeforeInvesting/);
+  assert.match(source, /const allocatable = Math\.max\(0, annualDifference\)/);
+  assert.match(source, /fmtDelta\(annualCashflowImpact \/ 52\)/);
+  assert.match(source, /fmtDelta\(annualCashflowImpact \/ 12\)/);
+  assert.match(source, /already absorbed by your plan's investment contributions/);
+});
