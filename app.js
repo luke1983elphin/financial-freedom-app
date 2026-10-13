@@ -15076,6 +15076,17 @@
     const baseAdjustments = active.adjustments(result);
     const firstResult = calculatePlan(applyScenarioAdjustments(plan, baseAdjustments));
     const annualDifference = estimatedCashflow(firstResult) - estimatedCashflow(result);
+    // A higher investment contribution can absorb expense savings, leaving zero
+    // *unallocated* cash even though the household's pre-investing cashflow improved.
+    // Keep the real unallocated balance for allocation decisions, but show the
+    // change before investment allocations for income/expense scenarios.
+    const isCashflowSaving = active.id === "custom" && ["expenses", "income"].includes(customWhatIf.kind);
+    const annualCashflowImpact = isCashflowSaving
+      ? (Number(firstResult.cashSurplusBeforeInvesting) || 0) - (Number(result.cashSurplusBeforeInvesting) || 0)
+      : annualDifference;
+    const investmentAbsorption = isCashflowSaving
+      ? (Number(firstResult.annualInvestmentContributions) || 0) - (Number(result.annualInvestmentContributions) || 0)
+      : 0;
     const allocatable = Math.max(0, annualDifference);
     const choices = [
       ["unallocated", "Keep it available", "Do not assume this extra money is invested"],
@@ -15097,10 +15108,11 @@
         <div class="what-if-stage"><h4>1. What changes in your cashflow?</h4>
           <p class="field-help">Compared with your existing plan, after the modelled tax, debt and investing effects of this change.</p>
           <div class="what-if-metrics">
-            <div><small>Per week</small><strong>${fmtDelta(annualDifference / 52)}</strong></div>
-            <div><small>Per month</small><strong>${fmtDelta(annualDifference / 12)}</strong></div>
-            <div><small>Per year</small><strong>${fmtDelta(annualDifference)}</strong></div>
+            <div><small>Per week</small><strong>${fmtDelta(annualCashflowImpact / 52)}</strong></div>
+            <div><small>Per month</small><strong>${fmtDelta(annualCashflowImpact / 12)}</strong></div>
+            <div><small>Per year</small><strong>${fmtDelta(annualCashflowImpact)}</strong></div>
           </div>
+          <p class="field-help">${isCashflowSaving ? (investmentAbsorption > 0.01 ? `Of this change, ${money(investmentAbsorption / 12)} per month is already absorbed by your plan's investment contributions. The amount available to allocate separately is ${money(allocatable / 12)} per month.` : "These figures show the change before investing. The next section shows how much remains available to allocate.") : ""}</p>
           <p class="field-help">${annualDifference < 0 ? (active.id === "custom" && customWhatIf.kind === "invest" ? "You are directing more of your existing cashflow into investments. This reduces cash available for other spending, rather than representing a loss of wealth. No extra cash remains to allocate." : active.id === "custom" && customWhatIf.kind === "debt" ? "You are directing more of your cashflow towards loan repayments. This reduces cash available for spending and may reduce your debt faster. No extra cash remains to allocate." : "This change requires more cash than your current plan. No additional money is available to allocate.") : "This is the estimated change in cash remaining after the selected action, before choosing how to use any extra money."}</p>
         </div>
         <div class="what-if-stage"><h4>2. What would you do with the extra money?</h4>
