@@ -2021,7 +2021,7 @@ test("Stage G2F advanced assumptions are behind a collapsed disclosure", () => {
 test("Stage G2F result hierarchy answers funding before detailed workings", () => {
   const snippet = sourceBetween(appSource, "function renderSemiRetirementScenarioResultHtml", "function renderSemiRetirementScenario(result)");
   assert.match(snippet, /Your Retirement Forecast/);
-  assert.match(snippet, /renderSemiRetirementSnapshotHtml\(viewModel\)[\s\S]*renderSemiRetirementTimelineHtml\(viewModel\)[\s\S]*renderSemiRetirementLongevityHtml\(viewModel\)[\s\S]*renderSemiRetirementFundingHtml\(viewModel\)[\s\S]*renderSemiRetirementPassiveIncomeHtml\(viewModel\)[\s\S]*renderSemiRetirementDebtPropertyHtml\(viewModel\)[\s\S]*renderSemiRetirementAnnualProjectionHtml\(viewModel\)[\s\S]*renderSemiRetirementAssumptionsHtml\(viewModel\)/);
+  assert.match(snippet, /renderSemiRetirementSnapshotHtml\\(viewModel\\)[\\s\\S]*renderSemiRetirementTimelineHtml\\(viewModel\\)[\\s\\S]*renderSemiRetirementWealthChartHtml\\(viewModel\\)[\\s\\S]*renderSemiRetirementDebtPropertyHtml\\(viewModel\\)[\\s\\S]*renderSemiRetirementFundingHtml\\(viewModel\\)[\\s\\S]*renderSemiRetirementLongevityHtml\\(viewModel\\)[\\s\\S]*renderSemiRetirementAnnualProjectionHtml\\(viewModel\\)[\\s\\S]*renderSemiRetirementAssumptionsHtml\\(viewModel\\)/);
 });
 
 test("Stage G2F outlook, funding and debt copy avoid false funding alarms", () => {
@@ -2034,7 +2034,7 @@ test("Stage G2F outlook, funding and debt copy avoid false funding alarms", () =
   assert.match(fundingSnippet, /Investments available before super/);
   assert.match(fundingSnippet, /Available super continues funding retirement where required/);
   assert.match(fundingSnippet, /Unfunded lifestyle spending/);
-  assert.match(debtSnippet, /Home & debt/);
+  assert.match(debtSnippet, /Home & Other Assets/);
   assert.match(debtSnippet, /Property equity when you retire/);
   assert.match(debtSnippet, /Projected net worth at \$\{netWorthAge\}/);
   assert.match(debtSnippet, /Future value based on the assumptions entered/);
