@@ -15052,11 +15052,11 @@
     ).join("") + `
       <div class="what-if-custom">
         <button class="btn ${activeWhatIfId === "custom" ? "btn-primary" : ""}" type="button" data-what-if-custom-toggle aria-expanded="${customWhatIfOpen}">${customWhatIfOpen ? "Hide custom change" : "Create your own change"}</button>
-        ${customWhatIfOpen ? `<div class="card mt-3" style="padding:1rem">
+        ${customWhatIfOpen ? `<div class="what-if-custom-card">
           <h4>Create your own change</h4>
           <p class="field-help">Choose a change and enter an amount. Your original plan stays unchanged.</p>
-          <div class="form-grid">
-            <label>What would you like to change?
+          <div class="what-if-custom-grid">
+            <label class="what-if-custom-field">What would you like to change?
               <select data-what-if-custom-kind>
                 ${[["expenses","Reduce expenses"],["invest","Increase investing"],["debt","Make extra loan repayments"],["income","Increase income"],["super","Additional concessional super"]].map(([id,label]) => `<option value="${id}" ${customWhatIf.kind === id ? "selected" : ""}>${label}</option>`).join("")}
               </select>
