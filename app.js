@@ -15050,7 +15050,7 @@
     actions.innerHTML = whatIfActions.map(action =>
       `<button class="btn what-if-button ${active.id === action.id ? "btn-primary" : ""}" type="button" data-what-if="${action.id}">${escapeHtml(action.label)}</button>`
     ).join("") + `
-      <div class="what-if-custom" style="flex-basis:100%;width:100%;margin-top:0.75rem">
+      <div class="what-if-custom">
         <button class="btn ${activeWhatIfId === "custom" ? "btn-primary" : ""}" type="button" data-what-if-custom-toggle aria-expanded="${customWhatIfOpen}">${customWhatIfOpen ? "Hide custom change" : "Create your own change"}</button>
         ${customWhatIfOpen ? `<div class="card mt-3" style="padding:1rem">
           <h4>Create your own change</h4>
@@ -15061,17 +15061,17 @@
                 ${[["expenses","Reduce expenses"],["invest","Increase investing"],["debt","Make extra loan repayments"],["income","Increase income"],["super","Additional concessional super"]].map(([id,label]) => `<option value="${id}" ${customWhatIf.kind === id ? "selected" : ""}>${label}</option>`).join("")}
               </select>
             </label>
-            <label>Amount ($)
+            <label class="what-if-custom-field">Amount ($)
               <input type="number" min="1" max="10000000" step="any" inputmode="decimal" data-what-if-custom-amount value="${escapeHtml(customWhatIf.amount)}">
             </label>
-            <label>Frequency
+            <label class="what-if-custom-field">Frequency
               <select data-what-if-custom-frequency>
                 ${[["weekly","Weekly"],["fortnightly","Fortnightly"],["monthly","Monthly"],["annually","Annually"]].map(([id,label]) => `<option value="${id}" ${customWhatIf.frequency === id ? "selected" : ""}>${label}</option>`).join("")}
               </select>
             </label>
           </div>
           ${customWhatIfError ? `<p class="field-help" role="alert">${escapeHtml(customWhatIfError)}</p>` : ""}
-          <button class="btn btn-primary mt-3" type="button" data-what-if-custom-apply>Try this change</button>
+          <button class="btn btn-primary what-if-custom-apply" type="button" data-what-if-custom-apply>Try this change</button>
         </div>` : ""}
       </div>`;
     const baseAdjustments = active.adjustments(result);
@@ -15102,7 +15102,7 @@
             <div><small>Per month</small><strong>${fmtDelta(annualDifference / 12)}</strong></div>
             <div><small>Per year</small><strong>${fmtDelta(annualDifference)}</strong></div>
           </div>
-          <p class="field-help">${annualDifference < 0 ? "This change requires more cash than your current plan. No additional money is available to allocate." : "This is the estimated change in cash remaining after the selected action, before choosing how to use any extra money."}</p>
+          <p class="field-help">${annualDifference < 0 ? (active.id === "custom" && customWhatIf.kind === "invest" ? "You are directing more of your existing cashflow into investments. This reduces cash available for other spending, rather than representing a loss of wealth. No extra cash remains to allocate." : active.id === "custom" && customWhatIf.kind === "debt" ? "You are directing more of your cashflow towards loan repayments. This reduces cash available for spending and may reduce your debt faster. No extra cash remains to allocate." : "This change requires more cash than your current plan. No additional money is available to allocate.") : "This is the estimated change in cash remaining after the selected action, before choosing how to use any extra money."}</p>
         </div>
         <div class="what-if-stage"><h4>2. What would you do with the extra money?</h4>
           <p class="field-help">${canAllocate ? `Choose how to direct up to ${money(allocatable / 12)} a month. Only the extra cash from this change is allocated.` : "No additional cash is available from this change. The forecast below still shows its modelled effect."}</p>
