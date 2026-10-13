@@ -9327,11 +9327,10 @@
           <button class="btn" type="button" data-semi-action="edit-inputs">Edit Scenario</button>
         </div>
         <div class="semi-retirement-snapshot-grid mt-4">
-          ${semiRetirementCards}
-          ${semiRetirementMetricCard("Modelled full retirement", fullyRetire, "Employment income stops at the selected ages.")}
-          ${semiRetirementMetricCard("Debt-free", debtFree.value, debtFree.note)}
-          ${semiRetirementMetricCard("Investments before super last to", accessibleLast.value, accessibleLast.note, viewModel.status?.type === "shortfall" ? "is-warning" : "")}
-          ${semiRetirementMetricCard(viewModel.status?.type === "shortfall" ? "Funding shortfall starts" : "Lifestyle funded to", lifestyleFundedTo.value, lifestyleFundedTo.note, viewModel.status?.type === "shortfall" ? "is-warning" : "is-positive")}
+          ${semiRetirementMetricCard("Fully retired at", fullyRetire, "Employment income stops at the selected ages.")}
+          ${semiRetirementMetricCard(viewModel.status?.type === "shortfall" ? "Spending shortfall begins" : "Lifestyle funded until", lifestyleFundedTo.value, lifestyleFundedTo.note, viewModel.status?.type === "shortfall" ? "is-warning" : "is-positive")}
+          ${semiRetirementMetricCard("Retirement investments at forecast end", semiRetirementMoney(end.totalInvestableAssets), "Projected investments and eligible super at the end of the selected forecast. Property is not included.")}
+          ${semiRetirementMetricCard("Spending shortfall", viewModel.longevity?.firstUnfundedSpending?.calendarYear ? `Starts in ${viewModel.longevity.firstUnfundedSpending.calendarYear}` : "None projected", "Based on annual available retirement funding, not retained property equity.", viewModel.status?.type === "shortfall" ? "is-warning" : "")}
         </div>
         <p class="field-help mt-3">${escapeHtml(viewModel.projectionEndDescription)}. Projection end retirement investments: ${escapeHtml(semiRetirementMoney(end.totalInvestableAssets))}. Future values are nominal amounts based on the assumptions entered.</p>
       </section>
@@ -10696,20 +10695,20 @@
         <div class="card-subheading">
           <div>
             <span class="metric-label">Projection results</span>
-            <h4>Modelled Retirement Results</h4>
+            <h4>Your Retirement Forecast</h4>
             <p>Based on the ages, income, spending, investment and return assumptions entered above.</p>
           </div>
           <button class="btn btn-primary" type="button" data-save-stage-g-scenario="retirement">Save Scenario</button>
         </div>
         <p class="field-help">${escapeHtml(modellingCopy().medium)}</p><p class="field-help">${escapeHtml(modellingCopy().super)}</p><p class="field-help"><strong>Age Pension not included.</strong> ${escapeHtml(modellingCopy().pension)}</p>
         ${renderSemiRetirementSnapshotHtml(viewModel)}
-        ${renderSemiRetirementComparisonHtml(viewModel)}
-        ${renderSemiRetirementAdjustmentsHtml(resultDraft)}
         ${renderSemiRetirementTimelineHtml(viewModel)}
         ${renderSemiRetirementLongevityHtml(viewModel)}
         ${renderSemiRetirementFundingHtml(viewModel)}
         ${renderSemiRetirementPassiveIncomeHtml(viewModel)}
         ${renderSemiRetirementDebtPropertyHtml(viewModel)}
+        ${renderSemiRetirementAdjustmentsHtml(resultDraft)}
+        ${renderSemiRetirementComparisonHtml(viewModel)}
         ${renderSemiRetirementAnnualProjectionHtml(viewModel)}
         ${renderSemiRetirementAssumptionsHtml(viewModel)}
         ${renderSemiRetirementDisclosureHtml()}

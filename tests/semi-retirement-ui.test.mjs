@@ -2020,7 +2020,7 @@ test("Stage G2F advanced assumptions are behind a collapsed disclosure", () => {
 
 test("Stage G2F result hierarchy answers funding before detailed workings", () => {
   const snippet = sourceBetween(appSource, "function renderSemiRetirementScenarioResultHtml", "function renderSemiRetirementScenario(result)");
-  assert.match(snippet, /Modelled Retirement Results/);
+  assert.match(snippet, /Your Retirement Forecast/);
   assert.match(snippet, /renderSemiRetirementSnapshotHtml\(viewModel\)[\s\S]*renderSemiRetirementTimelineHtml\(viewModel\)[\s\S]*renderSemiRetirementLongevityHtml\(viewModel\)[\s\S]*renderSemiRetirementFundingHtml\(viewModel\)[\s\S]*renderSemiRetirementPassiveIncomeHtml\(viewModel\)[\s\S]*renderSemiRetirementDebtPropertyHtml\(viewModel\)[\s\S]*renderSemiRetirementAnnualProjectionHtml\(viewModel\)[\s\S]*renderSemiRetirementAssumptionsHtml\(viewModel\)/);
 });
 
