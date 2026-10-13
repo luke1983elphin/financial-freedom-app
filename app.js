@@ -10017,7 +10017,8 @@
     const funding = viewModel.semiRetirementFunding || {};
     const totalNeeded = funding.requiredPortfolioWithdrawalsDuringSemiRetirement ?? funding.requiredAccessibleWithdrawalsDuringSemiRetirement ?? 0;
     const plannedExtraLifestyle = funding.totalOneOffLifestyleSpendingTodayDollars ?? funding.plannedAnnualAccessibleWithdrawal ?? 0;
-    const hasTransition = Boolean(viewModel.retirementTiming?.hasElectedPersonalSemiRetirement || viewModel.retirementTiming?.hasHouseholdTransition);\n    return `
+    const hasTransition = Boolean(viewModel.retirementTiming?.hasElectedPersonalSemiRetirement || viewModel.retirementTiming?.hasHouseholdTransition);
+    return `
       <details class="semi-retirement-results-section" ${hasTransition ? "open" : ""}><summary><strong>Your Income During Retirement</strong> — View details</summary>
         <div class="card-subheading">
           <h4>Transition / Semi-Retirement Funding</h4>
