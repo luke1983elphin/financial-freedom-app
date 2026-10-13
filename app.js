@@ -617,7 +617,6 @@
   let customWhatIfOpen = false;
   let customWhatIfError = "";
   let whatIfAllocation = "unallocated";
-  let whatIfAllocation = "unallocated";
   let generatedWeeklyPlanner = null;
   let weeklyPlan = loadWeeklyPlan();
   let activeWeeklyPlanTab = restoredDraftUi.activeWeeklyPlanTab || "thisWeek";
