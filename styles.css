@@ -9391,3 +9391,16 @@ body.scenario-save-modal-open {
 .age-pension-table th, .age-pension-table td { padding: .4rem .65rem; border-bottom: 1px solid #e2e8f0; text-align: left; }
 .age-pension-table td, .age-pension-table th:last-child { text-align: right; }
 .age-pension-table thead { position: sticky; top: 0; background: white; }
+
+/* Custom what-if editor: isolated styles to avoid affecting other forms. */
+.what-if-custom { flex-basis:100%; width:100%; min-width:0; margin-top:12px; }
+.what-if-custom-card { margin-top:14px; padding:20px; background:#f8fbff; border:1px solid #dbe7f3; border-radius:18px; box-shadow:0 8px 22px rgba(15,39,66,.045); }
+.what-if-custom-heading { display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.what-if-custom-heading h4 { margin:0; color:#0f2742; font-size:18px; }
+.what-if-custom-heading span { color:#64748b; font-size:12px; font-weight:700; }
+.what-if-custom-grid { display:grid; grid-template-columns:minmax(0,1.6fr) minmax(130px,1fr) minmax(150px,1fr); gap:16px; margin:18px 0; align-items:end; }
+.what-if-custom-field { display:grid; gap:8px; min-width:0; color:#334155; font-size:13px; font-weight:800; line-height:1.4; }
+.what-if-custom-field select,.what-if-custom-field input { box-sizing:border-box; display:block; width:100%; min-width:0; height:46px; padding:10px 12px; background:#fff; border:1px solid #cbd5e1; border-radius:11px; color:#0f2742; font:inherit; font-size:15px; font-weight:600; }
+.what-if-custom-field select:focus-visible,.what-if-custom-field input:focus-visible { outline:3px solid rgba(15,159,110,.22); outline-offset:2px; border-color:#0f9f6e; }
+.what-if-custom-apply { margin-top:2px; }
+@media (max-width:740px) { .what-if-custom-grid { grid-template-columns:1fr; gap:12px; } .what-if-custom-card { padding:16px; } }
