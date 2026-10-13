@@ -9998,7 +9998,12 @@
     const unfunded = longevity.firstUnfundedSpending;
     const projectionEnd = semiRetirementProjectionEndLabel(viewModel);
     const accessibleLast = semiRetirementAccessibleLastLabel(viewModel);
-    const accessibleTone = unfunded?.calendarYear ? "is-warning" : "";
+    const accessibleOutcome = window.FFSSemiRetirementUi?.buildSavedRetirementOutcome?.(viewModel)?.accessibleExhaustion;
+    const accessibleAlreadyZero = Boolean(accessibleOutcome?.alreadyZero);
+    const accessibleDepletion = accessible?.calendarYear
+      ? accessible
+      : accessibleOutcome?.calendarYear ? accessibleOutcome : null;
+    const accessibleTone = accessibleAlreadyZero || accessibleDepletion ? "is-warning" : "";
     return `
       <section class="semi-retirement-results-section">
         <div class="card-subheading">
@@ -10007,7 +10012,7 @@
         </div>
         <div class="semi-retirement-results-grid">
           ${semiRetirementMetricCard("Lifestyle funding", unfunded?.calendarYear ? `Shortfall starts in ${unfunded.calendarYear}` : `Funded through ${projectionEnd.value.replace("+", "")}`, unfunded?.calendarYear ? semiRetirementAgeList(milestoneAgesFromObject(unfunded, viewModel.people)) : projectionEnd.note, unfunded?.calendarYear ? "is-warning" : "is-positive")}
-          ${semiRetirementMetricCard("Investments available before super", accessible?.calendarYear ? `Used by ${accessibleLast.value}` : "Remain available", accessible?.calendarYear ? `${accessibleLast.note}. ${allFunds?.calendarYear && allFunds.calendarYear <= accessible.calendarYear ? "Liquid retirement funds are exhausted in this year." : "Available super continues funding retirement where required."}` : "Through the projection period.", accessibleTone)}
+          ${semiRetirementMetricCard("Investments available before super", accessibleAlreadyZero ? "None available" : accessibleDepletion ? `Used by ${accessibleLast.value}` : "Remain available", accessibleAlreadyZero ? `${accessibleLast.note}. No accessible investments are available at the retirement milestone; available super may still fund later spending.` : accessibleDepletion ? `${accessibleLast.note}. ${allFunds?.calendarYear && allFunds.calendarYear <= accessibleDepletion.calendarYear ? "Total retirement investments are exhausted by this year." : "Available super continues funding retirement where required."}` : "Through the projection period.", accessibleTone)}
           ${semiRetirementMetricCard("Retirement investments", allFunds?.calendarYear ? `Exhausted by ${semiRetirementFirstAgeLabel(milestoneAgesFromObject(allFunds, viewModel.people))}` : "No exhaustion projected", allFunds?.calendarYear ? semiRetirementAgeList(milestoneAgesFromObject(allFunds, viewModel.people)) : "No retirement investment exhaustion within the projection horizon.", allFunds?.calendarYear ? "is-warning" : "is-positive")}
           ${semiRetirementMetricCard("Unfunded lifestyle spending", unfunded?.calendarYear ? money(longevity.totalUnfundedSpending || 0) : "None projected", unfunded?.calendarYear ? `${semiRetirementAgeList(milestoneAgesFromObject(unfunded, viewModel.people))} - first shortfall ${unfunded.calendarYear}` : "No projected unfunded lifestyle spending.", unfunded?.calendarYear ? "is-warning" : "is-positive")}
         </div>
