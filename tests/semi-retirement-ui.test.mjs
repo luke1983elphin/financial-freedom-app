@@ -2053,11 +2053,11 @@ test("Stage G2F Income and tax mobile summary stacks without a narrow side actio
 test("funding outlook handles accessible investments already zero at retirement", () => {
   const appSource = readFileSync(new URL("../app.js", import.meta.url), "utf8");
   const start = appSource.indexOf("  function renderSemiRetirementLongevityHtml(viewModel) {");
-  const end = appSource.indexOf("\\n  function renderSemiRetirementFundingHtml", start);
+  const end = appSource.indexOf("  function renderSemiRetirementFundingHtml", start);
   assert.ok(start >= 0 && end > start);
   const renderer = appSource.slice(start, end);
-  assert.match(renderer, /accessibleOutcome\\?\\.alreadyZero/);
-  assert.match(renderer, /accessibleAlreadyZero \\? "None available"/);
-  assert.match(renderer, /accessibleDepletion \\? \`Used by/);
-  assert.match(renderer, /"Remain available"/);
+  assert.ok(renderer.includes("accessibleOutcome?.alreadyZero"));
+  assert.ok(renderer.includes('accessibleAlreadyZero ? "None available"'));
+  assert.ok(renderer.includes('accessibleDepletion ? `Used by'));
+  assert.ok(renderer.includes('"Remain available"'));
 });
