@@ -2,7 +2,7 @@
   "baseline": "bd23b2a",
   "files": {
     "calculator.js": "35c773747c31b162b728a68db9d0c70670083db30519b1cc12065ab5fc2d88ef",
-    "semiRetirementProjection.js": "349e796a9324ce95c01f32242df6860e63f4e3a5b1c2342efb34861d69dc1e0a",
+    "semiRetirementProjection.js": "8ebb7c8b13e833480739862ae877704edd13538787b1fc88c5d8898978d10c95",
     "semiRetirementUi.js": "157c676839ae1fc930c483b8c6e52cd51a6fc9762ceafcbc1dbf58db228d084e",
     "v2-data.js": "935fb66f828874f0ccc267d99d611a47113a85315cb983e45ff49390a84d8baa",
     "storage.js": "c85374d3b59ad306de5d3657d8ff44c12eb69c1f4d4e1b71228656228a4ff58d",
@@ -1061,7 +1061,7 @@
         "group": "files",
         "key": "semiRetirementProjection.js",
         "previousHash": "8b6e533e4203270ba8f13b5b1070318329ef9ee1540a4bde52014232d935dbc5",
-        "approvedHash": "349e796a9324ce95c01f32242df6860e63f4e3a5b1c2342efb34861d69dc1e0a"
+        "approvedHash": "8ebb7c8b13e833480739862ae877704edd13538787b1fc88c5d8898978d10c95"
       },
       {
         "group": "files",
