@@ -239,6 +239,14 @@
       employerSuperRate: hasFiniteNumber(person?.employerSuperRate)
         ? number(person.employerSuperRate)
         : DEFAULT_EMPLOYER_SUPER_RATE,
+      ...((number(person?.currentSalarySacrificeSuper) > 0 || number(person?.currentOtherPreTaxPackaging) > 0 || number(person?.currentPostTaxPackaging) > 0) ? {
+        currentSalarySacrificeSuper: number(person?.currentSalarySacrificeSuper),
+        currentOtherPreTaxPackaging: number(person?.currentOtherPreTaxPackaging),
+        currentPostTaxPackaging: number(person?.currentPostTaxPackaging),
+        salaryPackagingStopAge: hasFiniteNumber(person?.salaryPackagingStopAge)
+          ? number(person.salaryPackagingStopAge)
+          : fullRetirementAge,
+      } : {}),
       existingAdditionalConcessionalContributions: number(person?.existingAdditionalConcessionalContributions),
       additionalContributionsStopAge: hasFiniteNumber(person?.additionalContributionsStopAge)
         ? number(person.additionalContributionsStopAge)
@@ -2027,13 +2035,30 @@
         const recurringAdditionalSuperContribution = person.grossEmploymentIncome > 0 && person.age < contributionStopAge
           ? roundCurrency(source.existingAdditionalConcessionalContributions)
           : 0;
+        const hasSalaryPackaging = Math.max(0, number(source.currentSalarySacrificeSuper))
+          + Math.max(0, number(source.currentOtherPreTaxPackaging))
+          + Math.max(0, number(source.currentPostTaxPackaging)) > 0;
+        const salaryPackagingStopAge = hasFiniteNumber(source.salaryPackagingStopAge)
+          ? number(source.salaryPackagingStopAge)
+          : source.fullRetirementAge;
+        const salaryPackagingActive = hasSalaryPackaging && person.grossEmploymentIncome > 0 && person.age < salaryPackagingStopAge;
+        const salarySacrificeSuper = salaryPackagingActive
+          ? roundCurrency(Math.min(person.grossEmploymentIncome, Math.max(0, number(source.currentSalarySacrificeSuper))))
+          : 0;
+        const remainingAfterSuperSacrifice = roundCurrency(Math.max(0, person.grossEmploymentIncome - salarySacrificeSuper));
+        const otherPreTaxPackaging = salaryPackagingActive
+          ? roundCurrency(Math.min(remainingAfterSuperSacrifice, Math.max(0, number(source.currentOtherPreTaxPackaging))))
+          : 0;
+        const postTaxPackaging = salaryPackagingActive
+          ? roundCurrency(Math.max(0, number(source.currentPostTaxPackaging)))
+          : 0;
         const plannedExtraConcessionalContribution = plannedConcessionalContributionForYear(
           normalised.scenario.plannedConcessionalContributions,
           person.id,
           calendarYear,
         );
-        const taxReducingConcessionalContribution = roundCurrency(recurringAdditionalSuperContribution + plannedExtraConcessionalContribution);
-        const taxableIncomeBeforeConcessional = roundCurrency(person.grossEmploymentIncome + passive.taxableIncome);
+        const taxReducingConcessionalContribution = roundCurrency(recurringAdditionalSuperContribution + salarySacrificeSuper + plannedExtraConcessionalContribution);
+        const taxableIncomeBeforeConcessional = roundCurrency(person.grossEmploymentIncome + passive.taxableIncome - otherPreTaxPackaging);
         const taxableIncomeAfterConcessional = roundCurrency(Math.max(0, taxableIncomeBeforeConcessional - taxReducingConcessionalContribution));
         person.employmentIncome = roundCurrency(person.grossEmploymentIncome);
         person.interestIncome = passive.interestIncome;
@@ -2048,7 +2073,12 @@
         person.modelledConcessionalContributionTaxableIncomeReduction = roundCurrency(taxableIncomeBeforeConcessional - taxableIncomeAfterConcessional);
         person.totalTaxableIncome = taxableIncomeAfterConcessional;
         person.stslRepaymentIncome = stslRepaymentIncomeForPerson(taxableIncomeAfterConcessional, taxReducingConcessionalContribution);
-        person.totalCashIncomeBeforeTax = roundCurrency(person.grossEmploymentIncome + passive.cashIncome);
+        person.salarySacrificeSuper = salarySacrificeSuper;
+        person.otherPreTaxPackaging = otherPreTaxPackaging;
+        person.postTaxPackaging = postTaxPackaging;
+        person.salaryPackagingStopAge = salaryPackagingStopAge;
+        person.salaryPackagingActive = salaryPackagingActive;
+        person.totalCashIncomeBeforeTax = roundCurrency(person.grossEmploymentIncome + passive.cashIncome - salarySacrificeSuper - otherPreTaxPackaging - postTaxPackaging);
         person.discretionaryContributionStopAge = contributionStopAge;
         person.plannedAdditionalSuperStoppedBySemiRetirement = Boolean(source.hasSemiRetirement && person.age >= source.semiRetirementAge);
         person.recurringAdditionalSuperContribution = recurringAdditionalSuperContribution;
@@ -2056,7 +2086,7 @@
         person.plannedExtraConcessionalContribution = plannedExtraConcessionalContribution;
         person.plannedExtraConcessionalContributionTax = roundCurrency(plannedExtraConcessionalContribution * DEFAULT_CONTRIBUTIONS_TAX_RATE);
         person.netPlannedExtraConcessionalContribution = roundCurrency(plannedExtraConcessionalContribution * (1 - DEFAULT_CONTRIBUTIONS_TAX_RATE));
-        person.additionalSuperContribution = roundCurrency(recurringAdditionalSuperContribution + plannedExtraConcessionalContribution);
+        person.additionalSuperContribution = roundCurrency(recurringAdditionalSuperContribution + salarySacrificeSuper + plannedExtraConcessionalContribution);
       });
 
       const mls = calculateMls(peopleYear, normalised, financialYear);
@@ -2241,8 +2271,9 @@
       const totalRentalTaxableIncome = roundCurrency(passiveIncomeRows.filter((income) => income.type === "rentalTaxableIncome").reduce((total, income) => total + income.taxableIncome, 0));
       const otherIncome = roundCurrency(normalised.household.otherAnnualIncome);
       const plannedRecurringAdditionalSuperContribution = roundCurrency(peopleYear.reduce((total, person) => total + person.recurringAdditionalSuperContribution, 0));
+      const salarySacrificeSuperContribution = roundCurrency(peopleYear.reduce((total, person) => total + person.salarySacrificeSuper, 0));
       const plannedExtraConcessionalContribution = roundCurrency(peopleYear.reduce((total, person) => total + person.plannedExtraConcessionalContribution, 0));
-      const plannedAdditionalSuperContribution = roundCurrency(peopleYear.reduce((total, person) => total + person.additionalSuperContribution, 0));
+      const plannedAdditionalSuperContribution = roundCurrency(plannedRecurringAdditionalSuperContribution + plannedExtraConcessionalContribution);
       const netHouseholdCashIncome = roundCurrency(totalNetEmploymentIncome + otherIncome + netRentalCashflow);
       const householdCashRequirementBeforePlannedAccessibleContribution = roundCurrency(totalProjectedLifestyleSpending + annualDebtCashRequirement + plannedAdditionalSuperContribution);
       const requestedPlannedExternalAccessibleContribution = phase === "working"
@@ -2609,6 +2640,13 @@
           netEmployerSuperContribution: person.netEmployerSuperContribution,
           discretionaryContributionStopAge: person.discretionaryContributionStopAge,
           plannedAdditionalSuperStoppedBySemiRetirement: person.plannedAdditionalSuperStoppedBySemiRetirement,
+          ...((person.salarySacrificeSuper > 0 || person.otherPreTaxPackaging > 0 || person.postTaxPackaging > 0 || person.salaryPackagingActive) ? {
+            salarySacrificeSuper: person.salarySacrificeSuper,
+            otherPreTaxPackaging: person.otherPreTaxPackaging,
+            postTaxPackaging: person.postTaxPackaging,
+            salaryPackagingStopAge: person.salaryPackagingStopAge,
+            salaryPackagingActive: person.salaryPackagingActive,
+          } : {}),
           recurringAdditionalSuperContribution: person.recurringAdditionalSuperContribution,
           netRecurringAdditionalSuperContribution: person.netRecurringAdditionalSuperContribution,
           plannedExtraConcessionalContribution: person.plannedExtraConcessionalContribution,
@@ -2656,10 +2694,11 @@
           totalPropertyEquity,
           totalDebt,
           totalNetWorth,
+          ...(salarySacrificeSuperContribution > 0 ? { salarySacrificeSuperContribution } : {}),
           plannedRecurringAdditionalConcessionalContributionsPaidFromCash: plannedRecurringAdditionalSuperContribution,
           plannedExtraConcessionalContributionsPaidFromCash: plannedExtraConcessionalContribution,
           plannedAdditionalConcessionalContributionsPaidFromCash: plannedAdditionalSuperContribution,
-          additionalConcessionalContributionsPaidFromCash: totalAdditionalSuperContribution,
+          additionalConcessionalContributionsPaidFromCash: roundCurrency(totalAdditionalSuperContribution - salarySacrificeSuperContribution),
           householdCashRequirementBeforePlannedAccessibleContribution,
           cashSurplusBeforePlannedAccessibleContribution: roundCurrency(netHouseholdCashIncome - householdCashRequirementBeforePlannedAccessibleContribution),
           householdCashRequirement,

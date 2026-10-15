@@ -2,8 +2,8 @@
   "baseline": "bd23b2a",
   "files": {
     "calculator.js": "35c773747c31b162b728a68db9d0c70670083db30519b1cc12065ab5fc2d88ef",
-    "semiRetirementProjection.js": "8b6e533e4203270ba8f13b5b1070318329ef9ee1540a4bde52014232d935dbc5",
-    "semiRetirementUi.js": "0cdb98bd3aa7e99189c0c2e513661f2180ae7b2c851645b530e3adb6954dc65d",
+    "semiRetirementProjection.js": "9a973fbcc69b5748daabfc630fbd329ed1f07da2c3439d3aefb43d1f0ab36f8d",
+    "semiRetirementUi.js": "c4fdee63dc80ef8625f352f4f24cf9d191f9ddb4b6b9e39fa327906ffbf68a8f",
     "v2-data.js": "935fb66f828874f0ccc267d99d611a47113a85315cb983e45ff49390a84d8baa",
     "storage.js": "c85374d3b59ad306de5d3657d8ff44c12eb69c1f4d4e1b71228656228a4ff58d",
     "security.js": "19caa32b797a87c7ddbbe4c7352717ce1f7df52e7292a0de529449c24f7baa4b",
@@ -1050,6 +1050,24 @@
         "previousHash": "48e8b2e061de72de0fa85aeeb1cb4c327ee07b3e0b044bde560cad2d3a2b8f65",
         "approvedHash": "3bf1c35779e73b4d64f69d8e80ee4d667d0d8299d4e7d19e1eb2829ff332137d",
         "reason": "Adds compact salary packaging presentation and optional payslip review entry point."
+      }
+    ]
+  },
+  "retirementSalaryPackagingRevision": {
+    "date": "2026-10-15",
+    "reason": "Carry current salary sacrifice and packaged deductions into retirement working and semi-retirement years, stopping at full retirement without double-counting cashflow.",
+    "changes": [
+      {
+        "group": "files",
+        "key": "semiRetirementProjection.js",
+        "previousHash": "8b6e533e4203270ba8f13b5b1070318329ef9ee1540a4bde52014232d935dbc5",
+        "approvedHash": "9a973fbcc69b5748daabfc630fbd329ed1f07da2c3439d3aefb43d1f0ab36f8d"
+      },
+      {
+        "group": "files",
+        "key": "semiRetirementUi.js",
+        "previousHash": "0cdb98bd3aa7e99189c0c2e513661f2180ae7b2c851645b530e3adb6954dc65d",
+        "approvedHash": "c4fdee63dc80ef8625f352f4f24cf9d191f9ddb4b6b9e39fa327906ffbf68a8f"
       }
     ]
   }
