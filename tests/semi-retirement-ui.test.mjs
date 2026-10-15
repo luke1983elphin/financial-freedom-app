@@ -2061,3 +2061,132 @@ test("funding outlook handles accessible investments already zero at retirement"
   assert.ok(renderer.includes('accessibleDepletion ? `Used by'));
   assert.ok(renderer.includes('"Remain available"'));
 });
+
+
+test("salary packaging from the current plan is carried into retirement defaults", () => {
+  const plan = basePlan();
+  plan.personal.retirementTiming = {
+    version: 1,
+    mode: "individual",
+    people: [
+      { id: "person1", alreadyRetired: false, hasSemiRetirement: true, semiRetirementAge: 55, fullRetirementAge: 60, semiRetirementGrossIncome: 60000 },
+      { id: "person2", alreadyRetired: false, hasSemiRetirement: false, semiRetirementAge: 60, fullRetirementAge: 60, semiRetirementGrossIncome: 0 },
+    ],
+  };
+  plan.incomeItems[0] = {
+    ...plan.incomeItems[0],
+    salarySacrificeEnabled: true,
+    salarySacrificeSuperAmount: 10000,
+    salarySacrificeSuperFrequency: "annually",
+    salarySacrificeOtherPreTaxAmount: 6000,
+    salarySacrificeOtherPreTaxFrequency: "annually",
+    salarySacrificeOtherPostTaxAmount: 2400,
+    salarySacrificeOtherPostTaxFrequency: "annually",
+  };
+
+  const result = CALC.calculatePlan(plan);
+  const draft = UI.buildSemiRetirementScenarioDefaults(plan, result).draft;
+  const luke = draft.people[0];
+
+  assert.equal(luke.currentSalarySacrificeSuper, 10000);
+  assert.equal(luke.currentOtherPreTaxPackaging, 6000);
+  assert.equal(luke.currentPostTaxPackaging, 2400);
+  assert.equal(luke.salaryPackagingStopAge, 60);
+
+  const inputs = UI.scenarioDraftToProjectionInputs(draft);
+  assert.equal(inputs.people[0].currentSalarySacrificeSuper, 10000);
+  assert.equal(inputs.people[0].currentOtherPreTaxPackaging, 6000);
+  assert.equal(inputs.people[0].currentPostTaxPackaging, 2400);
+  assert.equal(inputs.people[0].salaryPackagingStopAge, 60);
+});
+
+test("salary packaging continues through semi-retirement and stops at full retirement without double-counting cash", () => {
+  const input = {
+    projectionStartYear: 2026,
+    projectionEndAge: 51,
+    inflationRate: 0,
+    household: {
+      currentLifestyleSpending: 0,
+      semiRetirementLifestyleSpending: 0,
+      fullRetirementLifestyleSpending: 0,
+      otherAnnualIncome: 0,
+      annualLoanPrincipalRepayments: 0,
+    },
+    accessibleInvestments: {
+      openingBalance: 0,
+      openingOffsetBalance: 0,
+      annualReturnRate: 0,
+      annualFeesRate: 0,
+      externalAnnualAccessibleContribution: 0,
+    },
+    people: [{
+      id: "person1",
+      name: "Luke",
+      currentAge: 44,
+      currentGrossEmploymentIncome: 100000,
+      annualIncomeGrowthRate: 0,
+      semiRetirementAge: 45,
+      semiRetirementGrossIncome: 50000,
+      fullRetirementAge: 50,
+      superAccessAge: 60,
+      openingSuperBalance: 0,
+      superReturnBeforeRetirement: 0,
+      superReturnAfterRetirement: 0,
+      superAnnualFeesRate: 0,
+      employerSuperRate: 0.12,
+      currentSalarySacrificeSuper: 10000,
+      currentOtherPreTaxPackaging: 6000,
+      currentPostTaxPackaging: 2400,
+      salaryPackagingStopAge: 50,
+      existingAdditionalConcessionalContributions: 0,
+      additionalContributionsStopAge: 50,
+      stslOpeningBalance: 0,
+      hasPrivateHealthCover: true,
+    }],
+    scenario: {
+      oneOffLifestyleEvents: [],
+      oneOffIncomeEvents: [],
+      plannedConcessionalContributions: [],
+      workingPhaseSurplusDestination: "unallocated",
+      surplusDestination: "unallocated",
+      minimumAccessibleBalance: 0,
+      minimumEstateBalanceAtEndAge: 0,
+      withdrawalOrder: "accessible-first",
+    },
+    assets: [],
+    liabilities: [],
+    propertyIncome: [],
+    passiveIncome: [],
+  };
+
+  const result = ENGINE.projectRetirementScenario(input);
+  assert.equal(result.validation.isValid, true, JSON.stringify(result.validation.errors));
+  const fullTime = result.years.find((row) => row.calendarYear === 2026).people[0];
+  const semi = result.years.find((row) => row.calendarYear === 2027).people[0];
+  const retired = result.years.find((row) => row.calendarYear === 2032).people[0];
+  const fullTimeHousehold = result.years.find((row) => row.calendarYear === 2026).household;
+
+  assert.equal(fullTime.grossEmploymentIncome, 100000);
+  assert.equal(fullTime.salarySacrificeSuper, 10000);
+  assert.equal(fullTime.otherPreTaxPackaging, 6000);
+  assert.equal(fullTime.postTaxPackaging, 2400);
+  assert.equal(fullTime.taxableIncomeBeforeModelledConcessionalContributions, 94000);
+  assert.equal(fullTime.modelledTaxReducingConcessionalContribution, 10000);
+  assert.equal(fullTime.totalTaxableIncome, 84000);
+  assert.equal(fullTime.totalCashIncomeBeforeTax, 81600);
+  assert.equal(fullTime.additionalSuperContribution, 10000);
+  assert.equal(fullTimeHousehold.salarySacrificeSuperContribution, 10000);
+  assert.equal(fullTimeHousehold.plannedAdditionalConcessionalContributionsPaidFromCash, 0);
+
+  assert.equal(semi.grossEmploymentIncome, 50000);
+  assert.equal(semi.salarySacrificeSuper, 10000);
+  assert.equal(semi.otherPreTaxPackaging, 6000);
+  assert.equal(semi.postTaxPackaging, 2400);
+  assert.equal(semi.totalTaxableIncome, 34000);
+  assert.equal(semi.totalCashIncomeBeforeTax, 31600);
+
+  assert.equal(retired.grossEmploymentIncome, 0);
+  assert.equal(retired.salarySacrificeSuper, 0);
+  assert.equal(retired.otherPreTaxPackaging, 0);
+  assert.equal(retired.postTaxPackaging, 0);
+});
