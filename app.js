@@ -639,6 +639,7 @@
     error: "",
   };
   const weeklyActualDrafts = new Map();
+  const payslipAssistState = new Map();
   let engagementMissionExpanded = false;
   let semiRetirementScenarioDraft = null;
   let semiRetirementScenarioInitialDraft = null;
@@ -5401,25 +5402,98 @@
     return `<p class="field-help salary-annual-equivalent" data-salary-annual-equivalent="${escapeHtml(item.id)}">Annual equivalent: ${money(presentation.annualEquivalent)} per year.</p>`;
   }
 
-  function salarySacrificeFieldsHtml(item = {}) {
-    if (!item.salarySacrificeEnabled) return dynamicInput("incomeItems", item, "salarySacrificeEnabled", "I salary sacrifice part of my pay", { type: "checkbox" });
+  function salaryPackagingRowHtml(item, amountKey, frequencyKey, title, note, placeholder = "0") {
     return `
-      ${dynamicInput("incomeItems", item, "salarySacrificeEnabled", "I salary sacrifice part of my pay", { type: "checkbox" })}
+      <div class="salary-package-row">
+        <div class="salary-package-copy">
+          <strong>${escapeHtml(title)}</strong>
+          <small>${escapeHtml(note)}</small>
+        </div>
+        <div class="salary-package-controls">
+          ${dynamicInput("incomeItems", item, amountKey, "Amount", { step: "10", placeholder })}
+          ${dynamicInput("incomeItems", item, frequencyKey, "Frequency", { type: "select", options: frequencies })}
+        </div>
+      </div>
+    `;
+  }
+
+  function salarySacrificeFieldsHtml(item = {}) {
+    const toggle = `<div class="salary-sacrifice-toggle">${dynamicInput("incomeItems", item, "salarySacrificeEnabled", "I use salary sacrifice or salary packaging", { type: "checkbox" })}</div>`;
+    if (!item.salarySacrificeEnabled) return toggle;
+    return `
+      ${toggle}
       <section class="salary-sacrifice-section">
-        <div class="card-subheading">
-          <h4>Salary sacrifice and packaged deductions</h4>
-          <p>Enter the amounts shown on your pay arrangement. Employer super continues to use gross qualifying earnings.</p>
+        <div class="salary-package-heading">
+          <div>
+            <h4>Salary packaging</h4>
+            <p>Use the amounts shown on your payslip or packaging arrangement.</p>
+          </div>
+          <span>Employer super stays based on gross qualifying earnings.</span>
         </div>
-        <div class="input-grid mt-3">
-          ${dynamicInput("incomeItems", item, "salarySacrificeSuperAmount", "Salary sacrifice to super", { step: "10", placeholder: "0" })}
-          ${dynamicInput("incomeItems", item, "salarySacrificeSuperFrequency", "Super sacrifice frequency", { type: "select", options: frequencies })}
-          ${dynamicInput("incomeItems", item, "salarySacrificeOtherPreTaxAmount", "Other pre-tax packaged benefit", { step: "10", placeholder: "e.g. novated lease pre-tax amount" })}
-          ${dynamicInput("incomeItems", item, "salarySacrificeOtherPreTaxFrequency", "Pre-tax benefit frequency", { type: "select", options: frequencies })}
-          ${dynamicInput("incomeItems", item, "salarySacrificeOtherPostTaxAmount", "Post-tax deduction", { step: "10", placeholder: "Optional" })}
-          ${dynamicInput("incomeItems", item, "salarySacrificeOtherPostTaxFrequency", "Post-tax deduction frequency", { type: "select", options: frequencies })}
+        <div class="salary-package-list">
+          ${salaryPackagingRowHtml(item, "salarySacrificeSuperAmount", "salarySacrificeSuperFrequency", "To super", "Pre-tax concessional contribution")}
+          ${salaryPackagingRowHtml(item, "salarySacrificeOtherPreTaxAmount", "salarySacrificeOtherPreTaxFrequency", "Other pre-tax benefit", "For example, the pre-tax part of a novated lease", "Optional")}
+          ${salaryPackagingRowHtml(item, "salarySacrificeOtherPostTaxAmount", "salarySacrificeOtherPostTaxFrequency", "Post-tax deduction", "For example, an employee contribution or packaged deduction", "Optional")}
         </div>
-        <p class="field-help mt-3">For novated leases and other packaged benefits, enter the pre-tax and post-tax amounts from the arrangement rather than asking Financial Freedom to calculate the FBT or ECM structure.</p>
+        <p class="field-help salary-package-note">For a novated lease, enter the pre-tax and post-tax amounts already calculated by your provider. Financial Freedom does not calculate the FBT or ECM arrangement itself.</p>
       </section>
+    `;
+  }
+
+  function payslipReviewValue(label, value, suffix = "") {
+    if (value === null || value === undefined || value === "" || !Number.isFinite(Number(value))) return "";
+    return `<div><span>${escapeHtml(label)}</span><strong>${money(value)}${escapeHtml(suffix)}</strong></div>`;
+  }
+
+  function payslipFrequencyLabel(value) {
+    return frequencies.find(([key]) => key === value)?.[1] || String(value || "");
+  }
+
+  function salaryPayslipAssistantHtml(item = {}) {
+    const state = payslipAssistState.get(String(item.id || "")) || {};
+    const data = state.data || null;
+    const review = data ? `
+      <div class="payslip-review">
+        <div class="payslip-review-heading">
+          <div><strong>Review what we found</strong><small>${escapeHtml(state.filename || "Payslip")}</small></div>
+          <span>Nothing changes until you confirm.</span>
+        </div>
+        <div class="payslip-review-grid">
+          ${payslipReviewValue("Gross pay", data.grossPay)}
+          ${data.payFrequency ? `<div><span>Pay frequency</span><strong>${escapeHtml(payslipFrequencyLabel(data.payFrequency))}</strong></div>` : ""}
+          ${payslipReviewValue("PAYG withholding", data.paygWithholding)}
+          ${payslipReviewValue("Employer super", data.employerSuper)}
+          ${payslipReviewValue("Salary sacrifice to super", data.salarySacrificeSuper)}
+          ${payslipReviewValue("Other pre-tax deductions", data.preTaxDeductions)}
+          ${payslipReviewValue("Post-tax deductions", data.postTaxDeductions)}
+          ${payslipReviewValue("STSL withholding", data.stslWithholding)}
+          ${payslipReviewValue("Net pay", data.netPay)}
+        </div>
+        <div class="payslip-review-actions">
+          <button class="btn btn-primary" type="button" data-payslip-confirm="${escapeHtml(item.id)}">Use these amounts</button>
+          <button class="btn" type="button" data-payslip-clear="${escapeHtml(item.id)}">Choose another</button>
+        </div>
+      </div>
+    ` : "";
+    const message = state.status === "loading"
+      ? '<p class="payslip-status">Reading payslip…</p>'
+      : state.error
+        ? `<p class="field-error" role="alert">${escapeHtml(state.error)}</p>`
+        : "";
+    return `
+      <details class="payslip-assistant"${state.status || state.error ? " open" : ""}>
+        <summary>
+          <span><strong>Use a recent payslip</strong><small>Optional — upload a PDF or image to fill these salary fields faster.</small></span>
+          <span class="payslip-summary-action">Upload</span>
+        </summary>
+        <div class="payslip-assistant-body">
+          <input class="hidden" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" data-payslip-file="${escapeHtml(item.id)}">
+          <button class="btn" type="button" data-payslip-browse="${escapeHtml(item.id)}" ${state.status === "loading" ? "disabled" : ""}>Choose payslip</button>
+          <p class="field-help">PDF, JPG, PNG or WebP. The file is sent only for extraction and is not saved in your Financial Freedom plan. Review every amount before confirming.</p>
+          ${message}
+          ${review}
+        </div>
+      </details>
     `;
   }
 
@@ -5436,10 +5510,10 @@
       const employerSuperAnnual = result.employerSuperContributions?.[`${ownerKey}Amount`] || 0;
       const sacrificeAnnual = result.salaryPackaging?.[ownerKey]?.superSacrifice || 0;
       return `
-        <div class="summary-grid mt-4 salary-take-home-summary">
+        <div class="summary-grid mt-4 salary-take-home-summary${sacrificeAnnual > 0 ? " has-sacrifice" : ""}">
           ${summaryTile("Estimated take-home pay", `${money(payroll.estimatedNetEmploymentIncome / divisor)} / ${frequencyLabel}`)}
           ${summaryTile("Employer super", `${money(employerSuperAnnual / divisor)} / ${frequencyLabel}`)}
-          ${summaryTile("Salary sacrifice to super", `${money(sacrificeAnnual / divisor)} / ${frequencyLabel}`)}
+          ${sacrificeAnnual > 0 ? summaryTile("Salary sacrifice to super", `${money(sacrificeAnnual / divisor)} / ${frequencyLabel}`) : ""}
         </div>
       `;
     } catch {
@@ -5450,6 +5524,81 @@
   function refreshSalaryAnnualEquivalent(item = {}) {
     const helper = document.querySelector(`[data-salary-annual-equivalent="${CSS.escape(String(item.id || ""))}"]`);
     if (helper) helper.textContent = `Annual equivalent: ${money(salaryAmountPresentation(item).annualEquivalent)} per year.`;
+  }
+
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("The payslip could not be read."));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function extractPayslipForSalary(incomeId, file) {
+    const id = String(incomeId || "");
+    const allowedTypes = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp"]);
+    if (!file || !allowedTypes.has(file.type)) {
+      payslipAssistState.set(id, { error: "Choose a PDF, JPG, PNG or WebP payslip." });
+      renderForms();
+      return;
+    }
+    if (file.size > 2.5 * 1024 * 1024) {
+      payslipAssistState.set(id, { error: "Please choose a payslip smaller than 2.5 MB." });
+      renderForms();
+      return;
+    }
+    payslipAssistState.set(id, { status: "loading", filename: file.name });
+    renderForms();
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      const response = await fetch("/api/payslip-extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: file.name, mimeType: file.type, dataUrl }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "The payslip could not be read.");
+      if (!payload.payslip || !Number.isFinite(Number(payload.payslip.grossPay)) || Number(payload.payslip.grossPay) <= 0) {
+        throw new Error("We could not confidently find the gross pay. Enter the salary manually or try another payslip.");
+      }
+      payslipAssistState.set(id, { status: "review", filename: file.name, data: payload.payslip });
+    } catch (error) {
+      payslipAssistState.set(id, { error: error.message || "The payslip could not be read.", filename: file.name });
+    }
+    renderForms();
+  }
+
+  function applyPayslipToSalary(incomeId) {
+    const id = String(incomeId || "");
+    const state = payslipAssistState.get(id);
+    const data = state?.data;
+    if (!data) return;
+    ensureCollectionData();
+    const item = plan.incomeItems?.find((entry) => String(entry.id) === id);
+    if (!item || normaliseIncomeType(item.type) !== "salaryWages") return;
+    const validFrequency = frequencies.some(([key]) => key === data.payFrequency) ? data.payFrequency : item.frequency || "fortnightly";
+    item.amount = Number(data.grossPay) || 0;
+    item.frequency = validFrequency;
+    const superSacrifice = Math.max(0, Number(data.salarySacrificeSuper) || 0);
+    const preTax = Math.max(0, Number(data.preTaxDeductions) || 0);
+    const postTax = Math.max(0, Number(data.postTaxDeductions) || 0);
+    item.salarySacrificeEnabled = superSacrifice > 0 || preTax > 0 || postTax > 0;
+    item.salarySacrificeSuperAmount = superSacrifice;
+    item.salarySacrificeSuperFrequency = validFrequency;
+    item.salarySacrificeOtherPreTaxAmount = preTax;
+    item.salarySacrificeOtherPreTaxFrequency = validFrequency;
+    item.salarySacrificeOtherPostTaxAmount = postTax;
+    item.salarySacrificeOtherPostTaxFrequency = validFrequency;
+    payslipAssistState.delete(id);
+    generatedWeeklyPlanner = null;
+    if (weeklyPlan) {
+      markWeeklyTimingReviewRequired();
+      saveWeeklyPlan();
+    }
+    autosavePlan();
+    renderAll();
+    updateSaveStatus("Payslip amounts applied. Review the salary estimate before continuing.");
   }
 
   function hasEnteredFinancialValue(value) {
@@ -5584,6 +5733,7 @@
           ${type === "salaryWages" ? salaryAnnualEquivalentHtml(item) : ""}
           ${type === "taxFree" ? `<p class="field-help">Included in cashflow and retirement forecasts, with no income tax or employer super modelled on this amount.</p>` : ""}
           ${dynamicInput("incomeItems", item, "frequency", "Frequency", { type: "select", options: frequencies })}
+          ${type === "salaryWages" ? salaryPayslipAssistantHtml(item) : ""}
           ${type === "salaryWages" ? salarySacrificeFieldsHtml(item) : ""}
           ${dividendTaxFields(item, type)}
           ${type === "other" ? dynamicInput("incomeItems", item, "isPassiveIncome", "Passive income", { type: "checkbox", infoKey: "passiveIncome" }) : ""}
@@ -17093,6 +17243,12 @@
 
     document.addEventListener("change", (event) => {
       const target = event.target;
+      if (target.dataset.payslipFile !== undefined) {
+        const file = target.files?.[0];
+        if (file) extractPayslipForSalary(target.dataset.payslipFile, file);
+        target.value = "";
+        return;
+      }
       if (target.dataset.retirementGoalAge !== undefined) {
         const age = Number(target.value);
         if (!Number.isFinite(age) || age <= 0 || !Number.isInteger(age) || age < Number(plan.personal.person1Age) || age > 110) { target.setCustomValidity("Enter an age from your current age to 110."); target.reportValidity(); return; }
@@ -17251,6 +17407,26 @@
     });
 
     document.addEventListener("click", (event) => {
+      const payslipBrowse = event.target.closest("[data-payslip-browse]");
+      if (payslipBrowse) {
+        event.preventDefault();
+        document.querySelector(`[data-payslip-file="${CSS.escape(payslipBrowse.dataset.payslipBrowse || "")}"]`)?.click();
+        return;
+      }
+      const payslipConfirm = event.target.closest("[data-payslip-confirm]");
+      if (payslipConfirm) {
+        event.preventDefault();
+        applyPayslipToSalary(payslipConfirm.dataset.payslipConfirm);
+        return;
+      }
+      const payslipClear = event.target.closest("[data-payslip-clear]");
+      if (payslipClear) {
+        event.preventDefault();
+        payslipAssistState.delete(String(payslipClear.dataset.payslipClear || ""));
+        renderForms();
+        return;
+      }
+
       const durabilityAction = event.target.closest("[data-durability-action]");
       if (durabilityAction) {
         event.preventDefault();
