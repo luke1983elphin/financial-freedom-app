@@ -638,8 +638,6 @@
         stslProjectedClosingBalance,
         allocatedExtraSuper: roundCurrency(allocatedExtraSuper),
         salarySacrifice: roundCurrency(allocatedExtraSuper),
-        preTaxPayrollDeductions: roundCurrency(preTaxDeductions),
-        postTaxPayrollDeductions: roundCurrency(postTaxDeductions),
         otherPayrollDeductions: roundCurrency(preTaxDeductions + postTaxDeductions),
         estimatedNetEmploymentIncome: roundCurrency(Math.max(0, gross - tax.incomeTax - tax.medicareLevy - helpRepayment - allocatedExtraSuper - preTaxDeductions - postTaxDeductions)),
       };
@@ -1038,32 +1036,34 @@
       if (type === "salaryWages") {
         if (owner === "person2") {
           summary.person2Salary = roundCurrency(summary.person2Salary + annualAmount);
-          summary.person2SalaryTaxable = roundCurrency(summary.person2SalaryTaxable + taxableAmount);
+          summary.person2Taxable = roundCurrency(summary.person2Taxable + taxableAmount);
         } else {
           summary.person1Salary = roundCurrency(summary.person1Salary + annualAmount);
-          summary.person1SalaryTaxable = roundCurrency(summary.person1SalaryTaxable + taxableAmount);
+          summary.person1Taxable = roundCurrency(summary.person1Taxable + taxableAmount);
         }
       } else if (owner === "person1") {
         summary.person1Other = roundCurrency(summary.person1Other + annualAmount);
         summary.person1TaxableOther = roundCurrency(summary.person1TaxableOther + taxableAmount);
+        summary.person1Taxable = roundCurrency(summary.person1Taxable + taxableAmount);
       } else if (owner === "person2") {
         summary.person2Other = roundCurrency(summary.person2Other + annualAmount);
         summary.person2TaxableOther = roundCurrency(summary.person2TaxableOther + taxableAmount);
+        summary.person2Taxable = roundCurrency(summary.person2Taxable + taxableAmount);
       } else {
         summary.jointOther = roundCurrency(summary.jointOther + annualAmount);
         summary.jointOtherTaxable = roundCurrency(summary.jointOtherTaxable + taxableAmount);
-        summary.person1TaxableOther = roundCurrency(summary.person1TaxableOther + taxableAmount * allocation.person1);
-        summary.person2TaxableOther = roundCurrency(summary.person2TaxableOther + taxableAmount * allocation.person2);
+        const person1TaxableShare = roundCurrency(taxableAmount * allocation.person1);
+        const person2TaxableShare = roundCurrency(taxableAmount * allocation.person2);
+        summary.person1TaxableOther = roundCurrency(summary.person1TaxableOther + person1TaxableShare);
+        summary.person2TaxableOther = roundCurrency(summary.person2TaxableOther + person2TaxableShare);
+        summary.person1Taxable = roundCurrency(summary.person1Taxable + person1TaxableShare);
+        summary.person2Taxable = roundCurrency(summary.person2Taxable + person2TaxableShare);
       }
-      summary.person1Taxable = roundCurrency(summary.person1SalaryTaxable + summary.person1TaxableOther);
-      summary.person2Taxable = roundCurrency(summary.person2SalaryTaxable + summary.person2TaxableOther);
       summary.otherIncome = roundCurrency(summary.person1Other + summary.person2Other + summary.jointOther);
       return summary;
     }, {
       person1Salary: 0,
       person2Salary: 0,
-      person1SalaryTaxable: 0,
-      person2SalaryTaxable: 0,
       person1Other: 0,
       person2Other: 0,
       person1TaxableOther: 0,
@@ -2452,6 +2452,7 @@
     const financialIndependenceAssets = accessibleFICapital;
     const incomeSummary = incomeBreakdown(plan);
     const salaryPackaging = salaryPackagingSummary(plan);
+    const hasSalaryPackaging = salaryPackaging.household.totalCashDeductions > 0;
     const person1AnnualIncome = incomeSummary.person1Taxable;
     const person2AnnualIncome = incomeSummary.person2Taxable;
     const person1SalaryWages = incomeSummary.person1Salary;
@@ -2543,19 +2544,28 @@
     });
     const legacyPerson1SalarySacrifice = nonNegative(plan.investing.person1SalarySacrifice);
     const legacyPerson2SalarySacrifice = nonNegative(plan.investing.person2SalarySacrifice);
+    const legacyPayrollExtraSplit = splitAdditionalContribution(
+      plan.investing.extraSuperContributions,
+      person1SalaryWages,
+      person2SalaryWages,
+    );
     const payrollEstimate = calculatePayrollEstimate({
       person1Income: person1SalaryWages,
       person2Income: person2SalaryWages,
-      extraConcessionalSuper: 0,
+      extraConcessionalSuper: hasSalaryPackaging ? 0 : plan.investing.extraSuperContributions,
       helpDebt: plan.liabilities.hecsHelpDebt,
       person1HelpDebt: person1StslBalance,
       person2HelpDebt: person2StslBalance,
-      person1SalarySacrifice: roundCurrency(salaryPackaging.person1.superSacrifice + (legacyPerson1SalarySacrifice || extraSuperSplitForTax.person1)),
-      person2SalarySacrifice: roundCurrency(salaryPackaging.person2.superSacrifice + (legacyPerson2SalarySacrifice || extraSuperSplitForTax.person2)),
-      person1PreTaxDeductions: salaryPackaging.person1.otherPreTax,
-      person2PreTaxDeductions: salaryPackaging.person2.otherPreTax,
-      person1PostTaxDeductions: salaryPackaging.person1.otherPostTax,
-      person2PostTaxDeductions: salaryPackaging.person2.otherPostTax,
+      person1SalarySacrifice: hasSalaryPackaging
+        ? roundCurrency(salaryPackaging.person1.superSacrifice + (legacyPerson1SalarySacrifice || legacyPayrollExtraSplit.person1))
+        : plan.investing.person1SalarySacrifice,
+      person2SalarySacrifice: hasSalaryPackaging
+        ? roundCurrency(salaryPackaging.person2.superSacrifice + (legacyPerson2SalarySacrifice || legacyPayrollExtraSplit.person2))
+        : plan.investing.person2SalarySacrifice,
+      person1PreTaxDeductions: hasSalaryPackaging ? salaryPackaging.person1.otherPreTax : undefined,
+      person2PreTaxDeductions: hasSalaryPackaging ? salaryPackaging.person2.otherPreTax : undefined,
+      person1PostTaxDeductions: hasSalaryPackaging ? salaryPackaging.person1.otherPostTax : undefined,
+      person2PostTaxDeductions: hasSalaryPackaging ? salaryPackaging.person2.otherPostTax : undefined,
       person1PayrollDeductions: plan.income.person1PayrollDeductions,
       person2PayrollDeductions: plan.income.person2PayrollDeductions,
       person1HasStslDebt: person1HasStsl,
@@ -2643,7 +2653,10 @@
       netIncomeAfterTax: netIncomeAfterTaxHelp, livingExpenses: annualLivingExpenses,
       annualSurplus: cashSurplusBeforeInvesting, configuredInvestmentContribution, actualAffordableInvestmentContribution,
       actualInvestmentContribution: annualInvestmentContributions, extraSuperContribution: annualExtraSuperContributions,
-      salaryPackaging, salaryPackagingCashDeductions: salaryPackaging.household.totalCashDeductions,
+      ...(hasSalaryPackaging ? {
+        salaryPackaging,
+        salaryPackagingCashDeductions: salaryPackaging.household.totalCashDeductions,
+      } : {}),
       remainingCashSurplus: cashSurplusAfterInvesting };
     const finalProjectedCashSurplus = cashSurplusAfterInvesting;
     const cashSurplusAfterTaxHelpAndInvesting = finalProjectedCashSurplus;
@@ -2979,7 +2992,7 @@
       person1SalaryWages,
       person2SalaryWages,
       incomeBreakdown: incomeSummary,
-      salaryPackaging,
+      ...(hasSalaryPackaging ? { salaryPackaging } : {}),
       otherAnnualIncome,
       passiveIncomeBreakdown: passiveIncomeSummary,
       annualPassiveIncome,
