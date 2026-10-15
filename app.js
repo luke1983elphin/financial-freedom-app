@@ -5488,8 +5488,13 @@
         </summary>
         <div class="payslip-assistant-body">
           <input class="hidden" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" data-payslip-file="${escapeHtml(item.id)}">
-          <button class="btn" type="button" data-payslip-browse="${escapeHtml(item.id)}" ${state.status === "loading" ? "disabled" : ""}>Choose payslip</button>
-          <p class="field-help">PDF, JPG, PNG or WebP. The file is sent only for extraction and is not saved in your Financial Freedom plan. Review every amount before confirming.</p>
+          <div class="payslip-dropzone" role="button" tabindex="0" data-payslip-dropzone="${escapeHtml(item.id)}" aria-label="Upload payslip by browsing or drag and drop">
+            <strong>${state.status === "loading" ? "Reading payslip…" : "Drag & drop payslip here"}</strong>
+            <span>or</span>
+            <button class="btn" type="button" data-payslip-browse="${escapeHtml(item.id)}" ${state.status === "loading" ? "disabled" : ""}>Choose payslip</button>
+            <small>PDF, JPG, PNG or WebP · max 2.5 MB</small>
+          </div>
+          <p class="field-help">The file is sent only for extraction and is not saved in your Financial Freedom plan. Review every amount before confirming.</p>
           ${message}
           ${review}
         </div>
@@ -17384,6 +17389,12 @@
     });
 
     document.addEventListener("keydown", (event) => {
+      const dropzone = event.target.closest?.("[data-payslip-dropzone]");
+      if (dropzone && (event.key === "Enter" || event.key === " ")) {
+        event.preventDefault();
+        document.querySelector(`[data-payslip-file="${CSS.escape(dropzone.dataset.payslipDropzone || "")}"]`)?.click();
+        return;
+      }
       const more = document.getElementById("moreNavigation");
       if (event.key === "Escape" && more?.open && more.contains(event.target)) {
         more.open = false;
@@ -17406,7 +17417,36 @@
       commitLinkedSetup();
     });
 
+    document.addEventListener("dragover", (event) => {
+      const dropzone = event.target.closest?.("[data-payslip-dropzone]");
+      if (!dropzone) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
+      dropzone.classList.add("is-dragging");
+    });
+
+    document.addEventListener("dragleave", (event) => {
+      const dropzone = event.target.closest?.("[data-payslip-dropzone]");
+      if (!dropzone) return;
+      if (!dropzone.contains(event.relatedTarget)) dropzone.classList.remove("is-dragging");
+    });
+
+    document.addEventListener("drop", (event) => {
+      const dropzone = event.target.closest?.("[data-payslip-dropzone]");
+      if (!dropzone) return;
+      event.preventDefault();
+      dropzone.classList.remove("is-dragging");
+      const file = event.dataTransfer?.files?.[0];
+      if (file) extractPayslipForSalary(dropzone.dataset.payslipDropzone, file);
+    });
+
     document.addEventListener("click", (event) => {
+      const payslipDropzone = event.target.closest("[data-payslip-dropzone]");
+      if (payslipDropzone && !event.target.closest("[data-payslip-browse]")) {
+        event.preventDefault();
+        document.querySelector(`[data-payslip-file="${CSS.escape(payslipDropzone.dataset.payslipDropzone || "")}"]`)?.click();
+        return;
+      }
       const payslipBrowse = event.target.closest("[data-payslip-browse]");
       if (payslipBrowse) {
         event.preventDefault();

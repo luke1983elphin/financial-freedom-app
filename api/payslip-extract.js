@@ -124,10 +124,46 @@ function extractionPrompt() {
   ].join("\n");
 }
 
+async function uploadTemporaryPdf({ base64, filename }) {
+  const bytes = Buffer.from(base64, "base64");
+  const form = new FormData();
+  form.append("purpose", "user_data");
+  form.append("file", new Blob([bytes], { type: "application/pdf" }), filename);
+  const response = await fetch("https://api.openai.com/v1/files", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+    body: form,
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || !payload.id) {
+    console.error("Payslip PDF upload failed", { status: response.status, code: payload?.error?.code || "", type: payload?.error?.type || "" });
+    const error = new Error(response.status === 429
+      ? "Payslip reading is busy. Please try again shortly."
+      : "The payslip PDF could not be prepared for reading. Please try again.");
+    error.status = response.status;
+    throw error;
+  }
+  return payload.id;
+}
+
+async function deleteTemporaryFile(fileId) {
+  if (!fileId) return;
+  try {
+    await fetch(`https://api.openai.com/v1/files/${encodeURIComponent(fileId)}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+    });
+  } catch {
+    // Best-effort cleanup. Do not block the user response if cleanup fails.
+  }
+}
+
 async function extractWithOpenAi({ mimeType, base64, filename }) {
   const content = [{ type: "input_text", text: extractionPrompt() }];
+  let temporaryFileId = "";
   if (mimeType === "application/pdf") {
-    content.push({ type: "input_file", filename, file_data: base64 });
+    temporaryFileId = await uploadTemporaryPdf({ base64, filename });
+    content.push({ type: "input_file", file_id: temporaryFileId });
   } else {
     content.push({ type: "input_image", image_url: `data:${mimeType};base64,${base64}`, detail: "high" });
   }
@@ -155,9 +191,10 @@ async function extractWithOpenAi({ mimeType, base64, filename }) {
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
+      console.error("Payslip extraction response failed", { status: response.status, code: payload?.error?.code || "", type: payload?.error?.type || "" });
       const error = new Error(response.status === 429
         ? "Payslip reading is busy. Please try again shortly."
-        : "The payslip reading service is unavailable. Please try again later.");
+        : "The payslip reading service could not read this file. Please try another payslip.");
       error.status = response.status;
       throw error;
     }
@@ -166,6 +203,7 @@ async function extractWithOpenAi({ mimeType, base64, filename }) {
     return normalisePayslip(parseJsonText(text));
   } finally {
     clearTimeout(timeout);
+    await deleteTemporaryFile(temporaryFileId);
   }
 }
 
