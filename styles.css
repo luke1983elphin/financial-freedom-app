@@ -9404,3 +9404,302 @@ body.scenario-save-modal-open {
 .what-if-custom-field select:focus-visible,.what-if-custom-field input:focus-visible { outline:3px solid rgba(15,159,110,.22); outline-offset:2px; border-color:#0f9f6e; }
 .what-if-custom-apply { margin-top:2px; }
 @media (max-width:740px) { .what-if-custom-grid { grid-template-columns:1fr; gap:12px; } .what-if-custom-card { padding:16px; } }
+
+
+/* Salary packaging and payslip assistant */
+.salary-sacrifice-toggle,
+.payslip-assistant,
+.salary-sacrifice-section {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.salary-sacrifice-toggle .toggle-field {
+  min-height: 52px;
+}
+
+.salary-sacrifice-section {
+  border: 1px solid #dbe4ee;
+  border-radius: 16px;
+  background: #f8fafc;
+  padding: 14px;
+}
+
+.salary-package-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.salary-package-heading h4 {
+  color: #0f2742;
+  font-size: 16px;
+  font-weight: 950;
+  line-height: 1.25;
+}
+
+.salary-package-heading p,
+.salary-package-heading > span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.salary-package-heading > span {
+  max-width: 250px;
+  text-align: right;
+}
+
+.salary-package-list {
+  display: grid;
+  gap: 10px;
+}
+
+.salary-package-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.9fr);
+  gap: 14px;
+  align-items: end;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 10px;
+}
+
+.salary-package-row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.salary-package-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.salary-package-copy strong {
+  color: #0f2742;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.salary-package-copy small {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.salary-package-controls {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.8fr) minmax(130px, 1fr);
+  gap: 8px;
+}
+
+.salary-package-controls .field-label {
+  font-size: 11px;
+}
+
+.salary-package-controls .field-input {
+  min-height: 46px;
+  padding: 10px 12px;
+  font-size: 14px;
+}
+
+.salary-package-note {
+  margin-top: 10px;
+}
+
+.salary-take-home-summary {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.salary-take-home-summary.has-sacrifice {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.salary-take-home-summary .summary-tile {
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.salary-take-home-summary .summary-tile strong {
+  font-size: 18px;
+}
+
+.payslip-assistant {
+  border: 1px dashed #cbd5e1;
+  border-radius: 14px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.payslip-assistant > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  padding: 11px 13px;
+  list-style: none;
+}
+
+.payslip-assistant > summary::-webkit-details-marker {
+  display: none;
+}
+
+.payslip-assistant > summary span:first-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.payslip-assistant > summary strong {
+  color: #0f2742;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.payslip-assistant > summary small {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.payslip-summary-action {
+  color: #0f9f6e;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.payslip-assistant[open] > summary {
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.payslip-assistant-body {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.payslip-assistant-body > .btn {
+  justify-self: start;
+}
+
+.payslip-status {
+  color: #0f2742;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.payslip-review {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #bdebd7;
+  border-radius: 14px;
+  background: #f3fbf7;
+  padding: 12px;
+}
+
+.payslip-review-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.payslip-review-heading > div {
+  display: grid;
+  gap: 2px;
+}
+
+.payslip-review-heading strong {
+  color: #0f2742;
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.payslip-review-heading small,
+.payslip-review-heading > span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.payslip-review-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.payslip-review-grid > div {
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 9px 10px;
+}
+
+.payslip-review-grid span {
+  display: block;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.payslip-review-grid strong {
+  display: block;
+  margin-top: 2px;
+  color: #0f2742;
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.payslip-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 720px) {
+  .salary-package-heading,
+  .salary-package-row,
+  .payslip-review-heading {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .salary-package-heading > span {
+    max-width: none;
+    text-align: left;
+  }
+
+  .salary-package-controls {
+    grid-template-columns: minmax(0, 1fr) minmax(115px, 0.8fr);
+  }
+
+  .salary-take-home-summary,
+  .salary-take-home-summary.has-sacrifice {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .salary-take-home-summary.has-sacrifice .summary-tile:last-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 430px) {
+  .salary-package-controls,
+  .payslip-review-grid,
+  .salary-take-home-summary,
+  .salary-take-home-summary.has-sacrifice {
+    grid-template-columns: 1fr;
+  }
+
+  .salary-take-home-summary.has-sacrifice .summary-tile:last-child {
+    grid-column: auto;
+  }
+}
