@@ -5894,8 +5894,8 @@
         <div class="input-grid mt-4">
           ${dynamicInput("liabilityItems", loan, "name", "Loan name", { kind: "text", placeholder: "e.g. Smith St loan" })}
           ${dynamicInput("liabilityItems", loan, "balance", "Loan balance", { step: "1000" })}
-          ${dynamicInput("liabilityItems", loan, "interestRatePct", "Interest rate (%)", { step: "0.1" })}
-          ${dynamicInput("liabilityItems", loan, "repayment", "Repayment amount", { step: "100" })}
+          ${dynamicInput("liabilityItems", loan, "interestRatePct", "Interest rate (%)", { step: "0.01" })}
+          ${dynamicInput("liabilityItems", loan, "repayment", "Repayment amount", { step: "0.01" })}
           ${dynamicInput("liabilityItems", loan, "repaymentFrequency", "Repayment frequency", { type: "select", options: frequencies })}
           ${dynamicInput("liabilityItems", loan, "termYears", "Remaining term (years)", { step: "1" })}
           ${dynamicInput("liabilityItems", loan, "repaymentType", "Repayment type", { type: "select", options: rentalLoanRepaymentTypeOptions })}
@@ -6046,8 +6046,8 @@
       </div>` : "";
     return `<div class="input-grid linked-setup-conditional">
       ${linkedSetupInput("loanBalance", "Current loan balance", { step: "1000" })}
-      ${linkedSetupInput("interestRatePct", "Interest rate (%)", { step: "0.1" })}
-      ${linkedSetupInput("repayment", "Repayment amount", { step: "100" })}
+      ${linkedSetupInput("interestRatePct", "Interest rate (%)", { step: "0.01" })}
+      ${linkedSetupInput("repayment", "Repayment amount", { step: "0.01" })}
       ${linkedSetupInput("repaymentFrequency", "Repayment frequency", { type: "select", options: frequencies })}
       ${linkedSetupInput("termYears", "Remaining term (years)", { step: "1" })}
       ${linkedSetupDraft.kind === "rental" ? linkedSetupInput("offsetBalance", "Offset balance", { step: "1000" }) : ""}
@@ -6375,8 +6375,8 @@
           ${dynamicInput("liabilityItems", item, "name", "Liability name", { kind: "text", placeholder: "e.g. Home loan" })}
           ${dynamicInput("liabilityItems", item, "type", "Liability type", { type: "select", options: liabilityTypeOptions })}
           ${dynamicInput("liabilityItems", item, "balance", "Balance", { step: "1000" })}
-          ${dynamicInput("liabilityItems", item, "interestRatePct", "Interest rate (%)", { step: "0.1" })}
-          ${dynamicInput("liabilityItems", item, "repayment", "Repayment amount", { step: "100" })}
+          ${dynamicInput("liabilityItems", item, "interestRatePct", "Interest rate (%)", { step: "0.01" })}
+          ${dynamicInput("liabilityItems", item, "repayment", "Repayment amount", { step: "0.01" })}
           ${dynamicInput("liabilityItems", item, "repaymentFrequency", "Repayment frequency", { type: "select", options: frequencies })}
           ${dynamicInput("liabilityItems", item, "termYears", "Remaining term (years)", { step: "1" })}
           ${rentalFields}
