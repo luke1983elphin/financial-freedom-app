@@ -5466,6 +5466,7 @@
           ${payslipReviewValue("Salary sacrifice to super", data.salarySacrificeSuper)}
           ${payslipReviewValue("Other pre-tax deductions", data.preTaxDeductions)}
           ${payslipReviewValue("Post-tax deductions", data.postTaxDeductions)}
+          ${payslipReviewValue("STSL withholding", data.stslWithholding)}
           ${payslipReviewValue("Net pay", data.netPay)}
         </div>
         <div class="payslip-review-actions">
@@ -5480,7 +5481,7 @@
         ? `<p class="field-error" role="alert">${escapeHtml(state.error)}</p>`
         : "";
     return `
-      <details class="payslip-assistant">
+      <details class="payslip-assistant"${state.status || state.error ? " open" : ""}>
         <summary>
           <span><strong>Use a recent payslip</strong><small>Optional — upload a PDF or image to fill these salary fields faster.</small></span>
           <span class="payslip-summary-action">Upload</span>
