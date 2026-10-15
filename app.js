@@ -6601,7 +6601,7 @@
     container.innerHTML = `
       <div class="input-grid">${visible.map(field).join("")}</div>
       <details class="setup-advanced-section mt-4"><summary>Advanced assumptions</summary><div class="input-grid mt-4">${advanced.map(field).join("")}</div></details>
-      <div id="wizardMlsAssumption" class="mt-4"></div>${modellingInformationHtml()}`;
+      <details class="setup-advanced-section mt-4"><summary>Tax &amp; repayment details</summary><div id="wizardMlsAssumption" class="mt-4"></div><div id="wizardHelpReview" class="summary-grid mt-4"></div></details>`;
   }
 
   function renderGoalCollection(containerId) {
