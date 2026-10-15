@@ -149,3 +149,57 @@ test("passive income includes only passive categories and flagged other income",
   assert.equal(result.passiveIncomeBreakdown.otherPassive, 4000);
   assert.equal(result.passiveIncomeBreakdown.total, 6000);
 });
+
+
+test("salary sacrifice to super reduces taxable salary but does not reduce employer super base", () => {
+  const { CALC, plan } = basePlan();
+  plan.incomeItems = [{
+    id: "salary-1",
+    type: "salaryWages",
+    owner: "person1",
+    amount: 100000,
+    frequency: "annually",
+    salarySacrificeEnabled: true,
+    salarySacrificeSuperAmount: 10000,
+    salarySacrificeSuperFrequency: "annually",
+  }];
+
+  const result = CALC.calculatePlan(plan);
+
+  assert.equal(result.person1SalaryWages, 100000);
+  assert.equal(result.person1AnnualIncome, 90000);
+  assert.equal(result.employerSuperContributions.person1Calculated, 12000);
+  assert.equal(result.salaryPackaging.person1.superSacrifice, 10000);
+  assert.equal(result.grossConcessionalSuperContributions, 22000);
+});
+
+test("generic packaged benefits reduce cash take-home using separate pre-tax and post-tax deductions", () => {
+  const { CALC, plan } = basePlan();
+  plan.incomeItems = [{
+    id: "salary-1",
+    type: "salaryWages",
+    owner: "person1",
+    amount: 100000,
+    frequency: "annually",
+    salarySacrificeEnabled: true,
+    salarySacrificeOtherPreTaxAmount: 6000,
+    salarySacrificeOtherPreTaxFrequency: "annually",
+    salarySacrificeOtherPostTaxAmount: 2400,
+    salarySacrificeOtherPostTaxFrequency: "annually",
+  }];
+
+  const baselinePlan = structuredClone(plan);
+  baselinePlan.incomeItems[0].salarySacrificeEnabled = false;
+  const baseline = CALC.calculatePlan(baselinePlan);
+  const result = CALC.calculatePlan(plan);
+
+  assert.equal(result.person1AnnualIncome, 94000);
+  assert.equal(result.salaryPackaging.person1.otherPreTax, 6000);
+  assert.equal(result.salaryPackaging.person1.otherPostTax, 2400);
+  assert.equal(result.employerSuperContributions.person1Calculated, 12000);
+  assert.ok(result.netIncomeAfterTaxHelp < baseline.netIncomeAfterTaxHelp);
+  assert.equal(
+    result.payrollEstimates.person1.otherPayrollDeductions,
+    8400,
+  );
+});
