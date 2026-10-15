@@ -5732,6 +5732,7 @@
           ${type === "salaryWages" ? salaryAnnualEquivalentHtml(item) : ""}
           ${type === "taxFree" ? `<p class="field-help">Included in cashflow and retirement forecasts, with no income tax or employer super modelled on this amount.</p>` : ""}
           ${dynamicInput("incomeItems", item, "frequency", "Frequency", { type: "select", options: frequencies })}
+          ${type === "salaryWages" ? salaryPayslipAssistantHtml(item) : ""}
           ${type === "salaryWages" ? salarySacrificeFieldsHtml(item) : ""}
           ${dividendTaxFields(item, type)}
           ${type === "other" ? dynamicInput("incomeItems", item, "isPassiveIncome", "Passive income", { type: "checkbox", infoKey: "passiveIncome" }) : ""}
@@ -5751,7 +5752,6 @@
             ? `<p class="field-help">${escapeHtml(item.name || "Linked investment income")}: amount and ownership are derived from the investment's return settings.</p>` : incomeFields}
         </div>
         ${investmentIncomeLinkFields(item)}
-        ${type === "salaryWages" ? salaryPayslipAssistantHtml(item) : ""}
         ${type === "salaryWages" ? salaryTakeHomeSummaryHtml(item) : ""}
         ${type === "rentalNetCashIncome" ? `${rentalLoanLinkControls(item)}<details class="linked-property-learn-more mt-3"><summary>Learn more</summary><p>${escapeHtml(goalInfoCopy.rentalNetCashIncome.body)}</p></details>` : ""}
       </article>
