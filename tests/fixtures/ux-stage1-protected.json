@@ -321,13 +321,13 @@
     "linkedPropertyRecords": "2b8d401a607a969c6dbb4689f3b798730da81c146b9889164617e309e8832b09",
     "linkedPropertyCashflowSummary": "a1d0bcc131d6878398aef6ef1f2637cdee6decdadd8a7d3e92f8ead3d474fff2",
     "linkedPropertyFrequencyLabel": "34f26ffc0bef2c28dd53d3d4a2e7a2c6b85bff56c10a642ad331e2f553b5e3ce",
-    "linkedPropertyLoanCard": "d66fe3efc85bc43169f68c0123d01b7f5f516bdf19f0740ae1d0ee215c1ac0b1",
+    "linkedPropertyLoanCard": "09b04e20274d7ef5f3e18037b34efd397fcb8e62c127696851b47b5435a70193",
     "linkedPropertyIncomeCard": "964e03d8046cbe4b03c05601d0cc292dda5a40f70fa86879f25f07824c1918e8",
     "linkedPropertyCard": "ac25bbe21f89a5c00e87ee24d12e2061ad3b0b97221b29ac3d0dd3c98130917a",
     "linkedPropertyManagementSectionHtml": "6d0f59f8e39018166cccfcd1897e4735a3fb722fef06c183fe8841c2e9f644fe",
     "linkedSetupInput": "643844cde5ce22d19266baa296dfcd84fecb3158bc12cfd037d9812f4df604d8",
     "linkedSetupOwnershipFields": "20bf6cec6e1da76f2698a24bf552340d24efccc9ede6f3b21c1ee3654882efac",
-    "linkedSetupLoanFields": "16a994ad0f73e791f90960c2d82f1bec710e8dfddc04efb65dfa5793447c3ba4",
+    "linkedSetupLoanFields": "e2e0ac44476382167e16b07f4573a798dd6704526dad21579e873a7011cd2788",
     "linkedExistingLoanOptions": "b447c3b7f59b742a629553fd516bd18e1bcc925b988f06597cf8c3871f51242f",
     "linkedExistingLoanControlHtml": "19c82c08104d87ddefc3ee8782f8a581d416d20d569e478bf5de4238bdbcefdd",
     "linkedSetupDialogHtml": "303d08703122db6b358173d80a89c92f76627e4c60539110aa672a68b1d8ebef",
@@ -337,7 +337,7 @@
     "applyExistingLoanToLinkedDraft": "2c7a2e3207f42815e6da16178217c5552c78303b4115f923437ecb95dd071ac8",
     "commitLinkedSetup": "0feb042a5d0785bade74bcda4239da763d2ce9c1a41013ab8feee67de9f2ea7b",
     "linkedInvestmentRecordsHtml": "ffa876f30f2e6fc31230654c57256744114b5332bf43e094f50a184926f42937",
-    "liabilityCard": "501e02fc7a976a270689391da9d527d668e901be9c85583dbdada6caf27ea4bf",
+    "liabilityCard": "97e80049c57484b9587305a93bf27eb9ffc77cbbeee8cbcac3ea08cedc5da57e",
     "goalCard": "dc0daccff7f67522b410c03b0bcb54ea1292ba9d6c3e2832df2b5b00f27df19a",
     "expenseCard": "34417c4df532d8f9c7193dc0fc392d4da2d65b626006d8028122f35e5c4a8b96",
     "taxSettingsCardHtml": "2914d6d271f29a9a0f3ab5a51a1732be88d964dfb18bc982699ea5e30263b97e",
@@ -1068,6 +1068,30 @@
         "key": "semiRetirementUi.js",
         "previousHash": "0cdb98bd3aa7e99189c0c2e513661f2180ae7b2c851645b530e3adb6954dc65d",
         "approvedHash": "c4fdee63dc80ef8625f352f4f24cf9d191f9ddb4b6b9e39fa327906ffbf68a8f"
+      }
+    ]
+  },
+  "exactLoanInputRevision": {
+    "date": "2026-10-15",
+    "reason": "Allow two-decimal interest rates and exact repayment amounts in guided and linked loan inputs; loan calculations unchanged.",
+    "changes": [
+      {
+        "group": "appFunctions",
+        "key": "linkedPropertyLoanCard",
+        "previousHash": "d66fe3efc85bc43169f68c0123d01b7f5f516bdf19f0740ae1d0ee215c1ac0b1",
+        "approvedHash": "09b04e20274d7ef5f3e18037b34efd397fcb8e62c127696851b47b5435a70193"
+      },
+      {
+        "group": "appFunctions",
+        "key": "linkedSetupLoanFields",
+        "previousHash": "16a994ad0f73e791f90960c2d82f1bec710e8dfddc04efb65dfa5793447c3ba4",
+        "approvedHash": "e2e0ac44476382167e16b07f4573a798dd6704526dad21579e873a7011cd2788"
+      },
+      {
+        "group": "appFunctions",
+        "key": "liabilityCard",
+        "previousHash": "501e02fc7a976a270689391da9d527d668e901be9c85583dbdada6caf27ea4bf",
+        "approvedHash": "97e80049c57484b9587305a93bf27eb9ffc77cbbeee8cbcac3ea08cedc5da57e"
       }
     ]
   }
