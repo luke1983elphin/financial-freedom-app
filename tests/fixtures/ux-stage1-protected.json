@@ -327,7 +327,7 @@
     "linkedPropertyManagementSectionHtml": "6d0f59f8e39018166cccfcd1897e4735a3fb722fef06c183fe8841c2e9f644fe",
     "linkedSetupInput": "643844cde5ce22d19266baa296dfcd84fecb3158bc12cfd037d9812f4df604d8",
     "linkedSetupOwnershipFields": "20bf6cec6e1da76f2698a24bf552340d24efccc9ede6f3b21c1ee3654882efac",
-    "linkedSetupLoanFields": "16a994ad0f73e791f90960c2d82f1bec710e8dfddc04efb65dfa5793447c3ba4",
+    "linkedSetupLoanFields": "e2e0ac44476382167e16b07f4573a798dd6704526dad21579e873a7011cd2788",
     "linkedExistingLoanOptions": "b447c3b7f59b742a629553fd516bd18e1bcc925b988f06597cf8c3871f51242f",
     "linkedExistingLoanControlHtml": "19c82c08104d87ddefc3ee8782f8a581d416d20d569e478bf5de4238bdbcefdd",
     "linkedSetupDialogHtml": "303d08703122db6b358173d80a89c92f76627e4c60539110aa672a68b1d8ebef",
@@ -1080,6 +1080,12 @@
         "key": "linkedPropertyLoanCard",
         "previousHash": "d66fe3efc85bc43169f68c0123d01b7f5f516bdf19f0740ae1d0ee215c1ac0b1",
         "approvedHash": "09b04e20274d7ef5f3e18037b34efd397fcb8e62c127696851b47b5435a70193"
+      },
+      {
+        "group": "appFunctions",
+        "key": "linkedSetupLoanFields",
+        "previousHash": "16a994ad0f73e791f90960c2d82f1bec710e8dfddc04efb65dfa5793447c3ba4",
+        "approvedHash": "e2e0ac44476382167e16b07f4573a798dd6704526dad21579e873a7011cd2788"
       }
     ]
   }
