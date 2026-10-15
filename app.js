@@ -5531,20 +5531,6 @@
     if (helper) helper.textContent = `Annual equivalent: ${money(salaryAmountPresentation(item).annualEquivalent)} per year.`;
   }
 
-  function refreshSalaryTakeHomeSummary(item = {}, sourceTarget = null) {
-    const card = sourceTarget?.closest?.(".form-item-card");
-    if (!card) return;
-    const current = card.querySelector(".salary-take-home-summary");
-    const next = salaryTakeHomeSummaryHtml(item);
-    if (current && next) {
-      current.outerHTML = next;
-    } else if (current && !next) {
-      current.remove();
-    } else if (!current && next) {
-      card.insertAdjacentHTML("beforeend", next);
-    }
-  }
-
   function readFileAsDataUrl(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -17180,9 +17166,11 @@
         if (target.dataset.collection === "incomeItems" && (target.dataset.key === "amount" || target.dataset.key === "frequency"
           || target.dataset.key.startsWith("salarySacrifice"))) {
           refreshEmployerSuperPanels();
-          if (item.type === "salaryWages") {
-            refreshSalaryAnnualEquivalent(item);
-            refreshSalaryTakeHomeSummary(item, target);
+          if (item.type === "salaryWages") refreshSalaryAnnualEquivalent(item);
+          if (item.type === "salaryWages" && (target.dataset.key === "frequency" || target.dataset.key.startsWith("salarySacrifice"))) {
+            renderForms();
+            renderOutputs();
+            return;
           }
         }
         if (target.dataset.collection === "expenseItems" && target.dataset.key === "amount") {
