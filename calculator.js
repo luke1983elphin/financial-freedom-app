@@ -899,10 +899,7 @@
   function incomeCashAnnualAmount(item = {}) {
     if (item.derivedInvestmentIncome === true) return roundCurrency(item.investmentCashIncome);
     const type = normaliseIncomeType(item.type || item.incomeType);
-    if (type === "salaryWages") {
-      const grossSalary = salaryCashEarningsAnnualAmount(item);
-      return roundCurrency(Math.max(0, grossSalary - salaryPackagingAnnualAmounts(item).totalPreTax));
-    }
+    if (type === "salaryWages") return salaryCashEarningsAnnualAmount(item);
     if (type === "rentalNetCashIncome") return rentalCashIncomeAnnualAmount(item) ?? 0;
     return roundCurrency(annualize(item.amount, item.frequency || "annually"));
   }
@@ -962,7 +959,10 @@
     if (normaliseIncomeType(item.type || item.incomeType) === "taxFree") return 0;
     if (item.derivedInvestmentIncome === true) return roundCurrency(item.investmentTaxableIncome);
     const type = normaliseIncomeType(item.type || item.incomeType);
-    if (type === "salaryWages") return salaryCashEarningsAnnualAmount(item);
+    if (type === "salaryWages") {
+      const grossSalary = salaryCashEarningsAnnualAmount(item);
+      return roundCurrency(Math.max(0, grossSalary - salaryPackagingAnnualAmounts(item).totalPreTax));
+    }
     if (type === "rentalNetCashIncome") return roundCurrency(annualize(item.amount, "annually"));
     return incomeCashAnnualAmount(item);
   }
