@@ -6506,6 +6506,38 @@
     `;
   }
 
+  // Presentation-only disclosures: the original form controls stay in the DOM.
+  // State is deliberately outside the financial plan and is never persisted.
+  const setupCardOpen = new Map();
+  function simplifySetupCards(container) {
+    if (!container || !container.id.startsWith("wizard")) return;
+    const cards = [...container.querySelectorAll(".collection-list > .form-item-card")];
+    cards.forEach((card, index) => {
+      const heading = card.querySelector(".item-card-title h4")?.textContent?.trim() || `Entry ${index + 1}`;
+      const key = `${container.id}:${index}`;
+      const isOpen = setupCardOpen.has(key) ? setupCardOpen.get(key) : index === cards.length - 1;
+      card.classList.add("setup-disclosure-card");
+      card.classList.toggle("setup-disclosure-collapsed", !isOpen);
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.className = "setup-card-toggle";
+      toggle.setAttribute("aria-expanded", String(isOpen));
+      toggle.setAttribute("aria-label", `${isOpen ? "Collapse" : "Edit"} ${heading}`);
+      toggle.textContent = isOpen ? "Done" : "Edit details";
+      const header = card.querySelector(".item-card-title");
+      if (!header) return;
+      header.append(toggle);
+      toggle.addEventListener("click", () => {
+        const next = card.classList.contains("setup-disclosure-collapsed");
+        setupCardOpen.set(key, next);
+        card.classList.toggle("setup-disclosure-collapsed", !next);
+        toggle.textContent = next ? "Done" : "Edit details";
+        toggle.setAttribute("aria-expanded", String(next));
+        toggle.setAttribute("aria-label", `${next ? "Collapse" : "Edit"} ${heading}`);
+      });
+    });
+  }
+
   function renderIncomeCollection(containerId) {
     const container = document.getElementById(containerId);
     if (!container) return;
@@ -6518,6 +6550,7 @@
       actionsHtml: incomeConsumerActionsHtml(),
       emptyText: "No income added yet. Salary or wages is the quickest place to start.",
     }) + taxSettingsCardHtml();
+    simplifySetupCards(container);
   }
 
   function renderAssetCollection(containerId) {
@@ -6532,6 +6565,7 @@
       actionsHtml: assetConsumerActionsHtml(),
       emptyText: "No assets added yet. Start with your home or cash and savings if they apply.",
     }) + linkedPropertyManagementSectionHtml();
+    simplifySetupCards(container);
   }
 
   function renderLiabilityCollection(containerId) {
@@ -6549,6 +6583,7 @@
       actionsHtml: liabilityConsumerActionsHtml(),
       emptyText: "No loans or debts added yet.",
     });
+    simplifySetupCards(container);
   }
 
   function renderExpenseCollection(containerId) {
@@ -6567,6 +6602,7 @@
         <span><span class="field-label">I have reviewed our current household spending</span><small class="field-help">Select this even if the current amount is genuinely zero or negligible.</small></span>
         <input class="toggle-input" type="checkbox" data-path="meta.setupConfirmations.spendingReviewed" data-type="boolean"${plan.meta?.setupConfirmations?.spendingReviewed ? " checked" : ""}>
       </label>`;
+    simplifySetupCards(container);
   }
 
   function superCheckpointHtml() {

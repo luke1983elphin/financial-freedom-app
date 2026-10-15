@@ -9751,3 +9751,13 @@ body.scenario-save-modal-open {
     padding: 14px;
   }
 }
+
+/* My Plan progressive disclosure: presentation only; fields are not removed. */
+.setup-disclosure-card .item-card-title { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.setup-card-toggle { flex-shrink:0; border:1px solid #cbd5e1; border-radius:999px; background:#fff; color:#0f2742; padding:9px 15px; font:inherit; font-size:13px; font-weight:750; cursor:pointer; min-height:42px; }
+.setup-card-toggle:hover { background:#eff6ff; }
+.setup-card-toggle:focus-visible { outline:3px solid #059669; outline-offset:2px; }
+.setup-disclosure-collapsed > :not(.item-card-title) { display:none !important; }
+.setup-disclosure-collapsed { padding-block:14px; box-shadow:none; }
+.setup-disclosure-collapsed .item-card-title { margin:0; }
+@media(max-width:600px) { .setup-disclosure-card .item-card-title { flex-wrap:wrap; } .setup-card-toggle { margin-left:auto; } }
