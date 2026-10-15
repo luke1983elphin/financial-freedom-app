@@ -315,7 +315,7 @@
     "investmentYieldDisplay": "425c2be3b800436da3386d20964c833581e18c01980faf4d9643ee6eb016c55c",
     "investmentReturnFields": "335fb359874f85a6b1301e87259003f947305aaae0f75cb139f2ae34fbbbac78",
     "investmentIncomeLinkFields": "b10286bc8e9ad88874ffcd9c53122fa7152d0e1439a5c4118da97368b916ed5f",
-    "incomeCard": "48e8b2e061de72de0fa85aeeb1cb4c327ee07b3e0b044bde560cad2d3a2b8f65",
+    "incomeCard": "3bf1c35779e73b4d64f69d8e80ee4d667d0d8299d4e7d19e1eb2829ff332137d",
     "assetCard": "ac0fc14ae6006d79f1e3a24a9ee455045ee1acf838c084e7ed176e2539a5a806",
     "rentalLinkEligible": "6d4cc46e1a1c9bbfa101439650bacc041dc5fb53d2976c1b4296b8e44df6bb44",
     "linkedPropertyRecords": "2b8d401a607a969c6dbb4689f3b798730da81c146b9889164617e309e8832b09",
@@ -1037,6 +1037,19 @@
         "key": "incomeCard",
         "previousHash": "1877852bd49d804167a26e4ef18f5b215fab24fe7e6b08c8c0afae1ae6bff547",
         "approvedHash": "48e8b2e061de72de0fa85aeeb1cb4c327ee07b3e0b044bde560cad2d3a2b8f65"
+      }
+    ]
+  },
+  "payslipAssistantRevision": {
+    "date": "2026-10-15",
+    "reason": "User-requested salary-card UX refinement and optional reviewed payslip input assistant. Financial calculations remain unchanged by this revision.",
+    "changes": [
+      {
+        "group": "appFunctions",
+        "key": "incomeCard",
+        "previousHash": "48e8b2e061de72de0fa85aeeb1cb4c327ee07b3e0b044bde560cad2d3a2b8f65",
+        "approvedHash": "3bf1c35779e73b4d64f69d8e80ee4d667d0d8299d4e7d19e1eb2829ff332137d",
+        "reason": "Adds compact salary packaging presentation and optional payslip review entry point."
       }
     ]
   }
