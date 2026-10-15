@@ -59,3 +59,19 @@ test("payslip extraction is explicitly non-storing and excludes direct identifie
   assert.match(apiSource, /Do not include names, addresses, employer identifiers, bank details, tax file numbers/);
   assert.match(apiSource, /current pay-period amounts/);
 });
+
+
+test("payslip assistant supports drag and drop as well as browsing", () => {
+  assert.match(appSource, /data-payslip-dropzone/);
+  assert.match(appSource, /Drag & drop payslip here/);
+  assert.match(appSource, /document\.addEventListener\("dragover"/);
+  assert.match(appSource, /document\.addEventListener\("drop"/);
+  assert.match(cssSource, /\.payslip-dropzone\.is-dragging/);
+});
+
+test("PDF payslips use temporary file upload and cleanup", () => {
+  assert.match(apiSource, /purpose", "user_data"/);
+  assert.match(apiSource, /input_file", file_id:/);
+  assert.match(apiSource, /deleteTemporaryFile/);
+  assert.doesNotMatch(apiSource, /input_file", filename, file_data:/);
+});
