@@ -2263,8 +2263,9 @@
       const totalRentalTaxableIncome = roundCurrency(passiveIncomeRows.filter((income) => income.type === "rentalTaxableIncome").reduce((total, income) => total + income.taxableIncome, 0));
       const otherIncome = roundCurrency(normalised.household.otherAnnualIncome);
       const plannedRecurringAdditionalSuperContribution = roundCurrency(peopleYear.reduce((total, person) => total + person.recurringAdditionalSuperContribution, 0));
+      const salarySacrificeSuperContribution = roundCurrency(peopleYear.reduce((total, person) => total + person.salarySacrificeSuper, 0));
       const plannedExtraConcessionalContribution = roundCurrency(peopleYear.reduce((total, person) => total + person.plannedExtraConcessionalContribution, 0));
-      const plannedAdditionalSuperContribution = roundCurrency(peopleYear.reduce((total, person) => total + person.additionalSuperContribution, 0));
+      const plannedAdditionalSuperContribution = roundCurrency(plannedRecurringAdditionalSuperContribution + plannedExtraConcessionalContribution);
       const netHouseholdCashIncome = roundCurrency(totalNetEmploymentIncome + otherIncome + netRentalCashflow);
       const householdCashRequirementBeforePlannedAccessibleContribution = roundCurrency(totalProjectedLifestyleSpending + annualDebtCashRequirement + plannedAdditionalSuperContribution);
       const requestedPlannedExternalAccessibleContribution = phase === "working"
@@ -2683,10 +2684,11 @@
           totalPropertyEquity,
           totalDebt,
           totalNetWorth,
+          salarySacrificeSuperContribution,
           plannedRecurringAdditionalConcessionalContributionsPaidFromCash: plannedRecurringAdditionalSuperContribution,
           plannedExtraConcessionalContributionsPaidFromCash: plannedExtraConcessionalContribution,
           plannedAdditionalConcessionalContributionsPaidFromCash: plannedAdditionalSuperContribution,
-          additionalConcessionalContributionsPaidFromCash: totalAdditionalSuperContribution,
+          additionalConcessionalContributionsPaidFromCash: roundCurrency(totalAdditionalSuperContribution - salarySacrificeSuperContribution),
           householdCashRequirementBeforePlannedAccessibleContribution,
           cashSurplusBeforePlannedAccessibleContribution: roundCurrency(netHouseholdCashIncome - householdCashRequirementBeforePlannedAccessibleContribution),
           householdCashRequirement,
