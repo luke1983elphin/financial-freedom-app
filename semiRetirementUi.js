@@ -597,6 +597,15 @@
     return nonNegative(result[`${key}SalaryWages`] ?? result.people?.[key]?.salaryAndWages);
   }
 
+  function salaryPackagingForPerson(result = {}, index) {
+    const packaging = result.salaryPackaging?.[personId(index)] || {};
+    return {
+      salarySacrificeSuper: nonNegative(packaging.superSacrifice),
+      otherPreTax: nonNegative(packaging.otherPreTax),
+      otherPostTax: nonNegative(packaging.otherPostTax),
+    };
+  }
+
   function superForPerson(plan = {}, index) {
     return nonNegative(plan.assets?.[`superPerson${index}`]);
   }
@@ -630,6 +639,8 @@
       income: {
         person1SalaryWages: salaryForPerson(result, 1),
         person2SalaryWages: salaryForPerson(result, 2),
+        person1SalaryPackaging: salaryPackagingForPerson(result, 1),
+        person2SalaryPackaging: salaryPackagingForPerson(result, 2),
       },
       assets: {
         ...(global.FFSCalculator?.investmentReturnAssets(plan).length ? {investmentComponents:global.FFSCalculator.investmentPortfolioComponents(plan,nonNegative(result.accessibleInvestmentAssets)-nonNegative(result.offsetFiAssets))} : {}),
@@ -713,6 +724,7 @@
     const fullRetirementAge = defaultFullRetirementAge(plan, index);
     const employerSuperRatePct = number(result.employerSuperRate || result.taxConfiguration?.employerSuperRate || 0.12) * 100;
     const superReturnPct = number(plan.investing?.expectedSuperReturnPct, 6.5);
+    const salaryPackaging = salaryPackagingForPerson(result, index);
     return {
       id: personId(index),
       name: personName(plan, index),
@@ -729,6 +741,10 @@
       superReturnAfterRetirementPct: Math.max(0, superReturnPct - 1),
       superAnnualFeesRatePct: 0,
       employerSuperRatePct,
+      currentSalarySacrificeSuper: salaryPackaging.salarySacrificeSuper,
+      currentOtherPreTaxPackaging: salaryPackaging.otherPreTax,
+      currentPostTaxPackaging: salaryPackaging.otherPostTax,
+      salaryPackagingStopAge: retirementTimingForPerson(plan, index, fullRetirementAge).fullRetirementAge ?? fullRetirementAge,
       existingAdditionalConcessionalContributions: plan.personal?.retirementTiming ? nonNegative(plan.investing?.extraSuperContributions) * (nonNegative(result.people?.[personId(index)]?.taxableIncome) / Math.max(1, nonNegative(result.people?.person1?.taxableIncome) + nonNegative(result.people?.person2?.taxableIncome))) : 0,
       additionalContributionsStopAge: retirementTimingForPerson(plan, index, fullRetirementAge).fullRetirementAge ?? fullRetirementAge,
       stslOpeningBalance: stslForPerson(result, index),
@@ -927,6 +943,9 @@
         ["currentGrossEmploymentIncome", "Annual income cannot be negative."],
         ["semiRetirementGrossIncome", "Annual income cannot be negative."],
         ["openingSuperBalance", "Super balance cannot be negative."],
+        ["currentSalarySacrificeSuper", "Salary sacrifice to super cannot be negative."],
+        ["currentOtherPreTaxPackaging", "Pre-tax salary packaging cannot be negative."],
+        ["currentPostTaxPackaging", "Post-tax salary packaging cannot be negative."],
         ["existingAdditionalConcessionalContributions", "Additional super contributions cannot be negative."],
         ["stslOpeningBalance", "STSL balance cannot be negative."],
       ].forEach(([field, message]) => {
@@ -1121,6 +1140,10 @@
           superReturnAfterRetirement: percentToRate(person.superReturnAfterRetirementPct),
           superAnnualFeesRate: percentToRate(person.superAnnualFeesRatePct),
           employerSuperRate: percentToRate(person.employerSuperRatePct),
+          currentSalarySacrificeSuper: nonNegative(person.currentSalarySacrificeSuper),
+          currentOtherPreTaxPackaging: nonNegative(person.currentOtherPreTaxPackaging),
+          currentPostTaxPackaging: nonNegative(person.currentPostTaxPackaging),
+          salaryPackagingStopAge: number(person.salaryPackagingStopAge, fullRetirementAge),
           existingAdditionalConcessionalContributions: nonNegative(person.existingAdditionalConcessionalContributions),
           additionalContributionsStopAge: number(person.additionalContributionsStopAge, fullRetirementAge),
           stslOpeningBalance: nonNegative(person.stslOpeningBalance),
@@ -2011,6 +2034,9 @@
         { label: `${person.name || person.id} full-retirement age`, value: person.fullRetirementAge, type: "age" },
         { label: `${person.name || person.id} assumed super access age`, value: person.superAccessAge, type: "age" },
         { label: `${person.name || person.id} employer super rate`, value: person.employerSuperRate, type: "percentRate" },
+        ...(number(person.currentSalarySacrificeSuper) > 0 ? [{ label: `${person.name || person.id} salary sacrifice to super`, value: person.currentSalarySacrificeSuper, type: "currency", note: "Carried from current salary details and modelled while employment continues, including semi-retirement." }] : []),
+        ...(number(person.currentOtherPreTaxPackaging) > 0 ? [{ label: `${person.name || person.id} other pre-tax salary packaging`, value: person.currentOtherPreTaxPackaging, type: "currency", note: "Carried from current salary details and stops at full retirement." }] : []),
+        ...(number(person.currentPostTaxPackaging) > 0 ? [{ label: `${person.name || person.id} post-tax salary deduction`, value: person.currentPostTaxPackaging, type: "currency", note: "Carried from current salary details and stops at full retirement." }] : []),
         { label: `${person.name || person.id} super return before retirement`, value: person.superReturnBeforeRetirement, type: "percentRate" },
         { label: `${person.name || person.id} super return after retirement`, value: person.superReturnAfterRetirement, type: "percentRate" },
       ]),
