@@ -5445,6 +5445,10 @@
     return `<div><span>${escapeHtml(label)}</span><strong>${money(value)}${escapeHtml(suffix)}</strong></div>`;
   }
 
+  function payslipFrequencyLabel(value) {
+    return frequencies.find(([key]) => key === value)?.[1] || String(value || "");
+  }
+
   function salaryPayslipAssistantHtml(item = {}) {
     const state = payslipAssistState.get(String(item.id || "")) || {};
     const data = state.data || null;
@@ -5456,7 +5460,7 @@
         </div>
         <div class="payslip-review-grid">
           ${payslipReviewValue("Gross pay", data.grossPay)}
-          ${data.payFrequency ? `<div><span>Pay frequency</span><strong>${escapeHtml(optionList(frequencies, data.payFrequency).replace(/<[^>]*>/g, "") || data.payFrequency)}</strong></div>` : ""}
+          ${data.payFrequency ? `<div><span>Pay frequency</span><strong>${escapeHtml(payslipFrequencyLabel(data.payFrequency))}</strong></div>` : ""}
           ${payslipReviewValue("PAYG withholding", data.paygWithholding)}
           ${payslipReviewValue("Employer super", data.employerSuper)}
           ${payslipReviewValue("Salary sacrifice to super", data.salarySacrificeSuper)}
@@ -5519,6 +5523,81 @@
   function refreshSalaryAnnualEquivalent(item = {}) {
     const helper = document.querySelector(`[data-salary-annual-equivalent="${CSS.escape(String(item.id || ""))}"]`);
     if (helper) helper.textContent = `Annual equivalent: ${money(salaryAmountPresentation(item).annualEquivalent)} per year.`;
+  }
+
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("The payslip could not be read."));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function extractPayslipForSalary(incomeId, file) {
+    const id = String(incomeId || "");
+    const allowedTypes = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp"]);
+    if (!file || !allowedTypes.has(file.type)) {
+      payslipAssistState.set(id, { error: "Choose a PDF, JPG, PNG or WebP payslip." });
+      renderForms();
+      return;
+    }
+    if (file.size > 2.5 * 1024 * 1024) {
+      payslipAssistState.set(id, { error: "Please choose a payslip smaller than 2.5 MB." });
+      renderForms();
+      return;
+    }
+    payslipAssistState.set(id, { status: "loading", filename: file.name });
+    renderForms();
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      const response = await fetch("/api/payslip-extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: file.name, mimeType: file.type, dataUrl }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "The payslip could not be read.");
+      if (!payload.payslip || !Number.isFinite(Number(payload.payslip.grossPay)) || Number(payload.payslip.grossPay) <= 0) {
+        throw new Error("We could not confidently find the gross pay. Enter the salary manually or try another payslip.");
+      }
+      payslipAssistState.set(id, { status: "review", filename: file.name, data: payload.payslip });
+    } catch (error) {
+      payslipAssistState.set(id, { error: error.message || "The payslip could not be read.", filename: file.name });
+    }
+    renderForms();
+  }
+
+  function applyPayslipToSalary(incomeId) {
+    const id = String(incomeId || "");
+    const state = payslipAssistState.get(id);
+    const data = state?.data;
+    if (!data) return;
+    ensureCollectionData();
+    const item = plan.incomeItems?.find((entry) => String(entry.id) === id);
+    if (!item || normaliseIncomeType(item.type) !== "salaryWages") return;
+    const validFrequency = frequencies.some(([key]) => key === data.payFrequency) ? data.payFrequency : item.frequency || "fortnightly";
+    item.amount = Number(data.grossPay) || 0;
+    item.frequency = validFrequency;
+    const superSacrifice = Math.max(0, Number(data.salarySacrificeSuper) || 0);
+    const preTax = Math.max(0, Number(data.preTaxDeductions) || 0);
+    const postTax = Math.max(0, Number(data.postTaxDeductions) || 0);
+    item.salarySacrificeEnabled = superSacrifice > 0 || preTax > 0 || postTax > 0;
+    item.salarySacrificeSuperAmount = superSacrifice;
+    item.salarySacrificeSuperFrequency = validFrequency;
+    item.salarySacrificeOtherPreTaxAmount = preTax;
+    item.salarySacrificeOtherPreTaxFrequency = validFrequency;
+    item.salarySacrificeOtherPostTaxAmount = postTax;
+    item.salarySacrificeOtherPostTaxFrequency = validFrequency;
+    payslipAssistState.delete(id);
+    generatedWeeklyPlanner = null;
+    if (weeklyPlan) {
+      markWeeklyTimingReviewRequired();
+      saveWeeklyPlan();
+    }
+    autosavePlan();
+    renderAll();
+    updateSaveStatus("Payslip amounts applied. Review the salary estimate before continuing.");
   }
 
   function hasEnteredFinancialValue(value) {
@@ -17163,6 +17242,12 @@
 
     document.addEventListener("change", (event) => {
       const target = event.target;
+      if (target.dataset.payslipFile !== undefined) {
+        const file = target.files?.[0];
+        if (file) extractPayslipForSalary(target.dataset.payslipFile, file);
+        target.value = "";
+        return;
+      }
       if (target.dataset.retirementGoalAge !== undefined) {
         const age = Number(target.value);
         if (!Number.isFinite(age) || age <= 0 || !Number.isInteger(age) || age < Number(plan.personal.person1Age) || age > 110) { target.setCustomValidity("Enter an age from your current age to 110."); target.reportValidity(); return; }
@@ -17321,6 +17406,26 @@
     });
 
     document.addEventListener("click", (event) => {
+      const payslipBrowse = event.target.closest("[data-payslip-browse]");
+      if (payslipBrowse) {
+        event.preventDefault();
+        document.querySelector(`[data-payslip-file="${CSS.escape(payslipBrowse.dataset.payslipBrowse || "")}"]`)?.click();
+        return;
+      }
+      const payslipConfirm = event.target.closest("[data-payslip-confirm]");
+      if (payslipConfirm) {
+        event.preventDefault();
+        applyPayslipToSalary(payslipConfirm.dataset.payslipConfirm);
+        return;
+      }
+      const payslipClear = event.target.closest("[data-payslip-clear]");
+      if (payslipClear) {
+        event.preventDefault();
+        payslipAssistState.delete(String(payslipClear.dataset.payslipClear || ""));
+        renderForms();
+        return;
+      }
+
       const durabilityAction = event.target.closest("[data-durability-action]");
       if (durabilityAction) {
         event.preventDefault();
