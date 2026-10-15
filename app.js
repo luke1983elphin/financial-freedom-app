@@ -639,6 +639,7 @@
     error: "",
   };
   const weeklyActualDrafts = new Map();
+  const payslipAssistState = new Map();
   let engagementMissionExpanded = false;
   let semiRetirementScenarioDraft = null;
   let semiRetirementScenarioInitialDraft = null;
@@ -5401,25 +5402,93 @@
     return `<p class="field-help salary-annual-equivalent" data-salary-annual-equivalent="${escapeHtml(item.id)}">Annual equivalent: ${money(presentation.annualEquivalent)} per year.</p>`;
   }
 
-  function salarySacrificeFieldsHtml(item = {}) {
-    if (!item.salarySacrificeEnabled) return dynamicInput("incomeItems", item, "salarySacrificeEnabled", "I salary sacrifice part of my pay", { type: "checkbox" });
+  function salaryPackagingRowHtml(item, amountKey, frequencyKey, title, note, placeholder = "0") {
     return `
-      ${dynamicInput("incomeItems", item, "salarySacrificeEnabled", "I salary sacrifice part of my pay", { type: "checkbox" })}
+      <div class="salary-package-row">
+        <div class="salary-package-copy">
+          <strong>${escapeHtml(title)}</strong>
+          <small>${escapeHtml(note)}</small>
+        </div>
+        <div class="salary-package-controls">
+          ${dynamicInput("incomeItems", item, amountKey, "Amount", { step: "10", placeholder })}
+          ${dynamicInput("incomeItems", item, frequencyKey, "Frequency", { type: "select", options: frequencies })}
+        </div>
+      </div>
+    `;
+  }
+
+  function salarySacrificeFieldsHtml(item = {}) {
+    const toggle = `<div class="salary-sacrifice-toggle">${dynamicInput("incomeItems", item, "salarySacrificeEnabled", "I use salary sacrifice or salary packaging", { type: "checkbox" })}</div>`;
+    if (!item.salarySacrificeEnabled) return toggle;
+    return `
+      ${toggle}
       <section class="salary-sacrifice-section">
-        <div class="card-subheading">
-          <h4>Salary sacrifice and packaged deductions</h4>
-          <p>Enter the amounts shown on your pay arrangement. Employer super continues to use gross qualifying earnings.</p>
+        <div class="salary-package-heading">
+          <div>
+            <h4>Salary packaging</h4>
+            <p>Use the amounts shown on your payslip or packaging arrangement.</p>
+          </div>
+          <span>Employer super stays based on gross qualifying earnings.</span>
         </div>
-        <div class="input-grid mt-3">
-          ${dynamicInput("incomeItems", item, "salarySacrificeSuperAmount", "Salary sacrifice to super", { step: "10", placeholder: "0" })}
-          ${dynamicInput("incomeItems", item, "salarySacrificeSuperFrequency", "Super sacrifice frequency", { type: "select", options: frequencies })}
-          ${dynamicInput("incomeItems", item, "salarySacrificeOtherPreTaxAmount", "Other pre-tax packaged benefit", { step: "10", placeholder: "e.g. novated lease pre-tax amount" })}
-          ${dynamicInput("incomeItems", item, "salarySacrificeOtherPreTaxFrequency", "Pre-tax benefit frequency", { type: "select", options: frequencies })}
-          ${dynamicInput("incomeItems", item, "salarySacrificeOtherPostTaxAmount", "Post-tax deduction", { step: "10", placeholder: "Optional" })}
-          ${dynamicInput("incomeItems", item, "salarySacrificeOtherPostTaxFrequency", "Post-tax deduction frequency", { type: "select", options: frequencies })}
+        <div class="salary-package-list">
+          ${salaryPackagingRowHtml(item, "salarySacrificeSuperAmount", "salarySacrificeSuperFrequency", "To super", "Pre-tax concessional contribution")}
+          ${salaryPackagingRowHtml(item, "salarySacrificeOtherPreTaxAmount", "salarySacrificeOtherPreTaxFrequency", "Other pre-tax benefit", "For example, the pre-tax part of a novated lease", "Optional")}
+          ${salaryPackagingRowHtml(item, "salarySacrificeOtherPostTaxAmount", "salarySacrificeOtherPostTaxFrequency", "Post-tax deduction", "For example, an employee contribution or packaged deduction", "Optional")}
         </div>
-        <p class="field-help mt-3">For novated leases and other packaged benefits, enter the pre-tax and post-tax amounts from the arrangement rather than asking Financial Freedom to calculate the FBT or ECM structure.</p>
+        <p class="field-help salary-package-note">For a novated lease, enter the pre-tax and post-tax amounts already calculated by your provider. Financial Freedom does not calculate the FBT or ECM arrangement itself.</p>
       </section>
+    `;
+  }
+
+  function payslipReviewValue(label, value, suffix = "") {
+    if (value === null || value === undefined || value === "" || !Number.isFinite(Number(value))) return "";
+    return `<div><span>${escapeHtml(label)}</span><strong>${money(value)}${escapeHtml(suffix)}</strong></div>`;
+  }
+
+  function salaryPayslipAssistantHtml(item = {}) {
+    const state = payslipAssistState.get(String(item.id || "")) || {};
+    const data = state.data || null;
+    const review = data ? `
+      <div class="payslip-review">
+        <div class="payslip-review-heading">
+          <div><strong>Review what we found</strong><small>${escapeHtml(state.filename || "Payslip")}</small></div>
+          <span>Nothing changes until you confirm.</span>
+        </div>
+        <div class="payslip-review-grid">
+          ${payslipReviewValue("Gross pay", data.grossPay)}
+          ${data.payFrequency ? `<div><span>Pay frequency</span><strong>${escapeHtml(optionList(frequencies, data.payFrequency).replace(/<[^>]*>/g, "") || data.payFrequency)}</strong></div>` : ""}
+          ${payslipReviewValue("PAYG withholding", data.paygWithholding)}
+          ${payslipReviewValue("Employer super", data.employerSuper)}
+          ${payslipReviewValue("Salary sacrifice to super", data.salarySacrificeSuper)}
+          ${payslipReviewValue("Other pre-tax deductions", data.preTaxDeductions)}
+          ${payslipReviewValue("Post-tax deductions", data.postTaxDeductions)}
+          ${payslipReviewValue("Net pay", data.netPay)}
+        </div>
+        <div class="payslip-review-actions">
+          <button class="btn btn-primary" type="button" data-payslip-confirm="${escapeHtml(item.id)}">Use these amounts</button>
+          <button class="btn" type="button" data-payslip-clear="${escapeHtml(item.id)}">Choose another</button>
+        </div>
+      </div>
+    ` : "";
+    const message = state.status === "loading"
+      ? '<p class="payslip-status">Reading payslip…</p>'
+      : state.error
+        ? `<p class="field-error" role="alert">${escapeHtml(state.error)}</p>`
+        : "";
+    return `
+      <details class="payslip-assistant">
+        <summary>
+          <span><strong>Use a recent payslip</strong><small>Optional — upload a PDF or image to fill these salary fields faster.</small></span>
+          <span class="payslip-summary-action">Upload</span>
+        </summary>
+        <div class="payslip-assistant-body">
+          <input class="hidden" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" data-payslip-file="${escapeHtml(item.id)}">
+          <button class="btn" type="button" data-payslip-browse="${escapeHtml(item.id)}" ${state.status === "loading" ? "disabled" : ""}>Choose payslip</button>
+          <p class="field-help">PDF, JPG, PNG or WebP. The file is sent only for extraction and is not saved in your Financial Freedom plan. Review every amount before confirming.</p>
+          ${message}
+          ${review}
+        </div>
+      </details>
     `;
   }
 
@@ -5436,10 +5505,10 @@
       const employerSuperAnnual = result.employerSuperContributions?.[`${ownerKey}Amount`] || 0;
       const sacrificeAnnual = result.salaryPackaging?.[ownerKey]?.superSacrifice || 0;
       return `
-        <div class="summary-grid mt-4 salary-take-home-summary">
+        <div class="summary-grid mt-4 salary-take-home-summary${sacrificeAnnual > 0 ? " has-sacrifice" : ""}">
           ${summaryTile("Estimated take-home pay", `${money(payroll.estimatedNetEmploymentIncome / divisor)} / ${frequencyLabel}`)}
           ${summaryTile("Employer super", `${money(employerSuperAnnual / divisor)} / ${frequencyLabel}`)}
-          ${summaryTile("Salary sacrifice to super", `${money(sacrificeAnnual / divisor)} / ${frequencyLabel}`)}
+          ${sacrificeAnnual > 0 ? summaryTile("Salary sacrifice to super", `${money(sacrificeAnnual / divisor)} / ${frequencyLabel}`) : ""}
         </div>
       `;
     } catch {
@@ -5603,6 +5672,7 @@
             ? `<p class="field-help">${escapeHtml(item.name || "Linked investment income")}: amount and ownership are derived from the investment's return settings.</p>` : incomeFields}
         </div>
         ${investmentIncomeLinkFields(item)}
+        ${type === "salaryWages" ? salaryPayslipAssistantHtml(item) : ""}
         ${type === "salaryWages" ? salaryTakeHomeSummaryHtml(item) : ""}
         ${type === "rentalNetCashIncome" ? `${rentalLoanLinkControls(item)}<details class="linked-property-learn-more mt-3"><summary>Learn more</summary><p>${escapeHtml(goalInfoCopy.rentalNetCashIncome.body)}</p></details>` : ""}
       </article>
