@@ -98,8 +98,8 @@
     const person1Name = String(options.person1Name || "Person 1").trim() || "Person 1";
     const person2Name = String(options.person2Name || "Person 2").trim() || "Person 2";
     const items = {
-      "salary-person1": ["incomeItems", { id: id("income"), name: `${person1Name} salary`, type: "salaryWages", owner: "person1", amount: 0, frequency: "fortnightly" }],
-      "salary-person2": ["incomeItems", { id: id("income"), name: `${person2Name} salary`, type: "salaryWages", owner: "person2", amount: 0, frequency: "fortnightly" }],
+      "salary-person1": ["incomeItems", { id: id("income"), name: `${person1Name} salary`, type: "salaryWages", owner: "person1", amount: 0, frequency: "fortnightly", salarySacrificeEnabled: false }],
+      "salary-person2": ["incomeItems", { id: id("income"), name: `${person2Name} salary`, type: "salaryWages", owner: "person2", amount: 0, frequency: "fortnightly", salarySacrificeEnabled: false }],
       "other-income": ["incomeItems", { id: id("income"), name: "Other income", type: "other", owner: "person1", amount: 0, frequency: "annually", isPassiveIncome: false }],
       home: ["assetItems", { id: id("asset"), name: "Your home", category: "home", value: 0 }],
       cash: ["assetItems", { id: id("asset"), name: "Cash and savings", category: "cash", value: 0 }],
