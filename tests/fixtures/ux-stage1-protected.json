@@ -337,7 +337,7 @@
     "applyExistingLoanToLinkedDraft": "2c7a2e3207f42815e6da16178217c5552c78303b4115f923437ecb95dd071ac8",
     "commitLinkedSetup": "0feb042a5d0785bade74bcda4239da763d2ce9c1a41013ab8feee67de9f2ea7b",
     "linkedInvestmentRecordsHtml": "ffa876f30f2e6fc31230654c57256744114b5332bf43e094f50a184926f42937",
-    "liabilityCard": "501e02fc7a976a270689391da9d527d668e901be9c85583dbdada6caf27ea4bf",
+    "liabilityCard": "97e80049c57484b9587305a93bf27eb9ffc77cbbeee8cbcac3ea08cedc5da57e",
     "goalCard": "dc0daccff7f67522b410c03b0bcb54ea1292ba9d6c3e2832df2b5b00f27df19a",
     "expenseCard": "34417c4df532d8f9c7193dc0fc392d4da2d65b626006d8028122f35e5c4a8b96",
     "taxSettingsCardHtml": "2914d6d271f29a9a0f3ab5a51a1732be88d964dfb18bc982699ea5e30263b97e",
@@ -1086,6 +1086,12 @@
         "key": "linkedSetupLoanFields",
         "previousHash": "16a994ad0f73e791f90960c2d82f1bec710e8dfddc04efb65dfa5793447c3ba4",
         "approvedHash": "e2e0ac44476382167e16b07f4573a798dd6704526dad21579e873a7011cd2788"
+      },
+      {
+        "group": "appFunctions",
+        "key": "liabilityCard",
+        "previousHash": "501e02fc7a976a270689391da9d527d668e901be9c85583dbdada6caf27ea4bf",
+        "approvedHash": "97e80049c57484b9587305a93bf27eb9ffc77cbbeee8cbcac3ea08cedc5da57e"
       }
     ]
   }
