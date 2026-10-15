@@ -17441,6 +17441,12 @@
     });
 
     document.addEventListener("click", (event) => {
+      const payslipDropzone = event.target.closest("[data-payslip-dropzone]");
+      if (payslipDropzone && !event.target.closest("[data-payslip-browse]")) {
+        event.preventDefault();
+        document.querySelector(`[data-payslip-file="${CSS.escape(payslipDropzone.dataset.payslipDropzone || "")}"]`)?.click();
+        return;
+      }
       const payslipBrowse = event.target.closest("[data-payslip-browse]");
       if (payslipBrowse) {
         event.preventDefault();
