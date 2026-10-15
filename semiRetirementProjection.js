@@ -239,12 +239,14 @@
       employerSuperRate: hasFiniteNumber(person?.employerSuperRate)
         ? number(person.employerSuperRate)
         : DEFAULT_EMPLOYER_SUPER_RATE,
-      currentSalarySacrificeSuper: number(person?.currentSalarySacrificeSuper),
-      currentOtherPreTaxPackaging: number(person?.currentOtherPreTaxPackaging),
-      currentPostTaxPackaging: number(person?.currentPostTaxPackaging),
-      salaryPackagingStopAge: hasFiniteNumber(person?.salaryPackagingStopAge)
-        ? number(person.salaryPackagingStopAge)
-        : fullRetirementAge,
+      ...((number(person?.currentSalarySacrificeSuper) > 0 || number(person?.currentOtherPreTaxPackaging) > 0 || number(person?.currentPostTaxPackaging) > 0) ? {
+        currentSalarySacrificeSuper: number(person?.currentSalarySacrificeSuper),
+        currentOtherPreTaxPackaging: number(person?.currentOtherPreTaxPackaging),
+        currentPostTaxPackaging: number(person?.currentPostTaxPackaging),
+        salaryPackagingStopAge: hasFiniteNumber(person?.salaryPackagingStopAge)
+          ? number(person.salaryPackagingStopAge)
+          : fullRetirementAge,
+      } : {}),
       existingAdditionalConcessionalContributions: number(person?.existingAdditionalConcessionalContributions),
       additionalContributionsStopAge: hasFiniteNumber(person?.additionalContributionsStopAge)
         ? number(person.additionalContributionsStopAge)
@@ -2033,16 +2035,22 @@
         const recurringAdditionalSuperContribution = person.grossEmploymentIncome > 0 && person.age < contributionStopAge
           ? roundCurrency(source.existingAdditionalConcessionalContributions)
           : 0;
-        const salaryPackagingActive = person.grossEmploymentIncome > 0 && person.age < source.salaryPackagingStopAge;
+        const hasSalaryPackaging = Math.max(0, number(source.currentSalarySacrificeSuper))
+          + Math.max(0, number(source.currentOtherPreTaxPackaging))
+          + Math.max(0, number(source.currentPostTaxPackaging)) > 0;
+        const salaryPackagingStopAge = hasFiniteNumber(source.salaryPackagingStopAge)
+          ? number(source.salaryPackagingStopAge)
+          : source.fullRetirementAge;
+        const salaryPackagingActive = hasSalaryPackaging && person.grossEmploymentIncome > 0 && person.age < salaryPackagingStopAge;
         const salarySacrificeSuper = salaryPackagingActive
-          ? roundCurrency(Math.min(person.grossEmploymentIncome, Math.max(0, source.currentSalarySacrificeSuper)))
+          ? roundCurrency(Math.min(person.grossEmploymentIncome, Math.max(0, number(source.currentSalarySacrificeSuper))))
           : 0;
         const remainingAfterSuperSacrifice = roundCurrency(Math.max(0, person.grossEmploymentIncome - salarySacrificeSuper));
         const otherPreTaxPackaging = salaryPackagingActive
-          ? roundCurrency(Math.min(remainingAfterSuperSacrifice, Math.max(0, source.currentOtherPreTaxPackaging)))
+          ? roundCurrency(Math.min(remainingAfterSuperSacrifice, Math.max(0, number(source.currentOtherPreTaxPackaging))))
           : 0;
         const postTaxPackaging = salaryPackagingActive
-          ? roundCurrency(Math.max(0, source.currentPostTaxPackaging))
+          ? roundCurrency(Math.max(0, number(source.currentPostTaxPackaging)))
           : 0;
         const plannedExtraConcessionalContribution = plannedConcessionalContributionForYear(
           normalised.scenario.plannedConcessionalContributions,
@@ -2068,7 +2076,7 @@
         person.salarySacrificeSuper = salarySacrificeSuper;
         person.otherPreTaxPackaging = otherPreTaxPackaging;
         person.postTaxPackaging = postTaxPackaging;
-        person.salaryPackagingStopAge = source.salaryPackagingStopAge;
+        person.salaryPackagingStopAge = salaryPackagingStopAge;
         person.salaryPackagingActive = salaryPackagingActive;
         person.totalCashIncomeBeforeTax = roundCurrency(person.grossEmploymentIncome + passive.cashIncome - salarySacrificeSuper - otherPreTaxPackaging - postTaxPackaging);
         person.discretionaryContributionStopAge = contributionStopAge;
