@@ -239,6 +239,12 @@
       employerSuperRate: hasFiniteNumber(person?.employerSuperRate)
         ? number(person.employerSuperRate)
         : DEFAULT_EMPLOYER_SUPER_RATE,
+      currentSalarySacrificeSuper: number(person?.currentSalarySacrificeSuper),
+      currentOtherPreTaxPackaging: number(person?.currentOtherPreTaxPackaging),
+      currentPostTaxPackaging: number(person?.currentPostTaxPackaging),
+      salaryPackagingStopAge: hasFiniteNumber(person?.salaryPackagingStopAge)
+        ? number(person.salaryPackagingStopAge)
+        : fullRetirementAge,
       existingAdditionalConcessionalContributions: number(person?.existingAdditionalConcessionalContributions),
       additionalContributionsStopAge: hasFiniteNumber(person?.additionalContributionsStopAge)
         ? number(person.additionalContributionsStopAge)
@@ -2027,13 +2033,24 @@
         const recurringAdditionalSuperContribution = person.grossEmploymentIncome > 0 && person.age < contributionStopAge
           ? roundCurrency(source.existingAdditionalConcessionalContributions)
           : 0;
+        const salaryPackagingActive = person.grossEmploymentIncome > 0 && person.age < source.salaryPackagingStopAge;
+        const salarySacrificeSuper = salaryPackagingActive
+          ? roundCurrency(Math.min(person.grossEmploymentIncome, Math.max(0, source.currentSalarySacrificeSuper)))
+          : 0;
+        const remainingAfterSuperSacrifice = roundCurrency(Math.max(0, person.grossEmploymentIncome - salarySacrificeSuper));
+        const otherPreTaxPackaging = salaryPackagingActive
+          ? roundCurrency(Math.min(remainingAfterSuperSacrifice, Math.max(0, source.currentOtherPreTaxPackaging)))
+          : 0;
+        const postTaxPackaging = salaryPackagingActive
+          ? roundCurrency(Math.max(0, source.currentPostTaxPackaging))
+          : 0;
         const plannedExtraConcessionalContribution = plannedConcessionalContributionForYear(
           normalised.scenario.plannedConcessionalContributions,
           person.id,
           calendarYear,
         );
-        const taxReducingConcessionalContribution = roundCurrency(recurringAdditionalSuperContribution + plannedExtraConcessionalContribution);
-        const taxableIncomeBeforeConcessional = roundCurrency(person.grossEmploymentIncome + passive.taxableIncome);
+        const taxReducingConcessionalContribution = roundCurrency(recurringAdditionalSuperContribution + salarySacrificeSuper + plannedExtraConcessionalContribution);
+        const taxableIncomeBeforeConcessional = roundCurrency(person.grossEmploymentIncome + passive.taxableIncome - otherPreTaxPackaging);
         const taxableIncomeAfterConcessional = roundCurrency(Math.max(0, taxableIncomeBeforeConcessional - taxReducingConcessionalContribution));
         person.employmentIncome = roundCurrency(person.grossEmploymentIncome);
         person.interestIncome = passive.interestIncome;
@@ -2048,7 +2065,12 @@
         person.modelledConcessionalContributionTaxableIncomeReduction = roundCurrency(taxableIncomeBeforeConcessional - taxableIncomeAfterConcessional);
         person.totalTaxableIncome = taxableIncomeAfterConcessional;
         person.stslRepaymentIncome = stslRepaymentIncomeForPerson(taxableIncomeAfterConcessional, taxReducingConcessionalContribution);
-        person.totalCashIncomeBeforeTax = roundCurrency(person.grossEmploymentIncome + passive.cashIncome);
+        person.salarySacrificeSuper = salarySacrificeSuper;
+        person.otherPreTaxPackaging = otherPreTaxPackaging;
+        person.postTaxPackaging = postTaxPackaging;
+        person.salaryPackagingStopAge = source.salaryPackagingStopAge;
+        person.salaryPackagingActive = salaryPackagingActive;
+        person.totalCashIncomeBeforeTax = roundCurrency(person.grossEmploymentIncome + passive.cashIncome - salarySacrificeSuper - otherPreTaxPackaging - postTaxPackaging);
         person.discretionaryContributionStopAge = contributionStopAge;
         person.plannedAdditionalSuperStoppedBySemiRetirement = Boolean(source.hasSemiRetirement && person.age >= source.semiRetirementAge);
         person.recurringAdditionalSuperContribution = recurringAdditionalSuperContribution;
@@ -2056,7 +2078,7 @@
         person.plannedExtraConcessionalContribution = plannedExtraConcessionalContribution;
         person.plannedExtraConcessionalContributionTax = roundCurrency(plannedExtraConcessionalContribution * DEFAULT_CONTRIBUTIONS_TAX_RATE);
         person.netPlannedExtraConcessionalContribution = roundCurrency(plannedExtraConcessionalContribution * (1 - DEFAULT_CONTRIBUTIONS_TAX_RATE));
-        person.additionalSuperContribution = roundCurrency(recurringAdditionalSuperContribution + plannedExtraConcessionalContribution);
+        person.additionalSuperContribution = roundCurrency(recurringAdditionalSuperContribution + salarySacrificeSuper + plannedExtraConcessionalContribution);
       });
 
       const mls = calculateMls(peopleYear, normalised, financialYear);
@@ -2609,6 +2631,11 @@
           netEmployerSuperContribution: person.netEmployerSuperContribution,
           discretionaryContributionStopAge: person.discretionaryContributionStopAge,
           plannedAdditionalSuperStoppedBySemiRetirement: person.plannedAdditionalSuperStoppedBySemiRetirement,
+          salarySacrificeSuper: person.salarySacrificeSuper,
+          otherPreTaxPackaging: person.otherPreTaxPackaging,
+          postTaxPackaging: person.postTaxPackaging,
+          salaryPackagingStopAge: person.salaryPackagingStopAge,
+          salaryPackagingActive: person.salaryPackagingActive,
           recurringAdditionalSuperContribution: person.recurringAdditionalSuperContribution,
           netRecurringAdditionalSuperContribution: person.netRecurringAdditionalSuperContribution,
           plannedExtraConcessionalContribution: person.plannedExtraConcessionalContribution,
