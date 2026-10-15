@@ -1,13 +1,13 @@
 {
   "baseline": "bd23b2a",
   "files": {
-    "calculator.js": "1b1d4d9dcf6c085ea08a3eb5085fcfb294be8f2c7a1f51877c53dd9bced1234f",
+    "calculator.js": "35c773747c31b162b728a68db9d0c70670083db30519b1cc12065ab5fc2d88ef",
     "semiRetirementProjection.js": "8b6e533e4203270ba8f13b5b1070318329ef9ee1540a4bde52014232d935dbc5",
     "semiRetirementUi.js": "0cdb98bd3aa7e99189c0c2e513661f2180ae7b2c851645b530e3adb6954dc65d",
     "v2-data.js": "935fb66f828874f0ccc267d99d611a47113a85315cb983e45ff49390a84d8baa",
     "storage.js": "c85374d3b59ad306de5d3657d8ff44c12eb69c1f4d4e1b71228656228a4ff58d",
     "security.js": "19caa32b797a87c7ddbbe4c7352717ce1f7df52e7292a0de529449c24f7baa4b",
-    "consumer-setup.js": "a187222ee105bebf9f435637f14e99ef6d1c0ac76f2c90440844e7bceab2e9c1",
+    "consumer-setup.js": "37f31ea6e9420c30a9d2f1a4ebc7687d4d4fabd1f650bdcb0e83ec06e101aed4",
     "plan-schema.js": "7c531d4d9b15330f77fdebf9597a73630583edbc452f8e1b9d247b25a17d86a7",
     "plan-selectors.js": "93929379dafbc43b77ad302208ffd35d348defd9d38ca81276811d9f9d3add35",
     "plan-mutations.js": "23eb4a3a3dc72ef9512b6341888f31f9b40f39ea3682f6150a391082f7d984e4",
@@ -315,7 +315,7 @@
     "investmentYieldDisplay": "425c2be3b800436da3386d20964c833581e18c01980faf4d9643ee6eb016c55c",
     "investmentReturnFields": "335fb359874f85a6b1301e87259003f947305aaae0f75cb139f2ae34fbbbac78",
     "investmentIncomeLinkFields": "b10286bc8e9ad88874ffcd9c53122fa7152d0e1439a5c4118da97368b916ed5f",
-    "incomeCard": "1877852bd49d804167a26e4ef18f5b215fab24fe7e6b08c8c0afae1ae6bff547",
+    "incomeCard": "48e8b2e061de72de0fa85aeeb1cb4c327ee07b3e0b044bde560cad2d3a2b8f65",
     "assetCard": "ac0fc14ae6006d79f1e3a24a9ee455045ee1acf838c084e7ed176e2539a5a806",
     "rentalLinkEligible": "6d4cc46e1a1c9bbfa101439650bacc041dc5fb53d2976c1b4296b8e44df6bb44",
     "linkedPropertyRecords": "2b8d401a607a969c6dbb4689f3b798730da81c146b9889164617e309e8832b09",
@@ -1012,6 +1012,31 @@
         "key": "renderSemiRetirementScenario",
         "previousHash": "bb6b5224ee3cd05bb8e183f284d69e6e098f6a46c2cc28a4d1dc7f3b87808112",
         "approvedHash": "46b82ec1a65fa85fda5adfb29ac15b22a17df9ff72485a7c33b9c1019ef54e4c"
+      }
+    ]
+  },
+  "salarySacrificeRevision": {
+    "date": "2026-10-15",
+    "base": "18f872c883d6c2c213c401bdb88eec20931bfdcd",
+    "reason": "User-requested salary sacrifice and packaged-deduction implementation; legacy numerical parity remains guarded when the feature is unused.",
+    "changes": [
+      {
+        "group": "files",
+        "key": "calculator.js",
+        "previousHash": "1b1d4d9dcf6c085ea08a3eb5085fcfb294be8f2c7a1f51877c53dd9bced1234f",
+        "approvedHash": "35c773747c31b162b728a68db9d0c70670083db30519b1cc12065ab5fc2d88ef"
+      },
+      {
+        "group": "files",
+        "key": "consumer-setup.js",
+        "previousHash": "a187222ee105bebf9f435637f14e99ef6d1c0ac76f2c90440844e7bceab2e9c1",
+        "approvedHash": "37f31ea6e9420c30a9d2f1a4ebc7687d4d4fabd1f650bdcb0e83ec06e101aed4"
+      },
+      {
+        "group": "appFunctions",
+        "key": "incomeCard",
+        "previousHash": "1877852bd49d804167a26e4ef18f5b215fab24fe7e6b08c8c0afae1ae6bff547",
+        "approvedHash": "48e8b2e061de72de0fa85aeeb1cb4c327ee07b3e0b044bde560cad2d3a2b8f65"
       }
     ]
   }
