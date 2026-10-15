@@ -576,6 +576,10 @@
     person2SalarySacrifice,
     person1PayrollDeductions,
     person2PayrollDeductions,
+    person1PreTaxDeductions,
+    person2PreTaxDeductions,
+    person1PostTaxDeductions,
+    person2PostTaxDeductions,
     person1HasStslDebt,
     person2HasStslDebt,
     person1HasHelpDebt,
@@ -592,10 +596,14 @@
       : splitAdditionalContribution(extraConcessionalSuper, gross1, gross2);
     const p1Sacrifice = roundCurrency(Math.min(gross1, split.person1));
     const p2Sacrifice = roundCurrency(Math.min(gross2, split.person2));
-    const p1OtherDeductions = nonNegative(person1PayrollDeductions);
-    const p2OtherDeductions = nonNegative(person2PayrollDeductions);
-    const p1Taxable = roundCurrency(Math.max(0, gross1 - p1Sacrifice));
-    const p2Taxable = roundCurrency(Math.max(0, gross2 - p2Sacrifice));
+    const p1LegacyDeductions = nonNegative(person1PayrollDeductions);
+    const p2LegacyDeductions = nonNegative(person2PayrollDeductions);
+    const p1PreTaxOther = nonNegative(person1PreTaxDeductions);
+    const p2PreTaxOther = nonNegative(person2PreTaxDeductions);
+    const p1PostTaxOther = roundCurrency(nonNegative(person1PostTaxDeductions) + p1LegacyDeductions);
+    const p2PostTaxOther = roundCurrency(nonNegative(person2PostTaxDeductions) + p2LegacyDeductions);
+    const p1Taxable = roundCurrency(Math.max(0, gross1 - p1Sacrifice - p1PreTaxOther));
+    const p2Taxable = roundCurrency(Math.max(0, gross2 - p2Sacrifice - p2PreTaxOther));
     const p1PayrollRepaymentIncome = roundCurrency(p1Taxable + p1Sacrifice);
     const p2PayrollRepaymentIncome = roundCurrency(p2Taxable + p2Sacrifice);
     const p1RepaymentIncome = hasValue(person1StslRepaymentIncome) ? nonNegative(person1StslRepaymentIncome) : p1PayrollRepaymentIncome;
@@ -613,7 +621,7 @@
     const p2HasStsl = booleanWithLegacy(person2HasStslDebt, person2HasHelpDebt, p2HelpDebt > 0);
     const p1Help = estimateStudyLoanRepayment(p1RepaymentIncome, p1HelpDebt, p1HasStsl).annualRepayment;
     const p2Help = estimateStudyLoanRepayment(p2RepaymentIncome, p2HelpDebt, p2HasStsl).annualRepayment;
-    const buildPerson = (gross, taxableIncome, repaymentIncome, allocatedExtraSuper, otherPayrollDeductions, helpRepayment, openingStslBalance) => {
+    const buildPerson = (gross, taxableIncome, repaymentIncome, allocatedExtraSuper, preTaxDeductions, postTaxDeductions, helpRepayment, openingStslBalance) => {
       const tax = individualTaxBreakdown(taxableIncome);
       const stslOpeningBalance = nonNegative(openingStslBalance);
       const stslProjectedClosingBalance = roundCurrency(Math.max(0, stslOpeningBalance - nonNegative(helpRepayment)));
@@ -630,12 +638,12 @@
         stslProjectedClosingBalance,
         allocatedExtraSuper: roundCurrency(allocatedExtraSuper),
         salarySacrifice: roundCurrency(allocatedExtraSuper),
-        otherPayrollDeductions: roundCurrency(otherPayrollDeductions),
-        estimatedNetEmploymentIncome: roundCurrency(Math.max(0, gross - tax.incomeTax - tax.medicareLevy - helpRepayment - allocatedExtraSuper - otherPayrollDeductions)),
+        otherPayrollDeductions: roundCurrency(preTaxDeductions + postTaxDeductions),
+        estimatedNetEmploymentIncome: roundCurrency(Math.max(0, gross - tax.incomeTax - tax.medicareLevy - helpRepayment - allocatedExtraSuper - preTaxDeductions - postTaxDeductions)),
       };
     };
-    const person1 = buildPerson(gross1, p1Taxable, p1RepaymentIncome, p1Sacrifice, p1OtherDeductions, p1Help, p1HelpDebt);
-    const person2 = buildPerson(gross2, p2Taxable, p2RepaymentIncome, p2Sacrifice, p2OtherDeductions, p2Help, p2HelpDebt);
+    const person1 = buildPerson(gross1, p1Taxable, p1RepaymentIncome, p1Sacrifice, p1PreTaxOther, p1PostTaxOther, p1Help, p1HelpDebt);
+    const person2 = buildPerson(gross2, p2Taxable, p2RepaymentIncome, p2Sacrifice, p2PreTaxOther, p2PostTaxOther, p2Help, p2HelpDebt);
     return {
       person1,
       person2,
@@ -908,6 +916,24 @@
     return roundCurrency(packageAmount / (1 + nonNegative(superRate)));
   }
 
+  function salaryPackagingAnnualAmounts(item = {}) {
+    const enabled = item.salarySacrificeEnabled === true;
+    const annual = (amount, frequency) => enabled
+      ? roundCurrency(annualize(amount, frequency || item.frequency || "annually"))
+      : 0;
+    const superSacrifice = annual(item.salarySacrificeSuperAmount, item.salarySacrificeSuperFrequency);
+    const otherPreTax = annual(item.salarySacrificeOtherPreTaxAmount, item.salarySacrificeOtherPreTaxFrequency);
+    const otherPostTax = annual(item.salarySacrificeOtherPostTaxAmount, item.salarySacrificeOtherPostTaxFrequency);
+    return {
+      enabled,
+      superSacrifice,
+      otherPreTax,
+      otherPostTax,
+      totalPreTax: roundCurrency(superSacrifice + otherPreTax),
+      totalCashDeductions: roundCurrency(superSacrifice + otherPreTax + otherPostTax),
+    };
+  }
+
   function qualifyingEarningsAnnualAmount(item = {}, superRate = EMPLOYER_SUPER_RATE) {
     if (item.qualifyingEarningsOverrideEnabled === true || item.useQualifyingEarningsOverride === true) {
       return roundCurrency(annualize(item.qualifyingEarningsAmount, item.qualifyingEarningsFrequency || item.frequency || "annually"));
@@ -930,7 +956,10 @@
     if (normaliseIncomeType(item.type || item.incomeType) === "taxFree") return 0;
     if (item.derivedInvestmentIncome === true) return roundCurrency(item.investmentTaxableIncome);
     const type = normaliseIncomeType(item.type || item.incomeType);
-    if (type === "salaryWages") return salaryCashEarningsAnnualAmount(item);
+    if (type === "salaryWages") {
+      const grossSalary = salaryCashEarningsAnnualAmount(item);
+      return roundCurrency(Math.max(0, grossSalary - salaryPackagingAnnualAmounts(item).totalPreTax));
+    }
     if (type === "rentalNetCashIncome") return roundCurrency(annualize(item.amount, "annually"));
     return incomeCashAnnualAmount(item);
   }
@@ -1002,22 +1031,31 @@
       summary.total = roundCurrency(summary.total + annualAmount);
       summary.taxableTotal = roundCurrency(summary.taxableTotal + taxableAmount);
       if (type === "salaryWages") {
-        if (owner === "person2") summary.person2Salary = roundCurrency(summary.person2Salary + annualAmount);
-        else summary.person1Salary = roundCurrency(summary.person1Salary + annualAmount);
+        if (owner === "person2") {
+          summary.person2Salary = roundCurrency(summary.person2Salary + annualAmount);
+          summary.person2Taxable = roundCurrency(summary.person2Taxable + taxableAmount);
+        } else {
+          summary.person1Salary = roundCurrency(summary.person1Salary + annualAmount);
+          summary.person1Taxable = roundCurrency(summary.person1Taxable + taxableAmount);
+        }
       } else if (owner === "person1") {
         summary.person1Other = roundCurrency(summary.person1Other + annualAmount);
         summary.person1TaxableOther = roundCurrency(summary.person1TaxableOther + taxableAmount);
+        summary.person1Taxable = roundCurrency(summary.person1Taxable + taxableAmount);
       } else if (owner === "person2") {
         summary.person2Other = roundCurrency(summary.person2Other + annualAmount);
         summary.person2TaxableOther = roundCurrency(summary.person2TaxableOther + taxableAmount);
+        summary.person2Taxable = roundCurrency(summary.person2Taxable + taxableAmount);
       } else {
         summary.jointOther = roundCurrency(summary.jointOther + annualAmount);
         summary.jointOtherTaxable = roundCurrency(summary.jointOtherTaxable + taxableAmount);
-        summary.person1TaxableOther = roundCurrency(summary.person1TaxableOther + taxableAmount * allocation.person1);
-        summary.person2TaxableOther = roundCurrency(summary.person2TaxableOther + taxableAmount * allocation.person2);
+        const person1TaxableShare = roundCurrency(taxableAmount * allocation.person1);
+        const person2TaxableShare = roundCurrency(taxableAmount * allocation.person2);
+        summary.person1TaxableOther = roundCurrency(summary.person1TaxableOther + person1TaxableShare);
+        summary.person2TaxableOther = roundCurrency(summary.person2TaxableOther + person2TaxableShare);
+        summary.person1Taxable = roundCurrency(summary.person1Taxable + person1TaxableShare);
+        summary.person2Taxable = roundCurrency(summary.person2Taxable + person2TaxableShare);
       }
-      summary.person1Taxable = roundCurrency(summary.person1Salary + summary.person1TaxableOther);
-      summary.person2Taxable = roundCurrency(summary.person2Salary + summary.person2TaxableOther);
       summary.otherIncome = roundCurrency(summary.person1Other + summary.person2Other + summary.jointOther);
       return summary;
     }, {
@@ -1035,6 +1073,33 @@
       total: 0,
       taxableTotal: 0,
     });
+  }
+
+  function salaryPackagingSummary(plan = {}) {
+    const empty = () => ({ superSacrifice: 0, otherPreTax: 0, otherPostTax: 0, totalPreTax: 0, totalCashDeductions: 0 });
+    const person1 = empty();
+    const person2 = empty();
+    normalisedIncomeItems(plan).forEach((item, index) => {
+      const type = normaliseIncomeType(item.type || item.incomeType, index);
+      if (type !== "salaryWages") return;
+      const owner = normaliseIncomeOwner(item.owner || item.incomeOwner, type, index);
+      const target = owner === "person2" ? person2 : person1;
+      const amounts = salaryPackagingAnnualAmounts(item);
+      for (const key of ["superSacrifice", "otherPreTax", "otherPostTax", "totalPreTax", "totalCashDeductions"]) {
+        target[key] = roundCurrency(target[key] + amounts[key]);
+      }
+    });
+    return {
+      person1,
+      person2,
+      household: {
+        superSacrifice: roundCurrency(person1.superSacrifice + person2.superSacrifice),
+        otherPreTax: roundCurrency(person1.otherPreTax + person2.otherPreTax),
+        otherPostTax: roundCurrency(person1.otherPostTax + person2.otherPostTax),
+        totalPreTax: roundCurrency(person1.totalPreTax + person2.totalPreTax),
+        totalCashDeductions: roundCurrency(person1.totalCashDeductions + person2.totalCashDeductions),
+      },
+    };
   }
 
   function calculateEmployerSuperForPerson(personId, incomes = [], superRate = EMPLOYER_SUPER_RATE, maximumContributionBase = EMPLOYER_SUPER_MAXIMUM_CONTRIBUTION_BASE) {
@@ -2383,6 +2448,8 @@
     const totalIncomeProducingAssets = currentFiAssetSummary.totalIncomeProducingAssets;
     const financialIndependenceAssets = accessibleFICapital;
     const incomeSummary = incomeBreakdown(plan);
+    const salaryPackaging = salaryPackagingSummary(plan);
+    const hasSalaryPackaging = salaryPackaging.household.totalCashDeductions > 0;
     const person1AnnualIncome = incomeSummary.person1Taxable;
     const person2AnnualIncome = incomeSummary.person2Taxable;
     const person1SalaryWages = incomeSummary.person1Salary;
@@ -2411,6 +2478,12 @@
     const person2TaxableAfterExtraSuper = roundCurrency(Math.max(0, person2AnnualIncome - extraSuperSplitForTax.person2));
     const person1TaxAdjustments = personTaxAdjustmentInputs(plan, "person1");
     const person2TaxAdjustments = personTaxAdjustmentInputs(plan, "person2");
+    person1TaxAdjustments.reportableEmployerSuperContributions = roundCurrency(
+      person1TaxAdjustments.reportableEmployerSuperContributions + salaryPackaging.person1.superSacrifice,
+    );
+    person2TaxAdjustments.reportableEmployerSuperContributions = roundCurrency(
+      person2TaxAdjustments.reportableEmployerSuperContributions + salaryPackaging.person2.superSacrifice,
+    );
     const person1MLSIncomeForThreshold = calculatePersonMLSIncomeForThreshold({
       taxableIncome: person1TaxableAfterExtraSuper,
       ...person1TaxAdjustments,
@@ -2466,15 +2539,30 @@
       otherIncome: 0,
       extraConcessionalSuper: plan.investing.extraSuperContributions,
     });
+    const legacyPerson1SalarySacrifice = nonNegative(plan.investing.person1SalarySacrifice);
+    const legacyPerson2SalarySacrifice = nonNegative(plan.investing.person2SalarySacrifice);
+    const legacyPayrollExtraSplit = splitAdditionalContribution(
+      plan.investing.extraSuperContributions,
+      person1SalaryWages,
+      person2SalaryWages,
+    );
     const payrollEstimate = calculatePayrollEstimate({
       person1Income: person1SalaryWages,
       person2Income: person2SalaryWages,
-      extraConcessionalSuper: plan.investing.extraSuperContributions,
+      extraConcessionalSuper: hasSalaryPackaging ? 0 : plan.investing.extraSuperContributions,
       helpDebt: plan.liabilities.hecsHelpDebt,
       person1HelpDebt: person1StslBalance,
       person2HelpDebt: person2StslBalance,
-      person1SalarySacrifice: plan.investing.person1SalarySacrifice,
-      person2SalarySacrifice: plan.investing.person2SalarySacrifice,
+      person1SalarySacrifice: hasSalaryPackaging
+        ? roundCurrency(salaryPackaging.person1.superSacrifice + (legacyPerson1SalarySacrifice || legacyPayrollExtraSplit.person1))
+        : plan.investing.person1SalarySacrifice,
+      person2SalarySacrifice: hasSalaryPackaging
+        ? roundCurrency(salaryPackaging.person2.superSacrifice + (legacyPerson2SalarySacrifice || legacyPayrollExtraSplit.person2))
+        : plan.investing.person2SalarySacrifice,
+      person1PreTaxDeductions: hasSalaryPackaging ? salaryPackaging.person1.otherPreTax : undefined,
+      person2PreTaxDeductions: hasSalaryPackaging ? salaryPackaging.person2.otherPreTax : undefined,
+      person1PostTaxDeductions: hasSalaryPackaging ? salaryPackaging.person1.otherPostTax : undefined,
+      person2PostTaxDeductions: hasSalaryPackaging ? salaryPackaging.person2.otherPostTax : undefined,
       person1PayrollDeductions: plan.income.person1PayrollDeductions,
       person2PayrollDeductions: plan.income.person2PayrollDeductions,
       person1HasStslDebt: person1HasStsl,
@@ -2546,7 +2634,7 @@
     const annualLoanRepayments = loanCashflow.totalRequiredLoanRepayments;
     const medicareLevySurchargeForCashflow = nonNegative(taxEstimate.medicareLevySurcharge);
     const estimatedTaxAndHelp = roundCurrency(taxEstimate.incomeTax + taxEstimate.medicareLevy + medicareLevySurchargeForCashflow + helpRepaymentEstimate.annualRepayment);
-    const netIncomeAfterTaxHelp = roundCurrency(annualGrossIncome - taxEstimate.incomeTax - taxEstimate.medicareLevy - medicareLevySurchargeForCashflow - helpRepaymentEstimate.annualRepayment);
+    const netIncomeAfterTaxHelp = roundCurrency(annualGrossIncome - taxEstimate.incomeTax - taxEstimate.medicareLevy - medicareLevySurchargeForCashflow - helpRepaymentEstimate.annualRepayment - salaryPackaging.household.totalCashDeductions);
     const configuredInvestmentContribution = roundCurrency(nonNegative(plan.investing.annualInvestingTarget));
     const annualExtraSuperContributions = roundCurrency(nonNegative(plan.investing.extraSuperContributions));
     const cashSurplusBeforeInvesting = roundCurrency(netIncomeAfterTaxHelp - annualCoreLivingExpenses - annualDebtRepayments - annualOtherRegularExpenses);
@@ -2562,13 +2650,17 @@
       netIncomeAfterTax: netIncomeAfterTaxHelp, livingExpenses: annualLivingExpenses,
       annualSurplus: cashSurplusBeforeInvesting, configuredInvestmentContribution, actualAffordableInvestmentContribution,
       actualInvestmentContribution: annualInvestmentContributions, extraSuperContribution: annualExtraSuperContributions,
+      ...(hasSalaryPackaging ? {
+        salaryPackaging,
+        salaryPackagingCashDeductions: salaryPackaging.household.totalCashDeductions,
+      } : {}),
       remainingCashSurplus: cashSurplusAfterInvesting };
     const finalProjectedCashSurplus = cashSurplusAfterInvesting;
     const cashSurplusAfterTaxHelpAndInvesting = finalProjectedCashSurplus;
     const firstYearMortgagePrincipalReduction = roundCurrency(loan.schedule.slice(0, 12).reduce((total, row) => total + Math.max(0, row.principalRepaid), 0));
     const employerSuper = employerSuperSummary(plan);
     const grossEmployerSuperContributions = nonNegative(employerSuper.totalEffective);
-    const grossExtraSuperContributions = nonNegative(plan.investing.extraSuperContributions);
+    const grossExtraSuperContributions = roundCurrency(nonNegative(plan.investing.extraSuperContributions) + salaryPackaging.household.superSacrifice);
     const grossConcessionalSuperContributions = roundCurrency(grossEmployerSuperContributions + grossExtraSuperContributions);
     const netEmployerSuperContributions = netConcessionalSuperContribution(grossEmployerSuperContributions);
     const netExtraSuperContributions = netConcessionalSuperContribution(grossExtraSuperContributions);
@@ -2639,6 +2731,7 @@
     });
     const person1SuperProjection = projectBalance({ startingBalance: nonNegative(plan.assets.superPerson1),
       annualContribution: netConcessionalSuperContribution(employerSuper.person1Amount
+        + salaryPackaging.person1.superSacrifice
         + nonNegative(plan.investing.extraSuperContributions) - extraSuperSplitForTax.person2),
       expectedReturn: expectedSuperReturn, years: 30, currentAge, safeWithdrawalRate });
     const superBalancesAtYear = year => {
@@ -2896,6 +2989,7 @@
       person1SalaryWages,
       person2SalaryWages,
       incomeBreakdown: incomeSummary,
+      ...(hasSalaryPackaging ? { salaryPackaging } : {}),
       otherAnnualIncome,
       passiveIncomeBreakdown: passiveIncomeSummary,
       annualPassiveIncome,
@@ -3042,6 +3136,8 @@
     calculateMedicareLevySurcharge,
     calculateHelpRepaymentIncome,
     calculatePayrollEstimate,
+    salaryPackagingAnnualAmounts,
+    salaryPackagingSummary,
     qualifyingEarningsAnnualAmount,
     calculateEmployerSuperForPerson,
     employerSuperSummary,

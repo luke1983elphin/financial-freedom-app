@@ -5401,6 +5401,52 @@
     return `<p class="field-help salary-annual-equivalent" data-salary-annual-equivalent="${escapeHtml(item.id)}">Annual equivalent: ${money(presentation.annualEquivalent)} per year.</p>`;
   }
 
+  function salarySacrificeFieldsHtml(item = {}) {
+    if (!item.salarySacrificeEnabled) return dynamicInput("incomeItems", item, "salarySacrificeEnabled", "I salary sacrifice part of my pay", { type: "checkbox" });
+    return `
+      ${dynamicInput("incomeItems", item, "salarySacrificeEnabled", "I salary sacrifice part of my pay", { type: "checkbox" })}
+      <section class="salary-sacrifice-section">
+        <div class="card-subheading">
+          <h4>Salary sacrifice and packaged deductions</h4>
+          <p>Enter the amounts shown on your pay arrangement. Employer super continues to use gross qualifying earnings.</p>
+        </div>
+        <div class="input-grid mt-3">
+          ${dynamicInput("incomeItems", item, "salarySacrificeSuperAmount", "Salary sacrifice to super", { step: "10", placeholder: "0" })}
+          ${dynamicInput("incomeItems", item, "salarySacrificeSuperFrequency", "Super sacrifice frequency", { type: "select", options: frequencies })}
+          ${dynamicInput("incomeItems", item, "salarySacrificeOtherPreTaxAmount", "Other pre-tax packaged benefit", { step: "10", placeholder: "e.g. novated lease pre-tax amount" })}
+          ${dynamicInput("incomeItems", item, "salarySacrificeOtherPreTaxFrequency", "Pre-tax benefit frequency", { type: "select", options: frequencies })}
+          ${dynamicInput("incomeItems", item, "salarySacrificeOtherPostTaxAmount", "Post-tax deduction", { step: "10", placeholder: "Optional" })}
+          ${dynamicInput("incomeItems", item, "salarySacrificeOtherPostTaxFrequency", "Post-tax deduction frequency", { type: "select", options: frequencies })}
+        </div>
+        <p class="field-help mt-3">For novated leases and other packaged benefits, enter the pre-tax and post-tax amounts from the arrangement rather than asking Financial Freedom to calculate the FBT or ECM structure.</p>
+      </section>
+    `;
+  }
+
+  function salaryTakeHomeSummaryHtml(item = {}) {
+    try {
+      const result = CALC.calculatePlan(plan);
+      const ownerKey = item.owner === "person2" ? "person2" : "person1";
+      const payroll = result.payrollEstimates?.[ownerKey];
+      if (!payroll) return "";
+      const periods = { weekly: 52, fortnightly: 26, monthly: 12, quarterly: 4, annually: 1 };
+      const frequency = periods[item.frequency] ? item.frequency : "annually";
+      const divisor = periods[frequency];
+      const frequencyLabel = frequency === "annually" ? "year" : frequency === "monthly" ? "month" : frequency === "quarterly" ? "quarter" : frequency === "fortnightly" ? "fortnight" : "week";
+      const employerSuperAnnual = result.employerSuperContributions?.[`${ownerKey}Amount`] || 0;
+      const sacrificeAnnual = result.salaryPackaging?.[ownerKey]?.superSacrifice || 0;
+      return `
+        <div class="summary-grid mt-4 salary-take-home-summary">
+          ${summaryTile("Estimated take-home pay", `${money(payroll.estimatedNetEmploymentIncome / divisor)} / ${frequencyLabel}`)}
+          ${summaryTile("Employer super", `${money(employerSuperAnnual / divisor)} / ${frequencyLabel}`)}
+          ${summaryTile("Salary sacrifice to super", `${money(sacrificeAnnual / divisor)} / ${frequencyLabel}`)}
+        </div>
+      `;
+    } catch {
+      return "";
+    }
+  }
+
   function refreshSalaryAnnualEquivalent(item = {}) {
     const helper = document.querySelector(`[data-salary-annual-equivalent="${CSS.escape(String(item.id || ""))}"]`);
     if (helper) helper.textContent = `Annual equivalent: ${money(salaryAmountPresentation(item).annualEquivalent)} per year.`;
@@ -5538,6 +5584,7 @@
           ${type === "salaryWages" ? salaryAnnualEquivalentHtml(item) : ""}
           ${type === "taxFree" ? `<p class="field-help">Included in cashflow and retirement forecasts, with no income tax or employer super modelled on this amount.</p>` : ""}
           ${dynamicInput("incomeItems", item, "frequency", "Frequency", { type: "select", options: frequencies })}
+          ${type === "salaryWages" ? salarySacrificeFieldsHtml(item) : ""}
           ${dividendTaxFields(item, type)}
           ${type === "other" ? dynamicInput("incomeItems", item, "isPassiveIncome", "Passive income", { type: "checkbox", infoKey: "passiveIncome" }) : ""}
         `;
@@ -5556,6 +5603,7 @@
             ? `<p class="field-help">${escapeHtml(item.name || "Linked investment income")}: amount and ownership are derived from the investment's return settings.</p>` : incomeFields}
         </div>
         ${investmentIncomeLinkFields(item)}
+        ${type === "salaryWages" ? salaryTakeHomeSummaryHtml(item) : ""}
         ${type === "rentalNetCashIncome" ? `${rentalLoanLinkControls(item)}<details class="linked-property-learn-more mt-3"><summary>Learn more</summary><p>${escapeHtml(goalInfoCopy.rentalNetCashIncome.body)}</p></details>` : ""}
       </article>
     `;
@@ -16956,14 +17004,15 @@
           renderAll();
           return;
         }
-        if (target.dataset.collection === "incomeItems" && (target.dataset.key === "type" || target.dataset.key === "owner" || target.dataset.key === "linkedAssetId")) {
+        if (target.dataset.collection === "incomeItems" && (target.dataset.key === "type" || target.dataset.key === "owner" || target.dataset.key === "linkedAssetId" || target.dataset.key === "salarySacrificeEnabled")) {
           renderAll();
           return;
         }
-        if (target.dataset.collection === "incomeItems" && (target.dataset.key === "amount" || target.dataset.key === "frequency")) {
+        if (target.dataset.collection === "incomeItems" && (target.dataset.key === "amount" || target.dataset.key === "frequency"
+          || target.dataset.key.startsWith("salarySacrifice"))) {
           refreshEmployerSuperPanels();
           if (item.type === "salaryWages") refreshSalaryAnnualEquivalent(item);
-          if (target.dataset.key === "frequency" && item.type === "salaryWages") {
+          if (item.type === "salaryWages" && (target.dataset.key === "frequency" || target.dataset.key.startsWith("salarySacrifice"))) {
             renderForms();
             renderOutputs();
             return;
