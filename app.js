@@ -6230,7 +6230,10 @@
   function commitLinkedSetup() {
     if (!linkedSetupDraft || !LINKED_SETUP) return false;
     if (isDemoActive()) {
-      updateSaveStatus("Return to My Plan before saving linked investments.");
+      const message = "You are viewing the demo plan. Return to My Plan before saving a home, loan or investment.";
+      linkedSetupDraft.errors = [message];
+      renderLinkedSetupDialog();
+      updateSaveStatus(message);
       return false;
     }
     const previousPlan = CALC.clonePlan(plan);
