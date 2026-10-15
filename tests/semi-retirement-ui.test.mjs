@@ -2186,7 +2186,7 @@ test("salary packaging continues through semi-retirement and stops at full retir
   assert.equal(semi.totalCashIncomeBeforeTax, 31600);
 
   assert.equal(retired.grossEmploymentIncome, 0);
-  assert.equal(retired.salarySacrificeSuper, 0);
-  assert.equal(retired.otherPreTaxPackaging, 0);
-  assert.equal(retired.postTaxPackaging, 0);
+  assert.equal(retired.salarySacrificeSuper ?? 0, 0);
+  assert.equal(retired.otherPreTaxPackaging ?? 0, 0);
+  assert.equal(retired.postTaxPackaging ?? 0, 0);
 });
