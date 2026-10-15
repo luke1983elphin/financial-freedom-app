@@ -917,10 +917,7 @@
   }
 
   function salaryPackagingAnnualAmounts(item = {}) {
-    const enabled = item.salarySacrificeEnabled === true
-      || nonNegative(item.salarySacrificeSuperAmount) > 0
-      || nonNegative(item.salarySacrificeOtherPreTaxAmount) > 0
-      || nonNegative(item.salarySacrificeOtherPostTaxAmount) > 0;
+    const enabled = item.salarySacrificeEnabled === true;
     const annual = (amount, frequency) => enabled
       ? roundCurrency(annualize(amount, frequency || item.frequency || "annually"))
       : 0;
