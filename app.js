@@ -6261,6 +6261,12 @@
     const savedKind = linkedSetupDraft.kind;
     closeLinkedSetup();
     renderAll();
+    // Rendering the forms can recreate the dialog; ensure it stays closed after saving.
+    const savedDialog = document.getElementById("linkedSetupDialog");
+    if (savedDialog) {
+      savedDialog.classList.add("hidden");
+      savedDialog.setAttribute("aria-hidden", "true");
+    }
     updateSaveStatus(savedKind === "home" ? "Home and loan saved." : savedKind === "rental" ? "Rental property saved." : "Investment saved.");
     return true;
   }
@@ -17167,7 +17173,7 @@
           || target.dataset.key.startsWith("salarySacrifice"))) {
           refreshEmployerSuperPanels();
           if (item.type === "salaryWages") refreshSalaryAnnualEquivalent(item);
-          if (item.type === "salaryWages" && (target.dataset.key === "frequency" || target.dataset.key.startsWith("salarySacrifice"))) {
+          if (item.type === "salaryWages" && (target.dataset.key === "frequency" || (target.dataset.key.startsWith("salarySacrifice") && target.dataset.type === "text"))) {
             renderForms();
             renderOutputs();
             return;
