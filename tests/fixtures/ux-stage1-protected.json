@@ -321,7 +321,7 @@
     "linkedPropertyRecords": "2b8d401a607a969c6dbb4689f3b798730da81c146b9889164617e309e8832b09",
     "linkedPropertyCashflowSummary": "a1d0bcc131d6878398aef6ef1f2637cdee6decdadd8a7d3e92f8ead3d474fff2",
     "linkedPropertyFrequencyLabel": "34f26ffc0bef2c28dd53d3d4a2e7a2c6b85bff56c10a642ad331e2f553b5e3ce",
-    "linkedPropertyLoanCard": "d66fe3efc85bc43169f68c0123d01b7f5f516bdf19f0740ae1d0ee215c1ac0b1",
+    "linkedPropertyLoanCard": "09b04e20274d7ef5f3e18037b34efd397fcb8e62c127696851b47b5435a70193",
     "linkedPropertyIncomeCard": "964e03d8046cbe4b03c05601d0cc292dda5a40f70fa86879f25f07824c1918e8",
     "linkedPropertyCard": "ac25bbe21f89a5c00e87ee24d12e2061ad3b0b97221b29ac3d0dd3c98130917a",
     "linkedPropertyManagementSectionHtml": "6d0f59f8e39018166cccfcd1897e4735a3fb722fef06c183fe8841c2e9f644fe",
@@ -1068,6 +1068,18 @@
         "key": "semiRetirementUi.js",
         "previousHash": "0cdb98bd3aa7e99189c0c2e513661f2180ae7b2c851645b530e3adb6954dc65d",
         "approvedHash": "c4fdee63dc80ef8625f352f4f24cf9d191f9ddb4b6b9e39fa327906ffbf68a8f"
+      }
+    ]
+  },
+  "exactLoanInputRevision": {
+    "date": "2026-10-15",
+    "reason": "Allow two-decimal interest rates and exact repayment amounts in guided and linked loan inputs; loan calculations unchanged.",
+    "changes": [
+      {
+        "group": "appFunctions",
+        "key": "linkedPropertyLoanCard",
+        "previousHash": "d66fe3efc85bc43169f68c0123d01b7f5f516bdf19f0740ae1d0ee215c1ac0b1",
+        "approvedHash": "09b04e20274d7ef5f3e18037b34efd397fcb8e62c127696851b47b5435a70193"
       }
     ]
   }
