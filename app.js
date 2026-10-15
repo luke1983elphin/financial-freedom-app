@@ -17159,6 +17159,15 @@
           saveWeeklyPlan();
         }
         syncCollectionInputs(target.dataset.collection, target.dataset.id, target.dataset.key, value);
+        // Assets and Super are two views of the same canonical super balances.
+        // Update the legacy fields immediately so the Super tab and projections
+        // cannot retain an older amount after an asset is edited.
+        if (target.dataset.collection === "assetItems" &&
+            (item.category === "super" || target.dataset.key === "category")) {
+          syncCollectionsToLegacy();
+          syncInputs("assets.superPerson1", plan.assets.superPerson1);
+          syncInputs("assets.superPerson2", plan.assets.superPerson2);
+        }
         autosavePlan();
         if((target.dataset.collection === "assetItems" && ["category","investmentReturnMode","incomeTreatment","owner"].includes(target.dataset.key))
           || (target.dataset.collection === "incomeItems" && target.dataset.key === "confirmedSeparateInvestmentIncome")) {
@@ -17227,6 +17236,13 @@
         saveWeeklyPlan();
       }
       syncInputs(target.dataset.path, value);
+      if (target.dataset.path === "personal.person1Name" || target.dataset.path === "personal.person2Name") {
+        syncDefaultPersonCollectionLabels();
+        autosavePlan();
+        renderForms();
+        renderOutputs();
+        return;
+      }
       if (["personal.targetAnnualSpending", "personal.fullRetirementAge", "personal.semiRetirementAge", "personal.workOptionalAge", "personal.person1Age", "personal.person2Age", "investing.inflationPct"].includes(target.dataset.path)) {
         updateLifestyleSpendingHelper();
       }
