@@ -9751,3 +9751,19 @@ body.scenario-save-modal-open {
     padding: 14px;
   }
 }
+
+/* Review keeps the three primary assumptions visible; details remain optional. */
+.review-key-assumptions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.review-key-assumptions > label, .review-advanced .input-grid > label { min-width: 0; }
+.review-key-assumptions .field-input { width: 100%; min-width: 0; }
+.review-key-assumptions .field-label { min-height: 2.8em; }
+.review-advanced-content { padding-top: 16px; }
+.review-advanced-content h4 { margin: 18px 0 10px; }
+.review-detail-rows { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 20px; }
+.review-advanced .summary-tile { padding: 10px 0; border: 0; border-bottom: 1px solid #e2e8f0; border-radius: 0; box-shadow: none; background: transparent; min-width: 0; overflow-wrap: anywhere; }
+.review-detail-rows > p { grid-column: 1 / -1; }
+#wizardAboutForm .field-label, .field-label-with-info, .item-card-title h4 { overflow-wrap: anywhere; }
+.nav-more-toggle > span { transition: transform 160ms ease; }
+.nav-more[open] > .nav-more-toggle > span { transform: rotate(180deg); }
+@media (max-width: 600px) { .review-key-assumptions, .review-detail-rows { grid-template-columns: minmax(0, 1fr); } .review-key-assumptions .field-label { min-height: 0; } }
+@media (prefers-reduced-motion: no-preference) { .review-advanced[open] .review-advanced-content { animation: review-reveal 160ms ease-out; } @keyframes review-reveal { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } } }

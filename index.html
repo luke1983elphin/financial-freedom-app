@@ -177,7 +177,7 @@
                 <button class="nav-button nav-primary" type="button" data-view="semiretirement" data-semi-retirement-nav><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17 9 11l4 4 8-9"/><path d="M15 6h6v6"/></svg><span>Retirement</span></button>
                 <button class="nav-button nav-primary" type="button" data-view="weeklyplan" ><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="m8 10 1.5 1.5L12 9M8 16h8"/></svg><span>Weekly</span></button>
                 </div>
-                <details class="nav-more" id="moreNavigation">
+                <details class="nav-more" id="moreNavigation" open>
                   <summary class="nav-more-toggle">More tools <span aria-hidden="true">⌄</span></summary>
                   <div class="nav-more-items" aria-label="More destinations">
                     <button class="nav-button nav-more-icon" type="button" data-view="decision"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 17h16M8 4v6M16 14v6"/></svg><span>Try a Change</span></button>
@@ -247,12 +247,7 @@
                         </details>
                       </div>
                       <div class="wizard-panel hidden" data-wizard-panel="7">
-                        <div class="card-subheading">
-                          <h3>Review Your Plan</h3>
-                          <p>Your seven sections are complete. Check the assumptions used in your projections before exploring results.</p>
-                        </div>
-                        <div id="wizardAssumptionsReview" class="input-grid mt-4"></div>
-                        <div id="wizardHelpReview" class="summary-grid mt-4"></div>
+                        <div id="wizardAssumptionsReview" class="mt-4"></div>
                       </div>
                       <div class="wizard-panel hidden" data-wizard-panel="8">
                         <div id="wizardResultsSummary" class="wizard-results"></div>

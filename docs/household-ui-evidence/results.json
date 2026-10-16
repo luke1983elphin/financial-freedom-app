@@ -1,0 +1,13 @@
+{
+  "checks": [
+    "Complete calculation output identical to GitHub baseline for identical inputs",
+    "More tools defaults open and preserves user preference after reload",
+    "1440px: continuous typing, delete, paste, same input identity/focus, names/fallback, decimal assumptions, disclosure, no page overflow",
+    "1920px: continuous typing, delete, paste, same input identity/focus, names/fallback, decimal assumptions, disclosure, no page overflow",
+    "768px: continuous typing, delete, paste, same input identity/focus, names/fallback, decimal assumptions, disclosure, no page overflow",
+    "375px: continuous typing, delete, paste, same input identity/focus, names/fallback, decimal assumptions, disclosure, no page overflow",
+    "430px: continuous typing, delete, paste, same input identity/focus, names/fallback, decimal assumptions, disclosure, no page overflow",
+    "Household name persisted after browser reload"
+  ],
+  "errors": []
+}
