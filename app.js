@@ -4935,7 +4935,7 @@
     const moreNavigation = document.getElementById("moreNavigation");
     if (moreNavigation) {
       if (moreNavigation.contains(document.activeElement)) moreNavigation.querySelector("summary")?.focus();
-      moreNavigation.open = false;
+
       moreNavigation.classList.toggle("has-active-view", Boolean(moreNavigation.querySelector('[aria-current="page"]')));
     }
     if (view === "dashboard") renderDashboardRetirementCard();
@@ -5024,6 +5024,11 @@
   function renderForm(containerId, fields) {
     const container = document.getElementById(containerId);
     if (!container) return;
+    // Keep the household editor and selection intact while dependent views refresh.
+    if (containerId === "wizardAboutForm" && container.contains(document.activeElement)) {
+      fields.forEach(config => updateFieldLabel(config.path, config.label));
+      return;
+    }
     container.innerHTML = fields.map(field).join("");
   }
 
@@ -6598,10 +6603,18 @@
     if (!container) return;
     const visible = fields.filter((item) => ["investing.expectedInvestmentReturnPct", "investing.expectedSuperReturnPct", "investing.inflationPct"].includes(item.path));
     const advanced = fields.filter((item) => !visible.includes(item));
+    const expanded = container.querySelector("#reviewAdvanced")?.open || false;
     container.innerHTML = `
-      <div class="input-grid">${visible.map(field).join("")}</div>
-      <details class="setup-advanced-section mt-4"><summary>Advanced assumptions</summary><div class="input-grid mt-4">${advanced.map(field).join("")}</div></details>
-      <div id="wizardMlsAssumption" class="mt-4"></div>${modellingInformationHtml()}`;
+      <div class="review-key-assumptions">${visible.map((config, index) => field({ ...config, label: ["Investment return (%)", "Super return (%)", "Inflation (%)"][index] })).join("")}</div>
+      <details id="reviewAdvanced" class="setup-advanced-section review-advanced mt-4" ${expanded ? "open" : ""}>
+        <summary>Advanced assumptions &amp; financial details</summary>
+        <div class="review-advanced-content">
+          <h4>Additional assumptions</h4><div class="input-grid">${advanced.map(field).join("")}</div>
+          <h4>Medicare Levy Surcharge</h4><div id="wizardMlsAssumption"></div>
+          <h4>Study and training loans (HELP/STSL)</h4><div id="wizardHelpReview" class="review-detail-rows"></div>
+          ${modellingInformationHtml()}
+        </div>
+      </details>`;
   }
 
   function renderGoalCollection(containerId) {
@@ -6701,10 +6714,10 @@
   function renderForms() {
     ensureCollectionData();
     const aboutFields = [
-      { label: "Person 1 name", path: "personal.person1Name", kind: "text" },
-      { label: "Person 2 name", path: "personal.person2Name", kind: "text" },
-      { label: "Person 1 age", path: "personal.person1Age" },
-      { label: "Person 2 age", path: "personal.person2Age" },
+      { label: `${personDisplayName(1)} name`, path: "personal.person1Name", kind: "text" },
+      { label: `${personDisplayName(2)} name`, path: "personal.person2Name", kind: "text" },
+      { label: `${personDisplayName(1)} age`, path: "personal.person1Age" },
+      { label: `${personDisplayName(2)} age`, path: "personal.person2Age" },
       { label: "Dependent children", path: "personal.dependants", step: "1" },
     ];
     const goalFields = [
@@ -7034,7 +7047,7 @@
     document.getElementById("wizardStepLabel").textContent = inSetup ? `Section ${activeWizardStep + 1} of ${inputSections}` : "Your plan is ready";
     document.getElementById("wizardStepTitle").textContent = inSetup ? step.title : activeWizardStep === 7 ? "Review Your Plan" : "Explore Your Results";
     document.getElementById("wizardHeading").textContent = inSetup ? step.title : activeWizardStep === 7 ? "Review Your Plan" : "Explore Your Results";
-    document.getElementById("wizardInstruction").textContent = inSetup ? step.instruction : activeWizardStep === 7 ? "Your seven sections are complete. Check the assumptions used in your projections, or continue to your results." : "Explore your financial outlook. You can return to edit your plan at any time.";
+    document.getElementById("wizardInstruction").textContent = inSetup ? step.instruction : activeWizardStep === 7 ? "Check the key assumptions used to estimate your financial future." : "Explore your financial outlook. You can return to edit your plan at any time.";
     document.getElementById("wizardPercent").textContent = inSetup ? `${percent}% Complete` : "Setup complete";
     document.getElementById("wizardProgressBar").style.width = `${percent}%`;
     document.querySelectorAll("[data-wizard-panel]").forEach((panel) => {
@@ -10746,7 +10759,7 @@
           <table class="semi-retirement-annual-table">
             <thead>
               <tr>
-                <th>Year</th><th>Person 1 age</th><th>Person 2 age</th><th>Household phase</th><th>Net cash income</th><th>Projected spending</th><th>Accessible withdrawal</th><th>Accessible investments</th><th>Super balance</th><th>Total investable assets</th><th>Total debt</th><th>Net rental cashflow</th><th>Projected net worth</th><th>Unfunded spending</th><th>Details</th>
+                <th>Year</th><th>${escapeHtml(personDisplayName(1))} age</th><th>${escapeHtml(personDisplayName(2))} age</th><th>Household phase</th><th>Net cash income</th><th>Projected spending</th><th>Accessible withdrawal</th><th>Accessible investments</th><th>Super balance</th><th>Total investable assets</th><th>Total debt</th><th>Net rental cashflow</th><th>Projected net worth</th><th>Unfunded spending</th><th>Details</th>
               </tr>
             </thead>
             <tbody>
@@ -16220,6 +16233,7 @@
 
   function syncInputs(path, value) {
     document.querySelectorAll(`[data-path="${path}"]`).forEach((input) => {
+      if (input === document.activeElement) return;
       if (input.type === "checkbox") {
         input.checked = Boolean(value);
       } else if (input.value !== String(value ?? "")) {
@@ -16976,6 +16990,13 @@
   }
 
   function bindEvents() {
+    const moreNavigation = document.getElementById("moreNavigation");
+    if (moreNavigation) {
+      try { moreNavigation.open = localStorage.getItem("ffs.ui.moreNavigationOpen") !== "false"; } catch { moreNavigation.open = true; }
+      moreNavigation.addEventListener("toggle", () => {
+        try { localStorage.setItem("ffs.ui.moreNavigationOpen", String(moreNavigation.open)); } catch { /* UI remains usable without storage. */ }
+      });
+    }
     document.addEventListener("toggle", (event) => {
       const details = event.target;
       if (!details?.dataset?.semiDetailState) return;
@@ -17220,6 +17241,14 @@
           target.checked = true;
           return;
         }
+      }
+      // Rename generated income labels while the previous household name is known.
+      const renamedPerson = target.dataset.path.match(/^personal\.person([12])Name$/)?.[1];
+      if (renamedPerson) {
+        const previousName = personDisplayName(Number(renamedPerson));
+        const nextName = String(value || "").trim() || `Person ${renamedPerson}`;
+        const income = plan.incomeItems?.find(item => item.id === `income-person-${renamedPerson}`);
+        if (income && income.name === `${previousName} income`) income.name = `${nextName} income`;
       }
       setPath(plan, target.dataset.path, value);
       if (/^assets\.superPerson[12]$/.test(target.dataset.path) && Number(value) > 0) {

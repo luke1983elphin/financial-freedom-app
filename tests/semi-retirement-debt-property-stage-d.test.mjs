@@ -122,8 +122,8 @@ test("Stage D responsive projection treatment avoids page-level table overflow o
 test("Stage D Year-by-Year Projection keeps all projection columns available", () => {
   [
     "Year",
-    "Person 1 age",
-    "Person 2 age",
+    "${escapeHtml(personDisplayName(1))} age",
+    "${escapeHtml(personDisplayName(2))} age",
     "Household phase",
     "Net cash income",
     "Projected spending",
