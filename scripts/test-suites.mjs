@@ -1,6 +1,7 @@
 export const DEFAULT_SUITE_TIMEOUT_MS = 120_000;
 
 export const ACTIVE_TEST_SUITES = [
+  { id: "release-safeguards", file: "tests/release-safeguards.test.mjs", groups: ["all", "mjs", "r1-ai"] },
   { id: "custom-what-if", file: "tests/custom-what-if.test.mjs", groups: ["all", "mjs", "presentation"] },
   { id: "age-pension", file: "tests/age-pension.test.mjs", groups: ["all", "mjs", "semi-retirement"] },
   { id: "retirement-goals-redesign", file: "tests/retirement-goals-redesign.test.mjs", groups: ["all", "mjs", "semi-retirement"] },
@@ -60,6 +61,9 @@ export const ACTIVE_TEST_SUITES = [
 ];
 
 export const SYNTAX_CHECK_FILES = [
+  "api/_lib/ai-policy.js",
+  "tests/release-browser.mjs",
+  "tests/release-safeguards.test.mjs",
   "agePensionEstimate.js",
   "tests/age-pension.test.mjs",
   "app.js",

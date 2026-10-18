@@ -1,3 +1,5 @@
+import { AI_RELEASE_READY, explicitlyEnabled, boundedTimeout, protectRequest, readJsonBody } from "./_lib/ai-policy.js";
+
 const MAX_REQUEST_BYTES = 4 * 1024 * 1024;
 const DEFAULT_MODEL = process.env.OPENAI_PAYSLIP_MODEL || "gpt-4.1-mini";
 const ALLOWED_MIME_TYPES = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp"]);
@@ -9,34 +11,7 @@ function sendJson(res, status, payload) {
   res.end(JSON.stringify(payload));
 }
 
-function readBody(req) {
-  if (req.body && typeof req.body === "object") return Promise.resolve(req.body);
-  if (typeof req.body === "string") {
-    try {
-      return Promise.resolve(JSON.parse(req.body));
-    } catch {
-      return Promise.reject(new Error("Invalid JSON request."));
-    }
-  }
-  return new Promise((resolve, reject) => {
-    let body = "";
-    req.on("data", (chunk) => {
-      body += chunk;
-      if (Buffer.byteLength(body, "utf8") > MAX_REQUEST_BYTES) {
-        reject(new Error("Request too large."));
-        req.destroy();
-      }
-    });
-    req.on("end", () => {
-      try {
-        resolve(body ? JSON.parse(body) : {});
-      } catch {
-        reject(new Error("Invalid JSON request."));
-      }
-    });
-    req.on("error", reject);
-  });
-}
+function readBody(req) { return readJsonBody(req, MAX_REQUEST_BYTES); }
 
 function cleanFilename(value) {
   return String(value || "payslip").replace(/[^a-zA-Z0-9._ -]/g, "").slice(0, 120) || "payslip";
@@ -133,10 +108,10 @@ async function uploadTemporaryPdf({ base64, filename }) {
     method: "POST",
     headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
     body: form,
+    signal: AbortSignal.timeout(10000),
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || !payload.id) {
-    console.error("Payslip PDF upload failed", { status: response.status, code: payload?.error?.code || "", type: payload?.error?.type || "" });
     const error = new Error(response.status === 429
       ? "Payslip reading is busy. Please try again shortly."
       : "The payslip PDF could not be prepared for reading. Please try again.");
@@ -151,6 +126,7 @@ async function deleteTemporaryFile(fileId) {
   try {
     await fetch(`https://api.openai.com/v1/files/${encodeURIComponent(fileId)}`, {
       method: "DELETE",
+      signal: AbortSignal.timeout(5000),
       headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
     });
   } catch {
@@ -158,7 +134,7 @@ async function deleteTemporaryFile(fileId) {
   }
 }
 
-async function extractWithOpenAi({ mimeType, base64, filename }) {
+export async function extractWithOpenAi({ mimeType, base64, filename }) {
   const content = [{ type: "input_text", text: extractionPrompt() }];
   let temporaryFileId = "";
   if (mimeType === "application/pdf") {
@@ -169,7 +145,7 @@ async function extractWithOpenAi({ mimeType, base64, filename }) {
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), Number(process.env.PAYSLIP_EXTRACT_TIMEOUT_MS || 30000));
+  const timeout = setTimeout(() => controller.abort(), boundedTimeout(process.env.PAYSLIP_EXTRACT_TIMEOUT_MS));
   try {
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
@@ -191,7 +167,6 @@ async function extractWithOpenAi({ mimeType, base64, filename }) {
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      console.error("Payslip extraction response failed", { status: response.status, code: payload?.error?.code || "", type: payload?.error?.type || "" });
       const error = new Error(response.status === 429
         ? "Payslip reading is busy. Please try again shortly."
         : "The payslip reading service could not read this file. Please try another payslip.");
@@ -212,15 +187,17 @@ export default async function payslipExtractHandler(req, res) {
     res.setHeader("Allow", "POST");
     return sendJson(res, 405, { error: "Method not allowed." });
   }
-  if (!process.env.OPENAI_API_KEY) {
-    return sendJson(res, 503, { error: "Payslip upload is not configured yet. Enter the salary manually for now." });
+  if (!AI_RELEASE_READY || !explicitlyEnabled(process.env.PAYSLIP_EXTRACT_SERVER_ENABLED) || !process.env.OPENAI_API_KEY) {
+    return sendJson(res, 503, { error: "Payslip uploads are currently unavailable. Enter your salary manually." });
   }
+
+  try { await protectRequest(req, MAX_REQUEST_BYTES); } catch (error) { return sendJson(res, error.status || 503, { error: error.message }); }
 
   let body;
   try {
     body = await readBody(req);
   } catch (error) {
-    return sendJson(res, error.message === "Request too large." ? 413 : 400, { error: error.message || "Invalid request." });
+    return sendJson(res, error.status || 400, { error: error.message || "Invalid request." });
   }
   if (Buffer.byteLength(JSON.stringify(body || {}), "utf8") > MAX_REQUEST_BYTES) {
     return sendJson(res, 413, { error: "Payslip file is too large." });
@@ -232,6 +209,8 @@ export default async function payslipExtractHandler(req, res) {
     return sendJson(res, 400, { error: "Choose a PDF, JPG, PNG or WebP payslip." });
   }
 
+  if (Buffer.from(parts.base64, "base64").length > 2.5 * 1024 * 1024) return sendJson(res, 413, { error: "Payslip file is too large." });
+
   let payslip;
   try {
     payslip = await extractWithOpenAi({
@@ -241,7 +220,7 @@ export default async function payslipExtractHandler(req, res) {
     });
   } catch (error) {
     if (error.name === "AbortError") return sendJson(res, 408, { error: "Payslip reading timed out. Please try again." });
-    return sendJson(res, error.status === 429 ? 429 : 502, { error: error.message || "The payslip could not be read." });
+    return sendJson(res, error.status === 429 ? 429 : 502, { error: "The payslip could not be read." });
   }
   if (!payslip) {
     return sendJson(res, 422, { error: "We could not confidently read this payslip. Enter the salary manually or try another payslip." });

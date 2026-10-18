@@ -81,6 +81,7 @@
         rates: [0, 0.01, 0.0125, 0.015],
       },
       heldRuleSections: ["medicareLevy", "medicareLevySurcharge", "stsl", "super"],
+      heldRuleSourceFinancialYear: "2026-27",
     },
   };
   const TAX_YEAR = DEFAULT_TAX_YEAR;
@@ -175,6 +176,29 @@
       return { requestedFinancialYear, appliedFinancialYear: latest, config: FINANCIAL_YEAR_CONFIGS[latest], heldLastSupported: true };
     }
     return { requestedFinancialYear, appliedFinancialYear: null, config: null, heldLastSupported: false };
+  }
+
+  // Disclosure only: consume resolver metadata without modifying calculation values.
+  function carriedForwardRuleNotices(resolutions = []) {
+    const labels = { taxBrackets: "income tax", medicareLevy: "Medicare levy", medicareLevySurcharge: "Medicare levy surcharge", stsl: "study loan repayments", super: "superannuation" };
+    const groups = new Map();
+    for (const resolution of resolutions) {
+      if (!resolution?.config) continue;
+      const { config, heldLastSupported, requestedFinancialYear, appliedFinancialYear } = resolution;
+      const held = config.heldRuleSections || [];
+      for (const section of Object.keys(labels)) {
+        const source = held.includes(section) ? config.heldRuleSourceFinancialYear : heldLastSupported ? appliedFinancialYear : null;
+        if (!source) continue;
+        if (!groups.has(source)) groups.set(source, { sections: new Set(), years: new Set() });
+        groups.get(source).sections.add(labels[section]);
+        groups.get(source).years.add(requestedFinancialYear);
+      }
+    }
+    return [...groups].map(([source, group]) => {
+      const years = [...group.years].sort();
+      const range = years.length === 1 ? years[0] : years[0] + " to " + years.at(-1);
+      return "Some settings for " + range + " are unavailable. This estimate uses " + source + " settings for " + [...group.sections].join(", ") + ".";
+    });
   }
 
   function supportedFinancialYearConfig(financialYear = FINANCIAL_YEAR) {
@@ -3117,6 +3141,7 @@
     annualize,
     annualRecurringExpenses,
     financialYearConfigs: FINANCIAL_YEAR_CONFIGS,
+    carriedForwardRuleNotices,
     supportedFinancialYearConfig,
     resolveFinancialYearConfig,
     financialYearForDate,

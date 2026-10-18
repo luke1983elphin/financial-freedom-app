@@ -270,45 +270,13 @@ test("R1 front end treats the server configuration endpoint as authoritative", (
   assert.match(appSource, /AI insights are currently unavailable\. You can continue using the financial planning tools\./);
 });
 
-test("R1 enabled path remains available only with explicit server flag and mocked provider", async () => {
-  const insightsProvider = installProviderMock({
-    generatedAt: "2026-09-06T00:00:00.000Z",
-    overallPosition: { rating: "Stable", summary: "The fictional household is tracking steadily based on supplied app figures." },
-    strengths: [{ title: "Positive surplus", explanation: "The app-calculated surplus gives this fictional household options." }],
-    pressurePoints: [{ title: "Mortgage debt", explanation: "The household still carries mortgage debt.", importance: "Medium" }],
-    rankedOpportunities: [{ rank: 1, title: "Review contributions", explanation: "Model higher contributions in the app.", potentialImpact: "Medium", complexity: "Low", tradeOffs: ["Less short-term cash."] }],
-    suggestedScenarios: [],
-    actionPlan: { next30Days: ["Review assumptions."], next12Months: ["Model a contribution change."], longerTerm: ["Review yearly."] },
-    missingInformation: [],
-    importantConsiderations: ["Fictional test only."],
-  });
-  await withEnvironment({
-    AI_INSIGHTS_SERVER_ENABLED: "true",
-    OPENAI_API_KEY: "test-key",
-  }, async () => {
-    const res = await request("POST", { planSummary: validPlanSummary });
-    assert.equal(res.statusCode, 200);
-    assert.equal(res.json.insights.overallPosition.rating, "Stable");
-  });
-  assert.equal(insightsProvider.calls, 1);
-  insightsProvider.restore();
-
-  const progressProvider = installProviderMock({
-    generatedAt: "2026-09-06T00:00:00.000Z",
-    summary: "The fictional household improved its net worth.",
-    keyImprovements: ["Net worth increased."],
-    areasToReview: ["Review spending."],
-    progressTowardGoals: ["Progress is visible."],
-    nextReviewActions: ["Check assumptions."],
-  });
-  await withEnvironment({
-    AI_INSIGHTS_SERVER_ENABLED: "true",
-    OPENAI_API_KEY: "test-key",
-  }, async () => {
-    const res = await request("POST", { type: "progress", progressComparison: validProgressComparison });
-    assert.equal(res.statusCode, 200);
-    assert.equal(res.json.progressInsights.summary, "The fictional household improved its net worth.");
-  });
-  assert.equal(progressProvider.calls, 1);
-  progressProvider.restore();
+test("release gate cannot be enabled by environment alone", async () => {
+  const provider = installThrowingProviderMock();
+  try {
+    await withEnvironment({ AI_INSIGHTS_SERVER_ENABLED: "true", OPENAI_API_KEY: "test-key" }, async () => {
+      assert.equal((await request("POST", { planSummary: validPlanSummary })).statusCode, 503);
+      assert.equal((await request("GET")).json.enabled, false);
+    });
+    assert.equal(provider.calls, 0);
+  } finally { provider.restore(); }
 });

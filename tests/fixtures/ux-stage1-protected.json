@@ -1,7 +1,7 @@
 {
   "baseline": "bd23b2a",
   "files": {
-    "calculator.js": "35c773747c31b162b728a68db9d0c70670083db30519b1cc12065ab5fc2d88ef",
+    "calculator.js": "b9cd8c47af46d838ff5d223bcec160c35957066451d363086a32b9850b606daa",
     "semiRetirementProjection.js": "9a973fbcc69b5748daabfc630fbd329ed1f07da2c3439d3aefb43d1f0ab36f8d",
     "semiRetirementUi.js": "c4fdee63dc80ef8625f352f4f24cf9d191f9ddb4b6b9e39fa327906ffbf68a8f",
     "v2-data.js": "935fb66f828874f0ccc267d99d611a47113a85315cb983e45ff49390a84d8baa",
@@ -16,7 +16,7 @@
     "linked-setup.js": "9fb6ee7af76fd14d61c49130981064ec5f5c9e6c286a8ae9df16726a59d1caed",
     "weekly-plan.js": "0aaf2710b38adbacba8b9abf12fa6e9e2e42f42138c017de053237cde481bcb5",
     "trust-readiness.js": "cef502262c2e3281dc17711f9b4b8aeebf78081b744080a4c808c263fbf938a4",
-    "api/ai-insights.js": "4655a2038cbddd4c7bf8547b31d63fd2f8c59227fd7df094dac37152b41e5d30",
+    "api/ai-insights.js": "1cc7ec292a8698ea5d8e8580707debc09c002afe3b68aee8e09982c5e1860cf4",
     "agePensionEstimate.js": "9f5d57f2c527b41e758dfb0592bceaeb364f1d197737611fcdf5759c25284003"
   },
   "appFunctions": {
@@ -492,7 +492,7 @@
     "semiRetirementComparisonInput": "ab0680eb1579417cfe5b52b4ab17004f4b38487a9abcb7a098f96f602d441a6a",
     "renderSemiRetirementComparisonControls": "6061642022551d35c4fe57c5e1edfceefe3a64c80ea7acf3845c721f3b514103",
     "renderSemiRetirementComparisonSelector": "1b6acdcdd7c469af2e40d807210acb5c76fb904762528bc82779f5ba88d174ad",
-    "renderSemiRetirementComparisonPrintReport": "21c41ff84849ffca2cc504f40ef43fc5ad96d46c4b8d8c2782d24e7ebaa53019",
+    "renderSemiRetirementComparisonPrintReport": "68b6245e15b3fc90257a7ee26fdeca233e64480ef819154649b33a1a5e94ce40",
     "renderSemiRetirementTimelineHtml": "0696f516b741974bfe180e73e01631fde316faf3d2f61de44094d8e87c35f646",
     "renderRetainedAssetsHtml": "8e6772e1a42f7e878fa2a9158906baf41a2d896c7af6d3c21145ae085cf51d48",
     "renderSemiRetirementLongevityHtml": "a6046d2f582420688d8b0a804eae93e92caadc56b23144fa74fe97b8ae6c248a",
@@ -508,7 +508,7 @@
     "renderSemiRetirementAssumptionsHtml": "5a6418aad62d266dd836ee35eef20c14d24a65e2f37d9cc59dc5255f2fb50b7a",
     "renderSemiRetirementWarningsHtml": "c4220c2d3d0bae77514b15f72adba882efa97cfc2653d74500dafca69fcd0234",
     "renderSemiRetirementDisclosureHtml": "d6927c28c17cc857625d1a706aeee1e4ecb87b0216c7b217bbbcdf4213ad9cae",
-    "renderSemiRetirementScenarioResultHtml": "4914553650e0ce22127fb6bbd3eecfbd4f5a8ca21062806689958ef4d051ceb7",
+    "renderSemiRetirementScenarioResultHtml": "34744b9c9ed500dd9a4e27b33dad251838f73585c5e2f9bb0a2ed8b689073679",
     "renderSemiRetirementScenario": "46b82ec1a65fa85fda5adfb29ac15b22a17df9ff72485a7c33b9c1019ef54e4c",
     "renderDecision": "dde7b6a51e36e3d63590e995620ddd189d17364a666a2f28afdaccf231806b99",
     "updateSemiRetirementDraftFromInput": "c17cf716f6647e99b3d580a9738ed5110d2cd11ff9f4e08dca89346bdee7e4fd",
@@ -708,7 +708,7 @@
     "reportLoanAssumptions": "0366713e81660b91b83c6a96eb2192dd2761739204a7a94e4244716037522a5c",
     "reportRentalSection": "884db8dd29b911fb1f26b096875dfb73f6e9e583932ec96b377f89784b6b7dcd",
     "reportReviewActions": "10dcae633a0babd65721c179a12a8d46e961c29769ff851c2eaf214807499bc4",
-    "reportPresentationHtml": "95274a7b56c8ccda32dabe68fc960f67ffc888dbc660e0f6adc018d8cecd2b98",
+    "reportPresentationHtml": "e49d686a2a9bb363a64397b2ed06db4500be0c4fb4a5c7f421a5162763ac0b1e",
     "renderReports": "646e95e2552bfb9292b627a97ba1de61520615e3fea0d0de2ea7bf0b6c73b1d2",
     "renderReportCharts": "9835b18eced460feed2da9162328502cac42e8679529916365988b0ff9b3d536",
     "renderSetupSummary": "58d53a4cbfaa9af7da3b2d9cfe2ad6d806838c5a7a1d4b33f7b696034cca6c0f",
@@ -1094,5 +1094,6 @@
         "approvedHash": "97e80049c57484b9587305a93bf27eb9ffc77cbbeee8cbcac3ea08cedc5da57e"
       }
     ]
-  }
+  },
+  "releaseSafeguardsReview": "2026-10-19: calculator disclosure-only addition verified against e1e69f8 full sample outputs and tax boundaries; AI handler intentionally locked and hardened. Other hashes unchanged."
 }

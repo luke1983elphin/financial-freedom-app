@@ -1,5 +1,15 @@
 # SAPTO in Age Pension forecasts
 
+Release review, 19 October 2026: sections 4 and 9–12 of the [official as-made
+instrument](https://www.legislation.gov.au/F2025L01060/asmade/2025-09-09/text/original/epub/OEBPS/document_1/document_1.html)
+were re-read. They confirm the $2,230/$1,602 bases, $445/$37,000/0.015 threshold
+inputs, 0.125 taper and $6,000/0.15 transfer inputs used in this file. That
+instrument commenced 1 October 2025. No numeric change is justified by that
+evidence. **Unresolved:** the register's latest-text and latest-details URLs
+returned errors in this review, so absence of subsequent amendments was not
+independently established. Confirm current compilation status before release;
+the as-made check must not be represented as that confirmation.
+
 Verified 13 October 2026. SAPTO is applied automatically within the enabled Age
 Pension scenario from age 67, under the same ordinary residency assumptions.
 Receiving a positive pension is not required. Couples are assumed to live

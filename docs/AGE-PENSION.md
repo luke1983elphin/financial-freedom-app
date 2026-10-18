@@ -7,7 +7,8 @@ fields and preserves the original calculation path.
 
 ## Dated rules
 
-Verified 13 October 2026; normal domestic rates effective 20 September 2026.
+Reverified 19 October 2026; normal domestic payment rates effective 20 September 2026.
+Other parameters have different effective dates; see the group register below.
 Amounts are annualised using 26 fortnights. Future basic pension, Pension
 Supplement, asset/income free areas and deeming balance thresholds compound at
 the scenario CPI rate, once for each calendar year after 2026. Each year's
@@ -48,6 +49,32 @@ Sources:
 - [Deeming](https://www.servicesaustralia.gov.au/deeming?context=22526)
 - [AGA September 2026 deeming determination](https://aga.gov.au/publications/deeming-rate-recommendation-september-2026)
 - [DSS pension indexation provisions](https://guides.dss.gov.au/social-security-guide/5/1/8/50)
+
+### Release verification register — 19 October 2026
+
+All groups below were checked separately against government sources on that date.
+No discrepancy was found in the estimator's monetary constants; calculation
+values are unchanged. The schedule's original `verifiedOn` records its prior
+verification; this register records the subsequent review.
+
+| Group | Verified values and categories | Effective date and evidence |
+| --- | --- | --- |
+| Normal domestic maximum payment | Single: basic $1,135.40 + Pension Supplement $88.20 + Energy Supplement $14.10 = $1,237.70 per fortnight. Partnered each: $855.90 + $66.50 + $10.60 = $933.00. | 20 September 2026 payment schedule: [Services Australia](https://www.servicesaustralia.gov.au/how-much-age-pension-you-can-get?context=22526). Energy Supplement values remain unchanged in that schedule; their original commencement is not asserted. |
+| Supplement tax components | Basic supplement $30.70 single / $25.30 partnered each. Exempt supplement $57.50 / $41.20, plus energy $14.10 / $10.60; estimator annualises $71.60 / $51.80 by 26. | 20 September 2026: [DSS supplement schedule](https://guides.dss.gov.au/social-security-guide/5/1/9/10), [DVA component table](https://clik.dva.gov.au/node/86936). |
+| Asset free areas | Homeowner single $333,000; non-homeowner single $600,000; couple combined $499,000 / $766,000, including one eligible partner. | 1 July 2026: [DSS historical dated table](https://guides.dss.gov.au/social-security-guide/4/10/3); current [Services Australia table](https://www.servicesaustralia.gov.au/assets-test-for-age-pension?context=22526). September part-pension cancellation figures are not the July free areas. |
+| Asset taper | $3 per fortnight per $1,000 single or couple combined; $1.50 for each eligible partner. Annual factors 78 / 39. | 1 January 2017: [DSS assets test](https://guides.dss.gov.au/social-security-guide/4/2/3). |
+| Income free areas | $226 per fortnight single; $396 combined couple (annual $5,876 / $10,296). | 1 July 2026: [DSS dated history](https://guides.dss.gov.au/social-security-guide/4/10/3); [Services Australia current income test](https://www.servicesaustralia.gov.au/income-test-for-age-pension?context=22526). |
+| Income taper | 50 cents per excess dollar single; 25 cents each eligible partner against combined income. | 20 September 2009 normal rules: [DSS dated history](https://guides.dss.gov.au/social-security-guide/4/10/3). Transitional rules excluded. |
+| Deeming balance thresholds | $66,800 single; $110,600 combined where at least one partner receives a pension. | 1 July 2026: [DSS deeming history](https://guides.dss.gov.au/social-security-guide/4/4/1/10). |
+| Deeming rates | 1.75% lower / 3.75% upper. | 20 September 2026: [ministerial determination](https://www.legislation.gov.au/F2026L01083/asmade/2026-08-21/text/original/epub/OEBPS/document_1/document_1.html) and [Services Australia](https://www.servicesaustralia.gov.au/deeming?context=22526). |
+| Work Bonus | $300 per fortnight per eligible person; annual proxy $7,800. | Increased to $300 from 1 July 2019: [DSS application/history](https://guides.dss.gov.au/social-security-guide/3/1/15/30). [Current scheme](https://www.servicesaustralia.gov.au/how-work-bonus-works?context=22561) also includes a bank and opening credit, intentionally not modelled. |
+| Pension age | 67, with residency and ordinary eligibility assumed. | Final age step from 1 July 2023: [Services Australia information](https://www.servicesaustralia.gov.au/sites/default/files/2024-06/ci006-2304en.pdf); [current eligibility](https://www.servicesaustralia.gov.au/who-can-get-age-pension?context=22526). |
+
+The estimator remains an annual scenario approximation, not an official
+entitlement assessment. Illness-separated, overseas, transitional, rent-assistance,
+fortnightly earnings/bank timing and specialist eligibility rules remain outside
+its supported scope. SAPTO is an existing separate tax-offset approximation;
+this pension-constant review does not broaden its scope or certify entitlement.
 - [DSS indexation register](https://www.dss.gov.au/income-support-payments/social-security-indexation)
 - [Superannuation and younger partners](https://www.servicesaustralia.gov.au/superannuation?context=22526)
 - [Work Bonus](https://www.servicesaustralia.gov.au/how-work-bonus-works?context=22561)

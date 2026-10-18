@@ -36,6 +36,23 @@ test('deeming uses verified tiers not investment return',()=>{
  assert.equal(P.deemedIncome(110600,true),1935.5); assert.equal(P.deemedIncome(210600,true),5685.5);
 });
 
+test('official free-area and taper boundaries for every supported household/home category',()=>{
+ for(const partnered of [false,true]) for(const homeowner of [false,true]) {
+  const assets=partnered?(homeowner?499000:766000):(homeowner?333000:600000);
+  const income=partnered?10296:5876;
+  const options={partnered,homeowner,...(partnered?{person2Age:67}:{})};
+  const maximum=partnered?48516:32180.2;
+  assert.equal(estimate({...options,assessableAssets:assets,assessableAnnualIncome:income}).annualPension,maximum);
+  assert.equal(estimate({...options,assessableAssets:assets+1000}).annualPension,Math.round((maximum-78)*100)/100);
+  assert.equal(estimate({...options,assessableAnnualIncome:income+26}).annualPension,Math.round((maximum-13)*100)/100);
+ }
+ assert.equal(P.deemedIncome(66801,false),1169.04);
+ assert.equal(P.deemedIncome(110601,true),1935.54);
+ assert.equal(P.RATES.taxExemptAnnualSingle,1861.6);
+ assert.equal(P.RATES.taxExemptAnnualCoupleEach,1346.8);
+ assert.equal(P.RATES.workBonusAnnual,7800);
+});
+
 test('annual CPI compounds monetary rates and thresholds, leaving fixed policy parameters unchanged',()=>{
  const base=JSON.stringify(P.RATES), future=P.ratesForProjectionYear(2036,0.025);
  const cents=n=>Math.round(n*100)/100;

@@ -45,11 +45,11 @@ if (missingUtilities.length) throw new Error(`Local utility stylesheet is missin
 const vercel = JSON.parse(read("vercel.json"));
 const headers = vercel.headers?.flatMap((entry) => entry.headers || []) || [];
 const headerMap = new Map(headers.map((item) => [String(item.key).toLowerCase(), item.value]));
-const csp = headerMap.get("content-security-policy-report-only");
+const csp = headerMap.get("content-security-policy");
 security.validateCsp(csp);
 for (const requiredHeader of ["x-content-type-options", "referrer-policy", "x-frame-options", "permissions-policy"]) {
   if (!headerMap.has(requiredHeader)) throw new Error(`Missing security header: ${requiredHeader}`);
 }
 
 console.log("[BROWSER SECURITY CONFIG PASSED]");
-console.log(JSON.stringify({ requiredUtilities: requiredUtilities.length, externalRuntimeScripts: 0, cspMode: "REPORT-ONLY" }, null, 2));
+console.log(JSON.stringify({ requiredUtilities: requiredUtilities.length, externalRuntimeScripts: 0, cspMode: "ENFORCING" }, null, 2));

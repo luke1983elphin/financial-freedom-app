@@ -639,6 +639,7 @@
     error: "",
   };
   const weeklyActualDrafts = new Map();
+  const PAYSLIP_UPLOADS_AVAILABLE = false; // Release privacy gate.
   const payslipAssistState = new Map();
   let engagementMissionExpanded = false;
   let semiRetirementScenarioDraft = null;
@@ -5455,6 +5456,7 @@
   }
 
   function salaryPayslipAssistantHtml(item = {}) {
+    if (!PAYSLIP_UPLOADS_AVAILABLE) return '<p class="field-help">Payslip uploads are currently unavailable. Enter your salary manually.</p>';
     const state = payslipAssistState.get(String(item.id || "")) || {};
     const data = state.data || null;
     const review = data ? `
@@ -5507,6 +5509,12 @@
     `;
   }
 
+  function carriedForwardRulesHtml(results) {
+    const rows = (Array.isArray(results) ? results : [results]).flatMap(result => result?.years || (result?.financialYear ? [result] : []));
+    const resolutions = rows.map(row => CALC.resolveFinancialYearConfig(row.financialYear));
+    return CALC.carriedForwardRuleNotices(resolutions).map(text => '<p class="field-help carried-forward-rules">' + escapeHtml(text) + '</p>').join("");
+  }
+
   function salaryTakeHomeSummaryHtml(item = {}) {
     try {
       const result = CALC.calculatePlan(plan);
@@ -5520,6 +5528,7 @@
       const employerSuperAnnual = result.employerSuperContributions?.[`${ownerKey}Amount`] || 0;
       const sacrificeAnnual = result.salaryPackaging?.[ownerKey]?.superSacrifice || 0;
       return `
+        ${carriedForwardRulesHtml(result)}
         <div class="summary-grid mt-4 salary-take-home-summary${sacrificeAnnual > 0 ? " has-sacrifice" : ""}">
           ${summaryTile("Estimated take-home pay", `${money(payroll.estimatedNetEmploymentIncome / divisor)} / ${frequencyLabel}`)}
           ${summaryTile("Employer super", `${money(employerSuperAnnual / divisor)} / ${frequencyLabel}`)}
@@ -5546,6 +5555,7 @@
   }
 
   async function extractPayslipForSalary(incomeId, file) {
+    if (!PAYSLIP_UPLOADS_AVAILABLE) return;
     const id = String(incomeId || "");
     const allowedTypes = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp"]);
     if (!file || !allowedTypes.has(file.type)) {
@@ -10061,7 +10071,8 @@
           <div>Plan: ${escapeHtml(planName)}</div>
           <div>Scenarios: ${scenarioSet.map((scenario) => escapeHtml(scenario.name)).join(", ")}</div>
           <div>Calculation version: ${escapeHtml(CALC.CALCULATION_VERSION)}</div>
-          <div>Rates/rules: supported Australian financial-year configurations</div>
+          <div>Rates/rules: Australian financial-year configurations, including the assumptions below</div>
+          ${carriedForwardRulesHtml(scenarioSet.map(scenario => scenario.result))}
         </header>
         <section>
           <h2>Main differences</h2>
@@ -10934,6 +10945,7 @@
           <button class="btn btn-primary" type="button" data-save-stage-g-scenario="retirement">Save Scenario</button>
         </div>
         <p class="field-help">${escapeHtml(modellingCopy().medium)}</p><p class="field-help">${escapeHtml(modellingCopy().super)}</p><p class="field-help"><strong>Age Pension not included.</strong> ${escapeHtml(modellingCopy().pension)}</p>
+        ${carriedForwardRulesHtml(result)}
         ${renderSemiRetirementSnapshotHtml(viewModel)}
         ${renderSemiRetirementTimelineHtml(viewModel)}
         ${renderSemiRetirementLongevityHtml(viewModel)}
@@ -14919,6 +14931,7 @@
     const disclaimer = `<div class="report-disclaimer"><h3>Important disclaimer</h3><p>${escapeHtml(modellingCopy().full)}</p><p>Actual outcomes may differ due to changes in income, expenses, investment returns, inflation, interest rates, taxation, legislation and personal circumstances.</p></div>`;
     return `
       <div class="report-opening">
+        ${carriedForwardRulesHtml(result)}
         <article class="report-title-card"><p class="brand-kicker">Current plan · Educational modelling</p><h1>Financial Freedom Report</h1><p>Generated ${escapeHtml(generatedDate)}. Based on the information and assumptions entered; this is not a saved retirement scenario.</p></article>
         <div class="report-small-note"><strong>About this report.</strong> This educational modelling summary illustrates estimated outcomes from the information and assumptions entered. It does not recommend a financial product or strategy. Projections are not guarantees. Consider obtaining appropriately licensed financial advice before decisions about financial products or significant strategies.</div>
         ${reportSection("Executive Summary", "Your position today and the target the model is working towards.", `

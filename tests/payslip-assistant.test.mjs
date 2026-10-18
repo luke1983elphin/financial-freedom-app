@@ -47,14 +47,14 @@ test("payslip endpoint does not operate without server API configuration", async
     const res = mockResponse();
     await payslipExtractHandler({ method: "POST", body: {} }, res);
     assert.equal(res.statusCode, 503);
-    assert.match(JSON.parse(res.body).error, /not configured/i);
+    assert.match(JSON.parse(res.body).error, /currently unavailable/i);
   } finally {
     if (previous === undefined) delete process.env.OPENAI_API_KEY;
     else process.env.OPENAI_API_KEY = previous;
   }
 });
 
-test("payslip extraction is explicitly non-storing and excludes direct identifiers", () => {
+test("payslip extraction is requests non-storage and excludes identifiers from output (not input redaction)", () => {
   assert.match(apiSource, /store:\s*false/);
   assert.match(apiSource, /Do not include names, addresses, employer identifiers, bank details, tax file numbers/);
   assert.match(apiSource, /current pay-period amounts/);
