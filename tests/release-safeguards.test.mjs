@@ -9,6 +9,20 @@ import { explicitlyEnabled, validateRequest, protectRequest, readJsonBody, bound
 
 const response = () => ({ setHeader() {}, end(value) { this.body = JSON.parse(value); } });
 const validRequest = () => ({ method: "POST", headers: { origin: "https://example.test", "content-type": "application/json", authorization: `Bearer ${"x".repeat(32)}` }, body: {} });
+test("both route handlers reject unsupported methods before body or network access", async () => {
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = () => { throw new Error("Network must not be reached"); };
+  try {
+    for (const handler of [payslip, insights]) for (const method of ["PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"]) {
+      const res = response();
+      await handler({ method, get body() { throw new Error("Must not read body"); } }, res);
+      assert.equal(res.statusCode, 405);
+    }
+    const res = response();
+    await payslip({ method: "GET" }, res);
+    assert.equal(res.statusCode, 405);
+  } finally { globalThis.fetch = previousFetch; }
+});
 async function sandbox(fn) {
   const previous = { ...process.env }, fetch = globalThis.fetch;
   Object.assign(process.env, { AI_ALLOWED_ORIGINS: "https://example.test", AI_PRIVATE_ACCESS_TOKEN: "x".repeat(32), AI_LIMIT_REDIS_REST_URL: "https://redis.example.test", AI_LIMIT_REDIS_REST_TOKEN: "synthetic", OPENAI_API_KEY: "synthetic" });

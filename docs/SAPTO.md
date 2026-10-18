@@ -5,10 +5,15 @@ instrument](https://www.legislation.gov.au/F2025L01060/asmade/2025-09-09/text/or
 were re-read. They confirm the $2,230/$1,602 bases, $445/$37,000/0.015 threshold
 inputs, 0.125 taper and $6,000/0.15 transfer inputs used in this file. That
 instrument commenced 1 October 2025. No numeric change is justified by that
-evidence. **Unresolved:** the register's latest-text and latest-details URLs
-returned errors in this review, so absence of subsequent amendments was not
-independently established. Confirm current compilation status before release;
-the as-made check must not be represented as that confirmation.
+evidence. **Follow-up resolved the current-version evidence gap:** the official
+[title page](https://www.legislation.gov.au/F2025L01060/asmade), retrieved on
+19 October 2026, identifies this instrument as in force and F2025L01060 dated
+9 September 2025 as its latest version. The [All versions page](https://www.legislation.gov.au/F2025L01060/asmade/versions)
+lists no compiled versions and one as-made version. The title page was reported
+as crawled today; the versions page was reported as crawled three months earlier.
+This establishes the Register's identified latest text, not a guarantee about
+future amendments. See [the complete evidence register](RELEASE-EVIDENCE-2026-10-19.md)
+for source-access limits and the constant-by-constant verification table.
 
 Verified 13 October 2026. SAPTO is applied automatically within the enabled Age
 Pension scenario from age 67, under the same ordinary residency assumptions.

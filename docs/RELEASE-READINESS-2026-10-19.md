@@ -14,7 +14,7 @@ merge, protection-setting change, account system or paid-service enablement.
 | Financial-year assumptions | 2027–28 has supported income-tax brackets but carries four sections from 2026–27. Later years hold the latest income-tax brackets too. No visible notice identified this. | Resolver metadata drives notices beside retirement results, salary estimates and reports, including comparison PDF output. The 2026–27 main report has no warning. Source year is stored with held-rule metadata; UI contains no hardcoded year. Calculation outputs are numerically unchanged. |
 | CSP | Report-only header; local scripts/resources, calculated style attributes and Blob downloads. | Enforcing CSP. Scripts and stylesheet elements self-only; style attributes retain their narrowly scoped inline allowance. Images/fonts/connect self-only; workers/objects/framing denied. No reporting collector. Real browser tests use the exact header. |
 | CI | Individual checks used continue-on-error, but the final shell gate already tested their outcomes. No evidence that ordinary check failures escaped that gate. Action tags were mutable. | Remove continue-on-error, preserve always-run diagnostics/final gate and isolated test runner, add enforcing-policy check. Pin checkout v4.3.0 and setup-node v4.4.0 to SHAs verified with official repository tag refs. |
-| Pension constants | Payment/components, assets, income, deeming, Work Bonus and age matched official sources. Effective dates differ by group. | Add dated source register and category/taper boundary tests; no monetary changes. SAPTO constants also match the as-made regulation, but latest-compilation status remains unresolved because register endpoints failed. |
+| Pension constants | Payment/components, assets, income, deeming, Work Bonus and age matched official sources. Effective dates differ by group. | Add dated source register and category/taper boundary tests; no monetary changes. SAPTO latest-version evidence was initially unresolved; the subsequent [evidence closure](RELEASE-EVIDENCE-2026-10-19.md) resolves it using the working official title and versions pages. |
 | Housekeeping | Root parity JSON is referenced by `scripts/r1-numerical-parity.mjs` and the stage-4 commit inventory. Old patch has no runtime reference but cannot be reverse-applied to current code. | Retain the referenced JSON. Retain the patch because its complete obsolescence is not established; failed applicability alone is not proof it is safe to discard. No unrelated workspace evidence deleted. |
 | Node / licence | No package dependencies in the lockfile. Native TypeScript syntax/test scripts and CI use Node 24.19.0. No licence file. | Keep the tested Node range unchanged; no evidence supports broadening runtimes. Licence remains an owner/distribution decision. |
 
@@ -71,7 +71,10 @@ preview-toolbar injection, Safari/Firefox, physical mobile devices and native
 print dialogs remain untested. Browser tests render PDFs through Chromium and
 stub the interactive print dialog. No deployment was authorised or performed.
 
-Confirm the current SAPTO regulation compilation as noted in [SAPTO.md](SAPTO.md).
+The subsequent [evidence closure](RELEASE-EVIDENCE-2026-10-19.md) resolves the
+SAPTO latest-version evidence item, records the absent per-IP limiter, and adds
+partially supported-year rendered evidence. It supersedes this report's open
+SAPTO verification status; see [SAPTO.md](SAPTO.md) for the source-access limits.
 Resolve licence/ownership/distribution terms before distributing under an
 open-source licence; none has been selected. Privacy/Terms retain their existing
 draft status; this work does not claim legal compliance.

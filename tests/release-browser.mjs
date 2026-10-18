@@ -16,6 +16,7 @@ let chrome;
 let profile;
 let cdp;
 let baseUrl;
+let evidenceFinancialYear;
 let browserMessages = [];
 const csp = JSON.parse(await readFile(path.join(root,"vercel.json"),"utf8")).headers[0].headers.find(h=>h.key==="Content-Security-Policy").value;
 import aiHandler from "../api/ai-insights.js";
@@ -113,7 +114,9 @@ before(async () => {
       const relative = requested === "/" ? "index.html" : requested.replace(/^\/+/, "");
       const resolved = path.resolve(root, relative);
       if (!resolved.startsWith(root)) throw new Error("Invalid path");
-      const body = await readFile(resolved);
+      let body = await readFile(resolved);
+      // Test-only alternate-year fixture; production files and calculation logic remain unchanged.
+      if (relative === "calculator.js" && evidenceFinancialYear) body = Buffer.from(body.toString().replace('const FINANCIAL_YEAR = "2026-27";', `const FINANCIAL_YEAR = "${evidenceFinancialYear}";`));
       response.writeHead(200, { "content-type": mime[path.extname(resolved)] || "application/octet-stream", "cache-control": "no-store" });
       response.end(body);
     } catch {
@@ -206,6 +209,42 @@ test('complete backup downloads under CSP', async()=>{
   const backup=JSON.parse(await readFile(path.join(downloads,download),'utf8'));
   assert.ok(backup && typeof backup==='object');
 });
+test('partially supported 2027-28 renders the source year and affected sections in setup and report', async()=>{
+  evidenceFinancialYear = '2027-28';
+  await navigate();
+  assert.equal(await evaluate('FFSCalculator.FINANCIAL_YEAR'), '2027-28');
+  const evidence = [];
+  for (const width of [1366, 375]) {
+    await cdp.send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<600});
+    await evaluate("FFSStage1BrowserTestHooks.setPlan(FFS_DATA.samplePlans[1].plan,'setup'); FFSStage1BrowserTestHooks.setWizardStep(1); FFSStage1BrowserTestHooks.closeDurabilityDialog()");
+    for (const surface of ['setup', 'report']) {
+      if (surface === 'report') await evaluate("FFSStage1BrowserTestHooks.showWorkspace('reports')");
+      const selector = surface === 'report' ? '#financialReportBody .carried-forward-rules' : '.carried-forward-rules';
+      const text = await evaluate(`document.querySelector(${JSON.stringify(selector)}).textContent`);
+      assert.match(text,/Some settings for 2027-28.*2026-27 settings for Medicare levy, Medicare levy surcharge, study loan repayments, superannuation/);
+      assert.doesNotMatch(text,/income tax/);
+      await evaluate(`document.querySelector(${JSON.stringify(selector)}).scrollIntoView({block:'center',behavior:'instant'})`);
+      await waitFor(()=>evaluate(`(()=>{const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return r.height>0 && r.top>=90 && r.bottom<innerHeight-150})()`));
+      const shot = await cdp.send('Page.captureScreenshot',{format:'png'});
+      await writeFile(path.join(root,'docs/release-evidence',`partial-2027-${surface}-${width}.png`),Buffer.from(shot.data,'base64'));
+      evidence.push({width,surface,text});
+      if (surface === 'report' && width === 1366) {
+        await evaluate("document.getElementById('reportPrintButton').click()");
+        await cdp.send('Emulation.setEmulatedMedia',{media:'print'});
+        assert.equal(await evaluate("document.body.dataset.printMode"),'financial-report');
+        assert.ok(await evaluate("document.querySelector('#financialReportBody .carried-forward-rules').getBoundingClientRect().height>0"));
+        await evaluate("window.scrollTo({top:0,behavior:'instant'})");
+        const printed = await cdp.send('Page.captureScreenshot',{format:'png'});
+        await writeFile(path.join(root,'docs/release-evidence','partial-2027-print-1366.png'),Buffer.from(printed.data,'base64'));
+        await cdp.send('Emulation.setEmulatedMedia',{media:'screen'});
+        await evaluate("delete document.body.dataset.printMode");
+      }
+    }
+  }
+  await writeFile(path.join(root,'docs/release-evidence','partial-2027-rendered.json'), JSON.stringify({fixture:'Local test server changes only calculator FINANCIAL_YEAR to 2027-28; actual application renderers and calculations run under enforcing CSP.',evidence},null,2)+'\n');
+  evidenceFinancialYear = undefined;
+});
+
 test('CSP rejects injected inline script and both APIs remain disabled', async()=>{
   assert.deepEqual(browserMessages,[],'no accidental CSP or runtime errors');
   const disabled=await evaluate("Promise.all(['/api/ai-insights','/api/payslip-extract'].map(url=>fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(r=>r.status)))");

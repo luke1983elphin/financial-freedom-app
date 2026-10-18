@@ -1,0 +1,25 @@
+{
+  "fixture": "Local test server changes only calculator FINANCIAL_YEAR to 2027-28; actual application renderers and calculations run under enforcing CSP.",
+  "evidence": [
+    {
+      "width": 1366,
+      "surface": "setup",
+      "text": "Some settings for 2027-28 are unavailable. This estimate uses 2026-27 settings for Medicare levy, Medicare levy surcharge, study loan repayments, superannuation."
+    },
+    {
+      "width": 1366,
+      "surface": "report",
+      "text": "Some settings for 2027-28 are unavailable. This estimate uses 2026-27 settings for Medicare levy, Medicare levy surcharge, study loan repayments, superannuation."
+    },
+    {
+      "width": 375,
+      "surface": "setup",
+      "text": "Some settings for 2027-28 are unavailable. This estimate uses 2026-27 settings for Medicare levy, Medicare levy surcharge, study loan repayments, superannuation."
+    },
+    {
+      "width": 375,
+      "surface": "report",
+      "text": "Some settings for 2027-28 are unavailable. This estimate uses 2026-27 settings for Medicare levy, Medicare levy surcharge, study loan repayments, superannuation."
+    }
+  ]
+}
