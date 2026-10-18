@@ -9851,15 +9851,21 @@
       ].filter(Boolean);
     }
     if (key === "firstShortfall") {
+      if (!firstShortfall.calendarYear) return [semiRetirementBreakdownRow("Funding shortfall", "None projected; no shortfall-year funding breakdown applies.")];
+      const funding = viewModel.annualRows?.find((row) => row.calendarYear === firstShortfall.calendarYear)?.household;
+      if (!funding) return [
+        semiRetirementBreakdownRow("Year", firstShortfall.calendarYear),
+        semiRetirementBreakdownRow("Funding detail", "Unavailable: the projection has no annual row for the shortfall year."),
+      ];
       return [
         semiRetirementBreakdownRow("Year", firstShortfall.calendarYear || "None projected"),
         semiRetirementBreakdownRow("Ages", firstShortfall.calendarYear ? semiRetirementAgeList(milestoneAgesFromObject(firstShortfall, viewModel.people)) : ""),
-        semiRetirementBreakdownRow("Normal lifestyle spending", semiRetirementMoney(firstShortfall.normalLifestyleSpending)),
-        semiRetirementBreakdownRow("One-off spending", semiRetirementMoney(firstShortfall.oneOffLifestyleSpending)),
-        semiRetirementBreakdownRow("Cash income", semiRetirementMoney(firstShortfall.cashIncome)),
-        semiRetirementBreakdownRow("Accessible withdrawal", semiRetirementMoney(firstShortfall.accessibleWithdrawal)),
-        semiRetirementBreakdownRow("Super withdrawal", semiRetirementMoney(firstShortfall.superWithdrawal)),
-        semiRetirementBreakdownRow("Unmet spending", semiRetirementMoney(firstShortfall.unfundedSpending)),
+        semiRetirementBreakdownRow("Normal lifestyle spending", semiRetirementMoney(funding.normalLifestyleSpending)),
+        semiRetirementBreakdownRow("One-off spending", semiRetirementMoney(funding.oneOffLifestyleSpending)),
+        semiRetirementBreakdownRow("Net cash income", semiRetirementMoney(funding.netHouseholdCashIncome)),
+        semiRetirementBreakdownRow("Accessible withdrawal", semiRetirementMoney(funding.totalAccessibleWithdrawal)),
+        semiRetirementBreakdownRow("Super withdrawal", semiRetirementMoney(funding.totalSuperWithdrawal)),
+        semiRetirementBreakdownRow("Unmet spending", semiRetirementMoney(funding.unmetSpending)),
       ].filter(Boolean);
     }
     if (key === "projectionEndNetWorth") {
@@ -10110,16 +10116,17 @@
             </section>
           `).join("")}
         </section>
+        <div class="semi-retirement-print-closing">
         <section>
           <h2>Key assumptions</h2>
           <div class="semi-retirement-print-assumptions">
             ${scenarioSet.map((scenario) => {
-              const assumptionRows = (scenario.viewModel?.assumptions?.rows || []).flatMap((group) => group.rows || []);
-              const important = assumptionRows.filter((row) => /retirement|semi|spending|inflation|investment return|super return|property growth/i.test(row.label || "")).slice(0, 10);
+              const assumptionRows = scenario.viewModel?.assumptions?.rows || [];
+              const important = assumptionRows.filter((row) => /retirement|semi|spending|inflation|investment return|super return|property.*growth/i.test(row.label || ""));
               return `
                 <article class="semi-retirement-comparison-breakdown-card">
                   <h4>${escapeHtml(scenario.name)}</h4>
-                  ${important.map((row) => semiRetirementBreakdownRow(row.label, semiRetirementAssumptionValue(row))).join("") || `<p>No key assumptions available.</p>`}
+                  ${important.map((row) => semiRetirementBreakdownRow(row.label, semiRetirementAssumptionValue(row), row.note)).join("") || `<p>Assumptions unavailable: this scenario has no assumption rows in its projection output.</p>`}
                 </article>
               `;
             }).join("")}
@@ -10133,6 +10140,7 @@
           <p>Modelled super access ages used in this report are scenario assumptions and are not a legal determination of eligibility to access super.</p>
           <p>${escapeHtml(CALC.getRuleGovernance().futureRuleAssumption)}</p>
         </section>
+        </div>
       </article>
     `;
   }

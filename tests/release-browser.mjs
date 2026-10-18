@@ -245,6 +245,45 @@ test('partially supported 2027-28 renders the source year and affected sections 
   evidenceFinancialYear = undefined;
 });
 
+test('comparison print preserves headers, assumptions and funding detail for distinct scenarios in both rule years', async()=>{
+  const output = process.env.FFS_PDF_OUTPUT_DIR || path.join(profile, 'pdfs');
+  await mkdir(output, {recursive:true});
+  for (const year of ['2026-27', '2027-28']) {
+    evidenceFinancialYear = year;
+    await navigate();
+    await cdp.send('Emulation.setDeviceMetricsOverride',{width:1366,height:900,deviceScaleFactor:1,mobile:false});
+    await evaluate("FFSStage1BrowserTestHooks.setPlan(FFS_DATA.samplePlans[1].plan,'reports'); FFSStage1BrowserTestHooks.closeDurabilityDialog()");
+    await evaluate("document.getElementById('reportPrintButton').click()");
+    await cdp.send('Emulation.setEmulatedMedia',{media:'print'});
+    assert.ok(await evaluate("document.querySelector('#financialReportBody').getBoundingClientRect().height>0"));
+    if (year === '2027-28') assert.ok(await evaluate("document.querySelector('#financialReportBody .carried-forward-rules').getBoundingClientRect().height>0"));
+    await writeFile(path.join(output,`financial-${year}.pdf`),Buffer.from((await cdp.send('Page.printToPDF',{printBackground:true,preferCSSPageSize:true})).data,'base64'));
+    await cdp.send('Emulation.setEmulatedMedia',{media:'screen'});
+    await evaluate("delete document.body.dataset.printMode; FFSStage1BrowserTestHooks.showWorkspace('semiretirement'); document.querySelector('[data-semi-action=calculate]').click(); document.querySelector('[data-semi-action=compare]').click()");
+    await evaluate(`(()=>{const paths=[...document.querySelectorAll('[data-semi-comparison-input$="fullRetirementAge"]')].map(e=>e.dataset.semiComparisonInput); for(const path of paths){const field=document.querySelector('[data-semi-comparison-input="'+path+'"]'); field.value=String(Number(field.value)+3); field.dispatchEvent(new Event('change',{bubbles:true}));}})()`);
+    await waitFor(()=>evaluate("document.querySelector('.semi-retirement-comparison-print-report').textContent.includes('3 years later')"));
+    await evaluate("document.querySelector('[data-semi-action=export-comparison-pdf]').click()");
+    await cdp.send('Emulation.setEmulatedMedia',{media:'print'});
+    const printed = await evaluate(`(()=>{const report=document.querySelector('.semi-retirement-comparison-print-report'); return {title:report.querySelector('h1').getBoundingClientRect().height,cover:report.querySelector('header').innerText,notices:[...report.querySelectorAll('.carried-forward-rules')].map(e=>({text:e.innerText,height:e.getBoundingClientRect().height})),assumptions:report.querySelector('.semi-retirement-print-assumptions').innerText,text:report.innerText,appHeader:document.querySelector('.app-header').getBoundingClientRect().height,nav:[...document.querySelectorAll('nav')].every(e=>e.getBoundingClientRect().height===0)};})()`);
+    assert.ok(printed.title>0);
+    assert.match(printed.cover,/Calculation version:/);
+    assert.ok(printed.notices.length && printed.notices.every(n=>n.height>0));
+    assert.match(printed.notices.map(n=>n.text).join(' '),/2026-27 settings for Medicare/);
+    assert.match(printed.assumptions,/Inflation/);
+    assert.match(printed.assumptions,/Accessible investment return/);
+    assert.doesNotMatch(printed.text,/No key assumptions available/);
+    assert.doesNotMatch(printed.text,/Not available/);
+    assert.equal(printed.appHeader,0);
+    assert.ok(printed.nav);
+    assert.equal(await evaluate("getComputedStyle(document.querySelector('.semi-retirement-print-closing')).breakInside"), 'avoid', 'keep assumptions and disclaimer together when they fit on a page');
+    await writeFile(path.join(output,`comparison-${year}.pdf`),Buffer.from((await cdp.send('Page.printToPDF',{printBackground:true,preferCSSPageSize:true})).data,'base64'));
+    await writeFile(path.join(output,`comparison-${year}.json`),JSON.stringify(printed,null,2));
+    await cdp.send('Emulation.setEmulatedMedia',{media:'screen'});
+    await evaluate("delete document.body.dataset.printMode");
+  }
+  evidenceFinancialYear = undefined;
+});
+
 test('CSP rejects injected inline script and both APIs remain disabled', async()=>{
   assert.deepEqual(browserMessages,[],'no accidental CSP or runtime errors');
   const disabled=await evaluate("Promise.all(['/api/ai-insights','/api/payslip-extract'].map(url=>fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(r=>r.status)))");

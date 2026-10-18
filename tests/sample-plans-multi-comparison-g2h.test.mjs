@@ -195,6 +195,28 @@ test("Stage G2H comparison PDF report is presentation-only and includes required
   assert.doesNotMatch(snippet, /runSemiRetirementProjection|projectRetirementScenario/);
 });
 
+test("comparison funding detail uses the shortfall annual row, including zero values and absent milestones", () => {
+  const ctx = { window: context, semiRetirementMoney: value => value == null ? "Not available" : String(value),
+    semiRetirementBreakdownRow: (label, value) => [label, value],
+    milestoneAgesFromObject: () => [], semiRetirementAgeList: () => "Age 86" };
+  vm.runInNewContext(sourceBetween(appSource, "function semiRetirementComparisonBreakdownRows", "function renderSemiRetirementComparisonBreakdown"), ctx);
+  const scenario = {viewModel:{longevity:{firstUnfundedSpending:{calendarYear:2067}}, annualRows:[
+    {calendarYear:2066,household:{normalLifestyleSpending:1}},
+    {calendarYear:2067,household:{normalLifestyleSpending:109998,oneOffLifestyleSpending:0,netHouseholdCashIncome:12000,totalAccessibleWithdrawal:0,totalSuperWithdrawal:70000,unmetSpending:27998}},
+  ]}};
+  const rows = Object.fromEntries(ctx.semiRetirementComparisonBreakdownRows("firstShortfall",scenario));
+  assert.equal(rows["Normal lifestyle spending"],"109998");
+  assert.equal(rows["One-off spending"],"0");
+  assert.equal(rows["Net cash income"],"12000");
+  assert.equal(rows["Accessible withdrawal"],"0");
+  assert.equal(rows["Super withdrawal"],"70000");
+  assert.equal(rows["Unmet spending"],"27998");
+  scenario.viewModel.annualRows=[];
+  assert.match(JSON.stringify(ctx.semiRetirementComparisonBreakdownRows("firstShortfall",scenario)),/no annual row/);
+  scenario.viewModel.longevity.firstUnfundedSpending={};
+  assert.match(JSON.stringify(ctx.semiRetirementComparisonBreakdownRows("firstShortfall",scenario)),/None projected/);
+});
+
 test("Stage G2H print mode hides interactive UI and prints the static comparison report", () => {
   assert.match(appSource, /function printSemiRetirementComparisonPdf/);
   assert.match(appSource, /printWithMode\("retirement-comparison"\)/);
