@@ -9913,3 +9913,7 @@ body.scenario-save-modal-open {
   .semi-retirement-comparison-cell .semi-comparison-mobile-milestone { display:block; }
   .semi-retirement-comparison-cell .semi-comparison-desktop-milestone { display:none; }
 }
+@media print {
+  body[data-print-mode="retirement-comparison"] .semi-comparison-portrait .semi-portrait-scenario:first-of-type { break-before:auto; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-portrait .semi-retirement-print-notes { break-inside:avoid; }
+}

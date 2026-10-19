@@ -288,3 +288,16 @@ test("portrait report includes every scenario, its own inputs, milestones and di
   assert.ok(html.includes("Held rules disclosure")); assert.ok(html.includes("Future rules held")); assert.ok(html.includes("Not financial advice"));
   assert.equal(JSON.stringify(scenarios), before);
 });
+
+test("export recalculates edited comparisons before rendering and blocks invalid comparison inputs", () => {
+  const events = [];
+  const ctx = { semiRetirementScenarioResult: {}, semiRetirementComparisonScenarios: [{ result: {}, errors: [] }], runSemiRetirementComparison: () => events.push("recalculate"), renderSemiRetirementScenario: () => events.push("render"), calculatePlan: () => ({}), plan: {}, updateSaveStatus: () => {}, usePortraitRetirementReport: () => true, document: { body: { dataset: {} } }, printWithMode: () => events.push("print") };
+  vm.runInNewContext(presentationFunction("printSemiRetirementComparisonPdf"), ctx);
+  ctx.printSemiRetirementComparisonPdf();
+  assert.deepEqual(events, ["recalculate", "render", "print"]);
+  assert.equal(ctx.document.body.dataset.comparisonWide, "false");
+  assert.equal(ctx.document.body.dataset.comparisonPortrait, "true");
+  events.length = 0; ctx.semiRetirementComparisonScenarios[0].errors = [{ message: "Invalid retirement age" }];
+  ctx.printSemiRetirementComparisonPdf();
+  assert.deepEqual(events, ["recalculate"]);
+});

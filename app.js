@@ -12496,6 +12496,11 @@
       updateSaveStatus("Add at least one comparison scenario before exporting.");
       return;
     }
+    runSemiRetirementComparison({ render: false });
+    if (semiRetirementComparisonScenarios.some(scenario => scenario.errors?.length || !scenario.result)) {
+      updateSaveStatus("Review comparison inputs before exporting.");
+      return;
+    }
     renderSemiRetirementScenario(calculatePlan(plan));
     updateSaveStatus("Use the print dialog to save the retirement comparison as PDF.");
     document.body.dataset.comparisonWide = !usePortraitRetirementReport() && semiRetirementComparisonScenarios.length >= 3 ? "true" : "false";
@@ -17493,14 +17498,17 @@
         return;
       }
       if (target.dataset.semiReportLayout !== undefined) {
+        runSemiRetirementComparison({ render: false });
         semiComparisonReportLayout = ["portrait", "side-by-side"].includes(target.value) ? target.value : "auto";
         renderSemiRetirementScenario(calculatePlan(plan)); return;
       }
       if (target.dataset.semiReportDetail !== undefined) {
+        runSemiRetirementComparison({ render: false });
         semiComparisonReportDetail = target.value === "full" ? "full" : "overview";
         renderSemiRetirementScenario(calculatePlan(plan)); return;
       }
       if (target.dataset.semiMobileComparison !== undefined) {
+        runSemiRetirementComparison({ render: false });
         semiComparisonMobileSelection = target.value;
         if (semiRetirementComparisonScenarios.some(scenario => scenario.id === target.value)) semiRetirementActiveComparisonId = target.value;
         renderSemiRetirementScenario(calculatePlan(plan)); return;
@@ -17866,6 +17874,7 @@
         if (semiAction.dataset.semiAction === "remove-comparison") removeSemiRetirementComparisonScenario(semiAction.dataset.comparisonId);
         if (semiAction.dataset.semiAction === "add-saved-comparison") addSelectedSavedRetirementScenarioToComparison();
         if (semiAction.dataset.semiAction === "mobile-comparison-view") {
+          runSemiRetirementComparison({ render: false });
           semiComparisonMobileView = ["results", "edit", "manage"].includes(semiAction.dataset.mobileView) ? semiAction.dataset.mobileView : "results";
           renderSemiRetirementScenario(calculatePlan(plan));
         }
