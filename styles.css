@@ -9847,3 +9847,20 @@ body.scenario-save-modal-open {
   .semi-comparison-common-assumptions { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:3mm; margin-bottom:6mm; }
   .semi-comparison-common-assumptions span { border-bottom:1px solid #e2e8f0; padding:3px; }
 }
+
+@media print {
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide .semi-retirement-print-table { line-height:1.2; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide .semi-retirement-print-table :is(th,td) { padding:4px; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide .retirement-scenario-summary { margin:2px 0; line-height:1.2; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide .semi-retirement-comparison-breakdown-card { gap:4px; padding:6px; font-size:9pt; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide .semi-retirement-comparison-breakdown-card div { grid-template-columns:minmax(0,1fr) auto; gap:4px 8px; padding-top:4px; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide .semi-retirement-comparison-breakdown-card :is(span,small) { font-size:9pt; font-weight:normal; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide .semi-retirement-comparison-breakdown-card small { grid-column:1 / -1; }
+}
+@media print {
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide .semi-retirement-comparison-breakdown { display:table !important; table-layout:fixed; width:100%; border-spacing:3mm 0; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide .semi-retirement-comparison-breakdown-card { display:table-cell; vertical-align:top; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide .semi-retirement-comparison-breakdown-card div { display:block; padding:4px 0; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide .semi-retirement-comparison-breakdown-card :is(span,strong,small) { display:block; overflow-wrap:anywhere; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide .semi-retirement-comparison-breakdown-card strong { margin-top:2px; }
+}
