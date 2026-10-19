@@ -104,8 +104,8 @@ test("Stage G2H sample selector is viewport-safe and keeps accessible touch targ
   assert.match(appSource, /closeSamplePlanMenus\(\)/);
 });
 
-test("Stage G2H Retirement Planning comparison supports Current plus up to three scenarios", () => {
-  assert.match(appSource, /const MAX_SEMI_RETIREMENT_COMPARISONS = 3/);
+test("Stage G2H Retirement Planning comparison supports Current plus up to five scenarios", () => {
+  assert.match(appSource, /const MAX_SEMI_RETIREMENT_COMPARISONS = 5/);
   assert.match(appSource, /let semiRetirementComparisonScenarios = \[\]/);
   assert.match(appSource, /function addSemiRetirementComparisonScenario/);
   assert.match(appSource, /requestSemiRetirementComparisonReplacement/);

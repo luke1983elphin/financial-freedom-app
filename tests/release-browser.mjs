@@ -23,6 +23,7 @@ import aiHandler from "../api/ai-insights.js";
 import payslipHandler from "../api/payslip-extract.js";
 
 function chromePath() {
+  if (process.env.FFS_BROWSER_EXECUTABLE && existsSync(process.env.FFS_BROWSER_EXECUTABLE)) return process.env.FFS_BROWSER_EXECUTABLE;
   const candidates = process.platform === "win32"
     ? [
         path.join(process.env.ProgramFiles || "", "Microsoft/Edge/Application/msedge.exe"),
@@ -321,6 +322,61 @@ test('comparison print preserves headers, assumptions and funding detail for dis
     await evaluate("delete document.body.dataset.printMode");
   }
   evidenceFinancialYear = undefined;
+});
+
+test('five alternative preview isolates baseline, exports readable groups and supports mobile selection', async () => {
+  const output = process.env.FFS_PDF_OUTPUT_DIR || path.join(profile, 'pdfs');
+  await mkdir(output, {recursive:true});
+  await cdp.send('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
+  await navigate();
+  await evaluate("FFSStage1BrowserTestHooks.setPlan(FFS_DATA.samplePlans[1].plan,'semiretirement'); FFSStage1BrowserTestHooks.closeDurabilityDialog(); document.querySelector('[data-semi-action=calculate]').click()");
+  const planBefore = await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())');
+  await evaluate("document.querySelector('[data-semi-action=demo-comparisons]').click()");
+  assert.equal(await evaluate("document.querySelectorAll('.semi-retirement-comparison-chip-list > article').length"),5);
+  assert.equal(await evaluate("document.querySelector('.semi-retirement-comparison-table').dataset.comparisonCount"),'6');
+  assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),planBefore,'creating comparisons must not change the plan');
+  const overview = await evaluate("document.querySelector('.semi-retirement-comparison-print-report').innerHTML");
+  for (const name of ['Current Plan','Retire 3 years earlier','Retire 3 years later','Spend 10% less','Spend 10% more','Invest $5,000 more']) assert.ok(overview.includes(name));
+  assert.ok(overview.includes('Shared assumptions'));
+  assert.ok(overview.includes('Assumptions that differ'));
+  assert.ok(overview.includes('Forecast end (year and ages)'));
+  assert.equal(await evaluate("document.querySelectorAll('.semi-comparison-detail-group').length"),0);
+  await evaluate("document.querySelector('[data-semi-action=export-comparison-pdf]').click()");
+  await cdp.send('Emulation.setEmulatedMedia',{media:'print'});
+  assert.equal(await evaluate('document.body.dataset.comparisonWide'),'true');
+  assert.ok(await evaluate("[...document.querySelectorAll('.semi-comparison-wide .semi-retirement-print-table')].every(t=>t.getBoundingClientRect().right <= document.querySelector('.semi-comparison-wide').getBoundingClientRect().right+2)"));
+  await writeFile(path.join(output,'five-alternatives-overview.pdf'),Buffer.from((await cdp.send('Page.printToPDF',{printBackground:true,preferCSSPageSize:true})).data,'base64'));
+  await cdp.send('Emulation.setEmulatedMedia',{media:'screen'});
+  await evaluate("delete document.body.dataset.printMode;document.querySelector('[data-semi-comparison]').scrollIntoView()");
+  await writeFile(path.join(output,'desktop-comparison.png'),Buffer.from((await cdp.send('Page.captureScreenshot',{format:'png'})).data,'base64'));
+  await cdp.send('Emulation.setDeviceMetricsOverride',{width:375,height:900,deviceScaleFactor:1,mobile:true});
+  const visibleCount = () => evaluate("[...document.querySelector('.semi-retirement-comparison-summary-row').querySelectorAll('.semi-retirement-comparison-cell')].filter(e=>getComputedStyle(e).display!=='none').length");
+  assert.equal(await visibleCount(),2,'mobile defaults to Current plus one alternative');
+  await evaluate("(()=>{const e=document.querySelector('[data-semi-mobile-comparison]');e.value=e.options[4].value;e.dispatchEvent(new Event('change',{bubbles:true}));})()");
+  assert.equal(await visibleCount(),2);
+  assert.match(await evaluate("document.querySelector('.semi-retirement-comparison-summary-row [data-mobile-visible=true]:last-child').dataset.scenarioLabel"),/Invest/);
+  assert.ok(await evaluate('document.documentElement.scrollWidth <= innerWidth+2'),'mobile page must not overflow');
+  await evaluate("document.querySelector('[data-semi-mobile-comparison]').scrollIntoView()");
+  await writeFile(path.join(output,'mobile-comparison.png'),Buffer.from((await cdp.send('Page.captureScreenshot',{format:'png'})).data,'base64'));
+  await cdp.send('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
+  await evaluate("(()=>{const e=document.querySelector('[data-semi-report-detail]');e.value='full';e.dispatchEvent(new Event('change',{bubbles:true}));})()");
+  assert.equal(await evaluate("document.querySelectorAll('.semi-comparison-detail-group').length"),3);
+  assert.ok(await evaluate("[...document.querySelectorAll('.semi-comparison-detail-group .semi-retirement-comparison-breakdown')].every(g=>g.children.length<=3 && g.firstElementChild.innerText.includes('Current Plan'))"));
+  await evaluate("document.querySelector('[data-semi-action=export-comparison-pdf]').click()");
+  await cdp.send('Emulation.setEmulatedMedia',{media:'print'});
+  await writeFile(path.join(output,'five-alternatives-full.pdf'),Buffer.from((await cdp.send('Page.printToPDF',{printBackground:true,preferCSSPageSize:true})).data,'base64'));
+  await cdp.send('Emulation.setEmulatedMedia',{media:'screen'});
+  await evaluate("delete document.body.dataset.printMode;window.prompt=()=>null;document.querySelector('[data-semi-action=compare]').click()");
+  assert.equal(await evaluate("document.querySelectorAll('.semi-retirement-comparison-chip-list > article').length"),5,'sixth alternative is not silently inserted');
+  await evaluate("document.querySelector('.semi-retirement-comparison-chip-list [data-semi-action=remove-comparison]').click()");
+  assert.equal(await evaluate("document.querySelectorAll('.semi-retirement-comparison-chip-list > article').length"),4);
+  await evaluate("(()=>{const e=document.querySelector('[data-semi-report-detail]');e.value='overview';e.dispatchEvent(new Event('change',{bubbles:true}));})()");
+  await evaluate("document.querySelector('[data-semi-action=export-comparison-pdf]').click()");
+  await cdp.send('Emulation.setEmulatedMedia',{media:'print'});
+  await writeFile(path.join(output,'four-alternatives-overview.pdf'),Buffer.from((await cdp.send('Page.printToPDF',{printBackground:true,preferCSSPageSize:true})).data,'base64'));
+  await cdp.send('Emulation.setEmulatedMedia',{media:'screen'});
+  await evaluate("delete document.body.dataset.printMode");
+  assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),planBefore);
 });
 
 test('CSP rejects injected inline script and both APIs remain disabled', async()=>{
