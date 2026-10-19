@@ -245,6 +245,40 @@ test('partially supported 2027-28 renders the source year and affected sections 
   evidenceFinancialYear = undefined;
 });
 
+test('saved custom names survive comparison edits and reopening restores saved retirement inputs', async()=>{
+  await navigate();
+  await evaluate("FFSStage1BrowserTestHooks.setPlan(FFS_DATA.samplePlans[1].plan,'semiretirement'); FFSStage1BrowserTestHooks.closeDurabilityDialog(); document.querySelector('[data-semi-action=calculate]').click(); document.querySelector('[data-save-stage-g-scenario=retirement]').click()");
+  await evaluate("document.querySelector('#stageGScenarioName').value='Retire at 62 - custom';document.querySelector('[data-scenario-save-action=save]').click()");
+  const id=await evaluate("document.querySelector('.scenario-library-card [data-compare-scenario]').dataset.compareScenario");
+  await evaluate(`document.querySelector('[data-compare-scenario="${id}"]').click()`);
+  await evaluate(`(()=>{const e=document.querySelector('[data-semi-comparison-input="people.0.fullRetirementAge"]');e.value='65';e.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  const report=await evaluate("document.querySelector('.semi-retirement-comparison-print-report').textContent");
+  assert.match(report,/Retire at 62 - custom/);assert.match(report,/Alex retires at 65 · Jordan retires at 62/);
+  await navigate();
+  await evaluate("FFSStage1BrowserTestHooks.showWorkspace('scenarios')");
+  assert.match(await evaluate("document.querySelector('.scenario-library-card').textContent"),/Alex retires at 62 · Jordan retires at 62/);
+  await evaluate(`document.querySelector('[data-open-scenario="${id}"]').click()`);
+  assert.equal(await evaluate(`document.querySelector('[data-semi-input="people.0.fullRetirementAge"]').value`),'62');
+});
+
+test('shared calendar-year selection and typed edits persist matching partner ages', async()=>{
+  await navigate();
+  await evaluate("FFSStage1BrowserTestHooks.setPlan(FFS_DATA.samplePlans[1].plan,'semiretirement'); FFSStage1BrowserTestHooks.closeDurabilityDialog()");
+  assert.equal(await evaluate("document.querySelector('[data-retirement-couple-mode]').value"),'individual');
+  await evaluate("(()=>{const e=document.querySelector('[data-retirement-couple-mode]');e.value='shared';e.dispatchEvent(new Event('change',{bubbles:true}));})()");
+  let timing=await evaluate("FFSStage1BrowserTestHooks.getPlan().personal.retirementTiming");
+  assert.equal(timing.mode,'shared');assert.deepEqual(timing.people.map(p=>p.fullRetirementAge),[62,61]);
+  await evaluate(`(()=>{const e=document.querySelector('[data-semi-input="people.0.fullRetirementAge"]');e.value='65';e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  timing=await evaluate("FFSStage1BrowserTestHooks.getPlan().personal.retirementTiming");
+  assert.equal(timing.mode,'shared');assert.deepEqual(timing.people.map(p=>p.fullRetirementAge),[65,64]);
+  await navigate();
+  await evaluate("FFSStage1BrowserTestHooks.showWorkspace('semiretirement')");
+  assert.equal(await evaluate("document.querySelector('[data-retirement-couple-mode]').value"),'shared');
+  await evaluate(`(()=>{const e=document.querySelector('[data-semi-input="people.1.fullRetirementAge"]');e.value='65';e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  timing=await evaluate("FFSStage1BrowserTestHooks.getPlan().personal.retirementTiming");
+  assert.equal(timing.mode,'individual');assert.deepEqual(timing.people.map(p=>p.fullRetirementAge),[65,65]);
+});
+
 test('comparison print preserves headers, assumptions and funding detail for distinct scenarios in both rule years', async()=>{
   const output = process.env.FFS_PDF_OUTPUT_DIR || path.join(profile, 'pdfs');
   await mkdir(output, {recursive:true});
@@ -271,6 +305,10 @@ test('comparison print preserves headers, assumptions and funding detail for dis
     assert.match(printed.notices.map(n=>n.text).join(' '),/2026-27 settings for Medicare/);
     assert.match(printed.assumptions,/Inflation/);
     assert.match(printed.assumptions,/Accessible investment return/);
+    assert.match(printed.text,/Retire at 65/);
+    assert.match(printed.text,/Alex retires at 65 · Jordan retires at 65/);
+    assert.match(printed.text,new RegExp(`First year both retired: ${new Date().getFullYear()+34}.*Alex 66, Jordan 65`));
+    assert.match(printed.text,new RegExp(`Alex was already retired from ${new Date().getFullYear()+33}`));
     assert.doesNotMatch(printed.text,/No key assumptions available/);
     assert.doesNotMatch(printed.text,/Not available/);
     assert.equal(printed.appHeader,0);

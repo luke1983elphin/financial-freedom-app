@@ -6705,7 +6705,7 @@
     if (!people.length || people.some(person => !Number.isFinite(Number(person.fullRetirementAge)) || Number(person.fullRetirementAge) < Number(person.currentAge)
       || Number(person.fullRetirementAge) > 110 || !Number.isFinite(Number(person.semiRetirementAge)) || !Number.isFinite(Number(person.semiRetirementGrossIncome)) || Number(person.semiRetirementGrossIncome) < 0
       || (person.hasSemiRetirement && (Number(person.semiRetirementAge) < Number(person.currentAge) || Number(person.semiRetirementAge) > Number(person.fullRetirementAge))))) return false;
-    window.FFSSemiRetirementUi.saveRetirementTiming(plan, people, plan.personal?.retirementTiming?.mode || "shared");
+    window.FFSSemiRetirementUi.saveRetirementTiming(plan, people, retirementCoupleMode());
     semiRetirementScenarioSourceKey = window.FFSSemiRetirementUi.basePlanSourceKey(plan, calculatePlan(plan));
     autosavePlan();
     return true;
@@ -9592,7 +9592,7 @@
     return {
       fullYear: Number.isFinite(fullYear) ? fullYear : null,
       fullAges,
-      fullRetirementLabel: fullAges.length ? semiRetirementAgeList(fullAges) : semiRetirementMilestoneNote(fullMilestone, fullAges),
+      fullRetirementLabel: comparisonHouseholdMilestone({ viewModel }),
       assetsAtRetirement: key.totalInvestableAssetsWhenBothFullyRetired?.value ?? fullRetirementHousehold.totalInvestableAssets,
       accessibleAtRetirement: key.accessibleWhenBothFullyRetired?.value ?? fullRetirementHousehold.closingAccessibleInvestmentBalance,
       superAtRetirement: fullRetirementHousehold.totalSuperBalance,
@@ -9678,6 +9678,35 @@
     return semiRetirementComparisonScenarioLabel(index);
   }
 
+  function retirementCoupleMode() {
+    return window.FFSSemiRetirementUi.retirementTimingMode(semiRetirementScenarioDraft?.people || [], plan.personal?.retirementTiming?.mode);
+  }
+
+  function retirementScenarioSummary(scenario) {
+    const people = scenario.draft?.people || scenario.scenarioInputSnapshot?.people || [];
+    if (!people.length) return "Retirement timing unavailable in this saved snapshot.";
+    return people.map(person =>
+      person.alreadyRetired ? `${person.name || person.id} is already retired` : `${person.name || person.id} retires at ${person.fullRetirementAge}`
+    ).join(" · ") + ".";
+  }
+
+  function retirementScenarioSubtitle(scenario) {
+    return `<small class="retirement-scenario-summary">${escapeHtml(retirementScenarioSummary(scenario))}</small>`;
+  }
+
+  function comparisonHouseholdMilestone(scenario) {
+    const view = scenario.viewModel || {};
+    const row = view.keyResults?.accessibleWhenBothFullyRetired?.row;
+    if (!row) return "First year both retired: not reached within projection.";
+    const people = row.people || [];
+    const label = people.length > 1 ? "First year both retired" : "First retired year";
+    const earlier = people.flatMap(person => {
+      const event = view.annualRows?.find(year => year.people?.some(p => p.id === person.id && p.employmentPhase === "fully-retired"));
+      return event && event.calendarYear < row.calendarYear ? [`${person.name || person.id} was already retired from ${event.calendarYear}.`] : [];
+    });
+    return `${label}: ${row.calendarYear} — ${people.map(person => `${person.name || person.id} ${person.age}`).join(", ")}.${earlier.length ? " " + earlier.join(" ") : ""}`;
+  }
+
   function selectedSavedRetirementScenarios() {
     return loadScenarios().filter((scenario) => normaliseSavedScenarioType(scenario.scenarioType) === "retirement" && scenario.scenarioInputSnapshot?.people);
   }
@@ -9722,7 +9751,7 @@
 
   function semiRetirementComparisonMetricDefinitions() {
     return [
-      { key: "fullRetirement", label: "Household fully retired", value: (summary) => summary.fullRetirementLabel, delta: (base, item) => semiRetirementComparisonDelta(base.fullYear, item.fullYear, "year") },
+      { key: "fullRetirement", label: "First year both retired", value: (summary) => summary.fullRetirementLabel, delta: (base, item) => semiRetirementComparisonDelta(base.fullYear, item.fullYear, "year") },
       { key: "assetsAtRetirement", label: "Assets at full retirement", value: (summary) => semiRetirementMoney(summary.assetsAtRetirement), delta: (base, item) => semiRetirementComparisonDelta(base.assetsAtRetirement, item.assetsAtRetirement) },
       { key: "accessibleAtRetirement", label: "Accessible investments at full retirement", value: (summary) => semiRetirementMoney(summary.accessibleAtRetirement), delta: (base, item) => semiRetirementComparisonDelta(base.accessibleAtRetirement, item.accessibleAtRetirement) },
       { key: "superAtRetirement", label: "Super at full retirement", value: (summary) => semiRetirementMoney(summary.superAtRetirement), delta: (base, item) => semiRetirementComparisonDelta(base.superAtRetirement, item.superAtRetirement) },
@@ -9787,7 +9816,7 @@
     const concessionalEvents = window.FFSSemiRetirementUi?.normalisePlannedConcessionalContributions?.(scenario.draft?.scenario?.plannedConcessionalContributions) || [];
     if (key === "fullRetirement") {
       return [
-        semiRetirementBreakdownRow("Household fully retired", summary.fullRetirementLabel),
+        semiRetirementBreakdownRow("Household milestone", comparisonHouseholdMilestone(scenario), "Ages are at the start of the projection year; financial balances are closing-year values."),
         ...((scenario.draft?.people || []).map((person) => semiRetirementBreakdownRow(`${person.name || person.id} full retirement`, Number.isFinite(Number(person.fullRetirementAge)) ? `Age ${person.fullRetirementAge}` : "Not available"))),
         ...((scenario.draft?.people || []).map((person) => person.hasSemiRetirement ? semiRetirementBreakdownRow(`${person.name || person.id} semi-retirement`, `Age ${person.semiRetirementAge}`) : "")),
       ].filter(Boolean);
@@ -9907,7 +9936,7 @@
       <div class="semi-retirement-comparison-breakdown">
         ${scenarioSet.map((scenario) => `
           <article class="semi-retirement-comparison-breakdown-card">
-            <h5>${escapeHtml(scenario.name)}</h5>
+            <h5>${escapeHtml(scenario.name)}</h5>${retirementScenarioSubtitle(scenario)}
             ${semiRetirementComparisonBreakdownRows(metricKey, scenario).join("") || `<p class="field-help">Not available from the current projection output.</p>`}
           </article>
         `).join("")}
@@ -9933,6 +9962,7 @@
       if (comparison.plannedConcessionalEventCount) rows.push(`Includes ${semiRetirementMoney(comparison.plannedConcessionalTotal)} planned extra concessional contributions`);
       return {
         name: scenario.name,
+        retirementSummary: retirementScenarioSummary(scenario),
         rows: rows.length ? rows.slice(0, 5) : ["No material headline difference from Current Plan."],
       };
     });
@@ -9948,6 +9978,7 @@
           ${differences.map((group) => `
             <article>
               <strong>${escapeHtml(group.name)}</strong>
+              <small class="retirement-scenario-summary">${escapeHtml(group.retirementSummary)}</small>
               <ul>${group.rows.map((row) => `<li>${escapeHtml(row)}</li>`).join("")}</ul>
             </article>
           `).join("")}
@@ -9997,6 +10028,7 @@
       <div class="semi-retirement-comparison-controls" data-semi-comparison-editor="${escapeHtml(active.id)}">
         <div class="semi-retirement-comparison-editor-heading">
           <h5>Edit ${escapeHtml(active.name)}</h5>
+          ${retirementScenarioSubtitle(active)}
           <span>Temporary scenario only</span>
         </div>
         ${people.map((person, index) => {
@@ -10053,7 +10085,7 @@
           ${semiRetirementComparisonScenarios.map((scenario, index) => `
             <article class="${scenario.id === semiRetirementActiveComparisonId ? "is-active" : ""}">
               <span>${escapeHtml(semiRetirementComparisonScenarioLabel(index))}</span>
-              <strong>${escapeHtml(scenario.name)}</strong>
+              <strong>${escapeHtml(scenario.name)}</strong>${retirementScenarioSubtitle(scenario)}
               <div>
                 <button class="btn btn-small" type="button" data-semi-action="set-active-comparison" data-comparison-id="${escapeHtml(scenario.id)}"${scenario.id === semiRetirementActiveComparisonId ? ' aria-pressed="true"' : ""}>Edit</button>
                 <button class="btn btn-small" type="button" data-semi-action="remove-comparison" data-comparison-id="${escapeHtml(scenario.id)}" aria-label="Remove ${escapeHtml(scenario.name)}">Remove</button>
@@ -10088,7 +10120,7 @@
           <h2>Key modelled outcomes</h2>
           <table class="semi-retirement-print-table">
             <thead>
-              <tr><th>Outcome</th>${scenarioSet.map((scenario) => `<th>${escapeHtml(scenario.name)}</th>`).join("")}</tr>
+              <tr><th>Outcome</th>${scenarioSet.map((scenario) => `<th>${escapeHtml(scenario.name)}${retirementScenarioSubtitle(scenario)}</th>`).join("")}</tr>
             </thead>
             <tbody>
               ${metrics.map((metric) => `
@@ -10108,7 +10140,7 @@
               <div class="semi-retirement-comparison-breakdown">
                 ${scenarioSet.map((scenario) => `
                   <article class="semi-retirement-comparison-breakdown-card">
-                    <h4>${escapeHtml(scenario.name)}</h4>
+                    <h4>${escapeHtml(scenario.name)}</h4>${retirementScenarioSubtitle(scenario)}
                     ${semiRetirementComparisonBreakdownRows(metric.key, scenario).join("") || `<p>Not available from the current projection output.</p>`}
                   </article>
                 `).join("")}
@@ -10125,7 +10157,7 @@
               const important = assumptionRows.filter((row) => /retirement|semi|spending|inflation|investment return|super return|property.*growth/i.test(row.label || ""));
               return `
                 <article class="semi-retirement-comparison-breakdown-card">
-                  <h4>${escapeHtml(scenario.name)}</h4>
+                  <h4>${escapeHtml(scenario.name)}</h4>${retirementScenarioSubtitle(scenario)}
                   ${important.map((row) => semiRetirementBreakdownRow(row.label, semiRetirementAssumptionValue(row), row.note)).join("") || `<p>Assumptions unavailable: this scenario has no assumption rows in its projection output.</p>`}
                 </article>
               `;
@@ -10165,7 +10197,7 @@
           <div class="semi-retirement-comparison-table mt-4" data-comparison-count="${scenarioSet.length}">
             <div class="semi-retirement-comparison-row semi-retirement-comparison-header" style="--semi-comparison-columns: ${scenarioSet.length};">
               <span>Outcome</span>
-              ${scenarioSet.map((scenario) => `<strong>${escapeHtml(scenario.name)}</strong>`).join("")}
+              ${scenarioSet.map((scenario) => `<strong>${escapeHtml(scenario.name)}${retirementScenarioSubtitle(scenario)}</strong>`).join("")}
             </div>
             ${metrics.map((metric) => renderSemiRetirementComparisonMetric(metric, scenarioSet)).join("")}
           </div>
@@ -10998,7 +11030,7 @@
             <h4>People & retirement timing</h4>
             <p>Choose when work reduces and when employment income stops.</p>
           </div>
-          ${draft.people.length > 1 && !String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:") ? `<label><span class="field-label">How would you like to plan together?</span><select class="field-input" data-retirement-couple-mode>${optionList([["shared", "Simple shared retirement plan"], ["individual", "Different timing for each partner"]], plan.personal?.retirementTiming?.mode || "shared")}</select><small class="field-help">A shared plan stops work in the same calendar year. Either partner can switch to their own timing.</small></label>` : ""}
+          ${draft.people.length > 1 && !String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:") ? `<label><span class="field-label">How would you like to plan together?</span><select class="field-input" data-retirement-couple-mode>${optionList([["shared", "Simple shared retirement plan"], ["individual", "Different timing for each partner"]], retirementCoupleMode())}</select><small class="field-help">A shared plan stops work in the same calendar year. Either partner can switch to their own timing.</small></label>` : ""}
           ${draft.people.length > 1 || draft.people.some(person => person.hasSemiRetirement || person.alreadyRetired) ? retirementJourneyHtml(draft) : ""}
           <div class="semi-retirement-grid mt-4">
             ${draft.people.map((person, index) => semiRetirementPersonPanel(person, index)).join("")}
@@ -11229,6 +11261,7 @@
     const prepared = {
       id: scenario.id || `retirement-comparison-${Date.now()}-${semiRetirementComparisonScenarios.length + 1}`,
       name: scenario.name || semiRetirementComparisonScenarioName(scenario.draft, semiRetirementComparisonScenarios.length),
+      nameIsAutomatic: scenario.nameIsAutomatic === true || !scenario.name,
       source: scenario.source || "temporary",
       savedScenarioId: scenario.savedScenarioId || "",
       draft: cloneScenarioDraft(scenario.draft),
@@ -11275,6 +11308,7 @@
     const scenario = {
       id: `retirement-comparison-${Date.now()}-${index + 1}`,
       name: semiRetirementComparisonScenarioName(semiRetirementComparisonDraft, index),
+      nameIsAutomatic: true,
       source: "temporary",
       draft: semiRetirementComparisonDraft,
     };
@@ -11295,6 +11329,7 @@
       : Number(target.value);
     window.FFSSemiRetirementUi.setDraftPath(draft, path, Number.isFinite(value) || type !== "number" ? value : 0);
     if (scenario) {
+      if (scenario.nameIsAutomatic) scenario.name = semiRetirementComparisonScenarioName(draft, semiRetirementComparisonScenarios.indexOf(scenario));
       scenario.errors = (scenario.errors || []).filter((error) => error.path !== path);
       semiRetirementActiveComparisonId = scenario.id;
       syncLegacySemiRetirementComparisonState(scenario);
@@ -16206,6 +16241,7 @@
           <div>
             <span class="metric-label">${escapeHtml(savedScenarioTypeLabel(type))}</span>
             <h3>${escapeHtml(scenario.name || "Saved scenario")}</h3>
+            ${type === "retirement" ? retirementScenarioSubtitle(scenario) : ""}
           </div>
           <span class="scenario-card-date">${escapeHtml(scenarioDisplayDate(scenario))}</span>
         </div>
@@ -17044,6 +17080,7 @@
       if (target.dataset.retirementGoalAge !== undefined || target.dataset.retirementGoalPath !== undefined || target.dataset.retirementCoupleMode !== undefined) return;
       if (target.dataset.semiInput !== undefined) {
         if (target.tagName === "SELECT") return;
+        target.dataset.retirementWasShared ??= String(retirementCoupleMode() === "shared");
         updateSemiRetirementDraftFromInput(target);
         return;
       }
@@ -17368,12 +17405,14 @@
         commitRetirementTiming(); ensureSemiRetirementBaseResult(); renderForms(); renderOutputs(); return;
       }
       if (target.dataset.semiInput !== undefined) {
+        const wasShared = target.dataset.retirementWasShared === "true" || retirementCoupleMode() === "shared";
+        delete target.dataset.retirementWasShared;
         updateSemiRetirementDraftFromInput(target);
         const match = target.dataset.semiInput.match(/^people\.(\d+)\.(alreadyRetired|hasSemiRetirement|semiRetirementAge|fullRetirementAge|semiRetirementGrossIncome)$/);
         if (match) {
           const index = Number(match[1]), person = semiRetirementScenarioDraft.people[index];
           if (match[2] === "alreadyRetired" && person.alreadyRetired) { person.hasSemiRetirement = false; person.fullRetirementAge = person.currentAge; person.semiRetirementAge = person.currentAge; }
-          if (index === 0 && (plan.personal?.retirementTiming?.mode || "shared") === "shared" && !String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:")) {
+          if (index === 0 && wasShared && !String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:")) {
             semiRetirementScenarioDraft.people.slice(1).forEach(partner => {
               partner.alreadyRetired = person.alreadyRetired; partner.hasSemiRetirement = person.hasSemiRetirement;
               partner.fullRetirementAge = Number(partner.currentAge) + Math.max(0, Number(person.fullRetirementAge) - Number(person.currentAge));
