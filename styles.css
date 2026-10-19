@@ -9864,3 +9864,47 @@ body.scenario-save-modal-open {
   body[data-print-mode="retirement-comparison"] .semi-comparison-wide .semi-retirement-comparison-breakdown-card :is(span,strong,small) { display:block; overflow-wrap:anywhere; }
   body[data-print-mode="retirement-comparison"] .semi-comparison-wide .semi-retirement-comparison-breakdown-card strong { margin-top:2px; }
 }
+
+/* Phone comparisons keep reading, editing and management separate. */
+.semi-comparison-mobile-tools { display:none; }
+@media screen and (max-width:700px) {
+  #retirementComparison { scroll-margin-top:110px; }
+  .semi-comparison-mobile-tools { display:block; margin:12px 0; }
+  .semi-comparison-mobile-tabs { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
+  .semi-comparison-mobile-tabs .btn { min-height:44px; padding:8px 5px; white-space:normal; }
+  .semi-comparison-mobile-tabs [aria-pressed="true"] { background:#0f766e; color:white; }
+  [data-semi-comparison][data-mobile-view="results"] [data-mobile-panel]:not([data-mobile-panel="results"]),
+  [data-semi-comparison][data-mobile-view="edit"] [data-mobile-panel]:not([data-mobile-panel="edit"]),
+  [data-semi-comparison][data-mobile-view="manage"] [data-mobile-panel]:not([data-mobile-panel="manage"]) { display:none; }
+  [data-semi-comparison][data-mobile-view]:not([data-mobile-view="results"]) > button[data-semi-action="toggle-mobile-outcomes"] { display:none; }
+  [data-semi-comparison] [data-mobile-visible="false"] { display:none; }
+  [data-semi-comparison][data-mobile-all-outcomes="false"] [data-mobile-primary="false"] { display:none; }
+  [data-semi-comparison] .semi-retirement-comparison-header,
+  [data-semi-comparison] .semi-retirement-comparison-summary-row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; padding:12px; }
+  [data-semi-comparison] .semi-retirement-comparison-header > span,
+  [data-semi-comparison] .semi-retirement-comparison-label { grid-column:1 / -1; }
+  [data-semi-comparison] .semi-retirement-comparison-cell::before { content:none; }
+  [data-semi-comparison] .semi-retirement-comparison-header strong { min-width:0; font-size:13px; overflow-wrap:anywhere; }
+  [data-semi-comparison] .semi-retirement-comparison-header .retirement-scenario-summary { font-size:12px; font-weight:normal; }
+  [data-semi-comparison] .semi-retirement-comparison-cell { font-size:14px; line-height:1.45; border:0; padding:0; }
+  [data-semi-comparison] .semi-retirement-comparison-cell small { font-weight:normal; }
+  [data-semi-comparison][data-mobile-all="true"] .semi-retirement-comparison-summary-row { grid-template-columns:minmax(0,1fr); }
+  [data-semi-comparison][data-mobile-all="true"] .semi-retirement-comparison-header { display:none; }
+  [data-semi-comparison][data-mobile-all="true"] .semi-retirement-comparison-cell::before { content:attr(data-scenario-label); }
+  [data-semi-comparison] .semi-retirement-comparison-breakdown { grid-template-columns:minmax(0,1fr); }
+  [data-semi-comparison] .semi-retirement-comparison-selector .field-input { width:100%; min-width:0; }
+}
+@media print {
+  @page retirement-portrait { size:A4 portrait; margin:14mm; }
+  body[data-print-mode="retirement-comparison"][data-comparison-portrait="true"] { page:retirement-portrait; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-portrait { font-size:11pt; line-height:1.4; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-portrait .semi-portrait-scenario { break-before:page; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-portrait :is(h2,h3) { break-after:avoid; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-portrait h3 { font-size:12pt; margin:3mm 0 1mm; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-portrait p { margin:1mm 0 3mm; }
+  .semi-portrait-outcome, .semi-portrait-assumptions > div, .semi-portrait-detail > div { break-inside:avoid; border-bottom:1px solid #e2e8f0; padding:2mm 0; }
+  .semi-portrait-assumptions { margin:0; }
+  .semi-portrait-assumptions > div { display:table; table-layout:fixed; width:100%; }
+  .semi-portrait-assumptions :is(dt,dd) { display:table-cell; width:50%; margin:0; overflow-wrap:anywhere; }
+  .semi-portrait-detail :is(span,strong,small) { display:block; }
+}
