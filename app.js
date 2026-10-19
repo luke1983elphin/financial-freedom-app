@@ -9783,7 +9783,7 @@
     const difference = scenario.isCurrent ? "" : metric.delta(baseScenario.summary || {}, scenario.summary || {});
     return `
       <strong class="semi-retirement-comparison-cell" data-scenario-label="${escapeHtml(scenario.name)}" data-mobile-visible="${semiComparisonVisibleOnMobile(scenario)}">
-        <span>${escapeHtml(value)}</span>
+        ${metric.key === "fullRetirement" ? `<span class="semi-comparison-mobile-milestone">${escapeHtml(String(scenario.summary?.fullYear || "Not reached"))} — ${escapeHtml(semiRetirementAgeList(scenario.summary?.fullAges || []))}</span><span class="semi-comparison-desktop-milestone">${escapeHtml(value)}</span>` : `<span>${escapeHtml(value)}</span>`}
         ${difference ? `<small>${escapeHtml(difference)} vs Current</small>` : ""}
       </strong>
     `;

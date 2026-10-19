@@ -9908,3 +9908,8 @@ body.scenario-save-modal-open {
   .semi-portrait-assumptions :is(dt,dd) { display:table-cell; width:50%; margin:0; overflow-wrap:anywhere; }
   .semi-portrait-detail :is(span,strong,small) { display:block; }
 }
+.semi-comparison-mobile-milestone { display:none; }
+@media screen and (max-width:700px) {
+  .semi-retirement-comparison-cell .semi-comparison-mobile-milestone { display:block; }
+  .semi-retirement-comparison-cell .semi-comparison-desktop-milestone { display:none; }
+}
