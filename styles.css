@@ -8736,6 +8736,7 @@ body.scenario-save-modal-open {
 
 @media print {
   .durability-notice,
+  .demo-mode-banner,
   .app-legal-footer,
   #durabilityDialog,
   #policyDialog {
@@ -8816,6 +8817,14 @@ body.scenario-save-modal-open {
   body[data-print-mode="retirement-comparison"] [data-view-panel="semiretirement"],
   body[data-print-mode="retirement-comparison"] #appWorkspace {
     display: block !important;
+  }
+
+  body[data-print-mode="retirement-comparison"] :is(#appWorkspace, #appWorkspace > div, #appWorkspace > div > div, [data-view-panel="semiretirement"]) {
+    padding: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    max-width: none !important;
+    width: 100% !important;
   }
 
   body[data-print-mode="retirement-comparison"] [data-view-panel="semiretirement"] > .section-heading,

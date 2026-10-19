@@ -313,6 +313,7 @@ test('comparison print preserves headers, assumptions and funding detail for dis
     assert.doesNotMatch(printed.text,/Not available/);
     assert.equal(printed.appHeader,0);
     assert.ok(printed.nav);
+    assert.equal(await evaluate("(()=>{const banner=document.querySelector('#demoModeBanner');const hidden=banner.classList.contains('hidden');banner.classList.remove('hidden');const display=getComputedStyle(banner).display;banner.classList.toggle('hidden',hidden);return display;})()"),'none','even active sample exploration controls never enter printed reports');
     assert.equal(await evaluate("getComputedStyle(document.querySelector('.semi-retirement-print-closing')).breakInside"), 'avoid', 'keep assumptions and disclaimer together when they fit on a page');
     await writeFile(path.join(output,`comparison-${year}.pdf`),Buffer.from((await cdp.send('Page.printToPDF',{printBackground:true,preferCSSPageSize:true})).data,'base64'));
     await writeFile(path.join(output,`comparison-${year}.json`),JSON.stringify(printed,null,2));

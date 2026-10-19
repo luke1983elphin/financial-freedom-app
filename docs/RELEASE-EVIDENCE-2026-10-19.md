@@ -124,6 +124,8 @@ Automatic temporary names now refresh on input edits using an explicit `nameIsAu
 
 New regression coverage checks unequal starting ages, adjacent retirement rows and income cessation, shared-year save/reload, explicit individual timing, custom saved-name preservation, edited comparison isolation, reopen consistency, automatic renaming and generated PDF summaries. The browser fixture also reproduces the original 62-to-65 case under 2027-28 rule disclosure configuration. Privacy/Terms and inaccessible branch-protection inspection remain separate.
 
+Actual deployed Sample Plan mode additionally exposed its sticky exploration banner and screen-wrapper spacing leaking into pagination. Print CSS now excludes that screen-only banner and removes comparison workspace padding/margins, while retaining the report's sample plan identity and all disclosures. An active-banner print regression was added. The real sample-mode six-page A4 export has content on every page and keeps the complete final disclaimer with assumptions. This does not change screen layout or the intentional non-persistence of Sample Plan exploration; persistence validation uses an imported fictional backup.
+
 ### Comparison PDF correction after deployed validation
 
 The `64852f8` preview exposed a real print defect missed by the earlier byte-count check: a global `header` print selector hid the comparison cover and its held-rule notices. The fix scopes it to `.app-header`; navigation remains excluded. Print-only assumptions use compact label/value rows and a closing group with the complete disclaimer, without reducing font sizes or suppressing notices. Print containers no longer clip the cover against screen-card rounded corners.
