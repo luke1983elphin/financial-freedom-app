@@ -10116,7 +10116,7 @@
       { label: "Property equity at forecast end", value: scenario => semiRetirementMoney(scenario.viewModel?.annualRows?.at(-1)?.household?.totalPropertyEquity ?? scenario.result?.years?.at(-1)?.household?.totalPropertyEquity ?? 0) },
       { label: "Forecast end (year and ages)", value: scenario => `${scenario.viewModel?.keyResults?.projectionEnd?.calendarYear || "End"} — ${semiRetirementAgeList(scenario.viewModel?.keyResults?.projectionEnd?.ages || [])}` },
     ];
-    const allAssumptions = scenarioSet.map(scenario => (scenario.viewModel?.assumptions?.rows || []).filter(row => /retirement|semi|spending|inflation|investment return|super return|property.*growth/i.test(row.label || "")));
+    const allAssumptions = scenarioSet.map(scenario => (scenario.viewModel?.assumptions?.rows || []).filter(row => /retirement|semi|spending|inflation|investment return|planned annual investing|super return|property.*growth/i.test(row.label || "")));
     const labels = [...new Set(allAssumptions.flat().map(row => row.label))];
     const values = label => allAssumptions.map(rows => { const row = rows.find(item => item.label === label); return row ? semiRetirementAssumptionValue(row) : "Not applicable"; });
     const shared = labels.filter(label => new Set(values(label)).size === 1);
