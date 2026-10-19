@@ -53,6 +53,7 @@
     "security:scan:self-test": "node scripts/scan-secrets-self-test.mjs",
     "verify": "pnpm run test:inventory && node --check consumer-setup.js && node --check plan-schema.js && node --check legacy-plan-adapter.js && node --check plan-selectors.js && node --check plan-mutations.js && node --check scenario-overlay.js && node --check tests/consumer-first-stage2.test.mjs && node --check tests/consumer-ux-stage2b.test.mjs && node --check tests/canonical-plan-stage3.test.mjs && node --check tests/canonical-integrity-stage3a.test.mjs && node --check tests/release-parity-stage4.test.mjs && pnpm run syntax && pnpm run syntax:self-test && pnpm run browser:security && pnpm run parity:self-test && pnpm run test:r1-ai && pnpm run test:runner && pnpm run security:scan && pnpm run security:scan:self-test && pnpm test",
     "test:age-pension": "node --test tests/age-pension.test.mjs",
-    "test:browser-age-pension": "node --test tests/age-pension-browser.mjs"
+    "test:browser-age-pension": "node --test tests/age-pension-browser.mjs",
+    "test:browser-release": "node --test tests/release-browser.mjs"
   }
 }

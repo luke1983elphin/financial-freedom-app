@@ -6,6 +6,14 @@
   --success: #0f9f6e;
 }
 
+.retirement-scenario-summary {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  margin-top: 4px;
+}
+
 .semi-retirement-scenario {
   display: grid;
   gap: 16px;
@@ -8728,6 +8736,7 @@ body.scenario-save-modal-open {
 
 @media print {
   .durability-notice,
+  .demo-mode-banner,
   .app-legal-footer,
   #durabilityDialog,
   #policyDialog {
@@ -8746,7 +8755,7 @@ body.scenario-save-modal-open {
     }
   }
 
-  header,
+  .app-header,
   nav,
   #homeView,
   .btn,
@@ -8810,6 +8819,14 @@ body.scenario-save-modal-open {
     display: block !important;
   }
 
+  body[data-print-mode="retirement-comparison"] :is(#appWorkspace, #appWorkspace > div, #appWorkspace > div > div, [data-view-panel="semiretirement"]) {
+    padding: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    max-width: none !important;
+    width: 100% !important;
+  }
+
   body[data-print-mode="retirement-comparison"] [data-view-panel="semiretirement"] > .section-heading,
   body[data-print-mode="retirement-comparison"] [data-semi-retirement-scenario] > :not(.semi-retirement-result-card),
   body[data-print-mode="retirement-comparison"] .semi-retirement-results-dashboard > :not(.semi-retirement-comparison),
@@ -8822,6 +8839,8 @@ body.scenario-save-modal-open {
   body[data-print-mode="retirement-comparison"] .semi-retirement-comparison-print-report {
     display: block !important;
     border: 0 !important;
+    border-radius: 0;
+    overflow: visible;
     box-shadow: none !important;
     padding: 0 !important;
   }
@@ -8832,7 +8851,7 @@ body.scenario-save-modal-open {
     padding-bottom: 6mm;
   }
 
-  body[data-print-mode="retirement-comparison"] .semi-retirement-print-cover p {
+  body[data-print-mode="retirement-comparison"] .semi-retirement-print-cover > p:first-child {
     color: #2563eb;
     font-size: 12px;
     font-weight: 950;
@@ -8848,9 +8867,35 @@ body.scenario-save-modal-open {
   }
 
   body[data-print-mode="retirement-comparison"] .semi-retirement-comparison-print-report section {
+    break-inside: auto;
+    page-break-inside: auto;
+    margin: 0 0 8mm;
+  }
+
+  body[data-print-mode="retirement-comparison"] .semi-retirement-print-breakdown,
+  body[data-print-mode="retirement-comparison"] .semi-retirement-print-closing {
     break-inside: avoid;
     page-break-inside: avoid;
-    margin: 0 0 8mm;
+  }
+
+  body[data-print-mode="retirement-comparison"] .semi-retirement-print-notes p {
+    orphans: 3;
+    widows: 3;
+  }
+
+  /* Remove screen-card spacing, not text, so assumptions and advice stay together. */
+  body[data-print-mode="retirement-comparison"] .semi-retirement-print-assumptions .semi-retirement-comparison-breakdown-card {
+    gap: 4px;
+  }
+
+  body[data-print-mode="retirement-comparison"] .semi-retirement-print-assumptions .semi-retirement-comparison-breakdown-card div {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 8px;
+    padding-top: 4px;
+  }
+
+  body[data-print-mode="retirement-comparison"] .semi-retirement-print-assumptions small {
+    grid-column: 1 / -1;
   }
 
   body[data-print-mode="retirement-comparison"] .semi-retirement-comparison-print-report h2,

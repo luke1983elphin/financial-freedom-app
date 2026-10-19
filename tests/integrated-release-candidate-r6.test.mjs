@@ -119,7 +119,7 @@ test("R6 security, storage and AI containment assets remain integrated in load o
   assert.ok(html.indexOf("security.js") < html.indexOf("storage.js"));
   assert.ok(html.indexOf("storage.js") < html.indexOf("app.js"));
   const headers = Object.fromEntries(vercel.headers[0].headers.map(({ key, value }) => [key, value]));
-  for (const key of ["Content-Security-Policy-Report-Only", "X-Content-Type-Options", "Referrer-Policy", "X-Frame-Options", "Permissions-Policy"]) {
+  for (const key of ["Content-Security-Policy", "X-Content-Type-Options", "Referrer-Policy", "X-Frame-Options", "Permissions-Policy"]) {
     assert.ok(headers[key], key);
   }
   assert.match(read("api/ai-insights.js"), /value === ENABLED_VALUE/);

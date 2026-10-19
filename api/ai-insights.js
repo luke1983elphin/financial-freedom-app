@@ -1,3 +1,5 @@
+import { AI_RELEASE_READY, explicitlyEnabled, boundedTimeout, protectRequest, readJsonBody } from "./_lib/ai-policy.js";
+
 const MAX_REQUEST_BYTES = 90 * 1024;
 const DEFAULT_MODEL = process.env.OPENAI_AI_INSIGHTS_MODEL || "gpt-4o-mini";
 const DEFAULT_MAX_GENERATIONS = Number(process.env.AI_INSIGHTS_MAX_GENERATIONS || 5);
@@ -19,7 +21,7 @@ function isExplicitlyEnabled(value) {
 }
 
 function aiEnablementStatus() {
-  const enabled = isExplicitlyEnabled(process.env[SERVER_ENABLEMENT_ENV]);
+  const enabled = AI_RELEASE_READY && isExplicitlyEnabled(process.env[SERVER_ENABLEMENT_ENV]);
   return {
     enabled,
     source: SERVER_ENABLEMENT_ENV,
@@ -38,34 +40,7 @@ function isEnabled() {
   return aiEnablementStatus().enabled;
 }
 
-function readBody(req) {
-  if (req.body && typeof req.body === "object") return Promise.resolve(req.body);
-  if (typeof req.body === "string") {
-    try {
-      return Promise.resolve(JSON.parse(req.body));
-    } catch {
-      return Promise.reject(new Error("Invalid JSON request."));
-    }
-  }
-  return new Promise((resolve, reject) => {
-    let body = "";
-    req.on("data", (chunk) => {
-      body += chunk;
-      if (Buffer.byteLength(body, "utf8") > MAX_REQUEST_BYTES) {
-        reject(new Error("Request too large."));
-        req.destroy();
-      }
-    });
-    req.on("end", () => {
-      try {
-        resolve(body ? JSON.parse(body) : {});
-      } catch {
-        reject(new Error("Invalid JSON request."));
-      }
-    });
-    req.on("error", reject);
-  });
-}
+function readBody(req) { return readJsonBody(req, MAX_REQUEST_BYTES); }
 
 function safeNumber(value) {
   const number = Number(value);
@@ -250,9 +225,9 @@ function progressUserPrompt(progressComparison) {
   });
 }
 
-async function callOpenAi(planSummary) {
+export async function callOpenAi(planSummary) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), Number(process.env.AI_INSIGHTS_TIMEOUT_MS || 30000));
+  const timeout = setTimeout(() => controller.abort(), boundedTimeout(process.env.AI_INSIGHTS_TIMEOUT_MS));
   try {
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -264,6 +239,8 @@ async function callOpenAi(planSummary) {
       body: JSON.stringify({
         model: DEFAULT_MODEL,
         temperature: 0.2,
+        store: false,
+        max_tokens: 2000,
         response_format: { type: "json_object" },
         messages: [
           { role: "system", content: systemPrompt() },
@@ -288,9 +265,9 @@ async function callOpenAi(planSummary) {
   }
 }
 
-async function callOpenAiProgress(progressComparison) {
+export async function callOpenAiProgress(progressComparison) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), Number(process.env.AI_INSIGHTS_TIMEOUT_MS || 30000));
+  const timeout = setTimeout(() => controller.abort(), boundedTimeout(process.env.AI_INSIGHTS_TIMEOUT_MS));
   try {
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -302,6 +279,8 @@ async function callOpenAiProgress(progressComparison) {
       body: JSON.stringify({
         model: DEFAULT_MODEL,
         temperature: 0.2,
+        store: false,
+        max_tokens: 2000,
         response_format: { type: "json_object" },
         messages: [
           { role: "system", content: progressSystemPrompt() },
@@ -341,13 +320,14 @@ export default async function aiInsightsHandler(req, res) {
     return sendJson(res, 405, { error: "Method not allowed." });
   }
   if (!isEnabled()) return sendJson(res, 503, disabledPayload());
-  if (!process.env.OPENAI_API_KEY) return sendJson(res, 500, { error: "AI Insights is not configured yet." });
+  if (!process.env.OPENAI_API_KEY) return sendJson(res, 503, disabledPayload());
+  try { await protectRequest(req, MAX_REQUEST_BYTES); } catch (error) { return sendJson(res, error.status || 503, { error: error.message }); }
 
   let body;
   try {
     body = await readBody(req);
   } catch (error) {
-    return sendJson(res, 400, { error: error.message || "Invalid request." });
+    return sendJson(res, error.status || 400, { error: error.message || "Invalid request." });
   }
   if (Buffer.byteLength(JSON.stringify(body || {}), "utf8") > MAX_REQUEST_BYTES) {
     return sendJson(res, 413, { error: "Request too large." });
@@ -358,12 +338,12 @@ export default async function aiInsightsHandler(req, res) {
     if (validationError) return sendJson(res, 400, { error: validationError });
     try {
       let progressInsights = await callOpenAiProgress(progressComparison);
-      if (!progressInsights) progressInsights = await callOpenAiProgress(progressComparison);
+
       if (!progressInsights) return sendJson(res, 502, { error: "The AI progress response could not be read safely. Please try again." });
       return sendJson(res, 200, { progressInsights });
     } catch (error) {
       if (error.name === "AbortError") return sendJson(res, 408, { error: "The AI progress insight timed out. Please try again." });
-      return sendJson(res, error.status === 429 ? 429 : 502, { error: error.message || "The AI progress insight could not be generated." });
+      return sendJson(res, error.status === 429 ? 429 : 502, { error: "The AI progress insight could not be generated." });
     }
   }
 
@@ -373,11 +353,11 @@ export default async function aiInsightsHandler(req, res) {
 
   try {
     let insights = await callOpenAi(planSummary);
-    if (!insights) insights = await callOpenAi(planSummary);
+
     if (!insights) return sendJson(res, 502, { error: "The AI response could not be read safely. Please try again." });
     return sendJson(res, 200, { insights });
   } catch (error) {
     if (error.name === "AbortError") return sendJson(res, 408, { error: "The AI review timed out. Please try again." });
-    return sendJson(res, error.status === 429 ? 429 : 502, { error: error.message || "The AI review could not be generated." });
+    return sendJson(res, error.status === 429 ? 429 : 502, { error: "The AI review could not be generated." });
   }
 }

@@ -110,7 +110,7 @@ test("R4A filename sanitisation prevents traversal, controls and executable exte
 test("R4A-K CSP and response headers include the critical protections", () => {
   const config = JSON.parse(read("vercel.json"));
   const headers = new Map(config.headers[0].headers.map((item) => [item.key.toLowerCase(), item.value]));
-  assert.doesNotThrow(() => SECURITY.validateCsp(headers.get("content-security-policy-report-only")));
+  assert.doesNotThrow(() => SECURITY.validateCsp(headers.get("content-security-policy")));
   assert.equal(headers.get("x-content-type-options"), "nosniff");
   assert.equal(headers.get("x-frame-options"), "DENY");
   assert.equal(headers.get("referrer-policy"), "strict-origin-when-cross-origin");

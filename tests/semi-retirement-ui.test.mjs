@@ -1420,7 +1420,7 @@ test("Stage FC5 comparison difference values reconcile mathematically", () => {
 
 test("Stage FC6 comparison displays the G2H headline outcome set", () => {
   const snippet = sourceBetween(appSource, "function semiRetirementComparisonMetricDefinitions", "function semiRetirementComparisonCellHtml");
-  ["Household fully retired", "Assets at full retirement", "Accessible investments at full retirement", "Super at full retirement", "Accessible investments last until", "Retirement funding status", "Debt at full retirement", "First projected funding shortfall", "Projection-end net worth", "One-off lifestyle spending", "Extra concessional contributions"].forEach((label) => {
+  ["First year both retired", "Assets at full retirement", "Accessible investments at full retirement", "Super at full retirement", "Accessible investments last until", "Retirement funding status", "Debt at full retirement", "First projected funding shortfall", "Projection-end net worth", "One-off lifestyle spending", "Extra concessional contributions"].forEach((label) => {
     assert.match(snippet, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   });
   assert.doesNotMatch(sourceBetween(appSource, "function renderSemiRetirementComparisonHtml", "function renderSemiRetirementTimelineHtml"), /renderSemiRetirementAnnualProjectionHtml|renderSemiRetirementDebtPropertyHtml/);

@@ -695,10 +695,20 @@
       semiRetirementAge: saved.hasSemiRetirement && !saved.alreadyRetired ? Math.max(currentAge, Math.min(fullRetirementAge, number(saved.semiRetirementAge))) : fullRetirementAge };
   }
 
+  function retirementTimingMode(people = [], preferred) {
+    if (preferred === "individual") return "individual";
+    const offsets = people.map(person => [
+      Math.max(0, number(person.fullRetirementAge) - number(person.currentAge)),
+      Boolean(person.hasSemiRetirement),
+      person.hasSemiRetirement ? Math.max(0, number(person.semiRetirementAge) - number(person.currentAge)) : null,
+    ]);
+    return offsets.every(value => JSON.stringify(value) === JSON.stringify(offsets[0])) ? "shared" : "individual";
+  }
+
   function saveRetirementTiming(plan, people, mode = "individual") {
     plan.personal ||= {};
     plan.personal.financialFreedomMilestoneAge ??= plan.personal.fullRetirementAge;
-    plan.personal.retirementTiming = { version: 1, mode, people: people.map(person => ({
+    plan.personal.retirementTiming = { version: 1, mode: retirementTimingMode(people, mode), people: people.map(person => ({
       id: person.id, alreadyRetired: Boolean(person.alreadyRetired), hasSemiRetirement: Boolean(person.hasSemiRetirement),
       semiRetirementAge: number(person.semiRetirementAge), fullRetirementAge: number(person.fullRetirementAge),
       semiRetirementGrossIncome: nonNegative(person.semiRetirementGrossIncome),
@@ -2452,6 +2462,7 @@
   global.FFSSemiRetirementUi = {
     applyRetirementForecast,
     retirementTimingForPerson,
+    retirementTimingMode,
     saveRetirementTiming,
     retirementJourney,
     defaultWorkingPhaseSurplusDestination,

@@ -16,6 +16,54 @@ function fixture(age=58,partnerAge=56){
  return p;
 }
 function defaults(p){return U.buildSemiRetirementScenarioDefaults(p,C.calculatePlan(p)).draft;}
+
+test('different current ages distinguish personal retirement events from first both-retired row',()=>{
+ const p=fixture(32,31),d=defaults(p); d.projectionStartYear=2026;
+ for(const age of [62,65]) {
+  d.people.forEach(person=>{person.fullRetirementAge=age;person.semiRetirementAge=age;});
+  const out=U.runSemiRetirementProjection(E,d),rows=out.result.years;
+  assert.equal(out.validation.isValid,true);
+  const first=rows.find(r=>r.people[0].employmentPhase==='fully-retired');
+  const both=rows.find(r=>r.people.every(person=>person.employmentPhase==='fully-retired'));
+  assert.equal(first.calendarYear,2026+age-32);assert.equal(first.people[0].age,age);
+  assert.equal(both.calendarYear,2026+age-31);assert.equal(both.people[0].age,age+1);assert.equal(both.people[1].age,age);
+  assert.ok(rows.find(r=>r.calendarYear===first.calendarYear-1).people[0].employmentIncome>0);
+  assert.equal(first.people[0].employmentIncome,0);
+  const view=U.buildSemiRetirementResultsViewModel(out.result,out.inputs,d);
+  assert.equal(view.keyResults.accessibleWhenBothFullyRetired.row.calendarYear,both.calendarYear);
+  assert.match(out.result.assumptions.ageConvention,/start of projection year zero/);
+ }
+});
+
+test('shared-year mode agrees with stored and reloaded inputs; legacy unequal years remain individual',()=>{
+ const p=fixture(32,31),d=defaults(p);
+ d.people.forEach(person=>{person.fullRetirementAge=65;person.semiRetirementAge=65;});
+ assert.equal(U.retirementTimingMode(d.people),'individual');
+ U.saveRetirementTiming(p,d.people,'shared');
+ assert.equal(p.personal.retirementTiming.mode,'individual');
+ assert.deepEqual(Array.from(defaults(p).people,p=>p.fullRetirementAge),[65,65]);
+ d.people[1].fullRetirementAge=64;d.people[1].semiRetirementAge=64;
+ U.saveRetirementTiming(p,d.people,'shared');
+ assert.equal(p.personal.retirementTiming.mode,'shared');
+ const reloaded=defaults(JSON.parse(JSON.stringify(p))),out=U.runSemiRetirementProjection(E,reloaded);
+ const events=reloaded.people.map(p=>out.result.years.find(r=>r.people.some(q=>q.id===p.id&&q.employmentPhase==='fully-retired')).calendarYear);
+ assert.equal(events[0],events[1]);
+ assert.equal(U.retirementTimingMode(reloaded.people,'individual'),'individual','explicit individual choice is retained even for coincident years');
+});
+
+test('comparison edits refresh only automatic names and never mutate saved snapshots',()=>{
+ const draft=defaults(fixture(32,31));draft.people.forEach(p=>p.fullRetirementAge=62);
+ const saved={name:'Retire at 62',scenarioInputSnapshot:clone(draft)};
+ const comparison={id:'saved',name:saved.name,draft:clone(saved.scenarioInputSnapshot),nameIsAutomatic:false};
+ const ctx={window:{FFSSemiRetirementUi:U},semiRetirementComparisonScenarios:[comparison],semiRetirementActiveComparisonId:'saved',money:n=>String(n),syncLegacySemiRetirementComparisonState:()=>{}};
+ vm.runInNewContext(['semiRetirementComparisonScenarioLabel','semiRetirementComparisonScenarioName','retirementScenarioSummary','updateSemiRetirementComparisonDraftFromInput'].map(extract).join('\n'),ctx);
+ const input={dataset:{semiComparisonInput:'people.0.fullRetirementAge',semiComparisonId:'saved'},value:'65'};
+ ctx.updateSemiRetirementComparisonDraftFromInput(input);
+ assert.equal(comparison.name,'Retire at 62');assert.equal(saved.scenarioInputSnapshot.people[0].fullRetirementAge,62);
+ assert.match(ctx.retirementScenarioSummary(comparison),/Alex retires at 65/);
+ comparison.nameIsAutomatic=true; input.dataset.semiComparisonInput='people.1.fullRetirementAge';ctx.updateSemiRetirementComparisonDraftFromInput(input);
+ assert.equal(comparison.name,'Retire at 65');
+});
 function extract(name){const start=source.indexOf('  function '+name+'(');assert.ok(start>=0,name);return source.slice(start,source.indexOf('\n  function ',start+5));}
 test('legacy plan and saved scenario defaults retain every age without writes',()=>{
  const p=fixture(),before=JSON.stringify(p),d=defaults(p);
