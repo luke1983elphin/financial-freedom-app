@@ -658,7 +658,12 @@
   let semiRetirementComparisonResult = null;
   let semiRetirementComparisonInputs = null;
   let semiRetirementComparisonErrors = [];
-  const MAX_SEMI_RETIREMENT_COMPARISONS = 3;
+  const MAX_SEMI_RETIREMENT_COMPARISONS = 5;
+  let semiComparisonReportDetail = "overview";
+  let semiComparisonMobileSelection = "";
+  let semiComparisonMobileView = "results";
+  let semiComparisonShowAllOutcomes = false;
+  let semiComparisonReportLayout = "auto";
   let semiRetirementComparisonScenarios = [];
   let semiRetirementActiveComparisonId = "";
   let selectedSavedRetirementScenarioId = "";
@@ -9765,12 +9770,20 @@
     ];
   }
 
+  function semiComparisonVisibleOnMobile(scenario) {
+    return scenario.isCurrent || semiComparisonMobileSelection === "all" || scenario.id === (semiComparisonMobileSelection || semiRetirementComparisonScenarios[0]?.id);
+  }
+
+  function usePortraitRetirementReport() {
+    return semiComparisonReportLayout === "portrait" || (semiComparisonReportLayout === "auto" && window.matchMedia("(max-width: 700px)").matches);
+  }
+
   function semiRetirementComparisonCellHtml(metric, scenario, baseScenario) {
     const value = metric.value(scenario.summary || {});
     const difference = scenario.isCurrent ? "" : metric.delta(baseScenario.summary || {}, scenario.summary || {});
     return `
-      <strong class="semi-retirement-comparison-cell" data-scenario-label="${escapeHtml(scenario.name)}">
-        <span>${escapeHtml(value)}</span>
+      <strong class="semi-retirement-comparison-cell" data-scenario-label="${escapeHtml(scenario.name)}" data-mobile-visible="${semiComparisonVisibleOnMobile(scenario)}">
+        ${metric.key === "fullRetirement" ? `<span class="semi-comparison-mobile-milestone">${escapeHtml(String(scenario.summary?.fullYear || "Not reached"))} — ${escapeHtml(semiRetirementAgeList(scenario.summary?.fullAges || []))}</span><span class="semi-comparison-desktop-milestone">${escapeHtml(value)}</span>` : `<span>${escapeHtml(value)}</span>`}
         ${difference ? `<small>${escapeHtml(difference)} vs Current</small>` : ""}
       </strong>
     `;
@@ -9779,7 +9792,7 @@
   function renderSemiRetirementComparisonMetric(metric, scenarioSet) {
     const baseScenario = scenarioSet[0];
     return `
-      <details class="semi-retirement-comparison-row" data-semi-comparison-breakdown="${escapeHtml(metric.key)}">
+      <details class="semi-retirement-comparison-row" data-mobile-primary="${["fullRetirement", "assetsAtRetirement", "accessibleLast", "firstShortfall", "projectionEndNetWorth"].includes(metric.key)}" data-semi-comparison-breakdown="${escapeHtml(metric.key)}">
         <summary class="semi-retirement-comparison-summary-row" style="--semi-comparison-columns: ${scenarioSet.length};">
           <span class="semi-retirement-comparison-label">
             <span>${escapeHtml(metric.label)}</span>
@@ -9935,7 +9948,7 @@
     return `
       <div class="semi-retirement-comparison-breakdown">
         ${scenarioSet.map((scenario) => `
-          <article class="semi-retirement-comparison-breakdown-card">
+          <article class="semi-retirement-comparison-breakdown-card" data-mobile-visible="${semiComparisonVisibleOnMobile(scenario)}">
             <h5>${escapeHtml(scenario.name)}</h5>${retirementScenarioSubtitle(scenario)}
             ${semiRetirementComparisonBreakdownRows(metricKey, scenario).join("") || `<p class="field-help">Not available from the current projection output.</p>`}
           </article>
@@ -10063,12 +10076,26 @@
     const savedRetirementScenarios = selectedSavedRetirementScenarios();
     const savedOptions = savedRetirementScenarios.map((scenario) => `<option value="${escapeHtml(scenario.id)}"${selectedSavedRetirementScenarioId === scenario.id ? " selected" : ""}>${escapeHtml(scenario.name || "Saved retirement scenario")}</option>`).join("");
     return `
-      <div class="semi-retirement-comparison-selector">
+      <div class="semi-retirement-comparison-selector" data-mobile-panel="manage">
         <div class="semi-retirement-comparison-actions">
           <button class="btn" type="button" data-semi-action="compare">Add temporary comparison</button>
+          <button class="btn" type="button" data-semi-action="demo-comparisons">Try five alternatives</button>
           <button class="btn" type="button" data-semi-action="reset-comparison"${semiRetirementComparisonScenarios.length ? "" : " disabled"}>Clear comparisons</button>
           <button class="btn btn-primary" type="button" data-semi-action="export-comparison-pdf"${semiRetirementComparisonScenarios.length ? "" : " disabled"}>Export comparison PDF</button>
         </div>
+        <label class="semi-comparison-export-choice${semiRetirementComparisonScenarios.length < 3 ? " hidden" : ""}">Report contents
+          <select class="field-input" data-semi-report-detail aria-label="Comparison report contents">
+            <option value="overview"${semiComparisonReportDetail === "overview" ? " selected" : ""}>Overview — outcomes, differences and assumptions</option>
+            <option value="full"${semiComparisonReportDetail === "full" ? " selected" : ""}>Full report — include detailed breakdowns</option>
+          </select>
+          <small>Four or more columns use landscape. Full reports repeat Current Plan beside up to two alternatives per group.</small>
+        </label>
+        <label class="semi-comparison-export-choice">PDF layout
+          <select class="field-input" data-semi-report-layout aria-label="Comparison PDF layout">
+            ${[["auto", "Automatic — portrait on phones"], ["portrait", "Portrait — one scenario at a time"], ["side-by-side", "Side by side — desktop layout"]].map(([value, label]) => `<option value="${value}"${semiComparisonReportLayout === value ? " selected" : ""}>${label}</option>`).join("")}
+          </select>
+          <small>Every selected scenario is included. Portrait reports keep each scenario readable without narrow columns.</small>
+        </label>
         <div class="semi-retirement-saved-selector">
           <label class="field-label" for="semiRetirementSavedComparisonSelect">Add saved Retirement Planning scenario</label>
           <div>
@@ -10097,7 +10124,67 @@
     `;
   }
 
+  function renderWideRetirementComparisonReport(scenarioSet, metrics) {
+    const planName = plan?.meta?.samplePlanName || [plan?.personal?.person1Name, plan?.personal?.person2Name].filter(Boolean).join(" and ") || "Financial Plan";
+    const headerCells = scenarioSet.map(scenario => `<th scope="col">${escapeHtml(scenario.name)}${retirementScenarioSubtitle(scenario)}</th>`).join("");
+    const table = (rows, trailing = []) => `<table class="semi-retirement-print-table"><thead><tr><th scope="col">Outcome</th>${headerCells}</tr></thead><tbody>${[...rows, ...trailing].map(metric => `<tr><th scope="row">${escapeHtml(metric.label)}</th>${scenarioSet.map(scenario => `<td>${escapeHtml(metric.value(scenario.summary || {}, scenario))}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+    const extra = [
+      { label: "Retirement funds at forecast end", value: scenario => semiRetirementMoney(scenario.viewModel?.keyResults?.projectionEnd?.totalInvestableAssets) },
+      { label: "Property equity at forecast end", value: scenario => semiRetirementMoney(scenario.viewModel?.annualRows?.at(-1)?.household?.totalPropertyEquity ?? scenario.result?.years?.at(-1)?.household?.totalPropertyEquity ?? 0) },
+      { label: "Forecast end (year and ages)", value: scenario => `${scenario.viewModel?.keyResults?.projectionEnd?.calendarYear || "End"} — ${semiRetirementAgeList(scenario.viewModel?.keyResults?.projectionEnd?.ages || [])}` },
+    ];
+    const allAssumptions = scenarioSet.map(scenario => (scenario.viewModel?.assumptions?.rows || []).filter(row => /retirement|semi|spending|inflation|investment return|planned annual investing|super return|property.*growth/i.test(row.label || "")));
+    const labels = [...new Set(allAssumptions.flat().map(row => row.label))];
+    const values = label => allAssumptions.map(rows => { const row = rows.find(item => item.label === label); return row ? semiRetirementAssumptionValue(row) : "Not applicable"; });
+    const shared = labels.filter(label => new Set(values(label)).size === 1);
+    const different = labels.filter(label => !shared.includes(label));
+    const groups = [];
+    for (let i = 1; i < scenarioSet.length; i += 2) groups.push([scenarioSet[0], ...scenarioSet.slice(i, i + 2)]);
+    return `<article class="semi-retirement-comparison-print-report semi-comparison-wide" aria-label="Retirement scenario comparison printable report">
+      <header class="semi-retirement-print-cover"><p>Financial Freedom</p><h1>Retirement Scenario Comparison</h1>
+        <div>Generated ${escapeHtml(new Date().toLocaleString("en-AU"))} · ${scenarioSet.length - 1} alternatives · ${semiComparisonReportDetail === "full" ? "Full report" : "Overview"}</div>
+        <div>Plan: ${escapeHtml(planName)} · Calculation version: ${escapeHtml(CALC.CALCULATION_VERSION)}</div>
+        ${carriedForwardRulesHtml(scenarioSet.map(scenario => scenario.result))}
+      </header>
+      <section class="semi-comparison-overview"><h2>Side-by-side overview</h2>
+        <p>Future values include assumed inflation. Retirement balances refer to each scenario's own retirement year; forecast-end balances should be compared at matching years and ages.</p>
+        ${table(metrics.filter(metric => ["fullRetirement", "assetsAtRetirement", "accessibleLast", "firstShortfall", "projectionEndNetWorth"].includes(metric.key)).map(metric => metric.key === "fullRetirement" ? { ...metric, value: summary => `${summary.fullYear || "Not reached"} — ${semiRetirementAgeList(summary.fullAges || [])}` } : metric), extra.map(metric => ({ label: metric.label, value: (_summary, scenario) => metric.value(scenario) })))}
+      </section>
+      <section class="semi-comparison-differences"><h2>What changes in each alternative?</h2>${renderSemiRetirementComparisonMainDifferences(scenarioSet)}</section>
+      <section class="semi-comparison-assumption-summary"><h2>Shared assumptions</h2><div class="semi-comparison-common-assumptions">${shared.map(label => `<span><strong>${escapeHtml(label)}</strong> ${escapeHtml(String(values(label)[0]))}</span>`).join("")}</div>
+        <h2>Assumptions that differ</h2>${different.length ? `<table class="semi-retirement-print-table"><thead><tr><th>Assumption</th>${headerCells}</tr></thead><tbody>${different.map(label => `<tr><th scope="row">${escapeHtml(label)}</th>${values(label).map(value => `<td>${escapeHtml(String(value))}</td>`).join("")}</tr>`).join("")}</tbody></table>` : '<p>All displayed assumptions match. Review event details below when using the full report.</p>'}
+        ${metrics.filter(metric => ["oneOffLifestyle", "concessional"].includes(metric.key)).every(metric => scenarioSet.every(scenario => metric.value(scenario.summary || {}) === "None")) ? "<p>No one-off lifestyle expenses or extra concessional contribution events are included in these scenarios.</p>" : table(metrics.filter(metric => ["oneOffLifestyle", "concessional"].includes(metric.key)))}
+      </section>
+      ${semiComparisonReportDetail === "full" ? groups.map((group, index) => `<section class="semi-comparison-detail-group"><h2>Detailed group ${index + 1}: ${group.map(scenario => escapeHtml(scenario.name)).join(" · ")}</h2><p>Current Plan is repeated for reference.</p>${metrics.map(metric => `<section class="semi-retirement-print-breakdown"><h3>${escapeHtml(metric.label)}</h3><div class="semi-retirement-comparison-breakdown" style="--comparison-detail-columns:${group.length}">${group.map(scenario => `<article class="semi-retirement-comparison-breakdown-card"><h4>${escapeHtml(scenario.name)}</h4>${retirementScenarioSubtitle(scenario)}${semiRetirementComparisonBreakdownRows(metric.key, scenario).join("")}</article>`).join("")}</div></section>`).join("")}</section>`).join("") : ""}
+      <section class="semi-retirement-print-notes"><h2>Important information</h2>
+        <p>This report illustrates projected outcomes based on the information and assumptions entered. Results are estimates, not guaranteed outcomes, and do not replace professional financial, taxation or legal advice.</p>
+        <p>Currency note: lifestyle inputs are entered in today's dollars. Future balances and projected spending outputs are nominal future values. Property equity is not automatically available to fund spending unless a specific strategy releases it.</p>
+        <p>Super access ages are scenario assumptions, not a legal determination of eligibility. ${escapeHtml(CALC.getRuleGovernance().futureRuleAssumption)}</p>
+      </section>
+    </article>`;
+  }
+
+  function renderPortraitRetirementComparisonReport(scenarioSet, metrics) {
+    return `<article class="semi-retirement-comparison-print-report semi-comparison-portrait" aria-label="Retirement scenario comparison printable report">
+      <header class="semi-retirement-print-cover"><p>Financial Freedom</p><h1>Retirement Scenario Comparison</h1>
+        <p>Portrait report · ${scenarioSet.length - 1} alternatives · Generated ${escapeHtml(new Date().toLocaleString("en-AU"))}</p>
+        <p>Calculation version: ${escapeHtml(CALC.CALCULATION_VERSION)}</p>
+        ${carriedForwardRulesHtml(scenarioSet.map(scenario => scenario.result))}
+      </header>
+      <p>Each scenario is shown separately. Changes compare with Current Plan. Retirement balances relate to each scenario's own retirement year. Forecast-end values should be compared at matching years and ages.</p>
+      ${scenarioSet.map(scenario => `<section class="semi-portrait-scenario"><h2>${escapeHtml(scenario.name)}</h2>${retirementScenarioSubtitle(scenario)}
+        ${metrics.filter(metric => ["fullRetirement", "assetsAtRetirement", "accessibleLast", "fundingStatus", "firstShortfall", "projectionEndNetWorth"].includes(metric.key)).map(metric => `<div class="semi-portrait-outcome"><h3>${escapeHtml(metric.label)}</h3><p><strong>${escapeHtml(metric.value(scenario.summary || {}))}</strong></p>${scenario.isCurrent ? "" : `<p>${escapeHtml(metric.delta(scenarioSet[0].summary || {}, scenario.summary || {}))} vs Current Plan</p>`}</div>`).join("")}
+        <p>Forecast end: ${escapeHtml(String(scenario.viewModel?.keyResults?.projectionEnd?.calendarYear || "Not available"))} — ${escapeHtml(semiRetirementAgeList(scenario.viewModel?.keyResults?.projectionEnd?.ages || []))}. Future balances are nominal future dollars.</p>
+        <h3>Assumptions</h3><dl class="semi-portrait-assumptions">${(scenario.viewModel?.assumptions?.rows || []).map(row => `<div><dt>${escapeHtml(row.label)}</dt><dd>${escapeHtml(String(semiRetirementAssumptionValue(row)))}</dd></div>`).join("")}</dl>
+        ${metrics.filter(metric => semiComparisonReportDetail === "full" || ["oneOffLifestyle", "concessional"].includes(metric.key)).map(metric => `<div class="semi-portrait-detail"><h3>${escapeHtml(metric.label)}</h3>${semiRetirementComparisonBreakdownRows(metric.key, scenario).join("")}</div>`).join("")}
+      </section>`).join("")}
+      <section class="semi-retirement-print-notes"><h2>Important information</h2><p>${escapeHtml(modellingCopy().full)}</p><p>Property equity is not automatically available for retirement spending unless a specific sale or equity-release strategy is modelled. Super access ages are scenario assumptions, not a legal determination of eligibility.</p><p>${escapeHtml(CALC.getRuleGovernance().futureRuleAssumption)}</p></section>
+    </article>`;
+  }
+
   function renderSemiRetirementComparisonPrintReport(scenarioSet, metrics) {
+    if (usePortraitRetirementReport()) return renderPortraitRetirementComparisonReport(scenarioSet, metrics);
+    if (scenarioSet.length > 3) return renderWideRetirementComparisonReport(scenarioSet, metrics);
     const generated = new Date().toLocaleString();
     const planName = plan?.meta?.samplePlanName || [plan?.personal?.person1Name, plan?.personal?.person2Name].filter(Boolean).join(" and ") || "Financial Plan";
     return `
@@ -10182,25 +10269,34 @@
     const scenarioSet = semiRetirementComparisonScenarioSet(currentViewModel);
     const metrics = semiRetirementComparisonMetricDefinitions();
     return `
-      <section class="semi-retirement-results-section semi-retirement-comparison" data-semi-comparison>
+      <section class="semi-retirement-results-section semi-retirement-comparison" id="retirementComparison" data-semi-comparison data-mobile-view="${scenarioSet.length > 1 ? semiComparisonMobileView : "manage"}" data-mobile-all="${semiComparisonMobileSelection === "all"}" data-mobile-all-outcomes="${semiComparisonShowAllOutcomes}">
         <div class="card-subheading">
           <div>
             <h4>Scenario Comparison</h4>
             <p>Compare Current Plan with up to ${MAX_SEMI_RETIREMENT_COMPARISONS} Retirement Planning scenarios. Temporary comparisons and saved Retirement Planning scenarios use the same projection engine, and your Financial Plan is unchanged.</p>
           </div>
         </div>
+        ${scenarioSet.length > 1 ? `<div class="semi-comparison-mobile-tools"><label class="semi-comparison-mobile-picker">Compare Current Plan with
+            <select class="field-input" data-semi-mobile-comparison aria-label="Mobile comparison scenario">
+              ${scenarioSet.slice(1).map((scenario, index) => `<option value="${escapeHtml(scenario.id)}"${(semiComparisonMobileSelection === scenario.id || (!semiComparisonMobileSelection && index === 0)) ? " selected" : ""}>Current Plan + ${escapeHtml(scenario.name)}</option>`).join("")}
+              <option value="all"${semiComparisonMobileSelection === "all" ? " selected" : ""}>All scenarios (long view)</option>
+            </select><small>Choose one alternative to compare. Tap an outcome for its breakdown.</small>
+          </label>
+          <div class="semi-comparison-mobile-tabs" aria-label="Comparison tools">${[["results", "Results"], ["edit", "Edit selected"], ["manage", "Scenarios & PDF"]].map(([view, label]) => `<button class="btn btn-small" type="button" data-semi-action="mobile-comparison-view" data-mobile-view="${view}" aria-pressed="${semiComparisonMobileView === view}">${label}</button>`).join("")}</div>
+        </div>` : ""}
         ${renderSemiRetirementComparisonSelector()}
         ${semiRetirementComparisonErrors.length ? `<div class="tax-note mt-4" role="alert"><strong>Review comparison inputs</strong><ul>${semiRetirementComparisonErrors.map((error) => `<li>${escapeHtml(error.message)}</li>`).join("")}</ul></div>` : ""}
         ${scenarioSet.length > 1 ? `
-          ${renderSemiRetirementComparisonMainDifferences(scenarioSet)}
-          ${renderSemiRetirementComparisonControls()}
-          <div class="semi-retirement-comparison-table mt-4" data-comparison-count="${scenarioSet.length}">
+          <div data-mobile-panel="manage">${renderSemiRetirementComparisonMainDifferences(scenarioSet)}</div>
+          <div data-mobile-panel="edit">${renderSemiRetirementComparisonControls()}</div>
+          <div class="semi-retirement-comparison-table mt-4" data-mobile-panel="results" data-comparison-count="${scenarioSet.length}">
             <div class="semi-retirement-comparison-row semi-retirement-comparison-header" style="--semi-comparison-columns: ${scenarioSet.length};">
               <span>Outcome</span>
-              ${scenarioSet.map((scenario) => `<strong>${escapeHtml(scenario.name)}${retirementScenarioSubtitle(scenario)}</strong>`).join("")}
+              ${scenarioSet.map((scenario) => `<strong data-mobile-visible="${semiComparisonVisibleOnMobile(scenario)}">${escapeHtml(scenario.name)}${retirementScenarioSubtitle(scenario)}</strong>`).join("")}
             </div>
             ${metrics.map((metric) => renderSemiRetirementComparisonMetric(metric, scenarioSet)).join("")}
           </div>
+          <button class="btn semi-comparison-mobile-tools" type="button" data-semi-action="toggle-mobile-outcomes" aria-expanded="${semiComparisonShowAllOutcomes}">${semiComparisonShowAllOutcomes ? "Show key outcomes" : "Show all outcomes"}</button>
           <p class="semi-retirement-comparison-note mt-4">Differences are shown as facts compared with Current Plan. Projection results depend on the assumptions entered.</p>
           ${renderSemiRetirementComparisonPrintReport(scenarioSet, metrics)}
         ` : `
@@ -11214,6 +11310,7 @@
     semiRetirementComparisonInputs = null;
     semiRetirementComparisonErrors = [];
     semiRetirementComparisonScenarios = [];
+    semiComparisonMobileSelection = "";
     semiRetirementActiveComparisonId = "";
     selectedSavedRetirementScenarioId = "";
   }
@@ -11300,6 +11397,31 @@
     return Boolean(semiRetirementScenarioResult);
   }
 
+  function tryFiveRetirementAlternatives() {
+    if (!ensureSemiRetirementBaseResult()) return;
+    if (semiRetirementComparisonScenarios.length && !window.confirm("Replace the temporary comparison selection with five example alternatives? Saved scenarios and Current Plan will stay unchanged.")) return;
+    const base = cloneScenarioDraft(semiRetirementScenarioResultDraft || semiRetirementScenarioDraft);
+    clearSemiRetirementComparisonState();
+    const examples = [
+      ["Retire 3 years earlier", draft => draft.people.forEach(person => {
+        person.fullRetirementAge = Math.max(Number(person.currentAge), Number(person.fullRetirementAge) - 3);
+        person.semiRetirementAge = Math.min(Number(person.semiRetirementAge), Number(person.fullRetirementAge));
+      })],
+      ["Retire 3 years later", draft => draft.people.forEach(person => { person.fullRetirementAge = Math.min(Number(draft.projectionEndAge), Number(person.fullRetirementAge) + 3); })],
+      ["Spend 10% less in retirement", draft => { draft.household.fullRetirementLifestyleSpending = Math.round(Number(draft.household.fullRetirementLifestyleSpending) * 0.9); }],
+      ["Spend 10% more in retirement", draft => { draft.household.fullRetirementLifestyleSpending = Math.round(Number(draft.household.fullRetirementLifestyleSpending) * 1.1); }],
+      ["Invest $5,000 more a year", draft => { draft.accessibleInvestments.externalAnnualAccessibleContribution = (Number(draft.accessibleInvestments.externalAnnualAccessibleContribution) || 0) + 5000; }],
+    ];
+    examples.forEach(([name, change], index) => {
+      const draft = cloneScenarioDraft(base); change(draft);
+      addSemiRetirementComparisonScenario({ id: `example-comparison-${Date.now()}-${index}`, name, nameIsAutomatic: false, source: "temporary", draft }, { render: false });
+    });
+    semiRetirementActiveComparisonId = semiRetirementComparisonScenarios[0]?.id || "";
+    syncLegacySemiRetirementComparisonState(activeSemiRetirementComparisonScenario());
+    renderSemiRetirementScenario(calculatePlan(plan));
+    updateSaveStatus("Five example alternatives created from Current Plan. They are illustrative, not recommendations. Current Plan and saved scenarios are unchanged.");
+  }
+
   function createSemiRetirementComparisonScenario() {
     if (!ensureSemiRetirementBaseResult() || !window.FFSSemiRetirementUi || !window.FFSSemiRetirementProjection) return;
     const sourceDraft = semiRetirementScenarioResultDraft || semiRetirementScenarioDraft;
@@ -11368,6 +11490,7 @@
   function removeSemiRetirementComparisonScenario(id) {
     const scenario = semiRetirementComparisonScenarios.find((item) => item.id === id);
     semiRetirementComparisonScenarios = semiRetirementComparisonScenarios.filter((item) => item.id !== id);
+    if (semiComparisonMobileSelection === id) semiComparisonMobileSelection = "";
     if (semiRetirementActiveComparisonId === id) {
       semiRetirementActiveComparisonId = semiRetirementComparisonScenarios[0]?.id || "";
     }
@@ -12373,7 +12496,15 @@
       updateSaveStatus("Add at least one comparison scenario before exporting.");
       return;
     }
+    runSemiRetirementComparison({ render: false });
+    if (semiRetirementComparisonScenarios.some(scenario => scenario.errors?.length || !scenario.result)) {
+      updateSaveStatus("Review comparison inputs before exporting.");
+      return;
+    }
+    renderSemiRetirementScenario(calculatePlan(plan));
     updateSaveStatus("Use the print dialog to save the retirement comparison as PDF.");
+    document.body.dataset.comparisonWide = !usePortraitRetirementReport() && semiRetirementComparisonScenarios.length >= 3 ? "true" : "false";
+    document.body.dataset.comparisonPortrait = usePortraitRetirementReport() ? "true" : "false";
     printWithMode("retirement-comparison");
   }
 
@@ -17366,6 +17497,22 @@
         target.value = "";
         return;
       }
+      if (target.dataset.semiReportLayout !== undefined) {
+        runSemiRetirementComparison({ render: false });
+        semiComparisonReportLayout = ["portrait", "side-by-side"].includes(target.value) ? target.value : "auto";
+        renderSemiRetirementScenario(calculatePlan(plan)); return;
+      }
+      if (target.dataset.semiReportDetail !== undefined) {
+        runSemiRetirementComparison({ render: false });
+        semiComparisonReportDetail = target.value === "full" ? "full" : "overview";
+        renderSemiRetirementScenario(calculatePlan(plan)); return;
+      }
+      if (target.dataset.semiMobileComparison !== undefined) {
+        runSemiRetirementComparison({ render: false });
+        semiComparisonMobileSelection = target.value;
+        if (semiRetirementComparisonScenarios.some(scenario => scenario.id === target.value)) semiRetirementActiveComparisonId = target.value;
+        renderSemiRetirementScenario(calculatePlan(plan)); return;
+      }
       if (target.dataset.retirementGoalAge !== undefined) {
         const age = Number(target.value);
         if (!Number.isFinite(age) || age <= 0 || !Number.isInteger(age) || age < Number(plan.personal.person1Age) || age > 110) { target.setCustomValidity("Enter an age from your current age to 110."); target.reportValidity(); return; }
@@ -17719,11 +17866,22 @@
         if (semiAction.dataset.semiAction === "calculate") calculateSemiRetirementScenario();
         if (semiAction.dataset.semiAction === "reset") resetSemiRetirementScenario();
         if (semiAction.dataset.semiAction === "reset-adjustments") resetSemiRetirementAdjustments();
+        if (semiAction.dataset.semiAction === "demo-comparisons") tryFiveRetirementAlternatives();
         if (semiAction.dataset.semiAction === "compare") createSemiRetirementComparisonScenario();
         if (semiAction.dataset.semiAction === "reset-comparison") resetSemiRetirementComparison();
+        if (semiAction.dataset.semiAction === "set-active-comparison") { semiComparisonMobileView = "edit"; semiComparisonMobileSelection = semiAction.dataset.comparisonId; }
         if (semiAction.dataset.semiAction === "set-active-comparison") setActiveSemiRetirementComparisonScenario(semiAction.dataset.comparisonId);
         if (semiAction.dataset.semiAction === "remove-comparison") removeSemiRetirementComparisonScenario(semiAction.dataset.comparisonId);
         if (semiAction.dataset.semiAction === "add-saved-comparison") addSelectedSavedRetirementScenarioToComparison();
+        if (semiAction.dataset.semiAction === "mobile-comparison-view") {
+          runSemiRetirementComparison({ render: false });
+          semiComparisonMobileView = ["results", "edit", "manage"].includes(semiAction.dataset.mobileView) ? semiAction.dataset.mobileView : "results";
+          renderSemiRetirementScenario(calculatePlan(plan));
+        }
+        if (semiAction.dataset.semiAction === "toggle-mobile-outcomes") {
+          semiComparisonShowAllOutcomes = !semiComparisonShowAllOutcomes;
+          renderSemiRetirementScenario(calculatePlan(plan));
+        }
         if (semiAction.dataset.semiAction === "export-comparison-pdf") printSemiRetirementComparisonPdf();
         if (semiAction.dataset.semiAction === "view-living-expenses") viewFinancialPlanLivingExpenses();
         if (semiAction.dataset.semiAction === "use-plan-living-expenses") useFinancialPlanLivingExpensesForSemiRetirementScenario();

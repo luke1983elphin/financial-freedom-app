@@ -104,8 +104,8 @@ test("Stage G2H sample selector is viewport-safe and keeps accessible touch targ
   assert.match(appSource, /closeSamplePlanMenus\(\)/);
 });
 
-test("Stage G2H Retirement Planning comparison supports Current plus up to three scenarios", () => {
-  assert.match(appSource, /const MAX_SEMI_RETIREMENT_COMPARISONS = 3/);
+test("Stage G2H Retirement Planning comparison supports Current plus up to five scenarios", () => {
+  assert.match(appSource, /const MAX_SEMI_RETIREMENT_COMPARISONS = 5/);
   assert.match(appSource, /let semiRetirementComparisonScenarios = \[\]/);
   assert.match(appSource, /function addSemiRetirementComparisonScenario/);
   assert.match(appSource, /requestSemiRetirementComparisonReplacement/);
@@ -239,4 +239,65 @@ test("Stage G2H mobile comparison stacks selected scenarios without page-level h
 
 test("Stage G2H package scripts include the focused regression", () => {
   assert.match(packageSource, /"test:stage-g2h": "node scripts\/run-tests\.mjs --group stage-g2h"/);
+});
+
+function presentationFunction(name) {
+  const start = appSource.indexOf(`  function ${name}(`);
+  assert.ok(start >= 0, name);
+  const next = appSource.indexOf("\n  function ", start + 1);
+  return appSource.slice(start, next < 0 ? undefined : next);
+}
+
+test("mobile comparison selection consistently filters cells and breakdowns without changing scenarios", () => {
+  const scenarios = [{ id: "base", isCurrent: true }, { id: "earlier" }, { id: "later" }];
+  const before = JSON.stringify(scenarios);
+  const ctx = { semiComparisonMobileSelection: "", semiRetirementComparisonScenarios: scenarios.slice(1) };
+  vm.runInNewContext(presentationFunction("semiComparisonVisibleOnMobile"), ctx);
+  assert.deepEqual(scenarios.map(ctx.semiComparisonVisibleOnMobile), [true, true, false]);
+  ctx.semiComparisonMobileSelection = "later";
+  assert.deepEqual(scenarios.map(ctx.semiComparisonVisibleOnMobile), [true, false, true]);
+  ctx.semiComparisonMobileSelection = "all";
+  assert.deepEqual(scenarios.map(ctx.semiComparisonVisibleOnMobile), [true, true, true]);
+  assert.equal(JSON.stringify(scenarios), before);
+});
+
+test("portrait report automatically follows phone width and honours explicit desktop/portrait choices", () => {
+  let phone = true;
+  const ctx = { semiComparisonReportLayout: "auto", window: { matchMedia: () => ({ matches: phone }) } };
+  vm.runInNewContext(presentationFunction("usePortraitRetirementReport"), ctx);
+  assert.equal(ctx.usePortraitRetirementReport(), true);
+  phone = false;
+  assert.equal(ctx.usePortraitRetirementReport(), false);
+  ctx.semiComparisonReportLayout = "portrait";
+  assert.equal(ctx.usePortraitRetirementReport(), true);
+  phone = true; ctx.semiComparisonReportLayout = "side-by-side";
+  assert.equal(ctx.usePortraitRetirementReport(), false);
+});
+
+test("portrait report includes every scenario, its own inputs, milestones and disclosures regardless of mobile selection", () => {
+  const escape = value => String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll('"', "&quot;");
+  const ctx = { escapeHtml: escape, semiComparisonReportDetail: "overview", CALC: { CALCULATION_VERSION: "test", getRuleGovernance: () => ({ futureRuleAssumption: "Future rules held" }) }, carriedForwardRulesHtml: () => "<p>Held rules disclosure</p>", retirementScenarioSubtitle: scenario => `<p>${escape(scenario.name)} retirement summary</p>`, semiRetirementAgeList: () => "Alex 91 / Jordan 90", semiRetirementAssumptionValue: row => row.value, semiRetirementComparisonBreakdownRows: (_key, scenario) => [`<p>${scenario.id} event details</p>`], modellingCopy: () => ({ full: "Educational modelling only. Not financial advice." }) };
+  vm.runInNewContext(presentationFunction("renderPortraitRetirementComparisonReport"), ctx);
+  const scenarios = ["Current Plan", "Earlier <custom>", "Downsize", "Spend less", "Invest more", "Later"].map((name, i) => ({ name, id: `s${i}`, isCurrent: i === 0, summary: { amount: 100 + i }, viewModel: { assumptions: { rows: [{ label: "Annual investing", value: i * 1000 }] }, keyResults: { projectionEnd: { calendarYear: 2085, ages: [] } } } }));
+  const before = JSON.stringify(scenarios);
+  const metrics = [{ key: "assetsAtRetirement", label: "Assets at full retirement", value: s => String(s.amount), delta: (base, item) => String(item.amount - base.amount) }, { key: "oneOffLifestyle", label: "Events", value: () => "None" }];
+  const html = ctx.renderPortraitRetirementComparisonReport(scenarios, metrics);
+  assert.equal((html.match(/class="semi-portrait-scenario"/g) || []).length, 6);
+  for (let i = 0; i < 6; i++) { assert.ok(html.includes(`<strong>${100 + i}</strong>`)); assert.ok(html.includes(`<dd>${i * 1000}</dd>`)); assert.ok(html.includes(`s${i} event details`)); }
+  assert.ok(html.includes("Earlier &lt;custom>")); assert.ok(!html.includes("Earlier <custom>"));
+  assert.ok(html.includes("Held rules disclosure")); assert.ok(html.includes("Future rules held")); assert.ok(html.includes("Not financial advice"));
+  assert.equal(JSON.stringify(scenarios), before);
+});
+
+test("export recalculates edited comparisons before rendering and blocks invalid comparison inputs", () => {
+  const events = [];
+  const ctx = { semiRetirementScenarioResult: {}, semiRetirementComparisonScenarios: [{ result: {}, errors: [] }], runSemiRetirementComparison: () => events.push("recalculate"), renderSemiRetirementScenario: () => events.push("render"), calculatePlan: () => ({}), plan: {}, updateSaveStatus: () => {}, usePortraitRetirementReport: () => true, document: { body: { dataset: {} } }, printWithMode: () => events.push("print") };
+  vm.runInNewContext(presentationFunction("printSemiRetirementComparisonPdf"), ctx);
+  ctx.printSemiRetirementComparisonPdf();
+  assert.deepEqual(events, ["recalculate", "render", "print"]);
+  assert.equal(ctx.document.body.dataset.comparisonWide, "false");
+  assert.equal(ctx.document.body.dataset.comparisonPortrait, "true");
+  events.length = 0; ctx.semiRetirementComparisonScenarios[0].errors = [{ message: "Invalid retirement age" }];
+  ctx.printSemiRetirementComparisonPdf();
+  assert.deepEqual(events, ["recalculate"]);
 });

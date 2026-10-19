@@ -9812,3 +9812,111 @@ body.scenario-save-modal-open {
 .nav-more[open] > .nav-more-toggle > span { transform: rotate(180deg); }
 @media (max-width: 600px) { .review-key-assumptions, .review-detail-rows { grid-template-columns: minmax(0, 1fr); } .review-key-assumptions .field-label { min-height: 0; } }
 @media (prefers-reduced-motion: no-preference) { .review-advanced[open] .review-advanced-content { animation: review-reveal 160ms ease-out; } @keyframes review-reveal { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } } }
+
+/* Multi-scenario preview: screen stays responsive; wide print uses landscape. */
+.semi-comparison-export-choice { display:grid; gap:8px; margin:16px 0; }
+.semi-comparison-export-choice small, .semi-comparison-mobile-picker small { color:#64748b; }
+.semi-comparison-mobile-picker { display:none; }
+@media (min-width:701px) {
+  .semi-retirement-comparison-table { overflow-x:auto; }
+  .semi-retirement-comparison-table[data-comparison-count="5"] > *,
+  .semi-retirement-comparison-table[data-comparison-count="6"] > * { min-width:1100px; }
+}
+@media (max-width:700px) {
+  .semi-comparison-mobile-picker { display:grid; gap:8px; margin:12px 0; }
+  .semi-retirement-comparison-cell[data-mobile-visible="false"] { display:none; }
+}
+@media print {
+  @page retirement-wide { size:A4 landscape; margin:12mm; }
+  body[data-print-mode="retirement-comparison"][data-comparison-wide="true"] { page:retirement-wide; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide { font-size:10pt; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide .semi-retirement-print-cover { margin-bottom:4mm; padding-bottom:3mm; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide .semi-retirement-print-cover h1 { font-size:24px; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide .semi-retirement-print-table { table-layout:fixed; font-size:9pt; margin-bottom:4mm; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide .semi-retirement-print-table th:first-child { width:16%; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide .semi-retirement-print-table :is(th,td) { padding:5px; overflow-wrap:anywhere; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide .semi-retirement-print-table tr { break-inside:avoid; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide .retirement-scenario-summary { font-size:8pt; line-height:1.3; font-weight:normal; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide :is(.semi-comparison-differences,.semi-comparison-assumption-summary,.semi-comparison-detail-group) { break-before:page; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide .semi-retirement-main-differences > div { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:5mm; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide .semi-retirement-main-differences article { break-inside:avoid; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide .semi-retirement-main-differences h5 { display:none; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide .semi-retirement-comparison-breakdown { grid-template-columns:repeat(var(--comparison-detail-columns,3),minmax(0,1fr)); }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide .semi-retirement-print-breakdown { break-inside:avoid; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide .semi-retirement-print-notes { break-inside:avoid; font-size:9pt; }
+  .semi-comparison-common-assumptions { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:3mm; margin-bottom:6mm; }
+  .semi-comparison-common-assumptions span { border-bottom:1px solid #e2e8f0; padding:3px; }
+}
+
+@media print {
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide .semi-retirement-print-table { line-height:1.2; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide .semi-retirement-print-table :is(th,td) { padding:4px; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide .retirement-scenario-summary { margin:2px 0; line-height:1.2; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide .semi-retirement-comparison-breakdown-card { gap:4px; padding:6px; font-size:9pt; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide .semi-retirement-comparison-breakdown-card div { grid-template-columns:minmax(0,1fr) auto; gap:4px 8px; padding-top:4px; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide .semi-retirement-comparison-breakdown-card :is(span,small) { font-size:9pt; font-weight:normal; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide .semi-retirement-comparison-breakdown-card small { grid-column:1 / -1; }
+}
+@media print {
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide .semi-retirement-comparison-breakdown { display:table !important; table-layout:fixed; width:100%; border-spacing:3mm 0; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide .semi-retirement-comparison-breakdown-card { display:table-cell; vertical-align:top; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide .semi-retirement-comparison-breakdown-card div { display:block; padding:4px 0; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide .semi-retirement-comparison-breakdown-card :is(span,strong,small) { display:block; overflow-wrap:anywhere; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-wide .semi-retirement-comparison-breakdown-card strong { margin-top:2px; }
+}
+
+/* Phone comparisons keep reading, editing and management separate. */
+.semi-comparison-mobile-tools { display:none; }
+@media screen and (max-width:700px) {
+  #retirementComparison { scroll-margin-top:110px; }
+  .semi-comparison-mobile-tools { display:block; margin:12px 0; }
+  .semi-comparison-mobile-tabs { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
+  .semi-comparison-mobile-tabs .btn { min-height:44px; padding:8px 5px; white-space:normal; }
+  .semi-comparison-mobile-tabs [aria-pressed="true"] { background:#0f766e; color:white; }
+  [data-semi-comparison][data-mobile-view="results"] [data-mobile-panel]:not([data-mobile-panel="results"]),
+  [data-semi-comparison][data-mobile-view="edit"] [data-mobile-panel]:not([data-mobile-panel="edit"]),
+  [data-semi-comparison][data-mobile-view="manage"] [data-mobile-panel]:not([data-mobile-panel="manage"]) { display:none; }
+  [data-semi-comparison][data-mobile-view]:not([data-mobile-view="results"]) > button[data-semi-action="toggle-mobile-outcomes"] { display:none; }
+  [data-semi-comparison] [data-mobile-visible="false"] { display:none; }
+  [data-semi-comparison][data-mobile-all-outcomes="false"] [data-mobile-primary="false"] { display:none; }
+  [data-semi-comparison] .semi-retirement-comparison-header,
+  [data-semi-comparison] .semi-retirement-comparison-summary-row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; padding:12px; }
+  [data-semi-comparison] .semi-retirement-comparison-header > span,
+  [data-semi-comparison] .semi-retirement-comparison-label { grid-column:1 / -1; }
+  [data-semi-comparison] .semi-retirement-comparison-cell::before { content:none; }
+  [data-semi-comparison] .semi-retirement-comparison-header strong { min-width:0; font-size:13px; overflow-wrap:anywhere; }
+  [data-semi-comparison] .semi-retirement-comparison-header .retirement-scenario-summary { font-size:12px; font-weight:normal; }
+  [data-semi-comparison] .semi-retirement-comparison-cell { font-size:14px; line-height:1.45; border:0; padding:0; }
+  [data-semi-comparison] .semi-retirement-comparison-cell small { font-weight:normal; }
+  [data-semi-comparison][data-mobile-all="true"] .semi-retirement-comparison-summary-row { grid-template-columns:minmax(0,1fr); }
+  [data-semi-comparison][data-mobile-all="true"] .semi-retirement-comparison-header { display:none; }
+  [data-semi-comparison][data-mobile-all="true"] .semi-retirement-comparison-cell::before { content:attr(data-scenario-label); }
+  [data-semi-comparison] .semi-retirement-comparison-breakdown { grid-template-columns:minmax(0,1fr); }
+  [data-semi-comparison] .semi-retirement-comparison-selector .field-input { width:100%; min-width:0; }
+}
+@media print {
+  @page retirement-portrait { size:A4 portrait; margin:14mm; }
+  body[data-print-mode="retirement-comparison"][data-comparison-portrait="true"] { page:retirement-portrait; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-portrait { font-size:11pt; line-height:1.4; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-portrait .semi-portrait-scenario { break-before:page; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-portrait :is(h2,h3) { break-after:avoid; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-portrait h3 { font-size:12pt; margin:3mm 0 1mm; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-portrait p { margin:1mm 0 3mm; }
+  .semi-portrait-outcome, .semi-portrait-assumptions > div, .semi-portrait-detail > div { break-inside:avoid; border-bottom:1px solid #e2e8f0; padding:2mm 0; }
+  .semi-portrait-assumptions { margin:0; }
+  .semi-portrait-assumptions > div { display:table; table-layout:fixed; width:100%; }
+  .semi-portrait-assumptions :is(dt,dd) { display:table-cell; width:50%; margin:0; overflow-wrap:anywhere; }
+  .semi-portrait-detail :is(span,strong,small) { display:block; }
+}
+.semi-comparison-mobile-milestone { display:none; }
+@media screen and (max-width:700px) {
+  .semi-retirement-comparison-cell .semi-comparison-mobile-milestone { display:block; }
+  .semi-retirement-comparison-cell .semi-comparison-desktop-milestone { display:none; }
+}
+@media print {
+  body[data-print-mode="retirement-comparison"] .semi-comparison-portrait .semi-portrait-scenario:first-of-type { break-before:auto; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-portrait .semi-retirement-print-notes { break-inside:avoid; }
+}
+@media print {
+  body[data-print-mode="retirement-comparison"] .semi-comparison-portrait .semi-portrait-scenario { break-before:auto; }
+}
