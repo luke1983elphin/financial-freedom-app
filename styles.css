@@ -9917,3 +9917,6 @@ body.scenario-save-modal-open {
   body[data-print-mode="retirement-comparison"] .semi-comparison-portrait .semi-portrait-scenario:first-of-type { break-before:auto; }
   body[data-print-mode="retirement-comparison"] .semi-comparison-portrait .semi-retirement-print-notes { break-inside:avoid; }
 }
+@media print {
+  body[data-print-mode="retirement-comparison"] .semi-comparison-portrait .semi-portrait-scenario { break-before:auto; }
+}
