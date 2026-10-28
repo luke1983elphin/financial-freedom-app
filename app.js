@@ -1530,6 +1530,8 @@
     const incomeResolution = resolveScenarioIncome(basePlan, adjustments);
     const incomeChange = incomeResolution.amount;
     const expenseChange = (Number(adjustments.expenseChange) || 0) + (Number(adjustments.otherExpenseAnnualChange) || 0);
+    const availableSpending = Math.max(0, CALC.annualRecurringExpenses(basePlan));
+    if (expenseChange < -availableSpending) throw scenarioInputError(`Expense reductions cannot exceed the available recurring spending of ${money(availableSpending)} per year.`);
     const repaymentChange = Number(adjustments.loanRepaymentChangeMonthly) || 0;
     const loanRateChange = Number(adjustments.loanInterestRateChangePct) || 0;
     const helpBalanceChange = Number(adjustments.helpBalanceChange) || 0;

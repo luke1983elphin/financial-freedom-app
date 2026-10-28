@@ -19,6 +19,19 @@ test('F7 zero and negative forecasts survive; only missing/non-finite values fal
 });
 const mortgage = (id, frequency, divisor) => ({ id, name: id, type: 'homeLoan', balance: 200000, repayment: 12000 / divisor, repaymentFrequency: frequency, interestRatePct: 0, termYears: 30 });
 
+test('F8 expense reductions cannot exceed the active recurring spending base', () => {
+  const p = controlledPlan(CALC), original = JSON.stringify(p);
+  assert.throws(() => apply(p, { expenseChange: -50000 }), /40,000/);
+  assert.throws(() => apply(p, { expenseChange: -30000, otherExpenseAnnualChange: -20000 }), /40,000/);
+  p.expenseItems.push({ id: 'inactive', amount: 20000, frequency: 'annually', active: false });
+  assert.throws(() => apply(p, { expenseChange: -50000 }), /40,000/);
+  p.expenseItems.pop();
+  const r = calc(apply(p, { expenseChange: -40000 }));
+  close(r.annualLivingExpenses, 0);
+  close(r.finalProjectedCashSurplus - calc(p).finalProjectedCashSurplus, 40000);
+  assert.equal(JSON.stringify(p), original);
+});
+
 test('F6 retirement-backed projections label one, five and ten completed periods consistently', () => {
   const p = controlledPlan(CALC);
   p.personal.retirementTiming = { version: 1, people: [{ id: 'person1', fullRetirementAge: 65, hasSemiRetirement: false }] };
