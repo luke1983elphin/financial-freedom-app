@@ -50,6 +50,66 @@ test('F6 retirement-backed projections label one, five and ten completed periods
   }
 });
 
+test('F6/F7 already-retired withdrawals reach a genuine zero after ten completed years', () => {
+  const p = controlledPlan(CALC);
+  Object.assign(p.personal, { person1Age: 70, fullRetirementAge: 70, targetAnnualSpending: 10000 });
+  p.personal.retirementTiming = { version: 1, people: [{ id: 'person1', alreadyRetired: true, fullRetirementAge: 70, hasSemiRetirement: false }] };
+  p.incomeItems = [];
+  p.assetItems = [{ id: 'cash', category: 'cash', value: 100000 }];
+  p.expenseItems[0].amount = 10000;
+  const r = calc(p);
+  for (const year of [1, 5, 10]) {
+    close(app.get('netWorthAtYear')(r, year), Math.max(0, 100000 - 10000 * year));
+    close(r.netWorthProjection[year - 1].closingBalance, r.retirementProjection.years[year - 1].household.totalNetWorth);
+  }
+});
+
+test('F6 annual retirement ledgers reconcile across sample households and supported changes', t => {
+  let checks = 0;
+  const check = (actual, expected) => { close(actual, expected, .05); checks++; };
+  for (const sample of context.FFS_DATA.samplePlans) {
+    const p = CALC.clonePlan(sample.plan), ui = context.FFSSemiRetirementUi;
+    const draft = ui.buildSemiRetirementScenarioDefaults(app.get('legacyCalculationProjection')(p), calc(p)).draft;
+    ui.saveRetirementTiming(p, draft.people);
+    for (const action of app.get('whatIfActions')) {
+      const adjustments = action.adjustments(calc(p));
+      const income = app.get('eligibleScenarioIncomes')(p, adjustments.incomeEmploymentOnly)[0];
+      const loan = app.get('eligibleScenarioLoans')(p)[0];
+      if (income) adjustments.incomeItemId = income.id;
+      if (loan) adjustments.loanId = loan.id;
+      let r;
+      try { r = calc(apply(p, adjustments)); }
+      catch (error) { assert.equal(error.code, 'scenario-input'); continue; }
+      for (const row of r.retirementProjection.years) {
+        const h = row.household;
+        check(h.totalNetWorth, h.totalAccessibleAssets + h.totalSuperBalance + row.assets.filter(a => a.includeInNetWorth && !a.isAccessibleAsset).reduce((s, a) => s + a.closingValue, 0) - h.totalDebt);
+        for (const person of row.people) {
+          check(person.closingSuperBalance, person.openingSuperBalance + person.employerSuperContribution + person.additionalSuperContribution + person.downsizerSuperContribution - person.superContributionsTax + person.superInvestmentEarnings - person.superFees - person.superWithdrawal);
+          check(person.netEmploymentIncome, person.totalCashIncomeBeforeTax - person.incomeTax - person.medicareLevy - person.medicareLevySurcharge - person.stslRepayment);
+        }
+        for (const debt of row.liabilities) check(debt.closingBalance, debt.openingBalance + debt.interestCharged - debt.totalRepayment);
+        const a = h.accessibleReconciliation;
+        check(a.closingBalance, a.openingBalance + a.householdSurplusContribution + a.externalAnnualAccessibleContribution + a.oneOffIncomeAccessibleContribution + a.downsizeAccessibleInvestmentContribution + a.investmentEarnings - a.totalAccessibleInvestmentWithdrawal - a.fees);
+      }
+    }
+  }
+  assert.ok(checks > 10000, `${checks} reconciled identities`);
+  t.diagnostic(`${checks} annual ledger identities reconciled`);
+});
+
+test('F5 unsaved detailed adjustments and preview leave persisted plan bytes unchanged', () => {
+  const isolated = loadTryChangeApp(), a = isolated.app;
+  a.setPlan(controlledPlan(isolated.CALC));
+  a.get('saveDraft')();
+  const before = JSON.stringify([...isolated.context.localStorage.map.entries()]);
+  const planBefore = JSON.stringify(a.getPlan());
+  a.comparison({ expenseChange: -5200, investmentContributionChange: 5200 });
+  a.get('buildComparisonPlan')();
+  a.get('buildDecisionScenarioSaveContext')('custom');
+  assert.equal(JSON.stringify([...isolated.context.localStorage.map.entries()]), before);
+  assert.equal(JSON.stringify(a.getPlan()), planBefore);
+});
+
 for (const [frequency, divisor] of [['weekly', 52], ['fortnightly', 26], ['monthly', 12], ['annually', 1]]) {
   test(`F1 $500/month is $6000/year for ${frequency} mortgage`, () => {
     const p = controlledPlan(CALC); p.liabilityItems = [mortgage('home', frequency, divisor)];
