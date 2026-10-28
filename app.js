@@ -1563,8 +1563,22 @@
     scenarioPlan.liabilities.hecsHelpDebt = addAmount(scenarioPlan.liabilities.hecsHelpDebt, helpBalanceChange);
     scenarioPlan.assets.cash = addAmount(scenarioPlan.assets.cash, cashChange, -Infinity);
     if (cashChange && Array.isArray(scenarioPlan.assetItems)) {
-      const cashItem = scenarioPlan.assetItems.find((item) => item.category === "cash");
-      if (cashItem) cashItem.value = addAmount(cashItem.value, cashChange, -Infinity);
+      const cashItems = scenarioPlan.assetItems.filter(item => item.category === "cash" && CALC.isActiveFinancialRecord(item));
+      const availableCash = cashItems.reduce((sum, item) => sum + Math.max(0, Number(item.value) || 0), 0);
+      if (cashChange < 0 && -cashChange > availableCash + 0.005) {
+        throw scenarioInputError(`One-off costs leave ${money(-cashChange - availableCash)} unfunded. Only ${money(availableCash)} cash is available. Specify funding in your plan before modelling this transaction; no loan or investment sale has been assumed.`);
+      }
+      if (cashChange > 0) {
+        if (cashItems.length) cashItems[0].value = addAmount(cashItems[0].value, cashChange);
+        else scenarioPlan.assetItems.push({ id: makeId("scenario-cash"), name: "Scenario cash", category: "cash", value: cashChange });
+      } else {
+        let remaining = -cashChange;
+        cashItems.forEach(item => {
+          const paid = Math.min(Math.max(0, Number(item.value) || 0), remaining);
+          item.value = Math.max(0, Number(item.value) || 0) - paid;
+          remaining -= paid;
+        });
+      }
     }
     return scenarioPlan;
   }

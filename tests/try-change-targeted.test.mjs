@@ -54,3 +54,18 @@ test('F2 couples must select an existing income owner; frequency and joint tax-f
   close(calc(t).taxEstimate.totalTax, calc(p).taxEstimate.totalTax);
   assert.throws(() => apply(p, { incomeChange: -60000, incomeItemId: 'partner' }), /exceeds/);
 });
+
+for (const cash of [10000, 0]) test(`F3 $50000 cost with $${cash} cash reports the full shortfall`, () => {
+  const p = controlledPlan(CALC); p.assetItems[0].value = cash;
+  assert.throws(() => apply(p, { oneOffCosts: 50000 }), new RegExp((50000 - cash).toLocaleString('en-AU')));
+  assert.equal(p.assetItems[0].value, cash);
+});
+test('F3 missing cash cannot hide a cost; funded costs consume only cash once', () => {
+  const p = controlledPlan(CALC); p.assetItems = p.assetItems.filter(item => item.category !== 'cash');
+  assert.throws(() => apply(p, { oneOffCosts: 50000 }), /unfunded/);
+  p.assetItems.push({ id: 'a', category: 'cash', value: 20000 }, { id: 'b', category: 'cash', value: 40000 });
+  const q = apply(p, { oneOffCosts: 50000 });
+  close(calc(q).currentNetWorth - calc(p).currentNetWorth, -50000);
+  assert.equal(q.assetItems[0].value, 100000);
+  close(q.assetItems.filter(a => a.category === 'cash').reduce((s, a) => s + a.value, 0), 10000);
+});
