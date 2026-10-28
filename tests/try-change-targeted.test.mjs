@@ -9,6 +9,24 @@ const close = (actual, expected, tolerance = .51) => assert.ok(Math.abs(actual -
 const forecast = r => JSON.stringify({ cash: r.finalProjectedCashSurplus, worth: r.netWorthProjection, investments: r.investmentProjection, super: r.superProjection });
 const mortgage = (id, frequency, divisor) => ({ id, name: id, type: 'homeLoan', balance: 200000, repayment: 12000 / divisor, repaymentFrequency: frequency, interestRatePct: 0, termYears: 30 });
 
+test('F6 retirement-backed projections label one, five and ten completed periods consistently', () => {
+  const p = controlledPlan(CALC);
+  p.personal.retirementTiming = { version: 1, people: [{ id: 'person1', fullRetirementAge: 65, hasSemiRetirement: false }] };
+  const b = calc(p), r = calc(apply(p, { investmentContributionChange: 5200 }));
+  assert.ok(r.retirementProjection);
+  for (const years of [1, 5, 10]) {
+    close(r.investmentProjection[years - 1].closingBalance - b.investmentProjection[years - 1].closingBalance, 5200 * years);
+    const raw = r.retirementProjection.years[years - 1];
+    for (const key of ['investmentProjection', 'superProjection', 'netWorthProjection', 'accumulationCashflowProjection', 'financialFreedomProgressProjection']) {
+      assert.equal(r[key][years - 1].year, years);
+      assert.equal(r[key][years - 1].age, 43 + years);
+    }
+    close(r.netWorthProjection[years - 1].closingBalance, raw.household.totalNetWorth);
+    close(r.superProjection[years - 1].closingBalance, raw.household.totalSuperBalance);
+    assert.equal(raw.person1Age, 43 + years - 1, 'engine retains start-of-period ages');
+  }
+});
+
 for (const [frequency, divisor] of [['weekly', 52], ['fortnightly', 26], ['monthly', 12], ['annually', 1]]) {
   test(`F1 $500/month is $6000/year for ${frequency} mortgage`, () => {
     const p = controlledPlan(CALC); p.liabilityItems = [mortgage('home', frequency, divisor)];

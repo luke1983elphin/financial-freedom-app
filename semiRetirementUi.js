@@ -865,15 +865,17 @@
     if (!outcome.validation?.isValid || !outcome.result?.validation?.isValid) return result;
     const rate = number(plan.investing?.safeWithdrawalRatePct, 4) / 100 || .04;
     const currentAge = number(plan.personal?.person1Age);
-    const rows = outcome.result.years.filter(row => number(row.person1Age) > currentAge);
-    const investmentProjection = rows.map(row => ({ year: number(row.person1Age) - currentAge, age: number(row.person1Age),
+    // Engine rows use opening ages and contain one completed year each.
+    const rows = outcome.result.years;
+    const completedYears = row => number(row.person1Age) - currentAge + 1;
+    const investmentProjection = rows.map(row => ({ year: completedYears(row), age: number(row.person1Age) + 1,
       openingBalance: row.household.openingAccessibleInvestmentBalance, annualContribution: row.household.accessibleInvestmentContribution,
       growth: row.household.accessibleInvestmentEarnings, closingBalance: Math.max(0, row.household.totalAccessibleAssets - row.household.offsetClosingBalance),
       passiveIncome: row.household.totalAccessibleAssets * rate }));
-    const superProjection = rows.map(row => ({ year: number(row.person1Age) - currentAge, age: number(row.person1Age),
+    const superProjection = rows.map(row => ({ year: completedYears(row), age: number(row.person1Age) + 1,
       closingBalance: row.household.totalSuperBalance, annualContribution: row.people.reduce((total, person) => total + person.netEmployerSuperContribution + person.netAdditionalSuperContribution, 0) }));
     const fiRows = rows.map(row => {
-      const year = number(row.person1Age) - currentAge;
+      const year = completedYears(row);
       const accessibleSuper = row.people.filter(person => person.age >= person.superAccessAge).reduce((total, person) => total + person.closingSuperBalance, 0);
       const investmentDebt = row.liabilities.filter(debt => ["investmentLoan", "shareInvestmentLoan", "managedFundLoan"].includes(debt.type)).reduce((total, debt) => total + debt.closingBalance, 0);
       const accessibleFiAssets = Math.max(0, row.household.totalAccessibleAssets - investmentDebt) + accessibleSuper;
@@ -881,7 +883,7 @@
       const principalResidenceEquity = row.properties.filter(property => propertyTypeGroup(property.type) === "principal-residence").reduce((total, property) => total + property.propertyEquity, 0);
       const spending = nonNegative(plan.personal?.targetAnnualSpending) * Math.pow(1 + number(plan.investing?.inflationPct) / 100, year);
       const requiredCapital = spending / rate;
-      return { year, age: number(row.person1Age), accessibleFiAssets, netFiAssets: accessibleFiAssets, accessibleSuper,
+      return { year, age: number(row.person1Age) + 1, accessibleFiAssets, netFiAssets: accessibleFiAssets, accessibleSuper,
         inaccessibleSuper: row.household.totalSuperBalance - accessibleSuper, investmentPropertyEquity, principalResidenceEquity,
         totalFiWealth: accessibleFiAssets + investmentPropertyEquity, estimatedSustainableIncome: accessibleFiAssets * rate,
         inflatedAnnualLifestyleSpending: spending, requiredCapital, progress: requiredCapital > 0 ? Math.min(200, accessibleFiAssets / requiredCapital * 100) : 0 };
@@ -902,11 +904,11 @@
       totalRetirementAssets, retirementSustainability,
       targetAgeNetFiAssets: targetRow?.accessibleFiAssets || 0, targetAgeEstimatedSustainableIncome: (targetRow?.accessibleFiAssets || 0) * rate,
       targetAgeSuperIncludedInNetFiAssets: (targetRow?.accessibleSuper || 0) > 0,
-      accumulationCashflowProjection: rows.map(row => ({ year: number(row.person1Age) - currentAge, age: number(row.person1Age),
+      accumulationCashflowProjection: rows.map(row => ({ year: completedYears(row), age: number(row.person1Age) + 1,
         netHouseholdCashIncome: row.household.netHouseholdCashIncome, livingExpenses: row.household.applicableLifestyleSpending,
         requiredDebtRepayments: row.household.totalDebtRepayments, actualInvesting: row.household.accessibleInvestmentContribution,
         investmentContribution: row.household.accessibleInvestmentContribution, remainingSurplus: row.household.surplusAvailableForEnjoyment + row.household.unallocatedSurplus })),
-      netWorthProjection: rows.map(row => ({ year: number(row.person1Age) - currentAge, age: number(row.person1Age), closingBalance: row.household.totalNetWorth })),
+      netWorthProjection: rows.map(row => ({ year: completedYears(row), age: number(row.person1Age) + 1, closingBalance: row.household.totalNetWorth })),
       financialFreedomProgressProjection: fiRows, fiWealthProjection: [result.fiWealthProjection[0], ...fiRows],
       milestones: result.milestones.map(milestone => {
         const row = fiRows.find(item => item.age >= milestone.age);

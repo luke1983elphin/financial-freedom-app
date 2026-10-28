@@ -1284,7 +1284,7 @@
     const years = projectionYearForAge(age);
     if (years <= 0) return Number(result.effectiveMortgageBalance) || 0;
     if (result.retirementProjection?.years?.length) {
-      const row = result.retirementProjection.years.find(item => Number(item.person1Age) >= Number(age)) || result.retirementProjection.years.at(-1);
+      const row = result.retirementProjection.years.find(item => Number(item.person1Age) + 1 >= Number(age)) || result.retirementProjection.years.at(-1);
       return row.liabilities.filter(debt => ["homeLoan", "mortgage", "mortgageLoan", "home_loan"].includes(debt.type)).reduce((total, debt) => total + Number(debt.closingBalance || 0), 0);
     }
     const month = years * 12;
