@@ -531,7 +531,8 @@
                     </label>
                     <label>
                       <span class="field-label">Employer super contribution change</span>
-                      <input class="field-input" type="number" step="1000" data-comparison="superContributionChange" value="0">
+                      <input class="field-input" type="number" step="1000" data-comparison="superContributionChange" value="0" disabled aria-describedby="scenarioEmployerSuperLimit">
+                      <small class="field-help" id="scenarioEmployerSuperLimit">Employer super changes are not supported in this scenario. Contributions continue to use your existing employment settings.</small>
                     </label>
                     <label>
                       <span class="field-label">Additional concessional super</span>

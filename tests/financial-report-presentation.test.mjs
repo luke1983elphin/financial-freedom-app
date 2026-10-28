@@ -7,7 +7,7 @@ import {reportFixture} from '../scripts/report-fixture.mjs';
 import {investmentReturnFixture} from '../scripts/investment-return-fixture.mjs';
 const {CALC}=load();
 const source=readFileSync(new URL('../app.js',import.meta.url),'utf8');
-const names=['carriedForwardRulesHtml','modellingCopy','reportMetric','reportGroup','reportChart','reportLoanAssumptions','reportRentalSection','reportReviewActions','reportPresentationHtml','reportSection','reportProgressBar','reportMilestoneRows','milestoneReachEstimate','targetAgeOutcome','freedomPercent','netWorthAtYear','investmentAtYear','projectedFiAssetsAtYear','projectedDebtAtYear','loanBalanceAtYear'];
+const names=['finiteForecastValue','carriedForwardRulesHtml','modellingCopy','reportMetric','reportGroup','reportChart','reportLoanAssumptions','reportRentalSection','reportReviewActions','reportPresentationHtml','reportSection','reportProgressBar','reportMilestoneRows','milestoneReachEstimate','targetAgeOutcome','freedomPercent','netWorthAtYear','investmentAtYear','projectedFiAssetsAtYear','projectedDebtAtYear','loanBalanceAtYear'];
 const code=names.map(name=>{const a=source.indexOf('  function '+name+'(');assert.ok(a>=0);return source.slice(a,source.indexOf('\n  function ',a+5));}).join('\n');
 const money=n=>new Intl.NumberFormat('en-AU',{style:'currency',currency:'AUD',maximumFractionDigits:0}).format(n);
 const ctx={CALC,console,money,roundForDisplay:n=>Math.round(n*100)/100,plainPercent:n=>Math.round(n)+'%',financialStageInfo:()=>({stage:{name:'Building Wealth'}}),financialProgressReportSectionHtml:()=>'',escapeHtml:s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))};

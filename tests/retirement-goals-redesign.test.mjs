@@ -91,7 +91,7 @@ test('each partner income stops on their own date and reduces only where elected
 test('main Future investment, super and net worth rows equal existing retirement engine rows',()=>{
  const p=fixture(),d=defaults(p);d.people[0].fullRetirementAge=60;d.people[1].fullRetirementAge=58;U.saveRetirementTiming(p,d.people,'shared');
  const original=C.calculatePlan(p),r=U.applyRetirementForecast(p,original);const expected=U.runSemiRetirementProjection(E,defaults(p)).result;
- for(const age of [59,60,70,80]){const engineRow=expected.years.find(row=>row.person1Age===age),i=r.investmentProjection.find(row=>row.age===age),s=r.superProjection.find(row=>row.age===age),n=r.netWorthProjection.find(row=>row.age===age);
+ for(const age of [59,60,70,80]){const engineRow=expected.years.find(row=>row.person1Age===age-1),i=r.investmentProjection.find(row=>row.age===age),s=r.superProjection.find(row=>row.age===age),n=r.netWorthProjection.find(row=>row.age===age);
  assert.equal(i.closingBalance,Math.max(0,engineRow.household.totalAccessibleAssets-engineRow.household.offsetClosingBalance));assert.equal(s.closingBalance,engineRow.household.totalSuperBalance);assert.equal(n.closingBalance,engineRow.household.totalNetWorth);}
  const before=JSON.stringify(p);U.applyRetirementForecast(p,original);assert.equal(JSON.stringify(p),before);
 });

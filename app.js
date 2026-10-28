@@ -590,11 +590,11 @@
     { id: "invest-100", label: "Invest an extra $100/week", adjustments: () => ({ investmentContributionChange: 5200 }) },
     { id: "invest-250", label: "Invest an extra $250/week", adjustments: () => ({ investmentContributionChange: 13000 }) },
     { id: "debt-500", label: "Pay an extra $500/month off debt", adjustments: () => ({ loanRepaymentChangeMonthly: 500 }) },
-    { id: "income-5", label: "Increase income by 5%", adjustments: (result) => ({ incomeChange: Math.round((result.annualGrossIncome || result.annualNetIncome) * 0.05) }) },
+    { id: "income-5", label: "Increase income by 5%", adjustments: () => ({ incomeRateChange: 0.05 }) },
     { id: "expenses-500", label: "Reduce expenses by $500/month", adjustments: () => ({ expenseChange: -6000 }) },
     { id: "super-10000", label: "Add $10,000 concessional super", adjustments: () => ({ extraConcessionalSuperChange: 10000 }) },
     { id: "car-50000", label: "Buy a $50,000 car", adjustments: () => ({ oneOffCosts: 50000 }) },
-    { id: "four-days", label: "Work 4 days per week", adjustments: (result) => ({ incomeChange: -Math.round((result.annualGrossIncome || result.annualNetIncome) * 0.2) }) },
+    { id: "four-days", label: "Work 4 days per week", adjustments: () => ({ incomeRateChange: -0.2, incomeEmploymentOnly: true }) },
   ];
 
   let restoredDraftUi = {};
@@ -617,6 +617,11 @@
   let customWhatIfOpen = false;
   let customWhatIfError = "";
   let whatIfAllocation = "unallocated";
+  let whatIfTargets = {};
+  let whatIfBaseSnapshot = null;
+  let whatIfRestoredBaseAdjustments = null;
+  let decisionScenarioBasePlan = null;
+  let decisionScenarioPlanKey = null;
   let generatedWeeklyPlanner = null;
   let weeklyPlan = loadWeeklyPlan();
   let activeWeeklyPlanTab = restoredDraftUi.activeWeeklyPlanTab || "thisWeek";
@@ -1279,7 +1284,7 @@
     const years = projectionYearForAge(age);
     if (years <= 0) return Number(result.effectiveMortgageBalance) || 0;
     if (result.retirementProjection?.years?.length) {
-      const row = result.retirementProjection.years.find(item => Number(item.person1Age) >= Number(age)) || result.retirementProjection.years.at(-1);
+      const row = result.retirementProjection.years.find(item => Number(item.person1Age) + 1 >= Number(age)) || result.retirementProjection.years.at(-1);
       return row.liabilities.filter(debt => ["homeLoan", "mortgage", "mortgageLoan", "home_loan"].includes(debt.type)).reduce((total, debt) => total + Number(debt.closingBalance || 0), 0);
     }
     const month = years * 12;
@@ -1473,17 +1478,68 @@
     return Math.max(min, (Number(value) || 0) + (Number(delta) || 0));
   }
 
+  function eligibleScenarioLoans(basePlan) {
+    return (basePlan.liabilityItems || []).filter(item => item.type === "homeLoan" && CALC.isActiveFinancialRecord(item) && Number(item.balance) > 0);
+  }
+
+  function scenarioInputError(message) {
+    const error = new Error(message);
+    error.code = "scenario-input";
+    return error;
+  }
+
+  function eligibleScenarioIncomes(basePlan, employmentOnly = false) {
+    return (basePlan.incomeItems || []).filter(item => {
+      const type = CALC.normaliseIncomeType(item.type || item.incomeType);
+      return CALC.isActiveFinancialRecord(item) && Number(item.amount) > 0
+        && (employmentOnly ? type === "salaryWages" : ["salaryWages", "other", "taxFree", "interest", "distributions"].includes(type));
+    });
+  }
+
+  function resolveScenarioIncome(basePlan, adjustments) {
+    if (!Number(adjustments.incomeChange) && !Number(adjustments.incomeRateChange)) return { amount: 0, item: null };
+    const items = eligibleScenarioIncomes(basePlan, adjustments.incomeEmploymentOnly);
+    const item = adjustments.incomeItemId ? items.find(item => item.id === adjustments.incomeItemId) : items.length === 1 ? items[0] : null;
+    if (!item) throw scenarioInputError("Choose the existing income entry to change. Its owner and income type will be preserved; working-hours changes require employment income.");
+    const annual = annualValue(item.amount, item.frequency);
+    const amount = Number(adjustments.incomeRateChange) ? Math.round(annual * Number(adjustments.incomeRateChange)) : Number(adjustments.incomeChange);
+    if (annual + amount < 0) throw scenarioInputError("The income reduction exceeds the selected entry's annual income.");
+    return { amount, item };
+  }
+
+  function scenarioTargetsHtml(basePlan, mode, adjustments = {}) {
+    const loans = eligibleScenarioLoans(basePlan);
+    const incomes = eligibleScenarioIncomes(basePlan);
+    const incomeHtml = incomes.length > 1 ? `<label class="field-label">Income entry for this change<select class="field-input" data-scenario-target="incomeItemId" data-scenario-mode="${mode}"><option value="">Choose an income entry</option>${incomes.map(item => `<option value="${escapeHtml(item.id)}" ${adjustments.incomeItemId === item.id ? "selected" : ""}>${escapeHtml(item.name || item.id)} — ${escapeHtml(item.owner)} (${escapeHtml(CALC.normaliseIncomeType(item.type || item.incomeType))})</option>`).join("")}</select></label>` : "";
+    if (loans.length < 2) return incomeHtml;
+    return incomeHtml + `<label class="field-label">Home loan for this change<select class="field-input" data-scenario-target="loanId" data-scenario-mode="${mode}"><option value="">Choose a home loan</option>${loans.map(item => `<option value="${escapeHtml(item.id)}" ${adjustments.loanId === item.id ? "selected" : ""}>${escapeHtml(item.name || item.id)}</option>`).join("")}</select></label>`;
+  }
+
+  function showScenarioInputError(element, error, prefix = "") {
+    if (error.code !== "scenario-input") throw error;
+    element.innerHTML = prefix + `<p class="field-help" role="alert">${escapeHtml(error.message)} The scenario has not been applied or saved.</p>`;
+  }
+
   function applyScenarioAdjustments(basePlan, adjustments = {}) {
+    if (Number(adjustments.superContributionChange)) throw scenarioInputError("Employer super changes are not supported in this scenario. Employer contributions remain derived from the existing employment settings; additional concessional super is a separate cash-funded change.");
     const scenarioPlan = CALC.clonePlan(basePlan);
-    const incomeChange = Number(adjustments.incomeChange) || 0;
+    const repaymentDelta = Number(adjustments.loanRepaymentChangeMonthly) || 0;
+    const eligibleLoans = eligibleScenarioLoans(scenarioPlan);
+    const repaymentLoan = adjustments.loanId ? eligibleLoans.find(item => item.id === adjustments.loanId) : eligibleLoans.length === 1 ? eligibleLoans[0] : null;
+    if (repaymentDelta && !repaymentLoan) throw scenarioInputError(eligibleLoans.length ? "Choose the home loan to receive this household repayment change." : "This change requires an eligible home loan with an outstanding balance.");
+    const incomeResolution = resolveScenarioIncome(basePlan, adjustments);
+    const incomeChange = incomeResolution.amount;
     const expenseChange = (Number(adjustments.expenseChange) || 0) + (Number(adjustments.otherExpenseAnnualChange) || 0);
+    const availableSpending = Math.max(0, CALC.annualRecurringExpenses(basePlan));
+    if (expenseChange < -availableSpending) throw scenarioInputError(`Expense reductions cannot exceed the available recurring spending of ${money(availableSpending)} per year.`);
     const repaymentChange = Number(adjustments.loanRepaymentChangeMonthly) || 0;
     const loanRateChange = Number(adjustments.loanInterestRateChangePct) || 0;
     const helpBalanceChange = Number(adjustments.helpBalanceChange) || 0;
     const cashChange = (Number(adjustments.oneOffSavings) || 0) - (Number(adjustments.oneOffCosts) || 0);
-    scenarioPlan.income.otherIncome = addAmount(scenarioPlan.income.otherIncome, incomeChange, -Infinity);
-    if (incomeChange && Array.isArray(scenarioPlan.incomeItems)) {
-      scenarioPlan.incomeItems.push({ id: makeId("scenario-income"), name: "Scenario income change", amount: incomeChange, frequency: "annually" });
+    if (incomeChange) {
+      const item = scenarioPlan.incomeItems.find(item => item.id === incomeResolution.item.id);
+      item.amount = Number(item.amount) + incomeChange / annualValue(1, item.frequency);
+      item.annualAmount = annualValue(item.amount, item.frequency);
     }
     scenarioPlan.expenses.otherExpenses = addAmount(scenarioPlan.expenses.otherExpenses, expenseChange, -Infinity);
     if (expenseChange && Array.isArray(scenarioPlan.expenseItems)) {
@@ -1495,7 +1551,8 @@
     if (Array.isArray(scenarioPlan.liabilityItems)) {
       scenarioPlan.liabilityItems = scenarioPlan.liabilityItems.map((item) => {
         if (item.type === "homeLoan") {
-          return { ...item, repayment: addAmount(item.repayment, repaymentChange), interestRatePct: addAmount(item.interestRatePct, loanRateChange) };
+          const change = item.id === repaymentLoan?.id ? repaymentChange * 12 / annualValue(1, item.repaymentFrequency || "monthly") : 0;
+          return { ...item, repayment: addAmount(item.repayment, change), interestRatePct: addAmount(item.interestRatePct, loanRateChange) };
         }
         if (item.type === "hecsHelp") {
           return { ...item, balance: addAmount(item.balance, helpBalanceChange) };
@@ -1513,8 +1570,22 @@
     scenarioPlan.liabilities.hecsHelpDebt = addAmount(scenarioPlan.liabilities.hecsHelpDebt, helpBalanceChange);
     scenarioPlan.assets.cash = addAmount(scenarioPlan.assets.cash, cashChange, -Infinity);
     if (cashChange && Array.isArray(scenarioPlan.assetItems)) {
-      const cashItem = scenarioPlan.assetItems.find((item) => item.category === "cash");
-      if (cashItem) cashItem.value = addAmount(cashItem.value, cashChange, -Infinity);
+      const cashItems = scenarioPlan.assetItems.filter(item => item.category === "cash" && CALC.isActiveFinancialRecord(item));
+      const availableCash = cashItems.reduce((sum, item) => sum + Math.max(0, Number(item.value) || 0), 0);
+      if (cashChange < 0 && -cashChange > availableCash + 0.005) {
+        throw scenarioInputError(`One-off costs leave ${money(-cashChange - availableCash)} unfunded. Only ${money(availableCash)} cash is available. Specify funding in your plan before modelling this transaction; no loan or investment sale has been assumed.`);
+      }
+      if (cashChange > 0) {
+        if (cashItems.length) cashItems[0].value = addAmount(cashItems[0].value, cashChange);
+        else scenarioPlan.assetItems.push({ id: makeId("scenario-cash"), name: "Scenario cash", category: "cash", value: cashChange });
+      } else {
+        let remaining = -cashChange;
+        cashItems.forEach(item => {
+          const paid = Math.min(Math.max(0, Number(item.value) || 0), remaining);
+          item.value = Math.max(0, Number(item.value) || 0) - paid;
+          remaining -= paid;
+        });
+      }
     }
     return scenarioPlan;
   }
@@ -1541,8 +1612,8 @@
     return { ...comparisonDefaults, ...(decisionScenarioDraft || plan.comparison || {}) };
   }
 
-  function buildComparisonPlan(baseResult = calculatePlan(plan)) {
-    return applyScenarioAdjustments(plan, comparisonAdjustmentsWithSurplus(baseResult, activeDecisionComparison()));
+  function buildComparisonPlan(baseResult = calculatePlan(decisionScenarioBasePlan || plan)) {
+    return applyScenarioAdjustments(decisionScenarioBasePlan || plan, comparisonAdjustmentsWithSurplus(baseResult, activeDecisionComparison()));
   }
 
   function estimatedCashflow(result) {
@@ -1550,15 +1621,19 @@
   }
 
   function netWorthAtYear(result, year) {
-    return result.netWorthProjection[Math.max(0, year - 1)]?.closingBalance || result.currentNetWorth;
+    return finiteForecastValue(result.netWorthProjection[Math.max(0, year - 1)]?.closingBalance, result.currentNetWorth);
+  }
+
+  function finiteForecastValue(value, fallback = 0) {
+    return Number.isFinite(value) ? value : Number.isFinite(fallback) ? fallback : 0;
   }
 
   function investmentAtYear(result, year) {
-    return result.investmentProjection[Math.max(0, year - 1)]?.closingBalance || 0;
+    return finiteForecastValue(result.investmentProjection[Math.max(0, year - 1)]?.closingBalance);
   }
 
   function superAtYear(result, year) {
-    return result.superProjection[Math.max(0, year - 1)]?.closingBalance || result.superannuationBalance || 0;
+    return finiteForecastValue(result.superProjection[Math.max(0, year - 1)]?.closingBalance, result.superannuationBalance);
   }
 
   function loanBalanceAtYear(result, year) {
@@ -1567,7 +1642,7 @@
   }
 
   function longTermNetWorth(result) {
-    return result.netWorthProjection.at(-1)?.closingBalance || result.currentNetWorth;
+    return finiteForecastValue(result.netWorthProjection.at(-1)?.closingBalance, result.currentNetWorth);
   }
 
   function targetAgeOutcome(result) {
@@ -15382,6 +15457,7 @@
   }
 
   function renderComparison(result) {
+    if (decisionScenarioBasePlan) result = calculatePlan(decisionScenarioBasePlan);
     const summary = document.getElementById("comparisonSummary");
     if (!summary) return;
     const readiness = personalisedResultsReadiness(plan, result);
@@ -15398,6 +15474,8 @@
         input.value = value;
       }
     });
+    const targetsHtml = (decisionScenarioBasePlan ? '<p class="field-help">Reviewing this scenario against its saved base plan. Your current plan is unchanged.</p>' : "") + scenarioTargetsHtml(decisionScenarioBasePlan || plan, "detailed", comparison);
+    try {
     const annualAllocation = comparisonSurplusAllocationAmount(result, comparison);
     const revisedPlan = buildComparisonPlan(result);
     const revisedResult = calculatePlan(revisedPlan);
@@ -15426,12 +15504,14 @@
       ...comparisonSurplusImpactTiles(result, revisedResult, comparison, annualAllocation),
     ];
     summary.innerHTML = `
+      ${targetsHtml}
       ${primaryTiles.join("")}
       <details class="decision-details decision-result-details">
         <summary>View details</summary>
         <div class="summary-grid mt-3">${technicalTiles.join("")}</div>
       </details>
     `;
+    } catch (error) { showScenarioInputError(summary, error, targetsHtml); }
   }
 
   function customWhatIfAdjustments() {
@@ -15449,7 +15529,54 @@
     }
   }
 
+  function resolveWhatIfScenario(result = calculatePlan(whatIfBaseSnapshot || plan)) {
+    const basePlan = whatIfBaseSnapshot || plan;
+    const custom = activeWhatIfId === "custom" ? customWhatIfAdjustments() : null;
+    if (activeWhatIfId === "custom" && !custom) throw scenarioInputError("Enter a valid positive custom amount before previewing or saving.");
+    const active = activeWhatIfId === "custom"
+      ? { id: "custom", label: "Custom change", adjustments: () => custom }
+      : whatIfActions.find(action => action.id === activeWhatIfId) || whatIfActions[0];
+    const baseAdjustments = { ...(whatIfRestoredBaseAdjustments || active.adjustments(result)), ...whatIfTargets };
+    const income = resolveScenarioIncome(basePlan, baseAdjustments);
+    if (income.item) {
+      baseAdjustments.incomeChange = income.amount;
+      baseAdjustments.incomeItemId = income.item.id;
+      delete baseAdjustments.incomeRateChange;
+    }
+    const firstResult = calculatePlan(applyScenarioAdjustments(basePlan, baseAdjustments));
+    const annualDifference = estimatedCashflow(firstResult) - estimatedCashflow(result);
+    // A higher investment contribution can absorb expense savings, leaving zero
+    // *unallocated* cash even though the household's pre-investing cashflow improved.
+    // Keep the real unallocated balance for allocation decisions, but show the
+    // change before investment allocations for income/expense scenarios.
+    const isCashflowSaving = ["income-5", "expenses-500"].includes(active.id)
+      || (active.id === "custom" && ["expenses", "income"].includes(customWhatIf.kind));
+    const annualCashflowImpact = isCashflowSaving
+      ? (Number(firstResult.cashSurplusBeforeInvesting) || 0) - (Number(result.cashSurplusBeforeInvesting) || 0)
+      : annualDifference;
+    const investmentAbsorption = isCashflowSaving
+      ? (Number(firstResult.annualInvestmentContributions) || 0) - (Number(result.annualInvestmentContributions) || 0)
+      : 0;
+    const allocatable = Math.max(0, annualDifference);
+    const choices = [
+      ["unallocated", "Keep it available", "Do not assume this extra money is invested"],
+      ["investments", "Invest it", "Add available cash to annual investments"],
+      ["debt", "Repay home loan", "Increase home-loan repayments"],
+      ["lifestyle", "Enjoy it", "Use the available amount for additional spending"]
+    ];
+    const canAllocate = allocatable > 0.01;
+    const selection = canAllocate ? whatIfAllocation : "unallocated";
+    const allocationAdjustments = { ...baseAdjustments };
+    if (canAllocate && selection === "investments") allocationAdjustments.investmentContributionChange = (Number(allocationAdjustments.investmentContributionChange) || 0) + allocatable;
+    if (canAllocate && selection === "debt") allocationAdjustments.loanRepaymentChangeMonthly = (Number(allocationAdjustments.loanRepaymentChangeMonthly) || 0) + allocatable / 12;
+    if (canAllocate && selection === "lifestyle") allocationAdjustments.expenseChange = (Number(allocationAdjustments.expenseChange) || 0) + allocatable;
+    const adjustedResult = calculatePlan(applyScenarioAdjustments(basePlan, allocationAdjustments));
+
+    return { basePlan, result, active, baseAdjustments, allocationAdjustments, firstResult, adjustedResult, annualDifference, isCashflowSaving, annualCashflowImpact, investmentAbsorption, allocatable, choices, canAllocate, selection };
+  }
+
   function renderWhatIf(result) {
+    if (whatIfBaseSnapshot) result = calculatePlan(whatIfBaseSnapshot);
     const actions = document.getElementById("whatIfActions");
     const output = document.getElementById("whatIfResult");
     if (!actions || !output) return;
@@ -15490,35 +15617,9 @@
           <button class="btn btn-primary what-if-custom-apply" type="button" data-what-if-custom-apply>Try this change</button>
         </div>` : ""}
       </div>`;
-    const baseAdjustments = active.adjustments(result);
-    const firstResult = calculatePlan(applyScenarioAdjustments(plan, baseAdjustments));
-    const annualDifference = estimatedCashflow(firstResult) - estimatedCashflow(result);
-    // A higher investment contribution can absorb expense savings, leaving zero
-    // *unallocated* cash even though the household's pre-investing cashflow improved.
-    // Keep the real unallocated balance for allocation decisions, but show the
-    // change before investment allocations for income/expense scenarios.
-    const isCashflowSaving = ["income-5", "expenses-500"].includes(active.id)
-      || (active.id === "custom" && ["expenses", "income"].includes(customWhatIf.kind));
-    const annualCashflowImpact = isCashflowSaving
-      ? (Number(firstResult.cashSurplusBeforeInvesting) || 0) - (Number(result.cashSurplusBeforeInvesting) || 0)
-      : annualDifference;
-    const investmentAbsorption = isCashflowSaving
-      ? (Number(firstResult.annualInvestmentContributions) || 0) - (Number(result.annualInvestmentContributions) || 0)
-      : 0;
-    const allocatable = Math.max(0, annualDifference);
-    const choices = [
-      ["unallocated", "Keep it available", "Do not assume this extra money is invested"],
-      ["investments", "Invest it", "Add available cash to annual investments"],
-      ["debt", "Repay home loan", "Increase home-loan repayments"],
-      ["lifestyle", "Enjoy it", "Use the available amount for additional spending"]
-    ];
-    const canAllocate = allocatable > 0.01;
-    const selection = canAllocate ? whatIfAllocation : "unallocated";
-    const allocationAdjustments = { ...baseAdjustments };
-    if (canAllocate && selection === "investments") allocationAdjustments.investmentContributionChange = (Number(allocationAdjustments.investmentContributionChange) || 0) + allocatable;
-    if (canAllocate && selection === "debt") allocationAdjustments.loanRepaymentChangeMonthly = (Number(allocationAdjustments.loanRepaymentChangeMonthly) || 0) + allocatable / 12;
-    if (canAllocate && selection === "lifestyle") allocationAdjustments.expenseChange = (Number(allocationAdjustments.expenseChange) || 0) + allocatable;
-    const adjustedResult = calculatePlan(applyScenarioAdjustments(plan, allocationAdjustments));
+    actions.innerHTML += (whatIfBaseSnapshot ? '<p class="field-help">Reviewing this scenario against its saved base plan. Your current plan is unchanged.</p>' : "") + scenarioTargetsHtml(whatIfBaseSnapshot || plan, "quick", whatIfTargets);
+    try {
+    const { annualDifference, isCashflowSaving, annualCashflowImpact, investmentAbsorption, allocatable, choices, canAllocate, selection, adjustedResult } = resolveWhatIfScenario(result);
     const fmtDelta = amount => `${amount >= 0 ? "+" : "−"}${money(Math.abs(amount))}`;
     const forecastRow = (label, before, after) => `<div class="what-if-forecast-row"><strong>${label}</strong><span>${money(before)}</span><span>${money(after)}</span><b>${fmtDelta(after - before)}</b></div>`;
     output.innerHTML = `
@@ -15547,6 +15648,7 @@
           <p class="field-help">Remaining annual cash after your choice: ${money(estimatedCashflow(adjustedResult))}. A negative result means the revised plan may require additional funding. Unallocated cash is not automatically treated as an investment.</p>
         </div>
       </section>`;
+    } catch (error) { showScenarioInputError(output, error); }
   }
 
   function normaliseSavedScenarioType(type = "") {
@@ -15670,13 +15772,13 @@
   }
 
   function buildDecisionScenarioSaveContext(mode = "custom") {
-    const baseResult = calculatePlan(plan);
-    const action = mode === "what-if" ? (whatIfActions.find((item) => item.id === activeWhatIfId) || whatIfActions[0]) : null;
-    const adjustments = action ? action.adjustments(baseResult) : activeDecisionComparison();
-    const adjustedPlan = action
-      ? applyScenarioAdjustments(plan, adjustments)
-      : buildComparisonPlan(baseResult);
-    const scenarioResult = calculatePlan(adjustedPlan);
+    const quick = mode === "what-if" ? resolveWhatIfScenario() : null;
+    const basePlan = quick?.basePlan || decisionScenarioBasePlan || plan;
+    const baseResult = quick?.result || calculatePlan(basePlan);
+    const action = quick?.active || null;
+    const adjustments = quick ? quick.allocationAdjustments : comparisonAdjustmentsWithSurplus(baseResult, activeDecisionComparison());
+    const adjustedPlan = applyScenarioAdjustments(basePlan, adjustments);
+    const scenarioResult = quick?.adjustedResult || calculatePlan(adjustedPlan);
     const changes = decisionChangeRowsFromAdjustments(adjustments);
     const overlay = TRUST?.createScenarioOverlay?.({ actionId: action?.id || "custom", label: action?.label || "Custom decision scenario", adjustments }) || null;
     return {
@@ -15687,12 +15789,13 @@
         mode: mode === "what-if" ? "decision-what-if" : "decision-custom",
         actionId: action?.id || "",
         adjustments: { ...comparisonDefaults, ...adjustments },
+        ...(quick ? { quick: { custom: { ...customWhatIf }, allocation: quick.selection, targets: { ...whatIfTargets }, baseAdjustments: { ...quick.baseAdjustments } } } : { comparisonDraft: activeDecisionComparison() }),
         ...(overlay ? { overlay } : {}),
       },
       changedInputs: changes,
       keyResultSnapshot: decisionKeyResultSnapshot(baseResult, scenarioResult),
       planSnapshot: adjustedPlan,
-      basePlanSnapshot: CALC.clonePlan(plan),
+      basePlanSnapshot: CALC.clonePlan(basePlan),
     };
   }
 
@@ -16621,6 +16724,15 @@
   }
 
   function renderOutputs() {
+    const scenarioPlanKey = `${activePlanId}:${plan.meta?.source || ""}:${plan.meta?.samplePlanId || ""}`;
+    if (decisionScenarioPlanKey !== null && decisionScenarioPlanKey !== scenarioPlanKey) {
+      whatIfBaseSnapshot = null;
+      whatIfRestoredBaseAdjustments = null;
+      decisionScenarioBasePlan = null;
+      whatIfTargets = {};
+      decisionScenarioDraft = null;
+    }
+    decisionScenarioPlanKey = scenarioPlanKey;
     const result = calculatePlan(plan);
     safeRenderModule("Demo banner", () => renderDemoModeBanner());
     safeRenderModule("Sample plan options", () => renderSamplePlanOptions());
@@ -16956,13 +17068,27 @@
     return loadScenarios().find((scenario) => scenario.id === id);
   }
 
-  function loadDecisionScenarioSnapshot(scenario) {
+  function restoreDecisionScenarioInputs(scenario) {
     const snapshot = scenario?.scenarioInputSnapshot || {};
     const adjustments = { ...comparisonDefaults, ...(snapshot.adjustments || {}) };
-    decisionScenarioDraft = adjustments;
-    if (snapshot.actionId && whatIfActions.some((action) => action.id === snapshot.actionId)) {
-      activeWhatIfId = snapshot.actionId;
+    const basePlan = CALC.clonePlan(scenario.basePlanSnapshot || plan);
+    if (snapshot.mode === "decision-what-if") {
+      activeWhatIfId = snapshot.actionId || "custom";
+      if (snapshot.quick?.custom) customWhatIf = { ...snapshot.quick.custom };
+      customWhatIfOpen = activeWhatIfId === "custom";
+      whatIfAllocation = snapshot.quick?.allocation || "unallocated";
+      whatIfTargets = { ...(snapshot.quick?.targets || {}) };
+      whatIfBaseSnapshot = basePlan;
+      whatIfRestoredBaseAdjustments = { ...(snapshot.quick?.baseAdjustments || adjustments) };
+    } else {
+      decisionScenarioDraft = { ...(snapshot.comparisonDraft || adjustments) };
+      decisionScenarioBasePlan = basePlan;
     }
+  }
+
+  function loadDecisionScenarioSnapshot(scenario) {
+    const snapshot = scenario?.scenarioInputSnapshot || {};
+    restoreDecisionScenarioInputs(scenario);
     showWorkspace("decision");
     renderOutputs();
     if (snapshot.mode !== "decision-what-if") {
@@ -17407,6 +17533,13 @@
         }
         // Keep the active editor mounted while typing. Full dependent views refresh on blur.
         renderSetupSummary(calculatePlan(plan));
+        return;
+      }
+      if (target.dataset.scenarioTarget) {
+        const key = target.dataset.scenarioTarget;
+        if (target.dataset.scenarioMode === "quick") { whatIfTargets = { ...whatIfTargets, [key]: target.value }; whatIfRestoredBaseAdjustments = null; }
+        else decisionScenarioDraft = { ...activeDecisionComparison(), [key]: target.value };
+        renderOutputs();
         return;
       }
       if (target.dataset.comparison) {
@@ -18124,6 +18257,8 @@
         };
         customWhatIfError = customWhatIfAdjustments() ? "" : "Enter a positive amount within the supported range.";
         if (!customWhatIfError) {
+          whatIfBaseSnapshot = null;
+          whatIfRestoredBaseAdjustments = null;
           activeWhatIfId = "custom";
           whatIfAllocation = "unallocated";
         }
@@ -18132,6 +18267,8 @@
       }
       const whatIfButton = event.target.closest("[data-what-if]");
       if (whatIfButton) {
+        whatIfBaseSnapshot = null;
+        whatIfRestoredBaseAdjustments = null;
         activeWhatIfId = whatIfButton.dataset.whatIf;
         whatIfAllocation = "unallocated";
         renderOutputs();
@@ -18172,7 +18309,14 @@
       if (scenarioSaveButton) {
         const mode = scenarioSaveButton.dataset.saveStageGScenario;
         if (mode === "retirement") openScenarioSaveDialog(buildRetirementScenarioSaveContext());
-        else openScenarioSaveDialog(buildDecisionScenarioSaveContext(mode === "decision-what-if" ? "what-if" : "custom"));
+        else {
+          try { openScenarioSaveDialog(buildDecisionScenarioSaveContext(mode === "decision-what-if" ? "what-if" : "custom")); }
+          catch (error) {
+            if (error.code !== "scenario-input") throw error;
+            updateSaveStatus(error.message);
+            renderOutputs();
+          }
+        }
         return;
       }
 
