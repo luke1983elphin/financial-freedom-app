@@ -32,8 +32,9 @@ test('invalid custom amounts are rejected instead of affecting financial results
 test('custom inputs use dedicated responsive form and preserve original-plan scenario flow', () => {
   assert.match(source, /class="what-if-custom-grid"/);
   assert.match(source, /class="what-if-custom-field">What would you like to change/);
-  assert.match(source, /const firstResult = calculatePlan\(applyScenarioAdjustments\(plan, baseAdjustments\)\)/);
-  assert.match(source, /const adjustedResult = calculatePlan\(applyScenarioAdjustments\(plan, allocationAdjustments\)\)/);
+  assert.match(source, /const firstResult = calculatePlan\(applyScenarioAdjustments\(basePlan, baseAdjustments\)\)/);
+  assert.match(source, /const adjustedResult = calculatePlan\(applyScenarioAdjustments\(basePlan, allocationAdjustments\)\)/);
+  assert.match(source, /function resolveWhatIfScenario\(/);
 });
 
 test('weekly to fortnightly to monthly expense reductions retain their distinct annual impacts', () => {

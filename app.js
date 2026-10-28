@@ -618,6 +618,10 @@
   let customWhatIfError = "";
   let whatIfAllocation = "unallocated";
   let whatIfTargets = {};
+  let whatIfBaseSnapshot = null;
+  let whatIfRestoredBaseAdjustments = null;
+  let decisionScenarioBasePlan = null;
+  let decisionScenarioPlanKey = null;
   let generatedWeeklyPlanner = null;
   let weeklyPlan = loadWeeklyPlan();
   let activeWeeklyPlanTab = restoredDraftUi.activeWeeklyPlanTab || "thisWeek";
@@ -1606,8 +1610,8 @@
     return { ...comparisonDefaults, ...(decisionScenarioDraft || plan.comparison || {}) };
   }
 
-  function buildComparisonPlan(baseResult = calculatePlan(plan)) {
-    return applyScenarioAdjustments(plan, comparisonAdjustmentsWithSurplus(baseResult, activeDecisionComparison()));
+  function buildComparisonPlan(baseResult = calculatePlan(decisionScenarioBasePlan || plan)) {
+    return applyScenarioAdjustments(decisionScenarioBasePlan || plan, comparisonAdjustmentsWithSurplus(baseResult, activeDecisionComparison()));
   }
 
   function estimatedCashflow(result) {
@@ -15447,6 +15451,7 @@
   }
 
   function renderComparison(result) {
+    if (decisionScenarioBasePlan) result = calculatePlan(decisionScenarioBasePlan);
     const summary = document.getElementById("comparisonSummary");
     if (!summary) return;
     const readiness = personalisedResultsReadiness(plan, result);
@@ -15463,7 +15468,7 @@
         input.value = value;
       }
     });
-    const targetsHtml = scenarioTargetsHtml(plan, "detailed", comparison);
+    const targetsHtml = (decisionScenarioBasePlan ? '<p class="field-help">Reviewing this scenario against its saved base plan. Your current plan is unchanged.</p>' : "") + scenarioTargetsHtml(decisionScenarioBasePlan || plan, "detailed", comparison);
     try {
     const annualAllocation = comparisonSurplusAllocationAmount(result, comparison);
     const revisedPlan = buildComparisonPlan(result);
@@ -15518,7 +15523,54 @@
     }
   }
 
+  function resolveWhatIfScenario(result = calculatePlan(whatIfBaseSnapshot || plan)) {
+    const basePlan = whatIfBaseSnapshot || plan;
+    const custom = activeWhatIfId === "custom" ? customWhatIfAdjustments() : null;
+    if (activeWhatIfId === "custom" && !custom) throw scenarioInputError("Enter a valid positive custom amount before previewing or saving.");
+    const active = activeWhatIfId === "custom"
+      ? { id: "custom", label: "Custom change", adjustments: () => custom }
+      : whatIfActions.find(action => action.id === activeWhatIfId) || whatIfActions[0];
+    const baseAdjustments = { ...(whatIfRestoredBaseAdjustments || active.adjustments(result)), ...whatIfTargets };
+    const income = resolveScenarioIncome(basePlan, baseAdjustments);
+    if (income.item) {
+      baseAdjustments.incomeChange = income.amount;
+      baseAdjustments.incomeItemId = income.item.id;
+      delete baseAdjustments.incomeRateChange;
+    }
+    const firstResult = calculatePlan(applyScenarioAdjustments(basePlan, baseAdjustments));
+    const annualDifference = estimatedCashflow(firstResult) - estimatedCashflow(result);
+    // A higher investment contribution can absorb expense savings, leaving zero
+    // *unallocated* cash even though the household's pre-investing cashflow improved.
+    // Keep the real unallocated balance for allocation decisions, but show the
+    // change before investment allocations for income/expense scenarios.
+    const isCashflowSaving = ["income-5", "expenses-500"].includes(active.id)
+      || (active.id === "custom" && ["expenses", "income"].includes(customWhatIf.kind));
+    const annualCashflowImpact = isCashflowSaving
+      ? (Number(firstResult.cashSurplusBeforeInvesting) || 0) - (Number(result.cashSurplusBeforeInvesting) || 0)
+      : annualDifference;
+    const investmentAbsorption = isCashflowSaving
+      ? (Number(firstResult.annualInvestmentContributions) || 0) - (Number(result.annualInvestmentContributions) || 0)
+      : 0;
+    const allocatable = Math.max(0, annualDifference);
+    const choices = [
+      ["unallocated", "Keep it available", "Do not assume this extra money is invested"],
+      ["investments", "Invest it", "Add available cash to annual investments"],
+      ["debt", "Repay home loan", "Increase home-loan repayments"],
+      ["lifestyle", "Enjoy it", "Use the available amount for additional spending"]
+    ];
+    const canAllocate = allocatable > 0.01;
+    const selection = canAllocate ? whatIfAllocation : "unallocated";
+    const allocationAdjustments = { ...baseAdjustments };
+    if (canAllocate && selection === "investments") allocationAdjustments.investmentContributionChange = (Number(allocationAdjustments.investmentContributionChange) || 0) + allocatable;
+    if (canAllocate && selection === "debt") allocationAdjustments.loanRepaymentChangeMonthly = (Number(allocationAdjustments.loanRepaymentChangeMonthly) || 0) + allocatable / 12;
+    if (canAllocate && selection === "lifestyle") allocationAdjustments.expenseChange = (Number(allocationAdjustments.expenseChange) || 0) + allocatable;
+    const adjustedResult = calculatePlan(applyScenarioAdjustments(basePlan, allocationAdjustments));
+
+    return { basePlan, result, active, baseAdjustments, allocationAdjustments, firstResult, adjustedResult, annualDifference, isCashflowSaving, annualCashflowImpact, investmentAbsorption, allocatable, choices, canAllocate, selection };
+  }
+
   function renderWhatIf(result) {
+    if (whatIfBaseSnapshot) result = calculatePlan(whatIfBaseSnapshot);
     const actions = document.getElementById("whatIfActions");
     const output = document.getElementById("whatIfResult");
     if (!actions || !output) return;
@@ -15559,37 +15611,9 @@
           <button class="btn btn-primary what-if-custom-apply" type="button" data-what-if-custom-apply>Try this change</button>
         </div>` : ""}
       </div>`;
-    actions.innerHTML += scenarioTargetsHtml(plan, "quick", whatIfTargets);
+    actions.innerHTML += (whatIfBaseSnapshot ? '<p class="field-help">Reviewing this scenario against its saved base plan. Your current plan is unchanged.</p>' : "") + scenarioTargetsHtml(whatIfBaseSnapshot || plan, "quick", whatIfTargets);
     try {
-    const baseAdjustments = { ...active.adjustments(result), ...whatIfTargets };
-    const firstResult = calculatePlan(applyScenarioAdjustments(plan, baseAdjustments));
-    const annualDifference = estimatedCashflow(firstResult) - estimatedCashflow(result);
-    // A higher investment contribution can absorb expense savings, leaving zero
-    // *unallocated* cash even though the household's pre-investing cashflow improved.
-    // Keep the real unallocated balance for allocation decisions, but show the
-    // change before investment allocations for income/expense scenarios.
-    const isCashflowSaving = ["income-5", "expenses-500"].includes(active.id)
-      || (active.id === "custom" && ["expenses", "income"].includes(customWhatIf.kind));
-    const annualCashflowImpact = isCashflowSaving
-      ? (Number(firstResult.cashSurplusBeforeInvesting) || 0) - (Number(result.cashSurplusBeforeInvesting) || 0)
-      : annualDifference;
-    const investmentAbsorption = isCashflowSaving
-      ? (Number(firstResult.annualInvestmentContributions) || 0) - (Number(result.annualInvestmentContributions) || 0)
-      : 0;
-    const allocatable = Math.max(0, annualDifference);
-    const choices = [
-      ["unallocated", "Keep it available", "Do not assume this extra money is invested"],
-      ["investments", "Invest it", "Add available cash to annual investments"],
-      ["debt", "Repay home loan", "Increase home-loan repayments"],
-      ["lifestyle", "Enjoy it", "Use the available amount for additional spending"]
-    ];
-    const canAllocate = allocatable > 0.01;
-    const selection = canAllocate ? whatIfAllocation : "unallocated";
-    const allocationAdjustments = { ...baseAdjustments };
-    if (canAllocate && selection === "investments") allocationAdjustments.investmentContributionChange = (Number(allocationAdjustments.investmentContributionChange) || 0) + allocatable;
-    if (canAllocate && selection === "debt") allocationAdjustments.loanRepaymentChangeMonthly = (Number(allocationAdjustments.loanRepaymentChangeMonthly) || 0) + allocatable / 12;
-    if (canAllocate && selection === "lifestyle") allocationAdjustments.expenseChange = (Number(allocationAdjustments.expenseChange) || 0) + allocatable;
-    const adjustedResult = calculatePlan(applyScenarioAdjustments(plan, allocationAdjustments));
+    const { annualDifference, isCashflowSaving, annualCashflowImpact, investmentAbsorption, allocatable, choices, canAllocate, selection, adjustedResult } = resolveWhatIfScenario(result);
     const fmtDelta = amount => `${amount >= 0 ? "+" : "−"}${money(Math.abs(amount))}`;
     const forecastRow = (label, before, after) => `<div class="what-if-forecast-row"><strong>${label}</strong><span>${money(before)}</span><span>${money(after)}</span><b>${fmtDelta(after - before)}</b></div>`;
     output.innerHTML = `
@@ -15742,13 +15766,13 @@
   }
 
   function buildDecisionScenarioSaveContext(mode = "custom") {
-    const baseResult = calculatePlan(plan);
-    const action = mode === "what-if" ? (whatIfActions.find((item) => item.id === activeWhatIfId) || whatIfActions[0]) : null;
-    const adjustments = action ? { ...action.adjustments(baseResult), ...whatIfTargets } : activeDecisionComparison();
-    const adjustedPlan = action
-      ? applyScenarioAdjustments(plan, adjustments)
-      : buildComparisonPlan(baseResult);
-    const scenarioResult = calculatePlan(adjustedPlan);
+    const quick = mode === "what-if" ? resolveWhatIfScenario() : null;
+    const basePlan = quick?.basePlan || decisionScenarioBasePlan || plan;
+    const baseResult = quick?.result || calculatePlan(basePlan);
+    const action = quick?.active || null;
+    const adjustments = quick ? quick.allocationAdjustments : comparisonAdjustmentsWithSurplus(baseResult, activeDecisionComparison());
+    const adjustedPlan = applyScenarioAdjustments(basePlan, adjustments);
+    const scenarioResult = quick?.adjustedResult || calculatePlan(adjustedPlan);
     const changes = decisionChangeRowsFromAdjustments(adjustments);
     const overlay = TRUST?.createScenarioOverlay?.({ actionId: action?.id || "custom", label: action?.label || "Custom decision scenario", adjustments }) || null;
     return {
@@ -15759,12 +15783,13 @@
         mode: mode === "what-if" ? "decision-what-if" : "decision-custom",
         actionId: action?.id || "",
         adjustments: { ...comparisonDefaults, ...adjustments },
+        ...(quick ? { quick: { custom: { ...customWhatIf }, allocation: quick.selection, targets: { ...whatIfTargets }, baseAdjustments: { ...quick.baseAdjustments } } } : { comparisonDraft: activeDecisionComparison() }),
         ...(overlay ? { overlay } : {}),
       },
       changedInputs: changes,
       keyResultSnapshot: decisionKeyResultSnapshot(baseResult, scenarioResult),
       planSnapshot: adjustedPlan,
-      basePlanSnapshot: CALC.clonePlan(plan),
+      basePlanSnapshot: CALC.clonePlan(basePlan),
     };
   }
 
@@ -16693,6 +16718,15 @@
   }
 
   function renderOutputs() {
+    const scenarioPlanKey = `${activePlanId}:${plan.meta?.source || ""}:${plan.meta?.samplePlanId || ""}`;
+    if (decisionScenarioPlanKey !== null && decisionScenarioPlanKey !== scenarioPlanKey) {
+      whatIfBaseSnapshot = null;
+      whatIfRestoredBaseAdjustments = null;
+      decisionScenarioBasePlan = null;
+      whatIfTargets = {};
+      decisionScenarioDraft = null;
+    }
+    decisionScenarioPlanKey = scenarioPlanKey;
     const result = calculatePlan(plan);
     safeRenderModule("Demo banner", () => renderDemoModeBanner());
     safeRenderModule("Sample plan options", () => renderSamplePlanOptions());
@@ -17028,13 +17062,27 @@
     return loadScenarios().find((scenario) => scenario.id === id);
   }
 
-  function loadDecisionScenarioSnapshot(scenario) {
+  function restoreDecisionScenarioInputs(scenario) {
     const snapshot = scenario?.scenarioInputSnapshot || {};
     const adjustments = { ...comparisonDefaults, ...(snapshot.adjustments || {}) };
-    decisionScenarioDraft = adjustments;
-    if (snapshot.actionId && whatIfActions.some((action) => action.id === snapshot.actionId)) {
-      activeWhatIfId = snapshot.actionId;
+    const basePlan = CALC.clonePlan(scenario.basePlanSnapshot || plan);
+    if (snapshot.mode === "decision-what-if") {
+      activeWhatIfId = snapshot.actionId || "custom";
+      if (snapshot.quick?.custom) customWhatIf = { ...snapshot.quick.custom };
+      customWhatIfOpen = activeWhatIfId === "custom";
+      whatIfAllocation = snapshot.quick?.allocation || "unallocated";
+      whatIfTargets = { ...(snapshot.quick?.targets || {}) };
+      whatIfBaseSnapshot = basePlan;
+      whatIfRestoredBaseAdjustments = { ...(snapshot.quick?.baseAdjustments || adjustments) };
+    } else {
+      decisionScenarioDraft = { ...(snapshot.comparisonDraft || adjustments) };
+      decisionScenarioBasePlan = basePlan;
     }
+  }
+
+  function loadDecisionScenarioSnapshot(scenario) {
+    const snapshot = scenario?.scenarioInputSnapshot || {};
+    restoreDecisionScenarioInputs(scenario);
     showWorkspace("decision");
     renderOutputs();
     if (snapshot.mode !== "decision-what-if") {
@@ -17483,7 +17531,7 @@
       }
       if (target.dataset.scenarioTarget) {
         const key = target.dataset.scenarioTarget;
-        if (target.dataset.scenarioMode === "quick") whatIfTargets = { ...whatIfTargets, [key]: target.value };
+        if (target.dataset.scenarioMode === "quick") { whatIfTargets = { ...whatIfTargets, [key]: target.value }; whatIfRestoredBaseAdjustments = null; }
         else decisionScenarioDraft = { ...activeDecisionComparison(), [key]: target.value };
         renderOutputs();
         return;
@@ -18203,6 +18251,8 @@
         };
         customWhatIfError = customWhatIfAdjustments() ? "" : "Enter a positive amount within the supported range.";
         if (!customWhatIfError) {
+          whatIfBaseSnapshot = null;
+          whatIfRestoredBaseAdjustments = null;
           activeWhatIfId = "custom";
           whatIfAllocation = "unallocated";
         }
@@ -18211,6 +18261,8 @@
       }
       const whatIfButton = event.target.closest("[data-what-if]");
       if (whatIfButton) {
+        whatIfBaseSnapshot = null;
+        whatIfRestoredBaseAdjustments = null;
         activeWhatIfId = whatIfButton.dataset.whatIf;
         whatIfAllocation = "unallocated";
         renderOutputs();
