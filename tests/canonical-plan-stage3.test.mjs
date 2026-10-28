@@ -248,7 +248,7 @@ test("34 sample plans retain calculation parity after canonical migration", () =
 
 test("35 app rendering uses the calculation adapter and does not run live compatibility sync", async () => {
   const source = await readFile(new URL("../app.js", import.meta.url), "utf8");
-  const renderBody = source.match(/function renderOutputs\(\) \{([\s\S]*?)\n  \}\n\n  function renderAll/)?.[1] || "";
+  const renderBody = source.match(/function renderOutputs\(\) \{([\s\S]*?)\r?\n  \}\r?\n\r?\n  function renderAll/)?.[1] || "";
   assert.match(renderBody, /calculatePlan\(plan\)/);
   assert.doesNotMatch(renderBody, /syncCollectionsToLegacy\(\)/);
 });
