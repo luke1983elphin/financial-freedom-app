@@ -9920,3 +9920,30 @@ body.scenario-save-modal-open {
 @media print {
   body[data-print-mode="retirement-comparison"] .semi-comparison-portrait .semi-portrait-scenario { break-before:auto; }
 }
+
+
+/* Retirement tab: tidy one-off expense and income entry cards only. */
+.semi-retirement-one-off-section:not(.semi-retirement-concessional-section) .semi-retirement-one-off-fields {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 12px 16px;
+}
+.semi-retirement-one-off-section:not(.semi-retirement-concessional-section) .semi-retirement-one-off-fields > :first-child {
+  grid-column: 1 / -1;
+}
+.semi-retirement-one-off-section:not(.semi-retirement-concessional-section) .semi-retirement-one-off-fields > :last-child {
+  grid-column: 1 / -1;
+  justify-self: end;
+}
+.semi-retirement-one-off-section:not(.semi-retirement-concessional-section) .semi-retirement-one-off-fields > * {
+  min-width: 0;
+}
+@media (max-width: 560px) {
+  .semi-retirement-one-off-section:not(.semi-retirement-concessional-section) .semi-retirement-one-off-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .semi-retirement-one-off-section:not(.semi-retirement-concessional-section) .semi-retirement-one-off-fields > :first-child,
+  .semi-retirement-one-off-section:not(.semi-retirement-concessional-section) .semi-retirement-one-off-fields > :last-child {
+    grid-column: 1;
+  }
+}
