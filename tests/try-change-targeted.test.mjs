@@ -28,3 +28,29 @@ test('F1 paid-off and inactive loans cannot receive a fictitious repayment', () 
   const p = controlledPlan(CALC); p.liabilityItems = [{ ...mortgage('a', 'monthly', 12), balance: 0 }];
   assert.throws(() => apply(p, { loanRepaymentChangeMonthly: 500 }), /eligible home loan/);
 });
+
+test('F2 single earner increases salary by $5200 with $1664 tax/levy and no second earner', () => {
+  const p = controlledPlan(CALC), b = calc(p), q = apply(p, { incomeChange: 5200 }), r = calc(q);
+  close(r.finalProjectedCashSurplus - b.finalProjectedCashSurplus, 3536);
+  close(r.taxEstimate.totalTax - b.taxEstimate.totalTax, 1664);
+  close(r.netConcessionalSuperContributions - b.netConcessionalSuperContributions, 530.4);
+  assert.equal(q.incomeItems.length, 1); assert.equal(q.incomeItems[0].owner, 'person1');
+});
+test('F2 four days reduces the selected salary, tax and employer super', () => {
+  const p = controlledPlan(CALC), b = calc(p), r = calc(apply(p, { incomeRateChange: -.2, incomeEmploymentOnly: true }));
+  close(r.finalProjectedCashSurplus - b.finalProjectedCashSurplus, -13600);
+  close(r.netConcessionalSuperContributions - b.netConcessionalSuperContributions, -2040);
+});
+test('F2 couples must select an existing income owner; frequency and joint tax-free type survive', () => {
+  const p = controlledPlan(CALC);
+  p.personal.person2Name = 'Partner'; p.personal.person2Age = 41;
+  p.incomeItems.push({ id: 'partner', type: 'salaryWages', owner: 'person2', amount: 2000, frequency: 'fortnightly' });
+  assert.throws(() => apply(p, { incomeChange: 5200 }), /Choose.*income/);
+  const q = apply(p, { incomeChange: 5200, incomeItemId: 'partner' });
+  assert.equal(q.incomeItems[0].amount, 100000); assert.equal(q.incomeItems[1].amount, 2200);
+  p.incomeItems.push({ id: 'free', type: 'taxFree', owner: 'joint', amount: 1000, frequency: 'annually', person1AllocationPercentage: 25, person2AllocationPercentage: 75 });
+  const t = apply(p, { incomeChange: 5200, incomeItemId: 'free' });
+  assert.equal(t.incomeItems[2].type, 'taxFree'); assert.equal(t.incomeItems[2].person1AllocationPercentage, 25);
+  close(calc(t).taxEstimate.totalTax, calc(p).taxEstimate.totalTax);
+  assert.throws(() => apply(p, { incomeChange: -60000, incomeItemId: 'partner' }), /exceeds/);
+});

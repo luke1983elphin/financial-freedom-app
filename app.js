@@ -590,11 +590,11 @@
     { id: "invest-100", label: "Invest an extra $100/week", adjustments: () => ({ investmentContributionChange: 5200 }) },
     { id: "invest-250", label: "Invest an extra $250/week", adjustments: () => ({ investmentContributionChange: 13000 }) },
     { id: "debt-500", label: "Pay an extra $500/month off debt", adjustments: () => ({ loanRepaymentChangeMonthly: 500 }) },
-    { id: "income-5", label: "Increase income by 5%", adjustments: (result) => ({ incomeChange: Math.round((result.annualGrossIncome || result.annualNetIncome) * 0.05) }) },
+    { id: "income-5", label: "Increase income by 5%", adjustments: () => ({ incomeRateChange: 0.05 }) },
     { id: "expenses-500", label: "Reduce expenses by $500/month", adjustments: () => ({ expenseChange: -6000 }) },
     { id: "super-10000", label: "Add $10,000 concessional super", adjustments: () => ({ extraConcessionalSuperChange: 10000 }) },
     { id: "car-50000", label: "Buy a $50,000 car", adjustments: () => ({ oneOffCosts: 50000 }) },
-    { id: "four-days", label: "Work 4 days per week", adjustments: (result) => ({ incomeChange: -Math.round((result.annualGrossIncome || result.annualNetIncome) * 0.2) }) },
+    { id: "four-days", label: "Work 4 days per week", adjustments: () => ({ incomeRateChange: -0.2, incomeEmploymentOnly: true }) },
   ];
 
   let restoredDraftUi = {};
@@ -1484,10 +1484,31 @@
     return error;
   }
 
+  function eligibleScenarioIncomes(basePlan, employmentOnly = false) {
+    return (basePlan.incomeItems || []).filter(item => {
+      const type = CALC.normaliseIncomeType(item.type || item.incomeType);
+      return CALC.isActiveFinancialRecord(item) && Number(item.amount) > 0
+        && (employmentOnly ? type === "salaryWages" : ["salaryWages", "other", "taxFree", "interest", "distributions"].includes(type));
+    });
+  }
+
+  function resolveScenarioIncome(basePlan, adjustments) {
+    if (!Number(adjustments.incomeChange) && !Number(adjustments.incomeRateChange)) return { amount: 0, item: null };
+    const items = eligibleScenarioIncomes(basePlan, adjustments.incomeEmploymentOnly);
+    const item = adjustments.incomeItemId ? items.find(item => item.id === adjustments.incomeItemId) : items.length === 1 ? items[0] : null;
+    if (!item) throw scenarioInputError("Choose the existing income entry to change. Its owner and income type will be preserved; working-hours changes require employment income.");
+    const annual = annualValue(item.amount, item.frequency);
+    const amount = Number(adjustments.incomeRateChange) ? Math.round(annual * Number(adjustments.incomeRateChange)) : Number(adjustments.incomeChange);
+    if (annual + amount < 0) throw scenarioInputError("The income reduction exceeds the selected entry's annual income.");
+    return { amount, item };
+  }
+
   function scenarioTargetsHtml(basePlan, mode, adjustments = {}) {
     const loans = eligibleScenarioLoans(basePlan);
-    if (loans.length < 2) return "";
-    return `<label class="field-label">Home loan for this change<select class="field-input" data-scenario-target="loanId" data-scenario-mode="${mode}"><option value="">Choose a home loan</option>${loans.map(item => `<option value="${escapeHtml(item.id)}" ${adjustments.loanId === item.id ? "selected" : ""}>${escapeHtml(item.name || item.id)}</option>`).join("")}</select></label>`;
+    const incomes = eligibleScenarioIncomes(basePlan);
+    const incomeHtml = incomes.length > 1 ? `<label class="field-label">Income entry for this change<select class="field-input" data-scenario-target="incomeItemId" data-scenario-mode="${mode}"><option value="">Choose an income entry</option>${incomes.map(item => `<option value="${escapeHtml(item.id)}" ${adjustments.incomeItemId === item.id ? "selected" : ""}>${escapeHtml(item.name || item.id)} — ${escapeHtml(item.owner)} (${escapeHtml(CALC.normaliseIncomeType(item.type || item.incomeType))})</option>`).join("")}</select></label>` : "";
+    if (loans.length < 2) return incomeHtml;
+    return incomeHtml + `<label class="field-label">Home loan for this change<select class="field-input" data-scenario-target="loanId" data-scenario-mode="${mode}"><option value="">Choose a home loan</option>${loans.map(item => `<option value="${escapeHtml(item.id)}" ${adjustments.loanId === item.id ? "selected" : ""}>${escapeHtml(item.name || item.id)}</option>`).join("")}</select></label>`;
   }
 
   function showScenarioInputError(element, error, prefix = "") {
@@ -1501,15 +1522,17 @@
     const eligibleLoans = eligibleScenarioLoans(scenarioPlan);
     const repaymentLoan = adjustments.loanId ? eligibleLoans.find(item => item.id === adjustments.loanId) : eligibleLoans.length === 1 ? eligibleLoans[0] : null;
     if (repaymentDelta && !repaymentLoan) throw scenarioInputError(eligibleLoans.length ? "Choose the home loan to receive this household repayment change." : "This change requires an eligible home loan with an outstanding balance.");
-    const incomeChange = Number(adjustments.incomeChange) || 0;
+    const incomeResolution = resolveScenarioIncome(basePlan, adjustments);
+    const incomeChange = incomeResolution.amount;
     const expenseChange = (Number(adjustments.expenseChange) || 0) + (Number(adjustments.otherExpenseAnnualChange) || 0);
     const repaymentChange = Number(adjustments.loanRepaymentChangeMonthly) || 0;
     const loanRateChange = Number(adjustments.loanInterestRateChangePct) || 0;
     const helpBalanceChange = Number(adjustments.helpBalanceChange) || 0;
     const cashChange = (Number(adjustments.oneOffSavings) || 0) - (Number(adjustments.oneOffCosts) || 0);
-    scenarioPlan.income.otherIncome = addAmount(scenarioPlan.income.otherIncome, incomeChange, -Infinity);
-    if (incomeChange && Array.isArray(scenarioPlan.incomeItems)) {
-      scenarioPlan.incomeItems.push({ id: makeId("scenario-income"), name: "Scenario income change", amount: incomeChange, frequency: "annually" });
+    if (incomeChange) {
+      const item = scenarioPlan.incomeItems.find(item => item.id === incomeResolution.item.id);
+      item.amount = Number(item.amount) + incomeChange / annualValue(1, item.frequency);
+      item.annualAmount = annualValue(item.amount, item.frequency);
     }
     scenarioPlan.expenses.otherExpenses = addAmount(scenarioPlan.expenses.otherExpenses, expenseChange, -Infinity);
     if (expenseChange && Array.isArray(scenarioPlan.expenseItems)) {
