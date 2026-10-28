@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { loadTryChangeApp, controlledPlan } from './helpers/try-change-app.mjs';
 const { app, CALC, context, document } = loadTryChangeApp();
 const apply = (...args) => app.get('applyScenarioAdjustments')(...args);
@@ -68,4 +69,11 @@ test('F3 missing cash cannot hide a cost; funded costs consume only cash once', 
   close(calc(q).currentNetWorth - calc(p).currentNetWorth, -50000);
   assert.equal(q.assetItems[0].value, 100000);
   close(q.assetItems.filter(a => a.category === 'cash').reduce((s, a) => s + a.value, 0), 10000);
+});
+
+test('F4 unsupported employer-super override is explicitly blocked, not silently ignored', () => {
+  assert.throws(() => apply(controlledPlan(CALC), { superContributionChange: 5200 }), /Employer super.*not supported/);
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  assert.match(html, /data-comparison="superContributionChange"[^>]*disabled/);
+  assert.match(html, /Employer super changes are not supported in this scenario/);
 });

@@ -1517,6 +1517,7 @@
   }
 
   function applyScenarioAdjustments(basePlan, adjustments = {}) {
+    if (Number(adjustments.superContributionChange)) throw scenarioInputError("Employer super changes are not supported in this scenario. Employer contributions remain derived from the existing employment settings; additional concessional super is a separate cash-funded change.");
     const scenarioPlan = CALC.clonePlan(basePlan);
     const repaymentDelta = Number(adjustments.loanRepaymentChangeMonthly) || 0;
     const eligibleLoans = eligibleScenarioLoans(scenarioPlan);
