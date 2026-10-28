@@ -15497,7 +15497,8 @@
     // *unallocated* cash even though the household's pre-investing cashflow improved.
     // Keep the real unallocated balance for allocation decisions, but show the
     // change before investment allocations for income/expense scenarios.
-    const isCashflowSaving = active.id === "custom" && ["expenses", "income"].includes(customWhatIf.kind);
+    const isCashflowSaving = ["income-5", "expenses-500"].includes(active.id)
+      || (active.id === "custom" && ["expenses", "income"].includes(customWhatIf.kind));
     const annualCashflowImpact = isCashflowSaving
       ? (Number(firstResult.cashSurplusBeforeInvesting) || 0) - (Number(result.cashSurplusBeforeInvesting) || 0)
       : annualDifference;
