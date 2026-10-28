@@ -617,6 +617,7 @@
   let customWhatIfOpen = false;
   let customWhatIfError = "";
   let whatIfAllocation = "unallocated";
+  let whatIfTargets = {};
   let generatedWeeklyPlanner = null;
   let weeklyPlan = loadWeeklyPlan();
   let activeWeeklyPlanTab = restoredDraftUi.activeWeeklyPlanTab || "thisWeek";
@@ -1473,8 +1474,33 @@
     return Math.max(min, (Number(value) || 0) + (Number(delta) || 0));
   }
 
+  function eligibleScenarioLoans(basePlan) {
+    return (basePlan.liabilityItems || []).filter(item => item.type === "homeLoan" && CALC.isActiveFinancialRecord(item) && Number(item.balance) > 0);
+  }
+
+  function scenarioInputError(message) {
+    const error = new Error(message);
+    error.code = "scenario-input";
+    return error;
+  }
+
+  function scenarioTargetsHtml(basePlan, mode, adjustments = {}) {
+    const loans = eligibleScenarioLoans(basePlan);
+    if (loans.length < 2) return "";
+    return `<label class="field-label">Home loan for this change<select class="field-input" data-scenario-target="loanId" data-scenario-mode="${mode}"><option value="">Choose a home loan</option>${loans.map(item => `<option value="${escapeHtml(item.id)}" ${adjustments.loanId === item.id ? "selected" : ""}>${escapeHtml(item.name || item.id)}</option>`).join("")}</select></label>`;
+  }
+
+  function showScenarioInputError(element, error, prefix = "") {
+    if (error.code !== "scenario-input") throw error;
+    element.innerHTML = prefix + `<p class="field-help" role="alert">${escapeHtml(error.message)} The scenario has not been applied or saved.</p>`;
+  }
+
   function applyScenarioAdjustments(basePlan, adjustments = {}) {
     const scenarioPlan = CALC.clonePlan(basePlan);
+    const repaymentDelta = Number(adjustments.loanRepaymentChangeMonthly) || 0;
+    const eligibleLoans = eligibleScenarioLoans(scenarioPlan);
+    const repaymentLoan = adjustments.loanId ? eligibleLoans.find(item => item.id === adjustments.loanId) : eligibleLoans.length === 1 ? eligibleLoans[0] : null;
+    if (repaymentDelta && !repaymentLoan) throw scenarioInputError(eligibleLoans.length ? "Choose the home loan to receive this household repayment change." : "This change requires an eligible home loan with an outstanding balance.");
     const incomeChange = Number(adjustments.incomeChange) || 0;
     const expenseChange = (Number(adjustments.expenseChange) || 0) + (Number(adjustments.otherExpenseAnnualChange) || 0);
     const repaymentChange = Number(adjustments.loanRepaymentChangeMonthly) || 0;
@@ -1495,7 +1521,8 @@
     if (Array.isArray(scenarioPlan.liabilityItems)) {
       scenarioPlan.liabilityItems = scenarioPlan.liabilityItems.map((item) => {
         if (item.type === "homeLoan") {
-          return { ...item, repayment: addAmount(item.repayment, repaymentChange), interestRatePct: addAmount(item.interestRatePct, loanRateChange) };
+          const change = item.id === repaymentLoan?.id ? repaymentChange * 12 / annualValue(1, item.repaymentFrequency || "monthly") : 0;
+          return { ...item, repayment: addAmount(item.repayment, change), interestRatePct: addAmount(item.interestRatePct, loanRateChange) };
         }
         if (item.type === "hecsHelp") {
           return { ...item, balance: addAmount(item.balance, helpBalanceChange) };
@@ -15398,6 +15425,8 @@
         input.value = value;
       }
     });
+    const targetsHtml = scenarioTargetsHtml(plan, "detailed", comparison);
+    try {
     const annualAllocation = comparisonSurplusAllocationAmount(result, comparison);
     const revisedPlan = buildComparisonPlan(result);
     const revisedResult = calculatePlan(revisedPlan);
@@ -15426,12 +15455,14 @@
       ...comparisonSurplusImpactTiles(result, revisedResult, comparison, annualAllocation),
     ];
     summary.innerHTML = `
+      ${targetsHtml}
       ${primaryTiles.join("")}
       <details class="decision-details decision-result-details">
         <summary>View details</summary>
         <div class="summary-grid mt-3">${technicalTiles.join("")}</div>
       </details>
     `;
+    } catch (error) { showScenarioInputError(summary, error, targetsHtml); }
   }
 
   function customWhatIfAdjustments() {
@@ -15490,7 +15521,9 @@
           <button class="btn btn-primary what-if-custom-apply" type="button" data-what-if-custom-apply>Try this change</button>
         </div>` : ""}
       </div>`;
-    const baseAdjustments = active.adjustments(result);
+    actions.innerHTML += scenarioTargetsHtml(plan, "quick", whatIfTargets);
+    try {
+    const baseAdjustments = { ...active.adjustments(result), ...whatIfTargets };
     const firstResult = calculatePlan(applyScenarioAdjustments(plan, baseAdjustments));
     const annualDifference = estimatedCashflow(firstResult) - estimatedCashflow(result);
     // A higher investment contribution can absorb expense savings, leaving zero
@@ -15547,6 +15580,7 @@
           <p class="field-help">Remaining annual cash after your choice: ${money(estimatedCashflow(adjustedResult))}. A negative result means the revised plan may require additional funding. Unallocated cash is not automatically treated as an investment.</p>
         </div>
       </section>`;
+    } catch (error) { showScenarioInputError(output, error); }
   }
 
   function normaliseSavedScenarioType(type = "") {
@@ -15672,7 +15706,7 @@
   function buildDecisionScenarioSaveContext(mode = "custom") {
     const baseResult = calculatePlan(plan);
     const action = mode === "what-if" ? (whatIfActions.find((item) => item.id === activeWhatIfId) || whatIfActions[0]) : null;
-    const adjustments = action ? action.adjustments(baseResult) : activeDecisionComparison();
+    const adjustments = action ? { ...action.adjustments(baseResult), ...whatIfTargets } : activeDecisionComparison();
     const adjustedPlan = action
       ? applyScenarioAdjustments(plan, adjustments)
       : buildComparisonPlan(baseResult);
@@ -17409,6 +17443,13 @@
         renderSetupSummary(calculatePlan(plan));
         return;
       }
+      if (target.dataset.scenarioTarget) {
+        const key = target.dataset.scenarioTarget;
+        if (target.dataset.scenarioMode === "quick") whatIfTargets = { ...whatIfTargets, [key]: target.value };
+        else decisionScenarioDraft = { ...activeDecisionComparison(), [key]: target.value };
+        renderOutputs();
+        return;
+      }
       if (target.dataset.comparison) {
         if(target.dataset.comparison === "investmentReturnChangePct") {
           const errors=CALC.investmentReturnAssets(plan).flatMap(asset=>CALC.investmentReturnValidation({...asset,expectedTotalReturnPct:Number(asset.expectedTotalReturnPct)+Number(target.value)}));
@@ -18172,7 +18213,14 @@
       if (scenarioSaveButton) {
         const mode = scenarioSaveButton.dataset.saveStageGScenario;
         if (mode === "retirement") openScenarioSaveDialog(buildRetirementScenarioSaveContext());
-        else openScenarioSaveDialog(buildDecisionScenarioSaveContext(mode === "decision-what-if" ? "what-if" : "custom"));
+        else {
+          try { openScenarioSaveDialog(buildDecisionScenarioSaveContext(mode === "decision-what-if" ? "what-if" : "custom")); }
+          catch (error) {
+            if (error.code !== "scenario-input") throw error;
+            updateSaveStatus(error.message);
+            renderOutputs();
+          }
+        }
         return;
       }
 
