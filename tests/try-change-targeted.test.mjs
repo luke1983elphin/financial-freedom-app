@@ -7,6 +7,16 @@ const apply = (...args) => app.get('applyScenarioAdjustments')(...args);
 const calc = p => app.get('calculatePlan')(p);
 const close = (actual, expected, tolerance = .51) => assert.ok(Math.abs(actual - expected) <= tolerance, `${actual} != ${expected}`);
 const forecast = r => JSON.stringify({ cash: r.finalProjectedCashSurplus, worth: r.netWorthProjection, investments: r.investmentProjection, super: r.superProjection });
+
+test('F7 zero and negative forecasts survive; only missing/non-finite values fall back', () => {
+  for (const value of [0, -500, 200, undefined, null, NaN, Infinity]) {
+    const r = { netWorthProjection: [{ closingBalance: value }], superProjection: [{ closingBalance: value }], investmentProjection: [{ closingBalance: value }], currentNetWorth: 100000, superannuationBalance: 50000 };
+    assert.equal(app.get('netWorthAtYear')(r, 1), Number.isFinite(value) ? value : 100000);
+    assert.equal(app.get('longTermNetWorth')(r), Number.isFinite(value) ? value : 100000);
+    assert.equal(app.get('superAtYear')(r, 1), Number.isFinite(value) ? value : 50000);
+    assert.equal(app.get('investmentAtYear')(r, 1), Number.isFinite(value) ? value : 0);
+  }
+});
 const mortgage = (id, frequency, divisor) => ({ id, name: id, type: 'homeLoan', balance: 200000, repayment: 12000 / divisor, repaymentFrequency: frequency, interestRatePct: 0, termYears: 30 });
 
 test('F6 retirement-backed projections label one, five and ten completed periods consistently', () => {

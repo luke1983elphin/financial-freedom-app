@@ -1619,15 +1619,19 @@
   }
 
   function netWorthAtYear(result, year) {
-    return result.netWorthProjection[Math.max(0, year - 1)]?.closingBalance || result.currentNetWorth;
+    return finiteForecastValue(result.netWorthProjection[Math.max(0, year - 1)]?.closingBalance, result.currentNetWorth);
+  }
+
+  function finiteForecastValue(value, fallback = 0) {
+    return Number.isFinite(value) ? value : Number.isFinite(fallback) ? fallback : 0;
   }
 
   function investmentAtYear(result, year) {
-    return result.investmentProjection[Math.max(0, year - 1)]?.closingBalance || 0;
+    return finiteForecastValue(result.investmentProjection[Math.max(0, year - 1)]?.closingBalance);
   }
 
   function superAtYear(result, year) {
-    return result.superProjection[Math.max(0, year - 1)]?.closingBalance || result.superannuationBalance || 0;
+    return finiteForecastValue(result.superProjection[Math.max(0, year - 1)]?.closingBalance, result.superannuationBalance);
   }
 
   function loanBalanceAtYear(result, year) {
@@ -1636,7 +1640,7 @@
   }
 
   function longTermNetWorth(result) {
-    return result.netWorthProjection.at(-1)?.closingBalance || result.currentNetWorth;
+    return finiteForecastValue(result.netWorthProjection.at(-1)?.closingBalance, result.currentNetWorth);
   }
 
   function targetAgeOutcome(result) {
