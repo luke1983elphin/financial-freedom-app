@@ -1510,7 +1510,7 @@
   function scenarioTargetsHtml(basePlan, mode, adjustments = {}) {
     const loans = eligibleScenarioLoans(basePlan);
     const incomes = eligibleScenarioIncomes(basePlan);
-    const incomeHtml = incomes.length > 1 ? `<label class="field-label">Income entry for this change<select class="field-input" data-scenario-target="incomeItemId" data-scenario-mode="${mode}"><option value="">Choose an income entry</option>${incomes.map(item => `<option value="${escapeHtml(item.id)}" ${adjustments.incomeItemId === item.id ? "selected" : ""}>${escapeHtml(item.name || item.id)} — ${escapeHtml(item.owner)} (${escapeHtml(CALC.normaliseIncomeType(item.type || item.incomeType))})</option>`).join("")}</select></label>` : "";
+    const incomeHtml = incomes.length > 1 ? `<label class="field-label scenario-income-entry">Income entry for this change<select class="field-input" data-scenario-target="incomeItemId" data-scenario-mode="${mode}"><option value="">Choose an income entry</option>${incomes.map(item => `<option value="${escapeHtml(item.id)}" ${adjustments.incomeItemId === item.id ? "selected" : ""}>${escapeHtml(item.name || item.id)} — ${escapeHtml(item.owner)} (${escapeHtml(CALC.normaliseIncomeType(item.type || item.incomeType))})</option>`).join("")}</select></label>` : "";
     if (loans.length < 2) return incomeHtml;
     return incomeHtml + `<label class="field-label">Home loan for this change<select class="field-input" data-scenario-target="loanId" data-scenario-mode="${mode}"><option value="">Choose a home loan</option>${loans.map(item => `<option value="${escapeHtml(item.id)}" ${adjustments.loanId === item.id ? "selected" : ""}>${escapeHtml(item.name || item.id)}</option>`).join("")}</select></label>`;
   }

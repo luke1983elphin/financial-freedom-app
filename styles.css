@@ -9947,3 +9947,80 @@ body.scenario-save-modal-open {
     grid-column: 1;
   }
 }
+
+/* Try a Change: presentation-only improvements. Keep native selects and scenario logic. */
+[data-view-panel="decision"] .scenario-income-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  width: 100%;
+  max-width: 600px;
+  margin: 18px 0 14px;
+  font-weight: 700;
+  color: #16324b;
+}
+[data-view-panel="decision"] .scenario-income-entry .field-input {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 14px;
+  border: 1px solid #cbded8;
+  border-radius: 12px;
+  background-color: #fff;
+  color: #102b42;
+  font-weight: 600;
+}
+[data-view-panel="decision"] .decision-accordion {
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #dce5eb;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 5px 18px rgba(15, 39, 66, .035);
+}
+[data-view-panel="decision"] .decision-accordion > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 19px 22px;
+  list-style: none;
+}
+[data-view-panel="decision"] .decision-accordion > summary::-webkit-details-marker { display: none; }
+[data-view-panel="decision"] .decision-accordion > summary::marker { content: ''; }
+[data-view-panel="decision"] .decision-accordion > summary h3 {
+  margin: 0 0 5px;
+  font-size: 17px;
+  line-height: 1.3;
+}
+[data-view-panel="decision"] .decision-accordion > summary span {
+  display: block;
+  color: #5b7184;
+  font-size: 13px;
+  line-height: 1.5;
+  font-weight: 400;
+}
+[data-view-panel="decision"] .decision-accordion > summary strong { display: none; }
+[data-view-panel="decision"] .decision-accordion > summary::after {
+  content: '';
+  display: block;
+  flex: 0 0 9px;
+  width: 9px;
+  height: 9px;
+  border-right: 2px solid #234b60;
+  border-bottom: 2px solid #234b60;
+  transform: rotate(45deg);
+  transition: transform .18s ease;
+}
+[data-view-panel="decision"] .decision-accordion[open] > summary::after { transform: rotate(225deg); }
+[data-view-panel="decision"] .decision-accordion > summary:hover { background: #f5faf8; }
+[data-view-panel="decision"] .decision-accordion > .decision-accordion-body {
+  margin-top: 0;
+  padding: 18px 22px 22px;
+  border-top: 1px solid #e5edf0;
+}
+@media (max-width: 600px) {
+  [data-view-panel="decision"] .decision-accordion > summary { padding: 16px; }
+  [data-view-panel="decision"] .decision-accordion > .decision-accordion-body { padding: 15px; }
+  [data-view-panel="decision"] .scenario-income-entry { max-width: none; }
+}
