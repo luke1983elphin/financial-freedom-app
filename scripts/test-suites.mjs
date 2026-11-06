@@ -1,6 +1,8 @@
 export const DEFAULT_SUITE_TIMEOUT_MS = 120_000;
 
 export const ACTIVE_TEST_SUITES = [
+  { id: "dollar-display-regression", file: "tests/dollar-display-regression.test.mjs", groups: ["all", "mjs", "presentation"] },
+  { id: "dollar-basis", file: "tests/dollar-basis.test.mjs", groups: ["all", "mjs", "presentation"] },
   { id: "try-change-targeted", file: "tests/try-change-targeted.test.mjs", groups: ["all", "mjs", "try-change"] },
   { id: "release-safeguards", file: "tests/release-safeguards.test.mjs", groups: ["all", "mjs", "r1-ai"] },
   { id: "custom-what-if", file: "tests/custom-what-if.test.mjs", groups: ["all", "mjs", "presentation"] },
@@ -62,6 +64,10 @@ export const ACTIVE_TEST_SUITES = [
 ];
 
 export const SYNTAX_CHECK_FILES = [
+  "dollar-basis.js",
+  "tests/dollar-display-regression.test.mjs",
+  "tests/dollar-basis-browser.mjs",
+  "tests/dollar-basis.test.mjs",
   "api/_lib/ai-policy.js",
   "tests/release-browser.mjs",
   "tests/release-safeguards.test.mjs",

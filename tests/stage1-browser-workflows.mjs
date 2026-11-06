@@ -141,17 +141,23 @@ before(async () => {
 });
 
 after(async () => {
+  if (cdp) await cdp.send("Browser.close").catch(() => {});
+  if (chrome && chrome.exitCode === null) await Promise.race([
+    new Promise(resolve => chrome.once("exit", resolve)),
+    new Promise(resolve => setTimeout(resolve, 2000)),
+  ]);
   cdp?.close();
-  chrome?.kill();
+  if (chrome && chrome.exitCode === null) chrome.kill();
+  chrome?.unref();
   server?.closeAllConnections?.();
   if (server?.listening) await new Promise((resolve) => server.close(resolve));
-  if (profile) await rm(profile, { recursive: true, force: true });
+  if (profile && path.resolve(profile).startsWith(path.resolve(tmpdir()) + path.sep) && path.basename(profile).startsWith("ffs-stage1-browser-")) await rm(profile, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
 });
 
 test("real browser gates empty and partial plans while enabling ready plans", async () => {
-  const empty = await evaluate("FFSStage1BrowserTestHooks.getReadiness()");
+  const empty = await evaluate("FFSStage1BrowserTestHooks.setPlan(FFSCalculator.emptyPlan(), 'decision'); FFSStage1BrowserTestHooks.closeDurabilityDialog(); FFSStage1BrowserTestHooks.getReadiness()");
   assert.equal(empty.state, "empty");
-  const emptyDecision = await evaluate("FFSStage1BrowserTestHooks.showWorkspace('decision'); document.getElementById('decisionList').innerText");
+  const emptyDecision = await evaluate("FFSStage1BrowserTestHooks.showWorkspace('decision'); document.getElementById('decisionList').textContent");
   assert.match(emptyDecision, /Complete your Financial Plan/);
   assert.doesNotMatch(emptyDecision, /Strongest opportunity/);
   const emptyReport = await evaluate("FFSStage1BrowserTestHooks.showWorkspace('reports'); ({text:document.getElementById('financialReportBody').innerText, disabled:document.getElementById('reportPrintButton').disabled})");
@@ -160,14 +166,14 @@ test("real browser gates empty and partial plans while enabling ready plans", as
 
   const partial = await evaluate(`(() => { const p=FFSCalculator.emptyPlan(); p.incomeItems=[]; p.assetItems=[]; p.liabilityItems=[]; p.expenseItems=[]; p.personal.person1Age=40; p.incomeItems.push({id:'salary',type:'salaryWages',owner:'person1',amount:90000,frequency:'annually'}); return FFSStage1BrowserTestHooks.setPlan(p,'decision'); })()`);
   assert.equal(partial.state, "partial");
-  assert.match(await evaluate("document.getElementById('decisionList').innerText"), /Complete your Financial Plan/);
+  assert.match(await evaluate("document.getElementById('decisionList').textContent"), /Complete your Financial Plan/);
 
   const ready = await evaluate("FFSStage1BrowserTestHooks.setPlan(FFS_DATA.samplePlans[1].plan,'decision')");
   assert.equal(ready.state, "ready");
-  assert.match(await evaluate("document.getElementById('decisionList').innerText"), /Strongest opportunity/);
+  assert.match(await evaluate("document.getElementById('decisionList').textContent"), /Modelled comparison/);
   const readyReport = await evaluate("FFSStage1BrowserTestHooks.showWorkspace('reports'); ({disabled:document.getElementById('reportPrintButton').disabled, title:document.getElementById('financialReportBody').innerText})");
   assert.equal(readyReport.disabled, false);
-  assert.match(readyReport.title, /Your Financial Freedom Report/);
+  assert.match(readyReport.title, /Financial Freedom Report/);
 });
 
 test("real browser converts, edits, unlinks, reloads and deletes rental records without orphans", async () => {
@@ -201,15 +207,20 @@ test("real browser converts, edits, unlinks, reloads and deletes rental records 
 
 test("real browser creates and edits a linked investment with stable IDs", async () => {
   await evaluate(`(() => { const p=FFSCalculator.emptyPlan(); p.incomeItems=[]; p.assetItems=[]; p.liabilityItems=[]; p.expenseItems=[]; FFSStage1BrowserTestHooks.setPlan(p,'investments'); FFSStage1BrowserTestHooks.openLinkedSetup('investment'); })()`);
-  await evaluate(`(() => { const set=(field,value,event='input')=>{const el=document.querySelector('[data-linked-setup-field="'+field+'"]'); el.value=value; el.dispatchEvent(new Event(event,{bubbles:true}));}; set('name','Managed portfolio'); set('investmentType','managedFund','change'); set('value','100000'); set('annualIncome','4500'); const loan=document.querySelector('[data-linked-setup-field="hasLoan"]'); loan.checked=true; loan.dispatchEvent(new Event('change',{bubbles:true})); set('loanBalance','25000'); document.querySelector('[data-linked-setup-form="investment"]').requestSubmit(); })()`);
+  await evaluate(`(() => { const set=(field,value,event='input')=>{const el=document.querySelector('[data-linked-setup-field="'+field+'"]'); el.value=value; el.dispatchEvent(new Event(event,{bubbles:true}));}; set('name','Managed portfolio'); set('investmentType','managedFund','change'); set('value','100000'); set('expectedTotalReturnPct','8'); set('expectedIncomeYieldPct','4.5'); set('incomeTreatment','cash','change'); const loan=document.querySelector('[data-linked-setup-field="hasLoan"]'); loan.checked=true; loan.dispatchEvent(new Event('change',{bubbles:true})); set('loanBalance','25000'); document.querySelector('[data-linked-setup-form="investment"]').requestSubmit(); })()`);
   await waitFor(() => evaluate("document.getElementById('linkedSetupDialog').classList.contains('hidden')"));
-  const first = await evaluate(`(() => { const p=FFSStage1BrowserTestHooks.getPlan(); const a=p.assetItems.find(x=>x.name==='Managed portfolio'); return {assetId:a.id,income:p.incomeItems.find(x=>x.linkedAssetId===a.id),loan:p.liabilityItems.find(x=>x.linkedAssetId===a.id)}; })()`);
+  const first = await evaluate(`(() => { const p=FFSStage1BrowserTestHooks.getPlan(); const a=p.assetItems.find(x=>x.name==='Managed portfolio'); return {assetId:a.id,asset:a,income:p.incomeItems.find(x=>x.linkedAssetId===a.id),loan:p.liabilityItems.find(x=>x.linkedAssetId===a.id)}; })()`);
+  assert.equal(first.asset.incomeTreatment, "cash");
+  assert.equal(Number(first.asset.expectedIncomeYieldPct), 4.5);
   assert.equal(first.income.type, "distributions");
+  assert.equal(Number(first.income.amount), 0, "linked placeholder does not double-count configured cash distributions");
   assert.ok(first.loan.id);
   await evaluate(`FFSStage1BrowserTestHooks.openLinkedSetup('investment',${JSON.stringify(first.assetId)}); (()=>{const el=document.querySelector('[data-linked-setup-field="owner"]'); el.value='person2'; el.dispatchEvent(new Event('change',{bubbles:true}));})(); document.querySelector('[data-linked-setup-form="investment"]').requestSubmit()`);
   await waitFor(() => evaluate("document.getElementById('linkedSetupDialog').classList.contains('hidden')"));
   const edited = await evaluate(`(() => { const p=FFSStage1BrowserTestHooks.getPlan(); return {asset:p.assetItems.find(x=>x.id===${JSON.stringify(first.assetId)}), income:p.incomeItems.find(x=>x.linkedAssetId===${JSON.stringify(first.assetId)}), loan:p.liabilityItems.find(x=>x.linkedAssetId===${JSON.stringify(first.assetId)})}; })()`);
   assert.deepEqual([edited.asset.owner, edited.income.owner, edited.loan.owner], ["person2", "person2", "person2"]);
+  assert.equal(edited.income.id, first.income.id);
+  assert.equal(edited.loan.id, first.loan.id);
   assert.equal(edited.asset.id, first.assetId);
   await navigate();
   assert.equal(await evaluate(`FFSStage1BrowserTestHooks.getPlan().assetItems.some(x=>x.id===${JSON.stringify(first.assetId)})`), true);
@@ -217,7 +228,7 @@ test("real browser creates and edits a linked investment with stable IDs", async
 
 test("real browser exposes accurate provenance for every quick scenario and legacy samples", async () => {
   await evaluate("FFSStage1BrowserTestHooks.setPlan(FFS_DATA.samplePlans[1].plan,'decision')");
-  const quick = await evaluate("FFSStage1BrowserTestHooks.quickScenarioProvenance()");
+  const quick = await evaluate("FFSStage1BrowserTestHooks.quickScenarioProvenance(FFSStage1BrowserTestHooks.getPlan().incomeItems.find(x=>x.type==='salaryWages').id)");
   assert.equal(quick.length, 8);
   quick.forEach((scenario) => assert.ok(scenario.changes.length > 0, scenario.label));
   const samples = await evaluate("FFSStage1BrowserTestHooks.sampleScenarioList(FFS_DATA.samplePlans[1].plan).filter(x=>x.scenarioType==='decision').map(x=>({name:x.name,changes:x.changedInputs}))");

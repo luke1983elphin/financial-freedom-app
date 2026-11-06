@@ -188,6 +188,14 @@
                   </div>
                 </details>
               </div>
+              <div class="dollar-basis-control" aria-label="Forecast dollar display">
+                <p class="dollar-basis-title">Forecast values</p>
+                <div class="dollar-basis-segments" role="group" aria-label="Forecast dollar values">
+                  <button type="button" class="dollar-basis-segment" data-dollar-basis="today" aria-pressed="false">Today's dollars</button>
+                  <button type="button" class="dollar-basis-segment" data-dollar-basis="future" aria-pressed="true">Future dollars</button>
+                </div>
+                <p class="dollar-basis-description" id="dollarBasisDescription" aria-live="polite">Projected values include future inflation.</p>
+              </div>
             </nav>
 
             <div class="grid gap-6">
@@ -805,6 +813,7 @@
     <script src="plan-selectors.js"></script>
     <script src="plan-mutations.js"></script>
     <script src="scenario-overlay.js"></script>
+    <script src="dollar-basis.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

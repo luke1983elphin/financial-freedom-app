@@ -10024,3 +10024,55 @@ body.scenario-save-modal-open {
   [data-view-panel="decision"] .decision-accordion > .decision-accordion-body { padding: 15px; }
   [data-view-panel="decision"] .scenario-income-entry { max-width: none; }
 }
+
+/* The display basis is a workspace preference, never a calculation setting. */
+.dollar-basis-control {
+  margin: 16px 5px 3px;
+  padding: 14px 10px 10px;
+  border-top: 1px solid #e2e8f0;
+}
+.dollar-basis-title {
+  margin: 0 0 8px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+.dollar-basis-segments {
+  display: flex;
+  width: 100%;
+  padding: 3px;
+  gap: 3px;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  background: #f1f5f9;
+}
+.dollar-basis-segment {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 9px 4px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.35;
+  cursor: pointer;
+}
+.dollar-basis-segment[aria-pressed="true"] {
+  background: #fff;
+  color: #0f2742;
+  border-color: #cbd5e1;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 10%);
+}
+.dollar-basis-segment:focus-visible {
+  outline: 2px solid #0f9f6e;
+  outline-offset: 2px;
+}
+.dollar-basis-description {
+  margin: 9px 1px 0;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.5;
+}
