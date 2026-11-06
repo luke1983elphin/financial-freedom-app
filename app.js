@@ -728,10 +728,10 @@
     return money(displayedForecastAmount(value, years, inflation));
   }
 
-  function forecastYearFromCalendarYear(calendarYear) {
-    const calendarBase = Number(new Date().getFullYear());
-    const year = Number(calendarYear);
-    return Number.isFinite(year) ? Math.max(0, year - calendarBase) : 0;
+  function forecastYearFromCalendarYear(calendarYear, inputs = semiRetirementScenarioInputs, rows = []) {
+    const calendarBase = Number(inputs?.projectionStartYear ?? inputs?.assumptions?.projectionStartYear ?? rows[0]?.calendarYear);
+    const year = Number(calendarYear, inputs = semiRetirementScenarioInputs, rows = []);
+    return Number.isFinite(year) && Number.isFinite(calendarBase) ? Math.max(0, year - calendarBase) : 0;
   }
 
   function updateDollarBasisToggle() {
@@ -7474,18 +7474,18 @@
   }
 
   function refreshFutureYouDollarDisplay(result) {
-    if (forecastDollarBasis !== "today") return;
     const future = futureYouPreview(result);
-    const values = [
-      future.accessibleFiAssets, future.investmentPropertyEquity, future.totalFiWealth,
-      future.principalResidenceEquity, future.netWorth, future.passiveIncome,
-    ];
-    document.querySelectorAll("[data-dashboard-future-results]").forEach((panel) => {
-      const fields = panel.querySelectorAll(".summary-tile strong");
-      values.forEach((value, index) => {
-        if (!fields[index]) return;
-        fields[index].textContent = forecastMoney(value, future.year) + (index === 5 ? " pa" : "");
-      });
+    const fields = {
+      "Accessible FI Assets": "accessibleFiAssets", "Investment Property Equity": "investmentPropertyEquity",
+      "Total FI Wealth": "totalFiWealth", "Home Equity": "principalResidenceEquity",
+      "Projected net worth": "netWorth", "Projected passive income": "passiveIncome",
+    };
+    document.querySelectorAll("[data-dashboard-future-results] .summary-tile").forEach(tile => {
+      const label = tile.querySelector("span")?.firstChild?.textContent?.trim();
+      const key = fields[label];
+      const value = tile.querySelector("strong");
+      if (key && value) value.textContent = forecastMoney(future[key], future.year, result.plan?.investing?.inflationPct)
+        + (key === "passiveIncome" ? " pa" : "");
     });
   }
 
@@ -7630,12 +7630,12 @@
     lineChart("netWorthChart", [{
       label: "Net worth",
       color: "#2563eb",
-      points: [{ x: 0, y: result.currentNetWorth }, ...result.netWorthProjection.map((row) => ({ x: row.year, y: displayedForecastAmount(row.closingBalance, row.year) }))],
+      points: [{ x: 0, y: result.currentNetWorth }, ...result.netWorthProjection.map((row) => ({ x: row.year, y: row.closingBalance }))],
     }], { xMarks: [0, 10, 20, 30], xLabel: (mark) => `${mark}y` });
     lineChart("dashboardInvestmentChart", [{
       label: "Investments",
       color: "#0f9f6e",
-      points: [{ x: 0, y: result.investmentBalance }, ...result.investmentProjection.map((row) => ({ x: row.year, y: displayedForecastAmount(row.closingBalance, row.year) }))],
+      points: [{ x: 0, y: result.investmentBalance }, ...result.investmentProjection.map((row) => ({ x: row.year, y: row.closingBalance }))],
     }], { xMarks: [0, 10, 20, 30], xLabel: (mark) => `${mark}y` });
     lineChart("dashboardDebtChart", [{
       label: "Debt balance",
@@ -8661,7 +8661,7 @@
     if (linkedInvestmentSetup) linkedInvestmentSetup.innerHTML = linkedInvestmentRecordsHtml();
     document.getElementById("investmentCards").innerHTML = [5, 10, 20, 30].map((year) => {
       const row = result.investmentProjection.find((item) => item.year === year) || result.investmentProjection.at(-1);
-      return `<div class="mini-card"><span>${year} years</span><strong>${forecastMoney(row?.closingBalance || 0, row?.year ?? year)}</strong><small>${forecastMoney(row?.passiveIncome || 0, row?.year ?? year)} pa passive income</small></div>`;
+      return `<div class="mini-card"><span>${year} years</span><strong>${money(row?.closingBalance || 0)}</strong><small>${money(row?.passiveIncome || 0)} pa passive income</small></div>`;
     }).join("");
     lineChart("investmentChart", [{
       label: "Investment balance",
@@ -8673,7 +8673,7 @@
   function renderSuper(result) {
     document.getElementById("superCards").innerHTML = [50, 55, 60, 65].map((age) => {
       const row = result.superProjection.find((item) => item.age >= age) || result.superProjection.at(-1);
-      return `<div class="mini-card"><span>Age ${age}</span><strong>${forecastMoney(row?.closingBalance || 0, row?.year ?? 0)}</strong><small>${forecastMoney(row?.passiveIncome || 0, row?.year ?? 0)} pa at withdrawal rate</small></div>`;
+      return `<div class="mini-card"><span>Age ${age}</span><strong>${money(row?.closingBalance || 0)}</strong><small>${money(row?.passiveIncome || 0)} pa at withdrawal rate</small></div>`;
     }).join("");
     const extra = result.taxEstimate.extraSuper;
     document.getElementById("superSummary").innerHTML = `
@@ -8699,16 +8699,16 @@
 
   function renderForecast(result) {
     const cards = [
-      ["1 year projected net worth", netWorthAtYear(result, 1), 1],
-      ["2 year projected net worth", netWorthAtYear(result, 2), 2],
-      ["5 year net worth", result.netWorthProjection[4]?.closingBalance || 0, 5],
-      ["10 year net worth", result.netWorthProjection[9]?.closingBalance || 0, 10],
-      ["20 year net worth", result.netWorthProjection[19]?.closingBalance || 0, 20],
-      ["30 year net worth", result.netWorthProjection[29]?.closingBalance || 0, 30],
-      ["Age-60+ sustainability assets", result.totalRetirementAssets, Math.max(0, Number(result.sustainabilityStartAge || 60) - Number(plan.personal.person1Age || 0))],
+      ["1 year projected net worth", netWorthAtYear(result, 1)],
+      ["2 year projected net worth", netWorthAtYear(result, 2)],
+      ["5 year net worth", result.netWorthProjection[4]?.closingBalance || 0],
+      ["10 year net worth", result.netWorthProjection[9]?.closingBalance || 0],
+      ["20 year net worth", result.netWorthProjection[19]?.closingBalance || 0],
+      ["30 year net worth", result.netWorthProjection[29]?.closingBalance || 0],
+      ["Age-60+ sustainability assets", result.totalRetirementAssets],
       ["Target FI Capital", result.targetCapital],
     ];
-    document.getElementById("forecastCards").innerHTML = cards.map(([label, value, year]) => metricCard(label, year === undefined ? money(value) : forecastMoney(value, year), "", "", label === "Target FI Capital" ? "targetFiCapital" : "")).join("");
+    document.getElementById("forecastCards").innerHTML = cards.map(([label, value]) => metricCard(label, money(value), "", "", label === "Target FI Capital" ? "targetFiCapital" : "")).join("");
   }
 
   function renderGoalsSummary(result) {
@@ -9694,10 +9694,10 @@
         <div class="semi-retirement-snapshot-grid mt-4">
           ${semiRetirementMetricCard("Fully retired at", fullyRetire, "Employment income stops at the selected ages.")}
           ${semiRetirementMetricCard(viewModel.status?.type === "shortfall" ? "Spending shortfall begins" : "Lifestyle funded until", lifestyleFundedTo.value, lifestyleFundedTo.note, viewModel.status?.type === "shortfall" ? "is-warning" : "is-positive")}
-          ${semiRetirementMetricCard("Retirement investments at forecast end", forecastMoney(end.totalInvestableAssets, forecastYearFromCalendarYear(end.calendarYear), semiRetirementScenarioInputs?.assumptions?.inflationRatePct ?? plan.investing?.inflationPct), "Projected investments and eligible super at the end of the selected forecast. Property is not included.")}
+          ${semiRetirementMetricCard("Retirement investments at forecast end", semiRetirementMoney(end.totalInvestableAssets), "Projected investments and eligible super at the end of the selected forecast. Property is not included.")}
           ${semiRetirementMetricCard("Spending shortfall", viewModel.longevity?.firstUnfundedSpending?.calendarYear ? `Starts in ${viewModel.longevity.firstUnfundedSpending.calendarYear}` : "None projected", "Based on annual available retirement funding, not retained property equity.", viewModel.status?.type === "shortfall" ? "is-warning" : "")}
         </div>
-        <p class="field-help mt-3">${escapeHtml(viewModel.projectionEndDescription)}. Projection end retirement investments: ${escapeHtml(forecastMoney(end.totalInvestableAssets, forecastYearFromCalendarYear(end.calendarYear), semiRetirementScenarioInputs?.assumptions?.inflationRatePct ?? plan.investing?.inflationPct))}. ${forecastDollarBasis === "today" ? "Values are in today's purchasing power." : "Future values are nominal amounts based on the assumptions entered."}</p>
+        <p class="field-help mt-3">${escapeHtml(viewModel.projectionEndDescription)}. Projection end retirement investments: ${escapeHtml(semiRetirementMoney(end.totalInvestableAssets))}. Future values are nominal amounts based on the assumptions entered.</p>
       </section>
     `;
   }
@@ -9709,10 +9709,6 @@
     const fullAges = semiRetirementMilestoneAgesFromRow(fullRow, viewModel.people);
     const fullYear = Number(fullMilestone.calendarYear || fullRow.calendarYear);
     const fullRetirementHousehold = fullRow.household || {};
-    const fullRetirementDisplayYear = forecastYearFromCalendarYear(fullYear);
-    const endDisplayYear = forecastYearFromCalendarYear(key.projectionEnd?.calendarYear);
-    const realAtRetirement = value => displayedForecastAmount(value, fullRetirementDisplayYear, semiRetirementScenarioInputs?.assumptions?.inflationRatePct ?? plan.investing?.inflationPct);
-    const realAtEnd = value => displayedForecastAmount(value, endDisplayYear, semiRetirementScenarioInputs?.assumptions?.inflationRatePct ?? plan.investing?.inflationPct);
     const accessibleExhaustion = viewModel.longevity?.accessibleFundsExhausted || null;
     const accessibleExhaustionYear = accessibleExhaustion?.calendarYear ? Number(accessibleExhaustion.calendarYear) : null;
     const allFundsExhaustion = viewModel.longevity?.allRetirementFundsExhausted || null;
@@ -9724,10 +9720,10 @@
       fullYear: Number.isFinite(fullYear) ? fullYear : null,
       fullAges,
       fullRetirementLabel: comparisonHouseholdMilestone({ viewModel }),
-      assetsAtRetirement: realAtRetirement(key.totalInvestableAssetsWhenBothFullyRetired?.value ?? fullRetirementHousehold.totalInvestableAssets),
-      accessibleAtRetirement: realAtRetirement(key.accessibleWhenBothFullyRetired?.value ?? fullRetirementHousehold.closingAccessibleInvestmentBalance),
-      superAtRetirement: realAtRetirement(fullRetirementHousehold.totalSuperBalance),
-      propertyEquityAtRetirement: realAtRetirement(fullRetirementHousehold.totalPropertyEquity),
+      assetsAtRetirement: key.totalInvestableAssetsWhenBothFullyRetired?.value ?? fullRetirementHousehold.totalInvestableAssets,
+      accessibleAtRetirement: key.accessibleWhenBothFullyRetired?.value ?? fullRetirementHousehold.closingAccessibleInvestmentBalance,
+      superAtRetirement: fullRetirementHousehold.totalSuperBalance,
+      propertyEquityAtRetirement: fullRetirementHousehold.totalPropertyEquity,
       accessibleExhaustionYear,
       accessibleLastLabel: accessibleExhaustionYear
         ? `${accessibleExhaustionYear} - ${semiRetirementAgeList(viewModel.people.map((person, index) => ({ name: person.name, age: accessibleExhaustion[`${person.id}Age`] ?? accessibleExhaustion[`person${index + 1}Age`] ?? "n/a" })))}`
@@ -9743,8 +9739,8 @@
         : "None projected",
       requiredWithdrawals: viewModel.semiRetirementFunding?.requiredAccessibleWithdrawalsDuringSemiRetirement,
       lifestyleSurplus: fullRetirementHousehold.annualLifestyleSurplusOrShortfall ?? fullRetirementHousehold.cashSurplusOrShortfall,
-      debtAtRetirement: realAtRetirement(debtAtRetirement),
-      projectedEndNetWorth: realAtEnd(key.projectionEnd?.projectedNetWorth),
+      debtAtRetirement,
+      projectedEndNetWorth: key.projectionEnd?.projectedNetWorth,
       oneOffLifestyleSpending: viewModel.semiRetirementFunding?.totalOneOffLifestyleSpending,
       oneOffLifestyleSpendingToday: viewModel.semiRetirementFunding?.totalOneOffLifestyleSpendingTodayDollars,
       oneOffLifestyleEventCount: oneOffEvents.length,
@@ -10251,12 +10247,14 @@
   }
 
   function renderWideRetirementComparisonReport(scenarioSet, metrics) {
+    const endMoney = (scenario, value) => forecastMoney(value,
+      forecastYearFromCalendarYear(scenario.viewModel?.keyResults?.projectionEnd?.calendarYear, scenario.inputs, scenario.viewModel?.annualRows), window.FFSDollarBasis.inflationPercent(scenario.inputs));
     const planName = plan?.meta?.samplePlanName || [plan?.personal?.person1Name, plan?.personal?.person2Name].filter(Boolean).join(" and ") || "Financial Plan";
     const headerCells = scenarioSet.map(scenario => `<th scope="col">${escapeHtml(scenario.name)}${retirementScenarioSubtitle(scenario)}</th>`).join("");
     const table = (rows, trailing = []) => `<table class="semi-retirement-print-table"><thead><tr><th scope="col">Outcome</th>${headerCells}</tr></thead><tbody>${[...rows, ...trailing].map(metric => `<tr><th scope="row">${escapeHtml(metric.label)}</th>${scenarioSet.map(scenario => `<td>${escapeHtml(metric.value(scenario.summary || {}, scenario))}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
     const extra = [
-      { label: "Retirement funds at forecast end", value: scenario => semiRetirementMoney(scenario.viewModel?.keyResults?.projectionEnd?.totalInvestableAssets) },
-      { label: "Property equity at forecast end", value: scenario => semiRetirementMoney(scenario.viewModel?.annualRows?.at(-1)?.household?.totalPropertyEquity ?? scenario.result?.years?.at(-1)?.household?.totalPropertyEquity ?? 0) },
+      { label: "Retirement funds at forecast end", value: scenario => endMoney(scenario, scenario.viewModel?.keyResults?.projectionEnd?.totalInvestableAssets) },
+      { label: "Property equity at forecast end", value: scenario => endMoney(scenario, scenario.viewModel?.annualRows?.at(-1)?.household?.totalPropertyEquity ?? scenario.result?.years?.at(-1)?.household?.totalPropertyEquity ?? 0) },
       { label: "Forecast end (year and ages)", value: scenario => `${scenario.viewModel?.keyResults?.projectionEnd?.calendarYear || "End"} — ${semiRetirementAgeList(scenario.viewModel?.keyResults?.projectionEnd?.ages || [])}` },
     ];
     const allAssumptions = scenarioSet.map(scenario => (scenario.viewModel?.assumptions?.rows || []).filter(row => /retirement|semi|spending|inflation|investment return|planned annual investing|super return|property.*growth/i.test(row.label || "")));
@@ -10755,27 +10753,21 @@
   }
 
   function renderSemiRetirementAnnualDetailHtml(row) {
-    const years = forecastYearFromCalendarYear(row.calendarYear);
-    const yearMoney = value => semiRetirementMoney(displayedForecastAmount(value, years, semiRetirementScenarioInputs?.assumptions?.inflationRatePct ?? plan.investing?.inflationPct));
-    const yearSignedMoney = value => {
-      const amount = displayedForecastAmount(value, years, semiRetirementScenarioInputs?.assumptions?.inflationRatePct ?? plan.investing?.inflationPct);
-      return `${Number(amount) > 0 ? "+" : ""}${money(amount)}`;
-    };
     const household = row.household || {};
     const annualDebtSections = (row.liabilities || [])
       .filter((debt) => Number(debt.openingBalance || 0) > 0 || Number(debt.closingBalance || 0) > 0 || Number(debt.totalRepayment ?? debt.scheduledRepayment ?? 0) > 0 || Number(debt.interestCharged || 0) > 0)
       .map((debt) => {
       const detailRows = [
-        { label: "Opening balance", value: yearMoney(debt.openingBalance) },
-        Number(debt.offsetBalanceUsed || 0) > 0 ? { label: "Offset balance used", value: yearMoney(debt.offsetBalanceUsed) } : null,
-        Number(debt.interestBearingBalance || 0) !== Number(debt.openingBalance || 0) ? { label: "Interest-bearing balance", value: yearMoney(debt.interestBearingBalance) } : null,
-        { label: "Interest", value: yearMoney(debt.interestCharged) },
-        { label: "Scheduled repayment", value: yearMoney(debt.regularRepayment ?? debt.scheduledRepayment) },
-        Number(debt.balloonRepayment || 0) > 0 ? { label: "Balloon repayment", value: yearMoney(debt.balloonRepayment) } : null,
-        Number(debt.downsizeDischargedBalance || 0) > 0 ? { label: "Repaid from downsizing sale proceeds", value: yearMoney(debt.downsizeDischargedBalance) } : null,
-        { label: "Principal repaid", value: yearMoney(debt.principalRepaid) },
-        Number(debt.capitalisedInterest || 0) > 0 ? { label: "Capitalised interest", value: yearMoney(debt.capitalisedInterest) } : null,
-        { label: "Closing balance", value: yearMoney(debt.closingBalance) },
+        { label: "Opening balance", value: semiRetirementMoney(debt.openingBalance) },
+        Number(debt.offsetBalanceUsed || 0) > 0 ? { label: "Offset balance used", value: semiRetirementMoney(debt.offsetBalanceUsed) } : null,
+        Number(debt.interestBearingBalance || 0) !== Number(debt.openingBalance || 0) ? { label: "Interest-bearing balance", value: semiRetirementMoney(debt.interestBearingBalance) } : null,
+        { label: "Interest", value: semiRetirementMoney(debt.interestCharged) },
+        { label: "Scheduled repayment", value: semiRetirementMoney(debt.regularRepayment ?? debt.scheduledRepayment) },
+        Number(debt.balloonRepayment || 0) > 0 ? { label: "Balloon repayment", value: semiRetirementMoney(debt.balloonRepayment) } : null,
+        Number(debt.downsizeDischargedBalance || 0) > 0 ? { label: "Repaid from downsizing sale proceeds", value: semiRetirementMoney(debt.downsizeDischargedBalance) } : null,
+        { label: "Principal repaid", value: semiRetirementMoney(debt.principalRepaid) },
+        Number(debt.capitalisedInterest || 0) > 0 ? { label: "Capitalised interest", value: semiRetirementMoney(debt.capitalisedInterest) } : null,
+        { label: "Closing balance", value: semiRetirementMoney(debt.closingBalance) },
       ].filter(Boolean);
       return `
         <section>
@@ -10788,34 +10780,34 @@
       <section>
         <h5>${escapeHtml(property.name || "Rental / Investment Property")}</h5>
         ${semiRetirementDetailRows([
-          { label: "Opening property value", value: yearMoney(property.openingValue) },
+          { label: "Opening property value", value: semiRetirementMoney(property.openingValue) },
           { label: "Capital growth assumption", value: semiRetirementAssumptionValue({ value: property.annualGrowthRate, type: "percentRate" }) },
-          { label: "Growth", value: yearMoney(property.propertyGrowth) },
-          { label: "Closing property value", value: yearMoney(property.closingValue) },
+          { label: "Growth", value: semiRetirementMoney(property.propertyGrowth) },
+          { label: "Closing property value", value: semiRetirementMoney(property.closingValue) },
           Number(property.baseRentalCashIncome || 0) && Number(property.baseRentalCashIncome || 0) !== Number(property.rentalCashIncome ?? property.grossRentalIncome ?? 0)
-            ? { label: "Base rental cash income", value: yearMoney(property.baseRentalCashIncome) }
+            ? { label: "Base rental cash income", value: semiRetirementMoney(property.baseRentalCashIncome) }
             : null,
           property.rentalCashIncomeGrowthSource === "cpi"
             ? { label: "Rental cash income growth", value: "CPI" }
             : null,
-          { label: "Rental cash income", value: yearMoney(property.rentalCashIncome ?? property.grossRentalIncome) },
-          { label: "Taxable rental income", value: yearMoney(property.taxableRentalIncome) },
-          { label: "Loan interest", value: yearMoney(property.loanInterest) },
-          { label: "Loan principal", value: yearMoney(property.loanPrincipal) },
-          { label: "Net property cashflow", value: yearSignedMoney(property.netPropertyCashflow) },
-          { label: "Linked loan balance", value: yearMoney(property.linkedLoanClosingBalance) },
-          { label: "Property equity", value: yearMoney(property.propertyEquity) },
+          { label: "Rental cash income", value: semiRetirementMoney(property.rentalCashIncome ?? property.grossRentalIncome) },
+          { label: "Taxable rental income", value: semiRetirementMoney(property.taxableRentalIncome) },
+          { label: "Loan interest", value: semiRetirementMoney(property.loanInterest) },
+          { label: "Loan principal", value: semiRetirementMoney(property.loanPrincipal) },
+          { label: "Net property cashflow", value: semiRetirementSignedMoney(property.netPropertyCashflow) },
+          { label: "Linked loan balance", value: semiRetirementMoney(property.linkedLoanClosingBalance) },
+          { label: "Property equity", value: semiRetirementMoney(property.propertyEquity) },
         ].filter(Boolean))}
       </section>
     `).join("");
     const oneOffLifestyleRows = (household.oneOffLifestyleEvents || []).map((event) => ({
       label: event.description || "One-off expense",
-      value: `${yearMoney(event.projectedAmount)} (${semiRetirementMoney(event.amountTodayDollars)} today)`,
+      value: `${semiRetirementMoney(event.projectedAmount)} (${semiRetirementMoney(event.amountTodayDollars)} today)`,
     }));
     const hasOneOffLifestyle = Number(household.oneOffLifestyleSpending || 0) > 0 || oneOffLifestyleRows.length > 0;
     const oneOffIncomeRows = (household.oneOffIncomeEvents || []).map((event) => ({
       label: `One-off income - ${event.description || "Income"}`,
-      value: `+${yearMoney(event.projectedAmount)} (${semiRetirementMoney(event.amountTodayDollars)} today)`,
+      value: `+${semiRetirementMoney(event.projectedAmount)} (${semiRetirementMoney(event.amountTodayDollars)} today)`,
     }));
     const hasOneOffIncome = Number(household.oneOffIncome || 0) > 0 || oneOffIncomeRows.length > 0;
     const downsizeEvent = household.downsizeHomeEvent || null;
@@ -10823,107 +10815,107 @@
       ? Object.entries(downsizeEvent.downsizerContributions).map(([personId, amount]) => {
         const person = (row.people || []).find((entry) => String(entry.id) === String(personId));
         return Number(amount || 0) > 0
-          ? { label: `${person?.name || personId} downsizer super contribution`, value: yearMoney(amount) }
+          ? { label: `${person?.name || personId} downsizer super contribution`, value: semiRetirementMoney(amount) }
           : null;
       }).filter(Boolean)
       : [];
     const downsizeRows = downsizeEvent?.applied ? [
-      { label: "Projected home sale value", value: yearMoney(downsizeEvent.projectedSaleValue) },
-      { label: "Less sale costs", value: `(${yearMoney(downsizeEvent.saleCosts)})` },
-      { label: "Less linked home loan repaid", value: `(${yearMoney(downsizeEvent.linkedHomeDebtRepaid)})` },
-      { label: "Net sale proceeds", value: yearMoney(downsizeEvent.netSaleProceeds) },
-      { label: "Replacement home value", value: `(${yearMoney(downsizeEvent.projectedReplacementHomeValue)})` },
-      { label: "Purchase costs", value: `(${yearMoney(downsizeEvent.purchaseCosts)})` },
-      { label: "Net cash released", value: yearSignedMoney(downsizeEvent.netCashReleased) },
-      Number(downsizeEvent.linkedHomeDebtRemaining || 0) > 0 ? { label: "Home loan remaining after downsizing", value: yearMoney(downsizeEvent.linkedHomeDebtRemaining) } : null,
+      { label: "Projected home sale value", value: semiRetirementMoney(downsizeEvent.projectedSaleValue) },
+      { label: "Less sale costs", value: `(${semiRetirementMoney(downsizeEvent.saleCosts)})` },
+      { label: "Less linked home loan repaid", value: `(${semiRetirementMoney(downsizeEvent.linkedHomeDebtRepaid)})` },
+      { label: "Net sale proceeds", value: semiRetirementMoney(downsizeEvent.netSaleProceeds) },
+      { label: "Replacement home value", value: `(${semiRetirementMoney(downsizeEvent.projectedReplacementHomeValue)})` },
+      { label: "Purchase costs", value: `(${semiRetirementMoney(downsizeEvent.purchaseCosts)})` },
+      { label: "Net cash released", value: semiRetirementSignedMoney(downsizeEvent.netCashReleased) },
+      Number(downsizeEvent.linkedHomeDebtRemaining || 0) > 0 ? { label: "Home loan remaining after downsizing", value: semiRetirementMoney(downsizeEvent.linkedHomeDebtRemaining) } : null,
       ...downsizeContributionRows,
-      Number(downsizeEvent.accessibleInvestmentContribution || 0) > 0 ? { label: "Added to accessible investments", value: yearMoney(downsizeEvent.accessibleInvestmentContribution) } : null,
-      Number(downsizeEvent.additionalFundsRequired || 0) > 0 ? { label: "Additional cash required", value: yearMoney(downsizeEvent.additionalFundsRequired) } : null,
-      Number(downsizeEvent.accessibleWithdrawal || 0) > 0 ? { label: "Funded from accessible resources", value: yearMoney(downsizeEvent.accessibleWithdrawal) } : null,
-      Number(downsizeEvent.unfundedShortfall || 0) > 0 ? { label: "Unfunded shortfall", value: yearMoney(downsizeEvent.unfundedShortfall) } : null,
+      Number(downsizeEvent.accessibleInvestmentContribution || 0) > 0 ? { label: "Added to accessible investments", value: semiRetirementMoney(downsizeEvent.accessibleInvestmentContribution) } : null,
+      Number(downsizeEvent.additionalFundsRequired || 0) > 0 ? { label: "Additional cash required", value: semiRetirementMoney(downsizeEvent.additionalFundsRequired) } : null,
+      Number(downsizeEvent.accessibleWithdrawal || 0) > 0 ? { label: "Funded from accessible resources", value: semiRetirementMoney(downsizeEvent.accessibleWithdrawal) } : null,
+      Number(downsizeEvent.unfundedShortfall || 0) > 0 ? { label: "Unfunded shortfall", value: semiRetirementMoney(downsizeEvent.unfundedShortfall) } : null,
     ].filter(Boolean) : [];
     const plannedAccessibleContributionValue = household.plannedExternalAccessibleContributionWasReduced
-      ? `${yearMoney(household.plannedExternalAccessibleContribution)} of ${yearMoney(household.plannedAccessibleInvestmentContributionRequested)} planned`
-      : yearMoney(household.plannedExternalAccessibleContribution);
+      ? `${semiRetirementMoney(household.plannedExternalAccessibleContribution)} of ${semiRetirementMoney(household.plannedAccessibleInvestmentContributionRequested)} planned`
+      : semiRetirementMoney(household.plannedExternalAccessibleContribution);
     const cashflowSummaryRows = [
-      ["Net household cash income", yearMoney(household.netHouseholdCashIncome)],
-      ["One-off income", yearMoney(household.oneOffIncome)],
-      ["Normal lifestyle spending", yearMoney(household.normalLifestyleSpending ?? household.applicableLifestyleSpending)],
-      ["Planned big expenses", yearMoney(household.oneOffLifestyleSpending)],
-      ["Debt cash repayments", yearMoney(household.annualDebtCashRequirement ?? household.totalDebtRepayments)],
+      ["Net household cash income", semiRetirementMoney(household.netHouseholdCashIncome)],
+      ["One-off income", semiRetirementMoney(household.oneOffIncome)],
+      ["Normal lifestyle spending", semiRetirementMoney(household.normalLifestyleSpending ?? household.applicableLifestyleSpending)],
+      ["Planned big expenses", semiRetirementMoney(household.oneOffLifestyleSpending)],
+      ["Debt cash repayments", semiRetirementMoney(household.annualDebtCashRequirement ?? household.totalDebtRepayments)],
       ["Planned annual investing", plannedAccessibleContributionValue],
-      ["Planned super contribution", yearMoney(household.plannedAdditionalConcessionalContributionsPaidFromCash)],
-      ["Cash surplus before allocation", yearSignedMoney(household.cashSurplusBeforeAllocation ?? household.cashSurplusOrShortfall)],
+      ["Planned super contribution", semiRetirementMoney(household.plannedAdditionalConcessionalContributionsPaidFromCash)],
+      ["Cash surplus before allocation", semiRetirementSignedMoney(household.cashSurplusBeforeAllocation ?? household.cashSurplusOrShortfall)],
     ].map(([label, value]) => ({ label, value }));
     const surplusAllocationRows = [
-      ["Extra lifestyle / enjoyment", yearMoney(household.surplusAvailableForEnjoyment)],
-      ["To accessible investments", yearMoney(household.surplusToAccessibleInvestments)],
-      ["To super", yearMoney(household.surplusToSuper)],
-      ["Unallocated surplus", yearMoney(household.unallocatedSurplus)],
+      ["Extra lifestyle / enjoyment", semiRetirementMoney(household.surplusAvailableForEnjoyment)],
+      ["To accessible investments", semiRetirementMoney(household.surplusToAccessibleInvestments)],
+      ["To super", semiRetirementMoney(household.surplusToSuper)],
+      ["Unallocated surplus", semiRetirementMoney(household.unallocatedSurplus)],
     ].map(([label, value]) => ({ label, value }));
     const fundingShortfallRows = [
-      ["Accessible withdrawal", yearMoney(household.requiredAccessibleWithdrawal)],
-      ["Super withdrawal", yearMoney(household.requiredSuperWithdrawal)],
-      ["Unmet spending", yearMoney(household.unmetRequiredLifestyleSpending ?? household.unmetSpending)],
-      ["Total portfolio withdrawal", yearMoney(household.totalPortfolioWithdrawal)],
+      ["Accessible withdrawal", semiRetirementMoney(household.requiredAccessibleWithdrawal)],
+      ["Super withdrawal", semiRetirementMoney(household.requiredSuperWithdrawal)],
+      ["Unmet spending", semiRetirementMoney(household.unmetRequiredLifestyleSpending ?? household.unmetSpending)],
+      ["Total portfolio withdrawal", semiRetirementMoney(household.totalPortfolioWithdrawal)],
     ].map(([label, value]) => ({ label, value }));
     const householdPositionRows = [
-      ["Other income", yearMoney(household.otherIncome)],
-      ["Passive taxable income", yearMoney(household.totalPassiveTaxableIncome)],
-      ["Passive cash income", yearMoney(household.totalPassiveCashIncome)],
-      ["Net rental cashflow", yearSignedMoney(household.netRentalCashflow)],
-      ["Total lifestyle spending", yearMoney(household.totalProjectedLifestyleSpending ?? household.applicableLifestyleSpending)],
-      ["Accessible investment contribution", yearMoney(household.accessibleInvestmentContribution)],
-      ["Opening accessible balance", yearMoney(household.openingAccessibleInvestmentBalance)],
-      ["Opening offset balance", yearMoney(household.offsetOpeningBalance)],
-      ["Offset withdrawals", yearMoney(household.offsetWithdrawals)],
-      ["Closing offset balance", yearMoney(household.offsetClosingBalance)],
-      ["Unallocated surplus balance", yearMoney(household.unallocatedSurplusClosingBalance)],
-      ...(household.agePension ? [["Estimated Age Pension (before tax)", household.agePension.unsupported ? "Not estimated" : yearMoney(household.estimatedAgePension)]] : []),
-      ["Investment earnings", yearMoney(household.accessibleInvestmentEarnings)],
-      ["Closing accessible balance", yearMoney(household.closingAccessibleInvestmentBalance)],
-      ["Total accessible assets", yearMoney(household.totalAccessibleAssets)],
-      ["Total super", yearMoney(household.totalSuperBalance)],
-      ["Total investable assets", yearMoney(household.totalInvestableAssets)],
-      ["Total debt", yearMoney(household.totalDebt)],
-      ["Loan interest", yearMoney(household.totalLoanInterest)],
-      ["Property value", yearMoney(household.totalPropertyValue)],
-      ["Property debt", yearMoney(household.totalPropertyDebt)],
-      ["Property equity", yearMoney(household.totalPropertyEquity)],
-      ["Projected net worth", yearMoney(household.totalNetWorth)],
+      ["Other income", semiRetirementMoney(household.otherIncome)],
+      ["Passive taxable income", semiRetirementMoney(household.totalPassiveTaxableIncome)],
+      ["Passive cash income", semiRetirementMoney(household.totalPassiveCashIncome)],
+      ["Net rental cashflow", semiRetirementSignedMoney(household.netRentalCashflow)],
+      ["Total lifestyle spending", semiRetirementMoney(household.totalProjectedLifestyleSpending ?? household.applicableLifestyleSpending)],
+      ["Accessible investment contribution", semiRetirementMoney(household.accessibleInvestmentContribution)],
+      ["Opening accessible balance", semiRetirementMoney(household.openingAccessibleInvestmentBalance)],
+      ["Opening offset balance", semiRetirementMoney(household.offsetOpeningBalance)],
+      ["Offset withdrawals", semiRetirementMoney(household.offsetWithdrawals)],
+      ["Closing offset balance", semiRetirementMoney(household.offsetClosingBalance)],
+      ["Unallocated surplus balance", semiRetirementMoney(household.unallocatedSurplusClosingBalance)],
+      ...(household.agePension ? [["Estimated Age Pension (before tax)", household.agePension.unsupported ? "Not estimated" : semiRetirementMoney(household.estimatedAgePension)]] : []),
+      ["Investment earnings", semiRetirementMoney(household.accessibleInvestmentEarnings)],
+      ["Closing accessible balance", semiRetirementMoney(household.closingAccessibleInvestmentBalance)],
+      ["Total accessible assets", semiRetirementMoney(household.totalAccessibleAssets)],
+      ["Total super", semiRetirementMoney(household.totalSuperBalance)],
+      ["Total investable assets", semiRetirementMoney(household.totalInvestableAssets)],
+      ["Total debt", semiRetirementMoney(household.totalDebt)],
+      ["Loan interest", semiRetirementMoney(household.totalLoanInterest)],
+      ["Property value", semiRetirementMoney(household.totalPropertyValue)],
+      ["Property debt", semiRetirementMoney(household.totalPropertyDebt)],
+      ["Property equity", semiRetirementMoney(household.totalPropertyEquity)],
+      ["Projected net worth", semiRetirementMoney(household.totalNetWorth)],
     ].map(([label, value]) => ({ label, value }));
     const superContributionRows = row.people.flatMap((person) => {
       const name = person.name || person.id;
       return [
-        { label: `${name} employer super`, value: yearMoney(person.employerSuperContribution) },
+        { label: `${name} employer super`, value: semiRetirementMoney(person.employerSuperContribution) },
         Number(person.recurringAdditionalSuperContribution || 0) > 0
-          ? { label: `${name} existing recurring extra super`, value: yearMoney(person.recurringAdditionalSuperContribution) }
+          ? { label: `${name} existing recurring extra super`, value: semiRetirementMoney(person.recurringAdditionalSuperContribution) }
           : null,
         Number(person.plannedExtraConcessionalContribution || 0) > 0
-          ? { label: `${name} planned extra concessional contribution`, value: yearMoney(person.plannedExtraConcessionalContribution) }
+          ? { label: `${name} planned extra concessional contribution`, value: semiRetirementMoney(person.plannedExtraConcessionalContribution) }
           : null,
         Number(person.plannedExtraConcessionalContribution || 0) > 0
-          ? { label: `${name} planned contribution tax`, value: yearMoney(person.plannedExtraConcessionalContributionTax) }
+          ? { label: `${name} planned contribution tax`, value: semiRetirementMoney(person.plannedExtraConcessionalContributionTax) }
           : null,
         Number(person.plannedExtraConcessionalContribution || 0) > 0
-          ? { label: `${name} net planned contribution added to super`, value: yearMoney(person.netPlannedExtraConcessionalContribution) }
+          ? { label: `${name} net planned contribution added to super`, value: semiRetirementMoney(person.netPlannedExtraConcessionalContribution) }
           : null,
         Number(person.surplusAdditionalSuperContribution || 0) > 0
-          ? { label: `${name} surplus directed to super`, value: yearMoney(person.surplusAdditionalSuperContribution) }
+          ? { label: `${name} surplus directed to super`, value: semiRetirementMoney(person.surplusAdditionalSuperContribution) }
           : null,
-        { label: `${name} total modelled super contributions`, value: yearMoney(person.totalModelledSuperContributions ?? (Number(person.employerSuperContribution || 0) + Number(person.additionalSuperContribution || 0))) },
+        { label: `${name} total modelled super contributions`, value: semiRetirementMoney(person.totalModelledSuperContributions ?? (Number(person.employerSuperContribution || 0) + Number(person.additionalSuperContribution || 0))) },
         Number(person.superContributionsTax || 0) > 0
-          ? { label: `${name} contributions tax`, value: yearMoney(person.superContributionsTax) }
+          ? { label: `${name} contributions tax`, value: semiRetirementMoney(person.superContributionsTax) }
           : null,
         Number(person.superWithdrawal || 0) > 0
-          ? { label: `${name} super withdrawal`, value: yearMoney(person.superWithdrawal) }
+          ? { label: `${name} super withdrawal`, value: semiRetirementMoney(person.superWithdrawal) }
           : null,
-        { label: `${name} closing super balance`, value: yearMoney(person.closingSuperBalance) },
+        { label: `${name} closing super balance`, value: semiRetirementMoney(person.closingSuperBalance) },
       ].filter(Boolean);
     });
     superContributionRows.push(
-      { label: "Total planned extra concessional contribution", value: yearMoney(household.plannedExtraConcessionalContributionsPaidFromCash) },
-      { label: "Combined household closing super balance", value: yearMoney(household.totalSuperBalance) },
+      { label: "Total planned extra concessional contribution", value: semiRetirementMoney(household.plannedExtraConcessionalContributionsPaidFromCash) },
+      { label: "Combined household closing super balance", value: semiRetirementMoney(household.totalSuperBalance) },
     );
     return `
       <div class="semi-retirement-annual-detail">
@@ -10932,33 +10924,33 @@
             <h5>${escapeHtml(person.name || person.id)}</h5>
             ${semiRetirementDetailRows([
               { label: "Employment phase", value: person.employmentPhaseLabel },
-              { label: "Gross employment income", value: yearMoney(person.grossEmploymentIncome) },
-              { label: "Interest income", value: yearMoney(person.interestIncome) },
-              { label: "Dividend income", value: yearMoney(person.dividendIncome) },
-              { label: "Rental taxable income", value: yearMoney(person.rentalTaxableIncome) },
-              { label: "Distribution income", value: yearMoney(person.distributionIncome) },
-              { label: "Taxable income before modelled concessional contributions", value: yearMoney(person.taxableIncomeBeforeModelledConcessionalContributions ?? person.totalTaxableIncome) },
-              { label: "Modelled concessional contribution taxable-income reduction", value: yearMoney(person.modelledConcessionalContributionTaxableIncomeReduction) },
-              { label: "Total taxable income", value: yearMoney(person.totalTaxableIncome) },
-              ...(person.sapto ? [{ label: "SAPTO applied (tax reduction)", value: yearMoney(person.sapto.applied) }, { label: "SAPTO rebate income", value: yearMoney(person.sapto.rebateIncome) }] : []),
-              { label: "Income tax", value: yearMoney(person.incomeTax) },
-              { label: "Medicare", value: yearMoney(person.medicareLevy) },
-              { label: "Medicare Levy Surcharge", value: yearMoney(person.medicareLevySurcharge) },
-              { label: "STSL repayment income", value: yearMoney(person.stslRepaymentIncome ?? person.totalTaxableIncome) },
-              { label: "STSL", value: yearMoney(person.stslRepayment) },
-              { label: "Net cash income", value: yearMoney(person.netIncome ?? person.netEmploymentIncome) },
-              { label: "Employer super", value: yearMoney(person.employerSuperContribution) },
-              { label: "Existing recurring extra super", value: yearMoney(person.recurringAdditionalSuperContribution) },
-              { label: "Planned extra concessional contribution", value: yearMoney(person.plannedExtraConcessionalContribution) },
-              { label: "Planned contribution tax", value: yearMoney(person.plannedExtraConcessionalContributionTax) },
-              { label: "Net planned contribution added to super", value: yearMoney(person.netPlannedExtraConcessionalContribution) },
-              { label: "Total additional super contribution", value: yearMoney(person.additionalSuperContribution) },
-              { label: "Total modelled super contributions", value: yearMoney(person.totalModelledSuperContributions ?? (Number(person.employerSuperContribution || 0) + Number(person.additionalSuperContribution || 0))) },
-              { label: "Contributions tax", value: yearMoney(person.superContributionsTax) },
-              { label: "Opening super", value: yearMoney(person.openingSuperBalance) },
-              { label: "Super earnings", value: yearMoney(person.superInvestmentEarnings) },
-              { label: "Super withdrawal", value: yearMoney(person.superWithdrawal) },
-              { label: "Closing super", value: yearMoney(person.closingSuperBalance) },
+              { label: "Gross employment income", value: semiRetirementMoney(person.grossEmploymentIncome) },
+              { label: "Interest income", value: semiRetirementMoney(person.interestIncome) },
+              { label: "Dividend income", value: semiRetirementMoney(person.dividendIncome) },
+              { label: "Rental taxable income", value: semiRetirementMoney(person.rentalTaxableIncome) },
+              { label: "Distribution income", value: semiRetirementMoney(person.distributionIncome) },
+              { label: "Taxable income before modelled concessional contributions", value: semiRetirementMoney(person.taxableIncomeBeforeModelledConcessionalContributions ?? person.totalTaxableIncome) },
+              { label: "Modelled concessional contribution taxable-income reduction", value: semiRetirementMoney(person.modelledConcessionalContributionTaxableIncomeReduction) },
+              { label: "Total taxable income", value: semiRetirementMoney(person.totalTaxableIncome) },
+              ...(person.sapto ? [{ label: "SAPTO applied (tax reduction)", value: semiRetirementMoney(person.sapto.applied) }, { label: "SAPTO rebate income", value: semiRetirementMoney(person.sapto.rebateIncome) }] : []),
+              { label: "Income tax", value: semiRetirementMoney(person.incomeTax) },
+              { label: "Medicare", value: semiRetirementMoney(person.medicareLevy) },
+              { label: "Medicare Levy Surcharge", value: semiRetirementMoney(person.medicareLevySurcharge) },
+              { label: "STSL repayment income", value: semiRetirementMoney(person.stslRepaymentIncome ?? person.totalTaxableIncome) },
+              { label: "STSL", value: semiRetirementMoney(person.stslRepayment) },
+              { label: "Net cash income", value: semiRetirementMoney(person.netIncome ?? person.netEmploymentIncome) },
+              { label: "Employer super", value: semiRetirementMoney(person.employerSuperContribution) },
+              { label: "Existing recurring extra super", value: semiRetirementMoney(person.recurringAdditionalSuperContribution) },
+              { label: "Planned extra concessional contribution", value: semiRetirementMoney(person.plannedExtraConcessionalContribution) },
+              { label: "Planned contribution tax", value: semiRetirementMoney(person.plannedExtraConcessionalContributionTax) },
+              { label: "Net planned contribution added to super", value: semiRetirementMoney(person.netPlannedExtraConcessionalContribution) },
+              { label: "Total additional super contribution", value: semiRetirementMoney(person.additionalSuperContribution) },
+              { label: "Total modelled super contributions", value: semiRetirementMoney(person.totalModelledSuperContributions ?? (Number(person.employerSuperContribution || 0) + Number(person.additionalSuperContribution || 0))) },
+              { label: "Contributions tax", value: semiRetirementMoney(person.superContributionsTax) },
+              { label: "Opening super", value: semiRetirementMoney(person.openingSuperBalance) },
+              { label: "Super earnings", value: semiRetirementMoney(person.superInvestmentEarnings) },
+              { label: "Super withdrawal", value: semiRetirementMoney(person.superWithdrawal) },
+              { label: "Closing super", value: semiRetirementMoney(person.closingSuperBalance) },
             ])}
           </section>
         `).join("")}
@@ -10987,13 +10979,13 @@
         ${hasOneOffLifestyle ? `
           <section>
             <h5>Planned big expenses</h5>
-            ${semiRetirementDetailRows(oneOffLifestyleRows.length ? oneOffLifestyleRows : [{ label: "Planned big expenses", value: yearMoney(household.oneOffLifestyleSpending) }])}
+            ${semiRetirementDetailRows(oneOffLifestyleRows.length ? oneOffLifestyleRows : [{ label: "Planned big expenses", value: semiRetirementMoney(household.oneOffLifestyleSpending) }])}
           </section>
         ` : ""}
         ${hasOneOffIncome ? `
           <section>
             <h5>One-off income</h5>
-            ${semiRetirementDetailRows(oneOffIncomeRows.length ? oneOffIncomeRows : [{ label: "One-off income", value: yearMoney(household.oneOffIncome) }])}
+            ${semiRetirementDetailRows(oneOffIncomeRows.length ? oneOffIncomeRows : [{ label: "One-off income", value: semiRetirementMoney(household.oneOffIncome) }])}
           </section>
         ` : ""}
         ${downsizeRows.length ? `
@@ -11011,26 +11003,18 @@
   function renderSemiRetirementAnnualProjectionHtml(viewModel) {
     const rows = viewModel.annualRows || [];
     const pensionRows = rows.filter(row => row.household?.agePension);
-    const scenarioInflationPct = semiRetirementScenarioInputs?.assumptions?.inflationRatePct ?? plan.investing?.inflationPct;
-    const byYear = (value, calendarYear) => semiRetirementMoney(displayedForecastAmount(value, forecastYearFromCalendarYear(calendarYear), scenarioInflationPct));
-    const signedByYear = (value, calendarYear) => {
-      const amount = displayedForecastAmount(value, forecastYearFromCalendarYear(calendarYear), scenarioInflationPct);
-      return `${Number(amount) > 0 ? "+" : ""}${money(amount)}`;
-    };
-    const endYear = viewModel.keyResults?.projectionEnd?.calendarYear;
-
     return `
-      ${viewModel.agePensionComparison ? `<p class="field-help">End-of-projection investments and super: ${byYear(viewModel.agePensionComparison.withPensionEndAssets, endYear)} with estimated pension; ${byYear(viewModel.agePensionComparison.totalInvestableAssetsAtEndAge, endYear)} without. First unfunded year without pension: ${viewModel.agePensionComparison.firstUnfundedYear ?? "none in projection"}.</p>` : ""}
+      ${viewModel.agePensionComparison ? `<p class="field-help">End-of-projection investments and super: ${semiRetirementMoney(viewModel.agePensionComparison.withPensionEndAssets)} with estimated pension; ${semiRetirementMoney(viewModel.agePensionComparison.totalInvestableAssetsAtEndAge)} without. First unfunded year without pension: ${viewModel.agePensionComparison.firstUnfundedYear ?? "none in projection"}.</p>` : ""}
       ${pensionRows.length ? `
         <section class="semi-retirement-results-section">
           <h4>Estimated Age Pension</h4>
-          <p>${pensionRows.some(row => row.household.agePension.unsupported) ? "No pension is included where circumstances are unsupported." : `Before-tax pension totals across the projection (${forecastDollarBasis === "today" ? "sum of annual today's-dollar amounts" : "nominal sum"}): ${semiRetirementMoney(pensionRows.reduce((sum, row) => sum + (forecastDollarBasis === "today" ? displayedForecastAmount(row.household.estimatedAgePension, forecastYearFromCalendarYear(row.calendarYear), scenarioInflationPct) : Number(row.household.estimatedAgePension || 0)), 0))}.`} Private savings exhaustion and unfunded spending are different milestones.</p>
+          <p>${pensionRows.some(row => row.household.agePension.unsupported) ? "No pension is included where circumstances are unsupported." : `Before-tax pension over this projection: ${semiRetirementMoney(pensionRows.reduce((sum, row) => sum + Number(row.household.estimatedAgePension || 0), 0))}.`} Private savings exhaustion and unfunded spending are different milestones.</p>
           <details class="mt-3"><summary>Annual pension estimates</summary>
             <div class="age-pension-table-wrap" role="region" aria-label="Annual Age Pension estimates" tabindex="0">
               <table class="age-pension-table">
-                <caption>Projected annual pension before tax, in ${forecastDollarBasis === 'today' ? "today's dollars" : 'future dollars'}</caption>
+                <caption>Projected annual pension before tax, in future dollars</caption>
                 <thead><tr><th scope="col">Year</th><th scope="col">Estimated pension</th></tr></thead>
-                <tbody>${pensionRows.map(row => `<tr><th scope="row">${escapeHtml(String(row.calendarYear))}</th><td>${row.household.agePension.unsupported ? "Not estimated" : byYear(row.household.estimatedAgePension, row.calendarYear)}</td></tr>`).join("")}</tbody>
+                <tbody>${pensionRows.map(row => `<tr><th scope="row">${escapeHtml(String(row.calendarYear))}</th><td>${row.household.agePension.unsupported ? "Not estimated" : semiRetirementMoney(row.household.estimatedAgePension)}</td></tr>`).join("")}</tbody>
               </table>
             </div>
           </details>
@@ -11040,7 +11024,7 @@
           <span><strong>Year-by-Year Projection</strong><small>${rows.length} annual periods from the projection engine output</small></span>
           <span>Expand</span>
         </summary>
-        <p class="field-help mt-3">Your entered lifestyle spending is in today's dollars and is increased over time using the selected inflation assumption. ${forecastDollarBasis === "today" ? "Displayed future spending and asset balances are expressed in today's purchasing power." : "Future spending and asset balances shown here are projected nominal amounts."}</p>
+        <p class="field-help mt-3">Your entered lifestyle spending is in today's dollars and is increased over time using the selected inflation assumption. Future spending and asset balances shown here are projected nominal amounts.</p>
         <p class="semi-retirement-scroll-cue">Desktop and tablet: scroll this table sideways to review every annual projection column. Phone widths use annual cards below.</p>
         <div class="semi-retirement-table-wrap semi-retirement-projection-scroll mt-4" role="region" aria-label="Year-by-year projection table. Scroll horizontally to see all columns." tabindex="0">
           <table class="semi-retirement-annual-table">
@@ -11058,16 +11042,16 @@
                     <td>${escapeHtml(row.ages?.[0]?.age ?? "n/a")}</td>
                     <td>${escapeHtml(row.ages?.[1]?.age ?? "n/a")}</td>
                     <td>${escapeHtml(row.householdPhaseLabel)}</td>
-                    <td>${escapeHtml(byYear(household.totalNetEmploymentIncome, row.calendarYear))}</td>
-                    <td>${escapeHtml(byYear(household.totalProjectedLifestyleSpending ?? household.applicableLifestyleSpending, row.calendarYear))}</td>
-                    <td>${escapeHtml(byYear(household.totalAccessibleWithdrawal, row.calendarYear))}</td>
-                    <td>${escapeHtml(byYear(household.closingAccessibleInvestmentBalance, row.calendarYear))}</td>
-                    <td>${escapeHtml(byYear(household.totalSuperBalance, row.calendarYear))}</td>
-                    <td>${escapeHtml(byYear(household.totalInvestableAssets, row.calendarYear))}</td>
-                    <td>${escapeHtml(byYear(household.totalDebt, row.calendarYear))}</td>
-                    <td>${escapeHtml(signedByYear(household.netRentalCashflow, row.calendarYear))}</td>
-                    <td>${escapeHtml(byYear(household.totalNetWorth, row.calendarYear))}</td>
-                    <td>${escapeHtml(byYear(household.unmetSpending, row.calendarYear))}</td>
+                    <td>${escapeHtml(semiRetirementMoney(household.totalNetEmploymentIncome))}</td>
+                    <td>${escapeHtml(semiRetirementMoney(household.totalProjectedLifestyleSpending ?? household.applicableLifestyleSpending))}</td>
+                    <td>${escapeHtml(semiRetirementMoney(household.totalAccessibleWithdrawal))}</td>
+                    <td>${escapeHtml(semiRetirementMoney(household.closingAccessibleInvestmentBalance))}</td>
+                    <td>${escapeHtml(semiRetirementMoney(household.totalSuperBalance))}</td>
+                    <td>${escapeHtml(semiRetirementMoney(household.totalInvestableAssets))}</td>
+                    <td>${escapeHtml(semiRetirementMoney(household.totalDebt))}</td>
+                    <td>${escapeHtml(semiRetirementSignedMoney(household.netRentalCashflow))}</td>
+                    <td>${escapeHtml(semiRetirementMoney(household.totalNetWorth))}</td>
+                    <td>${escapeHtml(semiRetirementMoney(household.unmetSpending))}</td>
                     <td><details><summary>View details</summary>${renderSemiRetirementAnnualDetailHtml(row)}</details></td>
                   </tr>
                 `;
@@ -11082,11 +11066,11 @@
               <article class="semi-retirement-annual-card ${Number(household.unmetSpending || 0) > 0 ? "has-warning" : ""}">
                 <div><strong>${escapeHtml(String(row.calendarYear))} - ${escapeHtml(semiRetirementAgeList(row.ages || []))}</strong><span>${escapeHtml(row.householdPhaseLabel)}</span></div>
                 ${semiRetirementDetailRows([
-                  { label: "Net cash income", value: byYear(household.totalNetEmploymentIncome, row.calendarYear) },
-                  { label: "Lifestyle spending", value: byYear(household.applicableLifestyleSpending, row.calendarYear) },
+                  { label: "Net cash income", value: semiRetirementMoney(household.totalNetEmploymentIncome) },
+                  { label: "Lifestyle spending", value: semiRetirementMoney(household.applicableLifestyleSpending) },
                   { label: "Portfolio withdrawal", value: semiRetirementMoney(household.totalPortfolioWithdrawal) },
-                  { label: "Accessible investments", value: byYear(household.closingAccessibleInvestmentBalance, row.calendarYear) },
-                  { label: "Super balance", value: byYear(household.totalSuperBalance, row.calendarYear) },
+                  { label: "Accessible investments", value: semiRetirementMoney(household.closingAccessibleInvestmentBalance) },
+                  { label: "Super balance", value: semiRetirementMoney(household.totalSuperBalance) },
                 ])}
                 <details><summary>View details</summary>${renderSemiRetirementAnnualDetailHtml(row)}</details>
               </article>
@@ -15225,8 +15209,6 @@
 
   function reportPresentationHtml(result, generatedDate) {
     const p = result.plan, m = reportMetric;
-    const reportBasis = typeof forecastDollarBasis === "undefined" ? "future" : forecastDollarBasis;
-    const reportForecastMoney = typeof forecastMoney === "function" ? forecastMoney : money;
     const progress = freedomPercent(result), fi = milestoneReachEstimate(result, 75);
     const annual = result.finalProjectedCashSurplus;
     const passive = result.passiveIncomeBreakdown;
@@ -15312,11 +15294,11 @@
         ${result.investmentReturnSummary ? `<p class="report-note">Configured investments retain ${money(result.investmentReturnSummary.retainedReturn)} of projected financial return and pay ${money(result.investmentReturnSummary.cashIncome)} as investment cash income: ${money(result.investmentReturnSummary.totalReturn)} total financial investment return. Cash distributions are removed from portfolio growth and included once in passive cash income.</p>` : ""}
         ${CALC.investmentIncomeReviewItems(p).length ? `<p class="report-note"><strong>Investment income review.</strong> Dividend or distribution income has been entered separately from investment assets. Confirm that it is not already included in the investment return assumption; the combined figure can overlap with passive income.</p>` : ""}
       `, "report-page-break")}
-      ${reportSection("Future Outlook", reportBasis === "today" ? "Estimates under the current plan, shown in today\'s purchasing-power dollars." : "Estimates under the current plan, shown in future nominal dollars.", `
+      ${reportSection("Future Outlook", "Estimates under the current plan, shown in future nominal dollars.", `
         ${result.investmentPropertyDebt > 0 ? '<p class="report-warning"><strong>Projection limit:</strong> The existing future net-worth and debt forecasts omit investment-property loan balances. They can overstate net worth and understate debt. Current liabilities and investment-property equity do include this debt.</p>' : ""}
-        ${reportGroup("Near term", m("1-year projected net worth", reportForecastMoney(netWorthAtYear(result,1), 1)) + m("2-year projected net worth", reportForecastMoney(netWorthAtYear(result,2), 2)))}
-        ${reportGroup("10-year outlook", m("Projected net worth", reportForecastMoney(netWorthAtYear(result,10), 10), "Projected household assets less modelled liabilities.", true) + m("Projected FI assets", reportForecastMoney(projectedFiAssetsAtYear(result,10), 10), "Includes super only when each person reaches the modelled access age.") + m("Projected investment portfolio", reportForecastMoney(investmentAtYear(result,10), 10), "Non-super portfolio after modelled growth and affordable contributions.") + m("Projected debt", reportForecastMoney(projectedDebtAtYear(result,10), 10), "Existing report estimate from the loan schedule, STSL and other entered debts."))}
-        ${reportGroup("Long term", m("30-year projected net worth", reportForecastMoney(netWorthAtYear(result,30), 30)) + m("Modelled Financial Freedom age", targetAgeOutcome(result), "First forecast year reaching the full spending-based target."))}
+        ${reportGroup("Near term", m("1-year projected net worth", money(netWorthAtYear(result,1))) + m("2-year projected net worth", money(netWorthAtYear(result,2))))}
+        ${reportGroup("10-year outlook", m("Projected net worth", money(netWorthAtYear(result,10)), "Projected household assets less modelled liabilities.", true) + m("Projected FI assets", money(projectedFiAssetsAtYear(result,10)), "Includes super only when each person reaches the modelled access age.") + m("Projected investment portfolio", money(investmentAtYear(result,10)), "Non-super portfolio after modelled growth and affordable contributions.") + m("Projected debt", money(projectedDebtAtYear(result,10)), "Existing report estimate from the loan schedule, STSL and other entered debts."))}
+        ${reportGroup("Long term", m("30-year projected net worth", money(netWorthAtYear(result,30))) + m("Modelled Financial Freedom age", targetAgeOutcome(result), "First forecast year reaching the full spending-based target."))}
         <p class="report-narrative">Over 10 years, the model estimates net worth of ${money(netWorthAtYear(result,10))}, an investment portfolio of ${money(investmentAtYear(result,10))} and debt of ${money(projectedDebtAtYear(result,10))}. Actual returns, tax, income, spending and inflation will vary.</p>
       `, "report-page-break")}
       ${reportSection("Progress and Wealth Over Time", "Future progress uses each year's inflation-adjusted spending target and includes super as it becomes accessible.", `
@@ -15402,12 +15384,12 @@
     lineChart("reportFiAssetsChart", [{
       label: "FI assets",
       color: "#0f9f6e",
-      points: projectionYears.map((year) => ({ x: year, y: year === 0 ? result.financialIndependenceAssets : displayedForecastAmount(projectedFiAssetsAtYear(result, year), year) })),
+      points: projectionYears.map((year) => ({ x: year, y: year === 0 ? result.financialIndependenceAssets : projectedFiAssetsAtYear(result, year) })),
     }], { width, height: 280, xMarks: [0, 10, 20, 30], xLabel: (mark) => `${mark}y` });
     lineChart("reportDebtChart", [{
       label: "Debt",
       color: "#dc4c3e",
-      points: projectionYears.map((year) => ({ x: year, y: year === 0 ? result.totalLiabilities : displayedForecastAmount(projectedDebtAtYear(result, year), year) })),
+      points: projectionYears.map((year) => ({ x: year, y: year === 0 ? result.totalLiabilities : projectedDebtAtYear(result, year) })),
     }], { width, height: 280, xMarks: [0, 10, 20, 30], xLabel: (mark) => `${mark}y` });
   }
 
@@ -16801,7 +16783,6 @@
     }
     decisionScenarioPlanKey = scenarioPlanKey;
     const result = calculatePlan(plan);
-    updateDollarBasisToggle();
     safeRenderModule("Demo banner", () => renderDemoModeBanner());
     safeRenderModule("Sample plan options", () => renderSamplePlanOptions());
     safeRenderModule("Setup labels", () => {
@@ -16814,7 +16795,6 @@
     safeRenderModule("Home preview", () => updatePreview(result));
     safeRenderModule("AI Insights card", () => renderAiInsightsHomeCard(result));
     safeRenderModule("Dashboard", () => renderDashboard(result));
-    safeRenderModule("Future dollar display", () => refreshFutureYouDollarDisplay(result));
     safeRenderModule("Financial Progress", () => renderFinancialProgress(result));
     safeRenderModule("Cashflow", () => renderCashflow(result));
     safeRenderModule("Loans", () => renderLoan(result));
@@ -17371,6 +17351,1225 @@
 
   function seedSampleScenarios(basePlan = DATA.demoPlan) {
     return sampleScenarioList(basePlan);
+  }
+
+  function renderInvestmentsDollarBasis(result) {
+    const linkedInvestmentSetup = document.getElementById("linkedInvestmentSetup");
+    if (linkedInvestmentSetup) linkedInvestmentSetup.innerHTML = linkedInvestmentRecordsHtml();
+    document.getElementById("investmentCards").innerHTML = [5, 10, 20, 30].map((year) => {
+      const row = result.investmentProjection.find((item) => item.year === year) || result.investmentProjection.at(-1);
+      return `<div class="mini-card"><span>${year} years</span><strong>${forecastMoney(row?.closingBalance || 0, row?.year ?? year)}</strong><small>${forecastMoney(row?.passiveIncome || 0, row?.year ?? year)} pa passive income</small></div>`;
+    }).join("");
+    lineChart("investmentChart", [{
+      label: "Investment balance",
+      color: "#0f9f6e",
+      points: [{ x: 0, y: result.investmentBalance }, ...result.investmentProjection.map((row) => ({ x: row.year, y: row.closingBalance }))],
+    }], { height: 260, xMarks: [0, 10, 20, 30], xLabel: (mark) => `${mark}y` });
+  }
+
+  function renderSuperDollarBasis(result) {
+    document.getElementById("superCards").innerHTML = [50, 55, 60, 65].map((age) => {
+      const row = result.superProjection.find((item) => item.age >= age) || result.superProjection.at(-1);
+      return `<div class="mini-card"><span>Age ${age}</span><strong>${forecastMoney(row?.closingBalance || 0, row?.year ?? 0)}</strong><small>${forecastMoney(row?.passiveIncome || 0, row?.year ?? 0)} pa at withdrawal rate</small></div>`;
+    }).join("");
+    const extra = result.taxEstimate.extraSuper;
+    document.getElementById("superSummary").innerHTML = `
+      <span class="text-sm font-bold text-slate-500">Additional concessional super estimate</span>
+      <div class="summary-grid mt-3">
+        ${summaryTile("Gross contribution", money(extra.grossContribution))}
+        ${summaryTile("Estimated personal tax saving", money(extra.estimatedPersonalTaxSaving))}
+        ${summaryTile("15% super contributions tax", money(extra.contributionsTax))}
+        ${summaryTile("Net amount invested in super", money(extra.netAmountInvested))}
+        ${summaryTile("Estimated after-tax cashflow cost", money(extra.afterTaxCashflowCost))}
+      </div>
+      <p class="mt-2 text-sm text-slate-600">Super is treated as available from age ${result.superAccessAge}. Age-${result.sustainabilityStartAge}+ sustainability assets: ${forecastMoney(result.totalRetirementAssets, projectionRowAtAge(result.investmentProjection, result.sustainabilityStartAge)?.year ?? 0, result.plan?.investing?.inflationPct)}</p>
+    `;
+  }
+
+  function renderForecastDollarBasis(result) {
+    const cards = [
+      ["1 year projected net worth", netWorthAtYear(result, 1), 1],
+      ["2 year projected net worth", netWorthAtYear(result, 2), 2],
+      ["5 year net worth", result.netWorthProjection[4]?.closingBalance || 0, 5],
+      ["10 year net worth", result.netWorthProjection[9]?.closingBalance || 0, 10],
+      ["20 year net worth", result.netWorthProjection[19]?.closingBalance || 0, 20],
+      ["30 year net worth", result.netWorthProjection[29]?.closingBalance || 0, 30],
+      ["Age-60+ sustainability assets", result.totalRetirementAssets, projectionRowAtAge(result.investmentProjection, result.sustainabilityStartAge)?.year ?? 0],
+      ["Target FI Capital", result.targetCapital],
+    ];
+    document.getElementById("forecastCards").innerHTML = cards.map(([label, value, year]) => metricCard(label, year === undefined ? money(value) : forecastMoney(value, year), "", "", label === "Target FI Capital" ? "targetFiCapital" : "")).join("");
+  }
+
+  function renderSemiRetirementSnapshotHtmlDollarBasis(viewModel) {
+    const key = viewModel.keyResults || {};
+    const outlook = semiRetirementOutlookCopy(viewModel);
+    const timing = viewModel.retirementTiming || {};
+    const fullyRetire = timing.fullRetirementValue
+      || semiRetirementPersonTimingLabel(viewModel.people, "fullRetirementAge", "Not modelled");
+    const semiRetirementCards = timing.hasElectedPersonalSemiRetirement
+      ? semiRetirementMetricCard("Semi-retire", timing.personalSemiRetirementValue || "Not modelled", "Personal scenario choice.")
+      : timing.hasHouseholdTransition
+        ? `${semiRetirementMetricCard("Semi-retirement choice", "None selected", "No person elected a personal semi-retirement phase.")}
+           ${semiRetirementMetricCard("Household retirement transition", timing.householdTransition?.value || "Transition modelled", timing.householdTransition?.note || "One person is retired while another is still working.")}`
+        : semiRetirementMetricCard("Semi-retire", "No semi-retirement phase", "The household moves directly from working to full retirement.");
+    const debtFree = semiRetirementDebtFreeLabel(viewModel.debtProperty || {});
+    const accessibleLast = semiRetirementAccessibleLastLabel(viewModel);
+    const lifestyleFundedTo = viewModel.status?.type === "shortfall"
+      ? semiRetirementMilestoneCardLabel(viewModel.longevity?.firstUnfundedSpending, viewModel.people, "Shortfall projected")
+      : semiRetirementProjectionEndLabel(viewModel);
+    const end = key.projectionEnd || {};
+    return `
+      <section class="semi-retirement-results-section semi-retirement-snapshot semi-retirement-outlook ${outlook.tone}">
+        <div class="semi-retirement-outlook-header">
+          <div>
+            <span class="metric-label">Your retirement outlook</span>
+            <h4>${escapeHtml(outlook.title)}</h4>
+            <p>${escapeHtml(outlook.detail)}</p>
+          </div>
+          <button class="btn" type="button" data-semi-action="edit-inputs">Edit Scenario</button>
+        </div>
+        <div class="semi-retirement-snapshot-grid mt-4">
+          ${semiRetirementMetricCard("Fully retired at", fullyRetire, "Employment income stops at the selected ages.")}
+          ${semiRetirementMetricCard(viewModel.status?.type === "shortfall" ? "Spending shortfall begins" : "Lifestyle funded until", lifestyleFundedTo.value, lifestyleFundedTo.note, viewModel.status?.type === "shortfall" ? "is-warning" : "is-positive")}
+          ${semiRetirementMetricCard("Retirement investments at forecast end", forecastMoney(end.totalInvestableAssets, forecastYearFromCalendarYear(end.calendarYear), window.FFSDollarBasis.inflationPercent(semiRetirementScenarioInputs)), "Projected investments and eligible super at the end of the selected forecast. Property is not included.")}
+          ${semiRetirementMetricCard("Spending shortfall", viewModel.longevity?.firstUnfundedSpending?.calendarYear ? `Starts in ${viewModel.longevity.firstUnfundedSpending.calendarYear}` : "None projected", "Based on annual available retirement funding, not retained property equity.", viewModel.status?.type === "shortfall" ? "is-warning" : "")}
+        </div>
+        <p class="field-help mt-3">${escapeHtml(viewModel.projectionEndDescription)}. Projection end retirement investments: ${escapeHtml(forecastMoney(end.totalInvestableAssets, forecastYearFromCalendarYear(end.calendarYear), window.FFSDollarBasis.inflationPercent(semiRetirementScenarioInputs)))}. ${forecastDollarBasis === "today" ? "Values are in today's purchasing power." : "Future values are nominal amounts based on the assumptions entered."}</p>
+      </section>
+    `;
+  }
+
+  function semiRetirementComparisonSummaryDollarBasis(viewModel, inputs = semiRetirementScenarioInputs) {
+    const key = viewModel?.keyResults || {};
+    const fullRow = key.accessibleWhenBothFullyRetired?.row || {};
+    const fullMilestone = key.accessibleWhenBothFullyRetired?.milestone || {};
+    const fullAges = semiRetirementMilestoneAgesFromRow(fullRow, viewModel.people);
+    const fullYear = Number(fullMilestone.calendarYear || fullRow.calendarYear);
+    const fullRetirementHousehold = fullRow.household || {};
+    const fullRetirementDisplayYear = forecastYearFromCalendarYear(fullYear, inputs, viewModel.annualRows);
+    const endDisplayYear = forecastYearFromCalendarYear(key.projectionEnd?.calendarYear, inputs, viewModel.annualRows);
+    const realAtRetirement = value => value == null ? value : displayedForecastAmount(value, fullRetirementDisplayYear, window.FFSDollarBasis.inflationPercent(inputs));
+    const realAtEnd = value => value == null ? value : displayedForecastAmount(value, endDisplayYear, window.FFSDollarBasis.inflationPercent(inputs));
+    const accessibleExhaustion = viewModel.longevity?.accessibleFundsExhausted || null;
+    const accessibleExhaustionYear = accessibleExhaustion?.calendarYear ? Number(accessibleExhaustion.calendarYear) : null;
+    const allFundsExhaustion = viewModel.longevity?.allRetirementFundsExhausted || null;
+    const firstShortfall = viewModel.longevity?.firstUnfundedSpending || null;
+    const debtAtRetirement = fullRetirementHousehold.totalDebt ?? viewModel.debtProperty?.netWorthDistinction?.totalDebt;
+    const oneOffEvents = window.FFSSemiRetirementUi?.normaliseOneOffLifestyleEvents?.(viewModel?.draft?.scenario?.oneOffLifestyleEvents) || [];
+    const plannedConcessionalEvents = window.FFSSemiRetirementUi?.normalisePlannedConcessionalContributions?.(viewModel?.draft?.scenario?.plannedConcessionalContributions) || [];
+    return {
+      fullYear: Number.isFinite(fullYear) ? fullYear : null,
+      fullAges,
+      fullRetirementLabel: comparisonHouseholdMilestone({ viewModel }),
+      assetsAtRetirement: realAtRetirement(key.totalInvestableAssetsWhenBothFullyRetired?.value ?? fullRetirementHousehold.totalInvestableAssets),
+      accessibleAtRetirement: realAtRetirement(key.accessibleWhenBothFullyRetired?.value ?? fullRetirementHousehold.closingAccessibleInvestmentBalance),
+      superAtRetirement: realAtRetirement(fullRetirementHousehold.totalSuperBalance),
+      propertyEquityAtRetirement: realAtRetirement(fullRetirementHousehold.totalPropertyEquity),
+      accessibleExhaustionYear,
+      accessibleLastLabel: accessibleExhaustionYear
+        ? `${accessibleExhaustionYear} - ${semiRetirementAgeList(viewModel.people.map((person, index) => ({ name: person.name, age: accessibleExhaustion[`${person.id}Age`] ?? accessibleExhaustion[`person${index + 1}Age`] ?? "n/a" })))}`
+        : "Through projection",
+      retirementFundingStatus: firstShortfall?.calendarYear
+        ? `First funding shortfall in ${firstShortfall.calendarYear}`
+        : allFundsExhaustion?.calendarYear
+          ? `Total retirement assets exhausted in ${allFundsExhaustion.calendarYear}`
+          : "Funded through projection",
+      firstShortfallYear: firstShortfall?.calendarYear ? Number(firstShortfall.calendarYear) : null,
+      firstShortfallLabel: firstShortfall?.calendarYear
+        ? `${firstShortfall.calendarYear} - ${semiRetirementAgeList(milestoneAgesFromObject(firstShortfall, viewModel.people))}`
+        : "None projected",
+      requiredWithdrawals: retirementFundingDisplay(viewModel, inputs).requiredAccessibleWithdrawalsDuringSemiRetirement,
+      lifestyleSurplus: realAtRetirement(fullRetirementHousehold.annualLifestyleSurplusOrShortfall ?? fullRetirementHousehold.cashSurplusOrShortfall),
+      debtAtRetirement: realAtRetirement(debtAtRetirement),
+      projectedEndNetWorth: realAtEnd(key.projectionEnd?.projectedNetWorth),
+      oneOffLifestyleSpending: retirementFundingDisplay(viewModel, inputs).totalOneOffLifestyleSpending,
+      oneOffLifestyleSpendingToday: viewModel.semiRetirementFunding?.totalOneOffLifestyleSpendingTodayDollars,
+      oneOffLifestyleEventCount: oneOffEvents.length,
+      plannedConcessionalTotal: plannedConcessionalEvents.reduce((total, event) => total + (Number(event.amount) || 0), 0),
+      plannedConcessionalEventCount: plannedConcessionalEvents.length,
+    };
+  }
+
+  function semiRetirementComparisonScenarioSetDollarBasis(currentViewModel) {
+    const scenarios = [currentRetirementComparisonScenario(currentViewModel)];
+    semiRetirementComparisonScenarios.forEach((scenario) => {
+      const viewModel = comparisonScenarioViewModel(scenario);
+      if (!viewModel?.isAvailable) return;
+      scenarios.push({
+        ...scenario,
+        viewModel,
+        summary: semiRetirementComparisonSummary(viewModel, scenario.inputs),
+      });
+    });
+    return scenarios;
+  }
+
+  function semiRetirementComparisonBreakdownRowsDollarBasis(key, scenario) {
+    const atYear = (value, calendarYear) => semiRetirementMoney(displayedForecastAmount(value,
+      forecastYearFromCalendarYear(calendarYear, scenario.inputs, scenario.viewModel?.annualRows),
+      window.FFSDollarBasis.inflationPercent(scenario.inputs || scenario.draft)));
+    const viewModel = scenario.viewModel || {};
+    const summary = scenario.summary || {};
+    const fullRow = viewModel.keyResults?.accessibleWhenBothFullyRetired?.row || {};
+    const household = fullRow.household || {};
+    const atRetirement = value => atYear(value, fullRow.calendarYear);
+    const atEnd = value => atYear(value, viewModel.keyResults?.projectionEnd?.calendarYear);
+    const atShortfall = value => atYear(value, viewModel.longevity?.firstUnfundedSpending?.calendarYear);
+    const end = viewModel.keyResults?.projectionEnd || {};
+    const endHousehold = viewModel.annualRows?.at?.(-1)?.household || {};
+    const firstShortfall = viewModel.longevity?.firstUnfundedSpending || {};
+    const debtCards = viewModel.debtProperty?.debtCards || [];
+    const oneOffEvents = window.FFSSemiRetirementUi?.normaliseOneOffLifestyleEvents?.(scenario.draft?.scenario?.oneOffLifestyleEvents) || [];
+    const concessionalEvents = window.FFSSemiRetirementUi?.normalisePlannedConcessionalContributions?.(scenario.draft?.scenario?.plannedConcessionalContributions) || [];
+    if (key === "fullRetirement") {
+      return [
+        semiRetirementBreakdownRow("Household milestone", comparisonHouseholdMilestone(scenario), "Ages are at the start of the projection year; financial balances are closing-year values."),
+        ...((scenario.draft?.people || []).map((person) => semiRetirementBreakdownRow(`${person.name || person.id} full retirement`, Number.isFinite(Number(person.fullRetirementAge)) ? `Age ${person.fullRetirementAge}` : "Not available"))),
+        ...((scenario.draft?.people || []).map((person) => person.hasSemiRetirement ? semiRetirementBreakdownRow(`${person.name || person.id} semi-retirement`, `Age ${person.semiRetirementAge}`) : "")),
+      ].filter(Boolean);
+    }
+    if (key === "assetsAtRetirement") {
+      return [
+        semiRetirementBreakdownRow("Accessible investments", semiRetirementMoney(summary.accessibleAtRetirement)),
+        semiRetirementBreakdownRow("Super", semiRetirementMoney(summary.superAtRetirement)),
+        semiRetirementBreakdownRow("Total investable retirement assets", semiRetirementMoney(summary.assetsAtRetirement)),
+        semiRetirementBreakdownRow("Property equity", semiRetirementMoney(summary.propertyEquityAtRetirement), "Shown separately unless a strategy releases it."),
+      ].filter(Boolean);
+    }
+    if (key === "accessibleAtRetirement") {
+      return [
+        semiRetirementBreakdownRow("Opening accessible balance", semiRetirementMoney(scenario.draft?.accessibleInvestments?.openingBalance)),
+        semiRetirementBreakdownRow("Planned annual investing", semiRetirementMoney(scenario.draft?.accessibleInvestments?.externalAnnualAccessibleContribution)),
+        semiRetirementBreakdownRow("Required accessible withdrawal at full retirement", atRetirement(household.requiredAccessibleWithdrawal)),
+        semiRetirementBreakdownRow("Total accessible withdrawals", atRetirement(household.totalAccessibleWithdrawal)),
+        semiRetirementBreakdownRow("Closing accessible investments", semiRetirementMoney(summary.accessibleAtRetirement)),
+      ].filter(Boolean);
+    }
+    if (key === "superAtRetirement") {
+      return [
+        ...((fullRow.people || []).flatMap((person) => {
+          const name = person.name || person.id;
+          return [
+            semiRetirementBreakdownRow(`${name} employer super`, atRetirement(person.employerSuperContribution)),
+            Number(person.additionalSuperContribution || 0) > 0 ? semiRetirementBreakdownRow(`${name} additional super`, atRetirement(person.additionalSuperContribution)) : "",
+            Number(person.plannedExtraConcessionalContribution || 0) > 0 ? semiRetirementBreakdownRow(`${name} planned extra concessional contribution`, atRetirement(person.plannedExtraConcessionalContribution), "Uses the existing planned contribution event treatment.") : "",
+            Number(person.plannedExtraConcessionalContributionTax || 0) > 0 ? semiRetirementBreakdownRow(`${name} planned contribution tax`, atRetirement(person.plannedExtraConcessionalContributionTax)) : "",
+            Number(person.superWithdrawal || 0) > 0 ? semiRetirementBreakdownRow(`${name} super withdrawal`, atRetirement(person.superWithdrawal)) : "",
+            semiRetirementBreakdownRow(`${name} closing super`, atRetirement(person.closingSuperBalance)),
+          ];
+        })),
+        semiRetirementBreakdownRow("Super withdrawals", atRetirement(household.totalSuperWithdrawal)),
+        semiRetirementBreakdownRow("Combined super", semiRetirementMoney(summary.superAtRetirement)),
+      ].filter(Boolean);
+    }
+    if (key === "accessibleLast") {
+      const accessible = viewModel.longevity?.accessibleFundsExhausted;
+      return [
+        semiRetirementBreakdownRow("Depletion year", accessible?.calendarYear || "Through projection"),
+        semiRetirementBreakdownRow("Ages", accessible?.calendarYear ? semiRetirementAgeList(milestoneAgesFromObject(accessible, viewModel.people)) : semiRetirementAgeList(end.ages || [])),
+        semiRetirementBreakdownRow("Super funding after that point", accessible?.calendarYear ? "Available super continues funding spending where required." : "Accessible investments remain available through the projection."),
+      ].filter(Boolean);
+    }
+    if (key === "fundingStatus") {
+      return [
+        semiRetirementBreakdownRow("Accessible investments exhausted", viewModel.longevity?.accessibleFundsExhausted?.calendarYear || "Not within projection"),
+        semiRetirementBreakdownRow("Total retirement assets exhausted", viewModel.longevity?.allRetirementFundsExhausted?.calendarYear || "Not within projection"),
+        semiRetirementBreakdownRow("First unmet spending", summary.firstShortfallLabel),
+        semiRetirementBreakdownRow("Projection end", `${end.calendarYear || "Projection end"} - ${semiRetirementAgeList(end.ages || [])}`),
+      ].filter(Boolean);
+    }
+    if (key === "debtAtRetirement") {
+      return [
+        ...debtCards
+          .filter((card) => Number(card.currentBalance || card.payoff?.balance || 0) > 0 || Number(card.projectedBalanceAtRetirement ?? card.balanceAtFullRetirement ?? 0) > 0)
+          .map((card) => semiRetirementBreakdownRow(card.label || card.name || "Debt", atYear(card.projectedBalanceAtRetirement ?? card.balanceAtFullRetirement, card.projectedBalanceAtRetirementYear ?? fullRow.calendarYear))),
+        semiRetirementBreakdownRow("Total debt", semiRetirementMoney(summary.debtAtRetirement)),
+      ].filter(Boolean);
+    }
+    if (key === "firstShortfall") {
+      if (!firstShortfall.calendarYear) return [semiRetirementBreakdownRow("Funding shortfall", "None projected; no shortfall-year funding breakdown applies.")];
+      const funding = viewModel.annualRows?.find((row) => row.calendarYear === firstShortfall.calendarYear)?.household;
+      if (!funding) return [
+        semiRetirementBreakdownRow("Year", firstShortfall.calendarYear),
+        semiRetirementBreakdownRow("Funding detail", "Unavailable: the projection has no annual row for the shortfall year."),
+      ];
+      return [
+        semiRetirementBreakdownRow("Year", firstShortfall.calendarYear || "None projected"),
+        semiRetirementBreakdownRow("Ages", firstShortfall.calendarYear ? semiRetirementAgeList(milestoneAgesFromObject(firstShortfall, viewModel.people)) : ""),
+        semiRetirementBreakdownRow("Normal lifestyle spending", atShortfall(funding.normalLifestyleSpending)),
+        semiRetirementBreakdownRow("One-off spending", atShortfall(funding.oneOffLifestyleSpending)),
+        semiRetirementBreakdownRow("Net cash income", atShortfall(funding.netHouseholdCashIncome)),
+        semiRetirementBreakdownRow("Accessible withdrawal", atShortfall(funding.totalAccessibleWithdrawal)),
+        semiRetirementBreakdownRow("Super withdrawal", atShortfall(funding.totalSuperWithdrawal)),
+        semiRetirementBreakdownRow("Unmet spending", atShortfall(funding.unmetSpending)),
+      ].filter(Boolean);
+    }
+    if (key === "projectionEndNetWorth") {
+      const finalAssets = viewModel.annualRows?.at?.(-1)?.assets || [];
+      const assetValue = (predicate) => finalAssets
+        .filter((asset) => asset?.includeInNetWorth !== false && !asset?.isAccessibleAsset && predicate(asset))
+        .reduce((total, asset) => total + (Number(asset.closingValue) || 0), 0);
+      const principalResidenceValue = assetValue((asset) => ["home", "principalResidence"].includes(asset.type));
+      const investmentPropertyValue = assetValue((asset) => asset.isRentalInvestmentProperty || ["investmentProperty", "rentalProperty", "rentalInvestmentProperty"].includes(asset.type));
+      const otherAssetValue = assetValue((asset) => !asset.isProperty && !["home", "principalResidence", "investmentProperty", "rentalProperty", "rentalInvestmentProperty"].includes(asset.type));
+      const otherPropertyValue = assetValue((asset) => asset.isProperty && !["home", "principalResidence", "investmentProperty", "rentalProperty", "rentalInvestmentProperty"].includes(asset.type));
+      return [
+        semiRetirementBreakdownRow("Accessible investments", atEnd(end.accessibleInvestments)),
+        semiRetirementBreakdownRow("Super", atEnd(end.super)),
+        principalResidenceValue ? semiRetirementBreakdownRow("Principal residence value", atEnd(principalResidenceValue), "Shown before remaining debt is deducted.") : "",
+        investmentPropertyValue ? semiRetirementBreakdownRow("Investment property value", atEnd(investmentPropertyValue), "Shown before remaining debt is deducted.") : "",
+        otherPropertyValue ? semiRetirementBreakdownRow("Other property value", atEnd(otherPropertyValue), "Shown before remaining debt is deducted.") : "",
+        otherAssetValue ? semiRetirementBreakdownRow("Other assets", atEnd(otherAssetValue)) : "",
+        semiRetirementBreakdownRow("Less remaining debt", atEnd(end.totalDebt ?? endHousehold.totalDebt)),
+        semiRetirementBreakdownRow("Total investable assets", atEnd(end.totalInvestableAssets)),
+        semiRetirementBreakdownRow("Projected net worth", atEnd(end.projectedNetWorth)),
+      ].filter(Boolean);
+    }
+    if (key === "oneOffLifestyle") {
+      return oneOffEvents.length
+        ? oneOffEvents.map((event) => semiRetirementBreakdownRow(event.description || "One-off lifestyle spending", `${event.year || "Year not set"} - ${semiRetirementMoney(event.amountTodayDollars)} today's dollars`, "Projected in the selected year by the existing retirement engine."))
+        : [semiRetirementBreakdownRow("One-off lifestyle spending", "None")];
+    }
+    if (key === "concessional") {
+      return concessionalEvents.length
+        ? concessionalEvents.map((event) => semiRetirementBreakdownRow(semiRetirementConcessionalContributionSummary(event, scenario.draft), semiRetirementMoney(event.amount), "Contribution-cap compliance is not implied."))
+        : [semiRetirementBreakdownRow("Extra concessional contributions", "None")];
+    }
+    return [semiRetirementBreakdownRow("Detail", "Not available from the current projection output")];
+  }
+
+  function renderSemiRetirementLongevityHtmlDollarBasis(viewModel) {
+    const longevity = viewModel.longevity || {};
+    const accessible = longevity.accessibleFundsExhausted;
+    const allFunds = longevity.allRetirementFundsExhausted;
+    const unfunded = longevity.firstUnfundedSpending;
+    const projectionEnd = semiRetirementProjectionEndLabel(viewModel);
+    const accessibleLast = semiRetirementAccessibleLastLabel(viewModel);
+    const accessibleOutcome = window.FFSSemiRetirementUi?.buildSavedRetirementOutcome?.(viewModel)?.accessibleExhaustion;
+    const accessibleAlreadyZero = Boolean(accessibleOutcome?.alreadyZero);
+    const accessibleDepletion = accessible?.calendarYear
+      ? accessible
+      : accessibleOutcome?.calendarYear ? accessibleOutcome : null;
+    const accessibleTone = accessibleAlreadyZero || accessibleDepletion ? "is-warning" : "";
+    return `
+      <section class="semi-retirement-results-section">
+        <div class="card-subheading">
+          <h4>Funding Outlook</h4>
+          <p>How the scenario funds lifestyle spending through the projection.</p>
+        </div>
+        <div class="semi-retirement-results-grid">
+          ${semiRetirementMetricCard("Lifestyle funding", unfunded?.calendarYear ? `Shortfall starts in ${unfunded.calendarYear}` : `Funded through ${projectionEnd.value.replace("+", "")}`, unfunded?.calendarYear ? semiRetirementAgeList(milestoneAgesFromObject(unfunded, viewModel.people)) : projectionEnd.note, unfunded?.calendarYear ? "is-warning" : "is-positive")}
+          ${semiRetirementMetricCard("Investments available before super", accessibleAlreadyZero ? "None available" : accessibleDepletion ? `Used by ${accessibleLast.value}` : "Remain available", accessibleAlreadyZero ? `${accessibleLast.note}. No accessible investments are available at the retirement milestone; available super may still fund later spending.` : accessibleDepletion ? `${accessibleLast.note}. ${allFunds?.calendarYear && allFunds.calendarYear <= accessibleDepletion.calendarYear ? "Total retirement investments are exhausted by this year." : "Available super continues funding retirement where required."}` : "Through the projection period.", accessibleTone)}
+          ${semiRetirementMetricCard("Retirement investments", allFunds?.calendarYear ? `Exhausted by ${semiRetirementFirstAgeLabel(milestoneAgesFromObject(allFunds, viewModel.people))}` : "No exhaustion projected", allFunds?.calendarYear ? semiRetirementAgeList(milestoneAgesFromObject(allFunds, viewModel.people)) : "No retirement investment exhaustion within the projection horizon.", allFunds?.calendarYear ? "is-warning" : "is-positive")}
+          ${semiRetirementMetricCard("Unfunded lifestyle spending (sum of discounted years)", unfunded?.calendarYear ? money(retirementDisplaySum(viewModel.annualRows || [], row => row.household?.unmetSpending || 0)) : "None projected", unfunded?.calendarYear ? `${semiRetirementAgeList(milestoneAgesFromObject(unfunded, viewModel.people))} - first shortfall ${unfunded.calendarYear}` : "No projected unfunded lifestyle spending.", unfunded?.calendarYear ? "is-warning" : "is-positive")}
+        </div>
+      </section>
+      ${renderRetainedAssetsHtml(viewModel)}
+    `;
+  }
+
+  function renderSemiRetirementAnnualDetailHtmlDollarBasis(row) {
+    const years = row.yearIndex ?? forecastYearFromCalendarYear(row.calendarYear);
+    const yearMoney = value => semiRetirementMoney(displayedForecastAmount(value, years, window.FFSDollarBasis.inflationPercent(semiRetirementScenarioInputs)));
+    const yearSignedMoney = value => {
+      const amount = displayedForecastAmount(value, years, window.FFSDollarBasis.inflationPercent(semiRetirementScenarioInputs));
+      return `${Number(amount) > 0 ? "+" : ""}${money(amount)}`;
+    };
+    const household = row.household || {};
+    const annualDebtSections = (row.liabilities || [])
+      .filter((debt) => Number(debt.openingBalance || 0) > 0 || Number(debt.closingBalance || 0) > 0 || Number(debt.totalRepayment ?? debt.scheduledRepayment ?? 0) > 0 || Number(debt.interestCharged || 0) > 0)
+      .map((debt) => {
+      const detailRows = [
+        { label: "Opening balance", value: yearMoney(debt.openingBalance) },
+        Number(debt.offsetBalanceUsed || 0) > 0 ? { label: "Offset balance used", value: yearMoney(debt.offsetBalanceUsed) } : null,
+        Number(debt.interestBearingBalance || 0) !== Number(debt.openingBalance || 0) ? { label: "Interest-bearing balance", value: yearMoney(debt.interestBearingBalance) } : null,
+        { label: "Interest", value: yearMoney(debt.interestCharged) },
+        { label: "Scheduled repayment", value: yearMoney(debt.regularRepayment ?? debt.scheduledRepayment) },
+        Number(debt.balloonRepayment || 0) > 0 ? { label: "Balloon repayment", value: yearMoney(debt.balloonRepayment) } : null,
+        Number(debt.downsizeDischargedBalance || 0) > 0 ? { label: "Repaid from downsizing sale proceeds", value: yearMoney(debt.downsizeDischargedBalance) } : null,
+        { label: "Principal repaid", value: yearMoney(debt.principalRepaid) },
+        Number(debt.capitalisedInterest || 0) > 0 ? { label: "Capitalised interest", value: yearMoney(debt.capitalisedInterest) } : null,
+        { label: "Closing balance", value: yearMoney(debt.closingBalance) },
+      ].filter(Boolean);
+      return `
+        <section>
+          <h5>${escapeHtml(debt.name || debt.type || "Debt")}</h5>
+          ${semiRetirementDetailRows(detailRows)}
+        </section>
+      `;
+    }).join("");
+    const annualPropertySections = (row.properties || []).filter((property) => property.isRentalInvestmentProperty).map((property) => `
+      <section>
+        <h5>${escapeHtml(property.name || "Rental / Investment Property")}</h5>
+        ${semiRetirementDetailRows([
+          { label: "Opening property value", value: yearMoney(property.openingValue) },
+          { label: "Capital growth assumption", value: semiRetirementAssumptionValue({ value: property.annualGrowthRate, type: "percentRate" }) },
+          { label: "Growth", value: yearMoney(property.propertyGrowth) },
+          { label: "Closing property value", value: yearMoney(property.closingValue) },
+          Number(property.baseRentalCashIncome || 0) && Number(property.baseRentalCashIncome || 0) !== Number(property.rentalCashIncome ?? property.grossRentalIncome ?? 0)
+            ? { label: "Base rental cash income", value: yearMoney(property.baseRentalCashIncome) }
+            : null,
+          property.rentalCashIncomeGrowthSource === "cpi"
+            ? { label: "Rental cash income growth", value: "CPI" }
+            : null,
+          { label: "Rental cash income", value: yearMoney(property.rentalCashIncome ?? property.grossRentalIncome) },
+          { label: "Taxable rental income", value: yearMoney(property.taxableRentalIncome) },
+          { label: "Loan interest", value: yearMoney(property.loanInterest) },
+          { label: "Loan principal", value: yearMoney(property.loanPrincipal) },
+          { label: "Net property cashflow", value: yearSignedMoney(property.netPropertyCashflow) },
+          { label: "Linked loan balance", value: yearMoney(property.linkedLoanClosingBalance) },
+          { label: "Property equity", value: yearMoney(property.propertyEquity) },
+        ].filter(Boolean))}
+      </section>
+    `).join("");
+    const oneOffLifestyleRows = (household.oneOffLifestyleEvents || []).map((event) => ({
+      label: event.description || "One-off expense",
+      value: `${yearMoney(event.projectedAmount)} (${semiRetirementMoney(event.amountTodayDollars)} today)`,
+    }));
+    const hasOneOffLifestyle = Number(household.oneOffLifestyleSpending || 0) > 0 || oneOffLifestyleRows.length > 0;
+    const oneOffIncomeRows = (household.oneOffIncomeEvents || []).map((event) => ({
+      label: `One-off income - ${event.description || "Income"}`,
+      value: `+${yearMoney(event.projectedAmount)} (${semiRetirementMoney(event.amountTodayDollars)} today)`,
+    }));
+    const hasOneOffIncome = Number(household.oneOffIncome || 0) > 0 || oneOffIncomeRows.length > 0;
+    const downsizeEvent = household.downsizeHomeEvent || null;
+    const downsizeContributionRows = downsizeEvent?.downsizerContributions
+      ? Object.entries(downsizeEvent.downsizerContributions).map(([personId, amount]) => {
+        const person = (row.people || []).find((entry) => String(entry.id) === String(personId));
+        return Number(amount || 0) > 0
+          ? { label: `${person?.name || personId} downsizer super contribution`, value: yearMoney(amount) }
+          : null;
+      }).filter(Boolean)
+      : [];
+    const downsizeRows = downsizeEvent?.applied ? [
+      { label: "Projected home sale value", value: yearMoney(downsizeEvent.projectedSaleValue) },
+      { label: "Less sale costs", value: `(${yearMoney(downsizeEvent.saleCosts)})` },
+      { label: "Less linked home loan repaid", value: `(${yearMoney(downsizeEvent.linkedHomeDebtRepaid)})` },
+      { label: "Net sale proceeds", value: yearMoney(downsizeEvent.netSaleProceeds) },
+      { label: "Replacement home value", value: `(${yearMoney(downsizeEvent.projectedReplacementHomeValue)})` },
+      { label: "Purchase costs", value: `(${yearMoney(downsizeEvent.purchaseCosts)})` },
+      { label: "Net cash released", value: yearSignedMoney(downsizeEvent.netCashReleased) },
+      Number(downsizeEvent.linkedHomeDebtRemaining || 0) > 0 ? { label: "Home loan remaining after downsizing", value: yearMoney(downsizeEvent.linkedHomeDebtRemaining) } : null,
+      ...downsizeContributionRows,
+      Number(downsizeEvent.accessibleInvestmentContribution || 0) > 0 ? { label: "Added to accessible investments", value: yearMoney(downsizeEvent.accessibleInvestmentContribution) } : null,
+      Number(downsizeEvent.additionalFundsRequired || 0) > 0 ? { label: "Additional cash required", value: yearMoney(downsizeEvent.additionalFundsRequired) } : null,
+      Number(downsizeEvent.accessibleWithdrawal || 0) > 0 ? { label: "Funded from accessible resources", value: yearMoney(downsizeEvent.accessibleWithdrawal) } : null,
+      Number(downsizeEvent.unfundedShortfall || 0) > 0 ? { label: "Unfunded shortfall", value: yearMoney(downsizeEvent.unfundedShortfall) } : null,
+    ].filter(Boolean) : [];
+    const plannedAccessibleContributionValue = household.plannedExternalAccessibleContributionWasReduced
+      ? `${yearMoney(household.plannedExternalAccessibleContribution)} of ${yearMoney(household.plannedAccessibleInvestmentContributionRequested)} planned`
+      : yearMoney(household.plannedExternalAccessibleContribution);
+    const cashflowSummaryRows = [
+      ["Net household cash income", yearMoney(household.netHouseholdCashIncome)],
+      ["One-off income", yearMoney(household.oneOffIncome)],
+      ["Normal lifestyle spending", yearMoney(household.normalLifestyleSpending ?? household.applicableLifestyleSpending)],
+      ["Planned big expenses", yearMoney(household.oneOffLifestyleSpending)],
+      ["Debt cash repayments", yearMoney(household.annualDebtCashRequirement ?? household.totalDebtRepayments)],
+      ["Planned annual investing", plannedAccessibleContributionValue],
+      ["Planned super contribution", yearMoney(household.plannedAdditionalConcessionalContributionsPaidFromCash)],
+      ["Cash surplus before allocation", yearSignedMoney(household.cashSurplusBeforeAllocation ?? household.cashSurplusOrShortfall)],
+    ].map(([label, value]) => ({ label, value }));
+    const surplusAllocationRows = [
+      ["Extra lifestyle / enjoyment", yearMoney(household.surplusAvailableForEnjoyment)],
+      ["To accessible investments", yearMoney(household.surplusToAccessibleInvestments)],
+      ["To super", yearMoney(household.surplusToSuper)],
+      ["Unallocated surplus", yearMoney(household.unallocatedSurplus)],
+    ].map(([label, value]) => ({ label, value }));
+    const fundingShortfallRows = [
+      ["Accessible withdrawal", yearMoney(household.requiredAccessibleWithdrawal)],
+      ["Super withdrawal", yearMoney(household.requiredSuperWithdrawal)],
+      ["Unmet spending", yearMoney(household.unmetRequiredLifestyleSpending ?? household.unmetSpending)],
+      ["Total portfolio withdrawal", yearMoney(household.totalPortfolioWithdrawal)],
+    ].map(([label, value]) => ({ label, value }));
+    const householdPositionRows = [
+      ["Other income", yearMoney(household.otherIncome)],
+      ["Passive taxable income", yearMoney(household.totalPassiveTaxableIncome)],
+      ["Passive cash income", yearMoney(household.totalPassiveCashIncome)],
+      ["Net rental cashflow", yearSignedMoney(household.netRentalCashflow)],
+      ["Total lifestyle spending", yearMoney(household.totalProjectedLifestyleSpending ?? household.applicableLifestyleSpending)],
+      ["Accessible investment contribution", yearMoney(household.accessibleInvestmentContribution)],
+      ["Opening accessible balance", yearMoney(household.openingAccessibleInvestmentBalance)],
+      ["Opening offset balance", yearMoney(household.offsetOpeningBalance)],
+      ["Offset withdrawals", yearMoney(household.offsetWithdrawals)],
+      ["Closing offset balance", yearMoney(household.offsetClosingBalance)],
+      ["Unallocated surplus balance", yearMoney(household.unallocatedSurplusClosingBalance)],
+      ...(household.agePension ? [["Estimated Age Pension (before tax)", household.agePension.unsupported ? "Not estimated" : yearMoney(household.estimatedAgePension)]] : []),
+      ["Investment earnings", yearMoney(household.accessibleInvestmentEarnings)],
+      ["Closing accessible balance", yearMoney(household.closingAccessibleInvestmentBalance)],
+      ["Total accessible assets", yearMoney(household.totalAccessibleAssets)],
+      ["Total super", yearMoney(household.totalSuperBalance)],
+      ["Total investable assets", yearMoney(household.totalInvestableAssets)],
+      ["Total debt", yearMoney(household.totalDebt)],
+      ["Loan interest", yearMoney(household.totalLoanInterest)],
+      ["Property value", yearMoney(household.totalPropertyValue)],
+      ["Property debt", yearMoney(household.totalPropertyDebt)],
+      ["Property equity", yearMoney(household.totalPropertyEquity)],
+      ["Projected net worth", yearMoney(household.totalNetWorth)],
+    ].map(([label, value]) => ({ label, value }));
+    const superContributionRows = row.people.flatMap((person) => {
+      const name = person.name || person.id;
+      return [
+        { label: `${name} employer super`, value: yearMoney(person.employerSuperContribution) },
+        Number(person.recurringAdditionalSuperContribution || 0) > 0
+          ? { label: `${name} existing recurring extra super`, value: yearMoney(person.recurringAdditionalSuperContribution) }
+          : null,
+        Number(person.plannedExtraConcessionalContribution || 0) > 0
+          ? { label: `${name} planned extra concessional contribution`, value: yearMoney(person.plannedExtraConcessionalContribution) }
+          : null,
+        Number(person.plannedExtraConcessionalContribution || 0) > 0
+          ? { label: `${name} planned contribution tax`, value: yearMoney(person.plannedExtraConcessionalContributionTax) }
+          : null,
+        Number(person.plannedExtraConcessionalContribution || 0) > 0
+          ? { label: `${name} net planned contribution added to super`, value: yearMoney(person.netPlannedExtraConcessionalContribution) }
+          : null,
+        Number(person.surplusAdditionalSuperContribution || 0) > 0
+          ? { label: `${name} surplus directed to super`, value: yearMoney(person.surplusAdditionalSuperContribution) }
+          : null,
+        { label: `${name} total modelled super contributions`, value: yearMoney(person.totalModelledSuperContributions ?? (Number(person.employerSuperContribution || 0) + Number(person.additionalSuperContribution || 0))) },
+        Number(person.superContributionsTax || 0) > 0
+          ? { label: `${name} contributions tax`, value: yearMoney(person.superContributionsTax) }
+          : null,
+        Number(person.superWithdrawal || 0) > 0
+          ? { label: `${name} super withdrawal`, value: yearMoney(person.superWithdrawal) }
+          : null,
+        { label: `${name} closing super balance`, value: yearMoney(person.closingSuperBalance) },
+      ].filter(Boolean);
+    });
+    superContributionRows.push(
+      { label: "Total planned extra concessional contribution", value: yearMoney(household.plannedExtraConcessionalContributionsPaidFromCash) },
+      { label: "Combined household closing super balance", value: yearMoney(household.totalSuperBalance) },
+    );
+    return `
+      <div class="semi-retirement-annual-detail">
+        ${row.people.map((person) => `
+          <section>
+            <h5>${escapeHtml(person.name || person.id)}</h5>
+            ${semiRetirementDetailRows([
+              { label: "Employment phase", value: person.employmentPhaseLabel },
+              { label: "Gross employment income", value: yearMoney(person.grossEmploymentIncome) },
+              { label: "Interest income", value: yearMoney(person.interestIncome) },
+              { label: "Dividend income", value: yearMoney(person.dividendIncome) },
+              { label: "Rental taxable income", value: yearMoney(person.rentalTaxableIncome) },
+              { label: "Distribution income", value: yearMoney(person.distributionIncome) },
+              { label: "Taxable income before modelled concessional contributions", value: yearMoney(person.taxableIncomeBeforeModelledConcessionalContributions ?? person.totalTaxableIncome) },
+              { label: "Modelled concessional contribution taxable-income reduction", value: yearMoney(person.modelledConcessionalContributionTaxableIncomeReduction) },
+              { label: "Total taxable income", value: yearMoney(person.totalTaxableIncome) },
+              ...(person.sapto ? [{ label: "SAPTO applied (tax reduction)", value: yearMoney(person.sapto.applied) }, { label: "SAPTO rebate income", value: yearMoney(person.sapto.rebateIncome) }] : []),
+              { label: "Income tax", value: yearMoney(person.incomeTax) },
+              { label: "Medicare", value: yearMoney(person.medicareLevy) },
+              { label: "Medicare Levy Surcharge", value: yearMoney(person.medicareLevySurcharge) },
+              { label: "STSL repayment income", value: yearMoney(person.stslRepaymentIncome ?? person.totalTaxableIncome) },
+              { label: "STSL", value: yearMoney(person.stslRepayment) },
+              { label: "Net cash income", value: yearMoney(person.netIncome ?? person.netEmploymentIncome) },
+              { label: "Employer super", value: yearMoney(person.employerSuperContribution) },
+              { label: "Existing recurring extra super", value: yearMoney(person.recurringAdditionalSuperContribution) },
+              { label: "Planned extra concessional contribution", value: yearMoney(person.plannedExtraConcessionalContribution) },
+              { label: "Planned contribution tax", value: yearMoney(person.plannedExtraConcessionalContributionTax) },
+              { label: "Net planned contribution added to super", value: yearMoney(person.netPlannedExtraConcessionalContribution) },
+              { label: "Total additional super contribution", value: yearMoney(person.additionalSuperContribution) },
+              { label: "Total modelled super contributions", value: yearMoney(person.totalModelledSuperContributions ?? (Number(person.employerSuperContribution || 0) + Number(person.additionalSuperContribution || 0))) },
+              { label: "Contributions tax", value: yearMoney(person.superContributionsTax) },
+              { label: "Opening super", value: yearMoney(person.openingSuperBalance) },
+              { label: "Super earnings", value: yearMoney(person.superInvestmentEarnings) },
+              { label: "Super withdrawal", value: yearMoney(person.superWithdrawal) },
+              { label: "Closing super", value: yearMoney(person.closingSuperBalance) },
+            ])}
+          </section>
+        `).join("")}
+        <section>
+          <h5>Cashflow summary</h5>
+          ${semiRetirementDetailRows(cashflowSummaryRows)}
+          ${household.plannedExternalAccessibleContributionWasReduced ? `<p class="field-help mt-2">The planned accessible investment contribution was reduced because available working cashflow was lower than the planned amount.</p>` : ""}
+          ${row.warnings?.length ? `<div class="semi-retirement-row-warning"><strong>Notes</strong><ul>${row.warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}</ul></div>` : ""}
+        </section>
+        <section>
+          <h5>Super contributions</h5>
+          ${semiRetirementDetailRows(superContributionRows)}
+        </section>
+        <section>
+          <h5>Surplus allocation</h5>
+          ${semiRetirementDetailRows(surplusAllocationRows)}
+        </section>
+        <section>
+          <h5>Funding shortfall</h5>
+          ${semiRetirementDetailRows(fundingShortfallRows)}
+        </section>
+        <section>
+          <h5>Household position</h5>
+          ${semiRetirementDetailRows(householdPositionRows)}
+        </section>
+        ${hasOneOffLifestyle ? `
+          <section>
+            <h5>Planned big expenses</h5>
+            ${semiRetirementDetailRows(oneOffLifestyleRows.length ? oneOffLifestyleRows : [{ label: "Planned big expenses", value: yearMoney(household.oneOffLifestyleSpending) }])}
+          </section>
+        ` : ""}
+        ${hasOneOffIncome ? `
+          <section>
+            <h5>One-off income</h5>
+            ${semiRetirementDetailRows(oneOffIncomeRows.length ? oneOffIncomeRows : [{ label: "One-off income", value: yearMoney(household.oneOffIncome) }])}
+          </section>
+        ` : ""}
+        ${downsizeRows.length ? `
+          <section>
+            <h5>Downsize home</h5>
+            ${semiRetirementDetailRows(downsizeRows)}
+          </section>
+        ` : ""}
+        ${annualDebtSections ? `<section class="semi-retirement-annual-subgroup"><h5>Debts</h5></section>${annualDebtSections}` : ""}
+        ${annualPropertySections ? `<section class="semi-retirement-annual-subgroup"><h5>Rental / Investment Property</h5></section>${annualPropertySections}` : ""}
+      </div>
+    `;
+  }
+
+  function renderSemiRetirementAnnualProjectionHtmlDollarBasis(viewModel) {
+    const rows = viewModel.annualRows || [];
+    const pensionRows = rows.filter(row => row.household?.agePension);
+    const scenarioInflationPct = window.FFSDollarBasis.inflationPercent(semiRetirementScenarioInputs);
+    const byYear = (value, calendarYear) => semiRetirementMoney(displayedForecastAmount(value, forecastYearFromCalendarYear(calendarYear, semiRetirementScenarioInputs, rows), scenarioInflationPct));
+    const signedByYear = (value, calendarYear) => {
+      const amount = displayedForecastAmount(value, forecastYearFromCalendarYear(calendarYear, semiRetirementScenarioInputs, rows), scenarioInflationPct);
+      return `${Number(amount) > 0 ? "+" : ""}${money(amount)}`;
+    };
+    const endYear = viewModel.keyResults?.projectionEnd?.calendarYear;
+
+    return `
+      ${viewModel.agePensionComparison ? `<p class="field-help">End-of-projection investments and super: ${byYear(viewModel.agePensionComparison.withPensionEndAssets, endYear)} with estimated pension; ${byYear(viewModel.agePensionComparison.totalInvestableAssetsAtEndAge, endYear)} without. First unfunded year without pension: ${viewModel.agePensionComparison.firstUnfundedYear ?? "none in projection"}.</p>` : ""}
+      ${pensionRows.length ? `
+        <section class="semi-retirement-results-section">
+          <h4>Estimated Age Pension</h4>
+          <p>${pensionRows.some(row => row.household.agePension.unsupported) ? "No pension is included where circumstances are unsupported." : `Before-tax pension totals across the projection (${forecastDollarBasis === "today" ? "sum of annual today's-dollar amounts" : "nominal sum"}): ${semiRetirementMoney(pensionRows.reduce((sum, row) => sum + (forecastDollarBasis === "today" ? displayedForecastAmount(row.household.estimatedAgePension, row.yearIndex ?? forecastYearFromCalendarYear(row.calendarYear, semiRetirementScenarioInputs, rows), scenarioInflationPct) : Number(row.household.estimatedAgePension || 0)), 0))}.`} Private savings exhaustion and unfunded spending are different milestones.</p>
+          <details class="mt-3"><summary>Annual pension estimates</summary>
+            <div class="age-pension-table-wrap" role="region" aria-label="Annual Age Pension estimates" tabindex="0">
+              <table class="age-pension-table">
+                <caption>Projected annual pension before tax, in ${forecastDollarBasis === 'today' ? "today's dollars" : 'future dollars'}</caption>
+                <thead><tr><th scope="col">Year</th><th scope="col">Estimated pension</th></tr></thead>
+                <tbody>${pensionRows.map(row => `<tr><th scope="row">${escapeHtml(String(row.calendarYear))}</th><td>${row.household.agePension.unsupported ? "Not estimated" : byYear(row.household.estimatedAgePension, row.calendarYear)}</td></tr>`).join("")}</tbody>
+              </table>
+            </div>
+          </details>
+        </section>` : ""}
+      <details class="semi-retirement-results-section semi-retirement-annual-projection">
+        <summary>
+          <span><strong>Year-by-Year Projection</strong><small>${rows.length} annual periods from the projection engine output</small></span>
+          <span>Expand</span>
+        </summary>
+        <p class="field-help mt-3">Your entered lifestyle spending is in today's dollars and is increased over time using the selected inflation assumption. ${forecastDollarBasis === "today" ? "Displayed future spending and asset balances are expressed in today's purchasing power." : "Future spending and asset balances shown here are projected nominal amounts."}</p>
+        <p class="semi-retirement-scroll-cue">Desktop and tablet: scroll this table sideways to review every annual projection column. Phone widths use annual cards below.</p>
+        <div class="semi-retirement-table-wrap semi-retirement-projection-scroll mt-4" role="region" aria-label="Year-by-year projection table. Scroll horizontally to see all columns." tabindex="0">
+          <table class="semi-retirement-annual-table">
+            <thead>
+              <tr>
+                <th>Year</th><th>${escapeHtml(personDisplayName(1))} age</th><th>${escapeHtml(personDisplayName(2))} age</th><th>Household phase</th><th>Net cash income</th><th>Projected spending</th><th>Accessible withdrawal</th><th>Accessible investments</th><th>Super balance</th><th>Total investable assets</th><th>Total debt</th><th>Net rental cashflow</th><th>Projected net worth</th><th>Unfunded spending</th><th>Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows.map((row) => {
+                const household = row.household || {};
+                return `
+                  <tr class="${Number(household.unmetSpending || 0) > 0 ? "has-warning" : ""}">
+                    <td>${escapeHtml(row.calendarYear)}</td>
+                    <td>${escapeHtml(row.ages?.[0]?.age ?? "n/a")}</td>
+                    <td>${escapeHtml(row.ages?.[1]?.age ?? "n/a")}</td>
+                    <td>${escapeHtml(row.householdPhaseLabel)}</td>
+                    <td>${escapeHtml(byYear(household.totalNetEmploymentIncome, row.calendarYear))}</td>
+                    <td>${escapeHtml(byYear(household.totalProjectedLifestyleSpending ?? household.applicableLifestyleSpending, row.calendarYear))}</td>
+                    <td>${escapeHtml(byYear(household.totalAccessibleWithdrawal, row.calendarYear))}</td>
+                    <td>${escapeHtml(byYear(household.closingAccessibleInvestmentBalance, row.calendarYear))}</td>
+                    <td>${escapeHtml(byYear(household.totalSuperBalance, row.calendarYear))}</td>
+                    <td>${escapeHtml(byYear(household.totalInvestableAssets, row.calendarYear))}</td>
+                    <td>${escapeHtml(byYear(household.totalDebt, row.calendarYear))}</td>
+                    <td>${escapeHtml(signedByYear(household.netRentalCashflow, row.calendarYear))}</td>
+                    <td>${escapeHtml(byYear(household.totalNetWorth, row.calendarYear))}</td>
+                    <td>${escapeHtml(byYear(household.unmetSpending, row.calendarYear))}</td>
+                    <td><details><summary>View details</summary>${renderSemiRetirementAnnualDetailHtml(row)}</details></td>
+                  </tr>
+                `;
+              }).join("")}
+            </tbody>
+          </table>
+        </div>
+        <div class="semi-retirement-annual-cards mt-4">
+          ${rows.map((row) => {
+            const household = row.household || {};
+            return `
+              <article class="semi-retirement-annual-card ${Number(household.unmetSpending || 0) > 0 ? "has-warning" : ""}">
+                <div><strong>${escapeHtml(String(row.calendarYear))} - ${escapeHtml(semiRetirementAgeList(row.ages || []))}</strong><span>${escapeHtml(row.householdPhaseLabel)}</span></div>
+                ${semiRetirementDetailRows([
+                  { label: "Net cash income", value: byYear(household.totalNetEmploymentIncome, row.calendarYear) },
+                  { label: "Lifestyle spending", value: byYear(household.applicableLifestyleSpending, row.calendarYear) },
+                  { label: "Portfolio withdrawal", value: byYear(household.totalPortfolioWithdrawal, row.calendarYear) },
+                  { label: "Accessible investments", value: byYear(household.closingAccessibleInvestmentBalance, row.calendarYear) },
+                  { label: "Super balance", value: byYear(household.totalSuperBalance, row.calendarYear) },
+                ])}
+                <details><summary>View details</summary>${renderSemiRetirementAnnualDetailHtml(row)}</details>
+              </article>
+            `;
+          }).join("")}
+        </div>
+      </details>
+    `;
+  }
+
+  function reportPresentationHtmlDollarBasis(result, generatedDate) {
+    const p = result.plan, m = reportMetric;
+    const reportBasis = typeof forecastDollarBasis === "undefined" ? "future" : forecastDollarBasis;
+    const reportForecastMoney = (value, years) => forecastMoney(value, years, p.investing?.inflationPct);
+    const progress = freedomPercent(result), fi = milestoneReachEstimate(result, 75);
+    const annual = result.finalProjectedCashSurplus;
+    const passive = result.passiveIncomeBreakdown;
+    const stage = financialStageInfo(result).stage;
+    const tax = result.taxEstimate;
+    const cashRows = [
+      ["Household cash income before tax", result.annualGrossIncome],
+      [`Estimated income tax (${tax.taxYear})`, -tax.incomeTax],
+      ["Estimated Medicare levy", -tax.medicareLevy],
+      ["Medicare levy surcharge", -tax.medicareLevySurcharge],
+      ...(result.helpRepaymentEstimate.annualRepayment > 0 ? [["Estimated STSL compulsory repayments", -result.helpRepaymentEstimate.annualRepayment]] : []),
+      ["Living expenses", -result.annualLivingExpenses], ["Debt cashflow deductions", -result.annualDebtRepayments],
+      ["Annual investing (affordable amount)", -result.annualInvestmentContributions],
+      ...(result.annualExtraSuperContributions > 0 ? [["Extra super contributions", -result.annualExtraSuperContributions]] : []),
+      ["Remaining annual cash surplus", annual],
+    ];
+    const annualExplain = "After modelled tax, Medicare, STSL, living costs, debt deductions, investing and extra super.";
+    const disclaimer = `<div class="report-disclaimer"><h3>Important disclaimer</h3><p>${escapeHtml(modellingCopy().full)}</p><p>Actual outcomes may differ due to changes in income, expenses, investment returns, inflation, interest rates, taxation, legislation and personal circumstances.</p></div>`;
+    return `
+      <div class="report-opening">
+        ${carriedForwardRulesHtml(result)}
+        <article class="report-title-card"><p class="brand-kicker">Current plan · Educational modelling</p><h1>Financial Freedom Report</h1><p>Generated ${escapeHtml(generatedDate)}. Based on the information and assumptions entered; this is not a saved retirement scenario.</p></article>
+        <div class="report-small-note"><strong>About this report.</strong> This educational modelling summary illustrates estimated outcomes from the information and assumptions entered. It does not recommend a financial product or strategy. Projections are not guarantees. Consider obtaining appropriately licensed financial advice before decisions about financial products or significant strategies.</div>
+        ${reportSection("Executive Summary", "Your position today and the target the model is working towards.", `
+          <div class="report-narrative-box"><p>Your net worth is approximately <strong>${money(result.currentNetWorth)}</strong>. Of this, <strong>${money(result.accessibleFiAssets)}</strong> counts as accessible Financial Independence (FI) assets under the model.</p>
+          <p>Annual lifestyle spending of <strong>${money(result.targetAnnualLifestyleSpendingToday)}</strong>, adjusted for inflation to your target age, produces an estimated FI target of <strong>${reportForecastMoney(result.targetCapital, result.targetProjectionYear)}</strong>. The unchanged model progress indicator is <strong>${plainPercent(progress)}</strong>; percentages retain the original nominal model definition.</p>
+          <p>The plan retains an estimated <strong>${money(annual)}</strong> annual cash ${annual < 0 ? "shortfall" : "surplus"} after modelled deductions and wealth-building contributions.</p></div>
+          ${reportGroup("At a Glance", [
+            m("Financial Freedom progress", plainPercent(progress), "Current accessible FI assets divided by the estimated target.", true),
+            m("Current financial stage", stage.name, "The app's current stage indicator, based on FI progress."),
+            m("Remaining annual cash surplus", money(annual), annualExplain),
+            m("Current investment portfolio", money(result.investmentBalance), "Non-super investment projection starting balance, including cash and excluding offset."),
+            m("Current liabilities", money(result.totalLiabilities), "All modelled liabilities, including any STSL balance."),
+            m("Target FI assets", reportForecastMoney(result.targetCapital, result.targetProjectionYear), "Inflation-adjusted target spending divided by the withdrawal assumption."),
+            m("Estimated FI age", fi.age ? `Age ${fi.age}` : "Beyond 30 years", "The app's 75% FI milestone: reached now or first reached in the forecast."),
+            m("Modelled Financial Freedom age", targetAgeOutcome(result), "First forecast year reaching 100% of that year's spending-based FI target. " + modellingCopy().fiAge),
+          ].join(""))}
+        `, "report-executive")}
+      </div>
+      ${financialProgressReportSectionHtml(result)}
+      ${reportSection("Current Financial Position", "Household wealth is broader than the assets available to support Financial Independence.", `
+        ${reportGroup("Household position", [
+          m("Annual household cash income", money(result.annualGrossIncome), "Salaries before tax plus other cash income, with rental income on its entered net basis."),
+          m("Annual living expenses", money(result.annualLivingExpenses), "Living and other regular expenses before debt deductions and investing."),
+          m("Total assets", money(result.totalAssets), "Assets included in the current household balance sheet."),
+          m("Total liabilities", money(result.totalLiabilities), "Outstanding household liabilities, including STSL where present."),
+          m("Net worth", money(result.currentNetWorth), "Total assets less total liabilities.", true),
+          ...(result.helpRepaymentEstimate.balance > 0 ? [m("STSL balance", money(result.helpRepaymentEstimate.balance), "Included in total liabilities; compulsory repayments appear separately in cashflow.")] : []),
+        ].join(""))}
+        ${reportGroup("Financial Independence position", [
+          m("Accessible FI Assets", money(result.accessibleFiAssets), "Cash, offset and eligible financial investments net of investment debt, plus super accessible by each person's age.", true),
+          m("Investment Property Equity", money(result.investmentPropertyEquity), "Investment property value less its debt; separate from accessible spending assets."),
+          m("Total FI Wealth", money(result.totalFiWealth), "Accessible FI Assets plus Investment Property Equity. Excludes home equity and inaccessible super."),
+        ].join(""), 3)}
+        ${reportGroup("Other key capital", [
+          m("Home Equity", money(result.principalResidenceEquity), "Principal residence value less home debt. It does not fund retirement without a modelled release."),
+          m("Current investment portfolio", money(result.investmentBalance), "Shown within household assets and FI assets, not an additional amount to add."),
+          m("Superannuation balance", money(result.superannuationBalance), "Total super; only each person's accessible portion is included in FI assets."),
+        ].join(""), 3)}
+      `, "report-page-break")}
+      ${reportSection("Cashflow Analysis", "Cash income is reduced by tax, compulsory repayments, living costs and planned wealth-building contributions.", `
+        <div class="report-waterfall">${cashRows.map(([label, value], index) => `<div class="report-cash-row${index === 0 ? " report-cash-start" : index === cashRows.length - 1 ? " report-cash-total" : ""}"><span>${escapeHtml(label)}</span><strong>${money(value)}</strong></div>`).join("")}</div>
+        ${reportGroup("Cash remaining", m("Remaining annual cash surplus", money(annual), annualExplain, true) + m("Equivalent monthly surplus", money(annual / 12), "Annual remaining surplus divided by 12; timing within the year will vary."))}
+        <p class="report-note">Debt cashflow deductions avoid counting rental interest twice when it is already included in net rent. The investing amount is limited by the model's affordability calculation; an entered target is not always fully funded.</p>
+        ${tax.medicareLevySurchargeEstimate?.cannotConfirm ? '<p class="report-warning">Medicare levy surcharge is not confirmed or included: complete private hospital cover information.</p>' : ""}
+        <p class="report-small-note">${annual < 0 ? "A negative remaining surplus indicates an affordability shortfall under the current inputs." : "A positive surplus is a modelled cash buffer, not a guarantee of future cash availability."}</p>
+      `, "report-page-break")}
+      ${reportRentalSection(result)}
+      ${passive?.total || passive?.rental ? reportSection("Passive Cash Income", "Income that may help fund the target lifestyle without salary or wages.", `
+        <div class="report-waterfall">${[["Interest", passive.interest], ["Dividends", passive.dividends], ["Distribution income", passive.distributions], ["Rental income after interest, before principal", passive.rental], ["Other passive income", passive.otherPassive], ["Total passive cash income", passive.total]].filter(([label, value]) => value !== 0 || label.startsWith("Total")).map(([label,value]) => `<div class="report-cash-row"><span>${escapeHtml(label)}</span><strong>${money(value)}</strong></div>`).join("")}</div>
+        <p class="report-note">These amounts are already reflected in household cash income. Rental loan principal reduces household cashflow separately; it does not reduce the passive rental income measure.</p>
+      `, "report-passive-section") : ""}
+      ${reportSection("Financial Freedom Progress", "Current accessible FI assets compared with the lifestyle-based target.", `
+        <div class="report-metrics report-columns-3 report-target-bridge">${m("Current FI assets", money(result.financialIndependenceAssets), "Accessible assets counted by the model.", true)}${m("Gap to target", money(Math.max(0, displayedForecastAmount(result.targetCapital, result.targetProjectionYear, p.investing?.inflationPct) - result.financialIndependenceAssets)), "Additional assets needed under these assumptions.")}${m("Target FI assets", reportForecastMoney(result.targetCapital, result.targetProjectionYear), "Capital needed for the target lifestyle.")}</div>
+        <p class="report-progress-label">${plainPercent(progress)} of the estimated target</p>${reportProgressBar(progress)}
+        ${reportGroup("What is supporting wealth creation?", [
+          m("Modelled annual withdrawal amount", `${money(result.estimatedSustainableIncomeFromCurrentFiAssets)} p.a.`, modellingCopy().withdrawal),
+          m("Current Passive Cash Income", `${money(result.annualPassiveIncome)} p.a.`, "Non-salary cash income, with rental income after interest but before principal."),
+          m("Projected Financial Investment Growth", `${money(result.projectedFinancialInvestmentGrowth)} p.a.`, result.investmentReturnSummary ? "Return retained in financial assets; configured cash distributions are excluded. Reinvested income remains within this amount." : "Eligible financial investments excluding cash and offset, multiplied by the entered investment return."),
+          m("Projected Property Growth", `${money(result.projectedPropertyGrowth)} p.a.`, "Investment property gross value growth using its property assumptions; excludes the home."),
+          m("Combined Wealth Creation", `${money(result.combinedWealthCreation)} p.a.`, "The model adds passive cash income, financial investment growth and investment-property growth. This is not spendable income."),
+        ].join(""))}
+        ${result.investmentReturnSummary ? `<p class="report-note">Configured investments retain ${money(result.investmentReturnSummary.retainedReturn)} of projected financial return and pay ${money(result.investmentReturnSummary.cashIncome)} as investment cash income: ${money(result.investmentReturnSummary.totalReturn)} total financial investment return. Cash distributions are removed from portfolio growth and included once in passive cash income.</p>` : ""}
+        ${CALC.investmentIncomeReviewItems(p).length ? `<p class="report-note"><strong>Investment income review.</strong> Dividend or distribution income has been entered separately from investment assets. Confirm that it is not already included in the investment return assumption; the combined figure can overlap with passive income.</p>` : ""}
+      `, "report-page-break")}
+      ${reportSection("Future Outlook", reportBasis === "today" ? "Estimates under the current plan, shown in today\'s purchasing-power dollars." : "Estimates under the current plan, shown in future nominal dollars.", `
+        ${result.investmentPropertyDebt > 0 ? '<p class="report-warning"><strong>Projection limit:</strong> The existing future net-worth and debt forecasts omit investment-property loan balances. They can overstate net worth and understate debt. Current liabilities and investment-property equity do include this debt.</p>' : ""}
+        ${reportGroup("Near term", m("1-year projected net worth", reportForecastMoney(netWorthAtYear(result,1), 1)) + m("2-year projected net worth", reportForecastMoney(netWorthAtYear(result,2), 2)))}
+        ${reportGroup("10-year outlook", m("Projected net worth", reportForecastMoney(netWorthAtYear(result,10), 10), "Projected household assets less modelled liabilities.", true) + m("Projected FI assets", reportForecastMoney(projectedFiAssetsAtYear(result,10), 10), "Includes super only when each person reaches the modelled access age.") + m("Projected investment portfolio", reportForecastMoney(investmentAtYear(result,10), 10), "Non-super portfolio after modelled growth and affordable contributions.") + m("Projected debt", reportForecastMoney(projectedDebtAtYear(result,10), 10), "Existing report estimate from the loan schedule, STSL and other entered debts."))}
+        ${reportGroup("Long term", m("30-year projected net worth", reportForecastMoney(netWorthAtYear(result,30), 30)) + m("Modelled Financial Freedom age", targetAgeOutcome(result), "First forecast year reaching the full spending-based target."))}
+        <p class="report-narrative">Over 10 years, the model estimates net worth of ${reportForecastMoney(netWorthAtYear(result,10), 10)}, an investment portfolio of ${reportForecastMoney(investmentAtYear(result,10), 10)} and debt of ${reportForecastMoney(projectedDebtAtYear(result,10), 10)}. Actual returns, tax, income, spending and inflation will vary.</p>
+      `, "report-page-break")}
+      ${reportSection("Progress and Wealth Over Time", "Future progress uses each year's inflation-adjusted spending target and includes super as it becomes accessible.", `
+        ${reportChart("reportProgressChart", "Financial Freedom progress", "The line is capped at 100% for readability; calculated progress can be higher.")}
+        ${reportChart("reportNetWorthChart", "Net worth projection", "Projected household wealth after modelled liabilities. This is broader than accessible FI assets.")}
+      `, "report-page-break report-chart-page")}
+      ${reportSection("Assets and Debt Over Time", "Distinct views of funding assets and outstanding liabilities.", `
+        ${reportChart("reportFiAssetsChart", "FI assets projection", "Accessible FI assets, including each person's super from their modelled access age.")}
+        ${reportChart("reportDebtChart", "Debt reduction", "Year 0 includes all liabilities. Future years use the home-loan schedule, STSL, other debts and credit cards; investment-property loans are excluded.")}
+      `, "report-page-break report-chart-page")}
+      ${reportSection("Milestones", "Progress thresholds used by the app; these are modelling milestones, not guarantees of retirement affordability.", `
+        <div class="report-milestone-grid">${reportMilestoneRows(result)}</div>
+        <p class="report-small-note">Estimated timing is shown using the first person's age. “Projected within forecast” means the threshold is reached within 30 years; it does not mean the entered target age is met.</p>
+      `, "report-page-break")}
+      ${reportSection("Planning Review", "Modelled observations based on the information and assumptions entered. These identify areas you may wish to explore using scenarios.", reportReviewActions(result), "report-page-break")}
+      ${reportSection("Important Assumptions", "The inputs that drive the model, rather than predictions of future conditions.", `<p class="report-small-note">${escapeHtml(modellingCopy().assumptions)}</p>
+        <div class="report-metrics report-columns-2">
+          ${result.investmentReturnSummary ? result.investmentReturnSummary.assets.map(asset=>m(`Assumed annual total investment return — ${asset.name || "Investment"}`,`${Number(asset.expectedTotalReturnPct).toFixed(1)}%`,`${Number(asset.expectedIncomeYieldPct).toFixed(1)}% income yield; ${asset.incomeTreatment === "cash" ? "paid as cash" : "reinvested"}. Includes capital growth and income. Income yield remains taxable in either treatment.`)).join("") : m("Investment return", `${Number(p.investing.expectedInvestmentReturnPct || 0).toFixed(1)}%`, "Legacy full return compounded in the non-super portfolio; separately entered passive income is not automatically reinvested.")}
+          ${m("Inflation", `${Number(p.investing.inflationPct || 0).toFixed(1)}%`, "Increases target lifestyle spending in future-year FI calculations; current cashflow expenses remain entered amounts.")}
+          ${m("Super growth", `${Number(p.investing.expectedSuperReturnPct || 0).toFixed(1)}%`, "Annual return used for super balances, alongside modelled net contributions.")}
+          ${m("Target retirement age", `Age ${p.personal.fullRetirementAge || "not set"}`, "Used to set the inflation horizon for the current FI capital target, capped at 30 years.")}
+          ${m("Modelled withdrawal rate", `${(Number(p.investing.safeWithdrawalRatePct) > 0 ? Number(p.investing.safeWithdrawalRatePct) : 4).toFixed(1)}%`, "Used for FI targets and modelled withdrawals; the model defaults to 4% when a positive rate is not entered.")}
+          ${m("Annual target lifestyle spending", money(result.targetAnnualLifestyleSpendingToday), "Today's spending target, inflated for future FI requirements.")}
+          ${m("Modelled super access age", `Age ${result.superAccessAge}`, "Applied separately to each person's age in the current plan; saved retirement scenarios can differ.")}
+          ${m("Projection period", "30 years", "The current-plan forecast horizon. Milestones outside it are not estimated.")}
+        </div>
+      `, "report-page-break")}
+      ${reportSection("Important Modelling Information", "Read the results alongside these limits.", `
+        <h3>Model limitations</h3><p class="report-small-note">${escapeHtml(modellingCopy().limitations)}</p><p class="report-small-note">${escapeHtml(modellingCopy().tax)}</p><p class="report-small-note">${escapeHtml(modellingCopy().super)}</p><p class="report-small-note"><strong>Age Pension not included.</strong> ${escapeHtml(modellingCopy().pension)}</p>
+        ${reportGroup("Loan rates in this plan", reportLoanAssumptions(result))}
+        <p class="report-small-note">Loans can have different rates. A single home-loan rate is not a household borrowing rate. The net-worth and debt charts use the home-loan schedule; linked rental loans are assessed separately for cashflow and FI property equity.</p>
+        <div class="report-narrative-box"><p>This is a current-plan report. Saved retirement scenarios keep their own inputs and outcomes and must be compared separately.</p><p>Property equity and locked super are not immediately available spending money. No property sale or release of home equity should be assumed unless explicitly modelled.</p></div>
+        ${disclaimer}
+        <footer class="report-footer"><span>Financial Freedom Report</span><span>Generated ${escapeHtml(generatedDate)}</span></footer>
+      `, "report-page-break report-final-section")}
+    `;
+  }
+
+  function renderComparisonDollarBasis(result) {
+    if (decisionScenarioBasePlan) result = calculatePlan(decisionScenarioBasePlan);
+    const summary = document.getElementById("comparisonSummary");
+    if (!summary) return;
+    const readiness = personalisedResultsReadiness(plan, result);
+    if (!readiness.readyForPersonalisedResults) {
+      summary.innerHTML = readinessGateHtml(readiness, "custom scenario comparisons");
+      return;
+    }
+    const comparison = activeDecisionComparison();
+    document.querySelectorAll("[data-comparison]").forEach((input) => {
+      const value = comparison[input.dataset.comparison] ?? 0;
+      if (input.type === "checkbox") {
+        input.checked = Boolean(value);
+      } else if (input.value !== String(value)) {
+        input.value = value;
+      }
+    });
+    const targetsHtml = (decisionScenarioBasePlan ? '<p class="field-help">Reviewing this scenario against its saved base plan. Your current plan is unchanged.</p>' : "") + scenarioTargetsHtml(decisionScenarioBasePlan || plan, "detailed", comparison);
+    try {
+    const annualAllocation = comparisonSurplusAllocationAmount(result, comparison);
+    const revisedPlan = buildComparisonPlan(result);
+    const revisedResult = calculatePlan(revisedPlan);
+    const current = estimatedCashflow(result);
+    const revised = estimatedCashflow(revisedResult);
+    const currentPercent = freedomPercent(result);
+    const revisedPercent = freedomPercent(revisedResult);
+    const primaryTiles = [
+      summaryTile("Monthly cash surplus", `${money(current / 12)} -> ${money(revised / 12)}`, revised >= current ? "status-green" : "status-amber"),
+      summaryTile("1-year net worth", `${forecastMoney(netWorthAtYear(result, 1), 1, result.plan?.investing?.inflationPct)} -> ${forecastMoney(netWorthAtYear(revisedResult, 1), 1, revisedResult.plan?.investing?.inflationPct)}`),
+      summaryTile("2-year net worth", `${forecastMoney(netWorthAtYear(result, 2), 2, result.plan?.investing?.inflationPct)} -> ${forecastMoney(netWorthAtYear(revisedResult, 2), 2, revisedResult.plan?.investing?.inflationPct)}`),
+      summaryTile("Long-term net worth", `${forecastMoney(longTermNetWorth(result), result.netWorthProjection.at(-1)?.year ?? 30, result.plan?.investing?.inflationPct)} -> ${forecastMoney(longTermNetWorth(revisedResult), revisedResult.netWorthProjection.at(-1)?.year ?? 30, revisedResult.plan?.investing?.inflationPct)}`),
+      summaryTile("Financial Freedom progress", `${plainPercent(currentPercent)} -> ${plainPercent(revisedPercent)}`, revisedPercent >= currentPercent ? "status-green" : "status-amber", "decisionFreedomProgress"),
+    ];
+    const technicalTiles = [
+      summaryTile("Current annual final surplus", money(current), current >= 0 ? "status-green" : "status-amber"),
+      summaryTile("Revised annual final surplus", money(revised), revised >= 0 ? "status-green" : "status-amber"),
+      summaryTile("Taxable income estimate", `${money(result.taxEstimate.taxableIncomeAfterExtraSuper)} -> ${money(revisedResult.taxEstimate.taxableIncomeAfterExtraSuper)}`),
+      summaryTile("Estimated income tax", `${money(result.taxEstimate.incomeTax)} -> ${money(revisedResult.taxEstimate.incomeTax)}`),
+      summaryTile("Estimated Medicare levy", `${money(result.taxEstimate.medicareLevy)} -> ${money(revisedResult.taxEstimate.medicareLevy)}`),
+      summaryTile("Estimated Medicare levy surcharge", `${money(result.taxEstimate.medicareLevySurcharge)} -> ${money(revisedResult.taxEstimate.medicareLevySurcharge)}`),
+      summaryTile("STSL compulsory repayment estimate", `${money(result.helpRepaymentEstimate.annualRepayment)} -> ${money(revisedResult.helpRepaymentEstimate.annualRepayment)}`),
+      summaryTile("Super balance in 2 years", `${forecastMoney(superAtYear(result, 2), 2, result.plan?.investing?.inflationPct)} -> ${forecastMoney(superAtYear(revisedResult, 2), 2, revisedResult.plan?.investing?.inflationPct)}`),
+      summaryTile("Investment balance in 2 years", `${forecastMoney(investmentAtYear(result, 2), 2, result.plan?.investing?.inflationPct)} -> ${forecastMoney(investmentAtYear(revisedResult, 2), 2, revisedResult.plan?.investing?.inflationPct)}`),
+      summaryTile("Debt balance now", `${money(result.totalLiabilities)} -> ${money(revisedResult.totalLiabilities)}`),
+      ...comparisonSurplusImpactTiles(result, revisedResult, comparison, annualAllocation),
+    ];
+    summary.innerHTML = `
+      ${targetsHtml}
+      ${primaryTiles.join("")}
+      <details class="decision-details decision-result-details">
+        <summary>View details</summary>
+        <div class="summary-grid mt-3">${technicalTiles.join("")}</div>
+      </details>
+    `;
+    } catch (error) { showScenarioInputError(summary, error, targetsHtml); }
+  }
+
+  function comparisonSurplusImpactTilesDollarBasis(result, revisedResult, comparison, annualAllocation) {
+    if (!annualAllocation || !["investments", "debt"].includes(comparison.surplusAllocationTarget)) return [];
+    const allocationLabel = comparison.surplusAllocationTarget === "investments" ? "investments" : "debt repayment";
+    const tiles = [
+      summaryTile("Surplus allocation modelled", `${money(annualAllocation)} per year to ${allocationLabel}`),
+    ];
+    if (comparison.surplusAllocationTarget === "investments") {
+      const currentFiAssets10 = projectedFiAssetsAtYear(result, 10);
+      const revisedFiAssets10 = projectedFiAssetsAtYear(revisedResult, 10);
+      const currentPassive10 = Math.round(currentFiAssets10 * safeWithdrawalRate());
+      const revisedPassive10 = Math.round(revisedFiAssets10 * safeWithdrawalRate());
+      const revisedMilestone = nextMilestone(revisedResult, freedomPercent(revisedResult));
+      tiles.push(
+        summaryTile("Projected investment balance in 10 years", `${forecastMoney(investmentAtYear(result, 10), 10, result.plan?.investing?.inflationPct)} -> ${forecastMoney(investmentAtYear(revisedResult, 10), 10, revisedResult.plan?.investing?.inflationPct)}`),
+        summaryTile("Projected FI assets in 10 years", `${forecastMoney(currentFiAssets10, 10, result.plan?.investing?.inflationPct)} -> ${forecastMoney(revisedFiAssets10, 10, revisedResult.plan?.investing?.inflationPct)}`),
+        summaryTile("Projected passive income in 10 years", `${forecastMoney(currentPassive10, 10, result.plan?.investing?.inflationPct)} -> ${forecastMoney(revisedPassive10, 10, revisedResult.plan?.investing?.inflationPct)}`),
+        summaryTile("Financial Freedom progress", `${plainPercent(freedomPercent(result))} -> ${plainPercent(freedomPercent(revisedResult))}`),
+        summaryTile("Target age outcome", `${targetAgeOutcome(result)} -> ${targetAgeOutcome(revisedResult)}`),
+        summaryTile("Relevant milestone", revisedMilestone.text)
+      );
+      return tiles;
+    }
+
+    const currentDebt10 = projectedDebtAtYear(result, 10);
+    const revisedDebt10 = projectedDebtAtYear(revisedResult, 10);
+    const canEstimateInterest = Number(result.loan?.offsetBenefit?.grossLoanBalance) > 0 && Number(result.loan?.totalInterestPaid) > 0;
+    const discountedInterest = value => value.loan.schedule.reduce((sum, row) => sum + displayedForecastAmount(row.interestCharged, row.month / 12, value.plan?.investing?.inflationPct), 0);
+    const interestSaved = canEstimateInterest ? Math.max(0, discountedInterest(result) - discountedInterest(revisedResult)) : null;
+    const futureAnnualCashflow = revisedResult.annualDebtRepayments > 0
+      ? revisedResult.finalProjectedCashSurplus + revisedResult.annualDebtRepayments
+      : revisedResult.finalProjectedCashSurplus;
+    tiles.push(
+      summaryTile("Remaining debt estimate in 10 years", `${forecastMoney(currentDebt10, 10, result.plan?.investing?.inflationPct)} -> ${forecastMoney(revisedDebt10, 10, revisedResult.plan?.investing?.inflationPct)}`),
+      summaryTile("Estimated debt repayment timing", `${formatLoanTiming(result.loan)} -> ${formatLoanTiming(revisedResult.loan)}`),
+      summaryTile("Estimated interest saved (sum of discounted payments)", interestSaved === null ? "Add loan balance, rate and repayment to estimate" : money(interestSaved)),
+      summaryTile("Future annual cashflow after debt is repaid", revisedResult.loan.payoffMonth == null ? "Payoff not reached in forecast" : forecastMoney(futureAnnualCashflow, revisedResult.loan.payoffMonth / 12, revisedResult.plan?.investing?.inflationPct)),
+      summaryTile("Financial Freedom progress", `${plainPercent(freedomPercent(result))} -> ${plainPercent(freedomPercent(revisedResult))}`),
+      summaryTile("Target age outcome", `${targetAgeOutcome(result)} -> ${targetAgeOutcome(revisedResult)}`)
+    );
+    return tiles;
+  }
+
+  function renderWhatIfDollarBasis(result) {
+    if (whatIfBaseSnapshot) result = calculatePlan(whatIfBaseSnapshot);
+    const actions = document.getElementById("whatIfActions");
+    const output = document.getElementById("whatIfResult");
+    if (!actions || !output) return;
+    const readiness = personalisedResultsReadiness(plan, result);
+    if (!readiness.readyForPersonalisedResults) {
+      actions.innerHTML = "";
+      output.innerHTML = readinessGateHtml(readiness, "quick comparisons");
+      return;
+    }
+    const customAdjustments = activeWhatIfId === "custom" ? customWhatIfAdjustments() : null;
+    const active = activeWhatIfId === "custom" && customAdjustments
+      ? { id: "custom", adjustments: () => customAdjustments }
+      : whatIfActions.find((action) => action.id === activeWhatIfId) || whatIfActions[0];
+    actions.innerHTML = whatIfActions.map(action =>
+      `<button class="btn what-if-button ${active.id === action.id ? "btn-primary" : ""}" type="button" data-what-if="${action.id}">${escapeHtml(action.label)}</button>`
+    ).join("") + `
+      <div class="what-if-custom">
+        <button class="btn ${activeWhatIfId === "custom" ? "btn-primary" : ""}" type="button" data-what-if-custom-toggle aria-expanded="${customWhatIfOpen}">${customWhatIfOpen ? "Hide custom change" : "Create your own change"}</button>
+        ${customWhatIfOpen ? `<div class="what-if-custom-card">
+          <h4>Create your own change</h4>
+          <p class="field-help">Choose a change and enter an amount. Your original plan stays unchanged.</p>
+          <div class="what-if-custom-grid">
+            <label class="what-if-custom-field">What would you like to change?
+              <select data-what-if-custom-kind>
+                ${[["expenses","Reduce expenses"],["invest","Increase investing"],["debt","Make extra loan repayments"],["income","Increase income"],["super","Additional concessional super"]].map(([id,label]) => `<option value="${id}" ${customWhatIf.kind === id ? "selected" : ""}>${label}</option>`).join("")}
+              </select>
+            </label>
+            <label class="what-if-custom-field">Amount ($)
+              <input type="number" min="1" max="10000000" step="any" inputmode="decimal" data-what-if-custom-amount value="${escapeHtml(customWhatIf.amount)}">
+            </label>
+            <label class="what-if-custom-field">Frequency
+              <select data-what-if-custom-frequency>
+                ${[["weekly","Weekly"],["fortnightly","Fortnightly"],["monthly","Monthly"],["annually","Annually"]].map(([id,label]) => `<option value="${id}" ${customWhatIf.frequency === id ? "selected" : ""}>${label}</option>`).join("")}
+              </select>
+            </label>
+          </div>
+          ${customWhatIfError ? `<p class="field-help" role="alert">${escapeHtml(customWhatIfError)}</p>` : ""}
+          <button class="btn btn-primary what-if-custom-apply" type="button" data-what-if-custom-apply>Try this change</button>
+        </div>` : ""}
+      </div>`;
+    actions.innerHTML += (whatIfBaseSnapshot ? '<p class="field-help">Reviewing this scenario against its saved base plan. Your current plan is unchanged.</p>' : "") + scenarioTargetsHtml(whatIfBaseSnapshot || plan, "quick", whatIfTargets);
+    try {
+    const { annualDifference, isCashflowSaving, annualCashflowImpact, investmentAbsorption, allocatable, choices, canAllocate, selection, adjustedResult } = resolveWhatIfScenario(result);
+    const fmtDelta = amount => `${amount >= 0 ? "+" : "−"}${money(Math.abs(amount))}`;
+    const forecastRow = (label, before, after, year) => {
+      before = displayedForecastAmount(before, year, result.plan?.investing?.inflationPct);
+      after = displayedForecastAmount(after, year, adjustedResult.plan?.investing?.inflationPct);
+      return `<div class="what-if-forecast-row"><strong>${label}</strong><span>${money(before)}</span><span>${money(after)}</span><b>${fmtDelta(after - before)}</b></div>`;
+    };
+    output.innerHTML = `
+      <section class="what-if-flow">
+        <div class="what-if-stage"><h4>1. What changes in your cashflow?</h4>
+          <p class="field-help">Compared with your existing plan, after the modelled tax, debt and investing effects of this change.</p>
+          <div class="what-if-metrics">
+            <div><small>Per week</small><strong>${fmtDelta(annualCashflowImpact / 52)}</strong></div>
+            <div><small>Per month</small><strong>${fmtDelta(annualCashflowImpact / 12)}</strong></div>
+            <div><small>Per year</small><strong>${fmtDelta(annualCashflowImpact)}</strong></div>
+          </div>
+          <p class="field-help">${isCashflowSaving ? (investmentAbsorption > 0.01 ? `Of this change, ${money(investmentAbsorption / 12)} per month is already absorbed by your plan's investment contributions. The amount available to allocate separately is ${money(allocatable / 12)} per month.` : "These figures show the change before investing. The next section shows how much remains available to allocate.") : ""}</p>
+          <p class="field-help">${annualDifference < 0 ? (active.id === "custom" && customWhatIf.kind === "invest" ? "You are directing more of your existing cashflow into investments. This reduces cash available for other spending, rather than representing a loss of wealth. No extra cash remains to allocate." : active.id === "custom" && customWhatIf.kind === "debt" ? "You are directing more of your cashflow towards loan repayments. This reduces cash available for spending and may reduce your debt faster. No extra cash remains to allocate." : "This change requires more cash than your current plan. No additional money is available to allocate.") : "This is the estimated change in cash remaining after the selected action, before choosing how to use any extra money."}</p>
+        </div>
+        <div class="what-if-stage"><h4>2. What would you do with the extra money?</h4>
+          <p class="field-help">${canAllocate ? `Choose how to direct up to ${money(allocatable / 12)} a month. Only the extra cash from this change is allocated.` : "No additional cash is available from this change. The forecast below still shows its modelled effect."}</p>
+          <div class="what-if-allocations">${choices.map(([id,label,description]) => `<button type="button" data-what-if-allocation="${id}" class="what-if-allocation ${selection === id ? "selected" : ""}" ${!canAllocate && id !== "unallocated" ? "disabled" : ""}><strong>${label}</strong><small>${description}</small></button>`).join("")}</div>
+        </div>
+        <div class="what-if-stage"><h4>3. What could this mean for your future?</h4>
+          <p class="field-help">Indicative results from the existing projection model. They are not guaranteed outcomes.</p>
+          <div class="what-if-forecast"><div class="what-if-forecast-row what-if-forecast-head"><strong>Measure</strong><span>Current</span><span>Changed</span><b>Difference</b></div>
+          ${forecastRow("Net worth after 1 year", netWorthAtYear(result,1),netWorthAtYear(adjustedResult,1), 1)}
+          ${forecastRow("Net worth after 5 years", netWorthAtYear(result,5),netWorthAtYear(adjustedResult,5), 5)}
+          ${forecastRow("Net worth after 10 years", netWorthAtYear(result,10),netWorthAtYear(adjustedResult,10), 10)}
+          </div>
+          <p class="field-help">Remaining annual cash after your choice: ${money(estimatedCashflow(adjustedResult))}. A negative result means the revised plan may require additional funding. Unallocated cash is not automatically treated as an investment.</p>
+        </div>
+      </section>`;
+    } catch (error) { showScenarioInputError(output, error); }
+  }
+
+  function refreshNamedForecastDisplays(result) {
+    const rate = result.plan?.investing?.inflationPct;
+    const target = displayedForecastAmount(result.targetCapital, result.targetProjectionYear, rate);
+    const gap = forecastDollarBasis === "today" ? Math.max(0, target - result.financialIndependenceAssets) : result.fiTargetRemaining;
+    const update = (selector, values) => document.querySelectorAll(selector).forEach(tile => {
+      const label = tile.querySelector("span")?.firstChild?.textContent?.trim();
+      const field = tile.querySelector("strong");
+      if (field && Object.hasOwn(values, label)) field.textContent = money(values[label]);
+    });
+    update("#secondMetricGrid .metric-card", { "Target FI Assets": target, "Remaining Required": gap });
+    update("#goalsFiSummary .summary-tile, #forecastCards .metric-card", { "Target FI Capital": target });
+    update("#setupSummary .setup-summary-row", { "1-year net worth": displayedForecastAmount(netWorthAtYear(result, 1), 1, rate) });
+  }
+
+  function retirementDisplayFields(object, fields, calendarYear, inputs = semiRetirementScenarioInputs, rows = []) {
+    return window.FFSDollarBasis.convertedFields(object, fields,
+      forecastYearFromCalendarYear(calendarYear, inputs, rows), window.FFSDollarBasis.inflationPercent(inputs), forecastDollarBasis);
+  }
+
+  function retirementDisplaySum(rows, value, inputs = semiRetirementScenarioInputs) {
+    return window.FFSDollarBasis.annualSum(rows, value, inputs, forecastDollarBasis);
+  }
+
+  function retirementFundingDisplay(viewModel, inputs = semiRetirementScenarioInputs) {
+    const rows = viewModel.annualRows || [];
+    const semi = rows.filter(row => row.householdPhase === "semi-retirement");
+    const sum = (fields, selected = rows) => retirementDisplaySum(selected,
+      row => fields.reduce((total, field) => total + Number(row.household?.[field] || 0), 0), inputs);
+    return { ...viewModel.semiRetirementFunding,
+      requiredAccessibleWithdrawalsDuringSemiRetirement: sum(["requiredAccessibleWithdrawal"], semi),
+      requiredPortfolioWithdrawalsDuringSemiRetirement: sum(["requiredAccessibleWithdrawal", "requiredSuperWithdrawal"], semi),
+      superWithdrawalsDuringSemiRetirement: sum(["totalSuperWithdrawal"], semi),
+      totalAssetWithdrawalsDuringSemiRetirement: sum(["totalAccessibleWithdrawal", "totalSuperWithdrawal"], semi),
+      totalOneOffLifestyleSpending: sum(["oneOffLifestyleSpending"]),
+      totalDownsizerContributions: retirementDisplaySum(rows, row => row.household?.downsizeHomeEvent?.totalDownsizerContributions || 0, inputs),
+      totalDownsizeCashReleased: retirementDisplaySum(rows, row => Math.max(0, row.household?.downsizeHomeEvent?.netCashReleased || 0), inputs),
+      totalDownsizeUnfundedShortfall: sum(["downsizeUnfundedShortfall"]),
+    };
+  }
+
+  function savedOutcomeForDisplay(outcome, inputs) {
+    if (!outcome || forecastDollarBasis !== "today") return outcome;
+    if (inputs?.projectionStartYear == null || window.FFSDollarBasis.inflationPercent(inputs) == null) {
+      return { ...outcome, accessibleAtRetirement: null, superAtRetirement: null, fundingAssetsAtRetirement: null,
+        capital: outcome.capital ? { ...outcome.capital, totalNetEquity: null, debtUnknown: true,
+          assets: (outcome.capital.assets || []).map(asset => ({ ...asset, netEquity: null })) } : null };
+    }
+    const full = retirementDisplayFields(outcome, ["accessibleAtRetirement", "superAtRetirement", "fundingAssetsAtRetirement"], outcome.fullRetirement?.calendarYear, inputs);
+    const endYear = outcome.horizon?.calendarYear;
+    return { ...full, capital: outcome.capital ? {
+      ...retirementDisplayFields(outcome.capital, ["totalNetEquity"], endYear, inputs),
+      assets: (outcome.capital.assets || []).map(asset => retirementDisplayFields(asset, ["netEquity"], endYear, inputs)),
+    } : null };
+  }
+
+  function scenarioForDollarDisplay(scenario) {
+    if (forecastDollarBasis !== "today" || !scenario) return scenario;
+    const snapshot = scenario.keyResultSnapshot || (scenario.plan && normaliseSavedScenarioType(scenario.scenarioType) !== "retirement"
+      ? financialPlanKeyResultSnapshot(calculatePlan(scenario.plan)) : null);
+    if (!snapshot) return scenario;
+    // Retirement cards use their renderer context; comparison rows consume the outcome directly.
+    if (snapshot.retirementOutcome) return scenario;
+    const rows = (snapshot.rows || []).map(row => {
+      const years = { "1-year net worth": 1, "2-year net worth": 2, "Long-term net worth": 30 }[row.label];
+      if (years === undefined) return row;
+      const rate = scenario.plan?.investing?.inflationPct;
+      if (row.currentValue != null && row.scenarioValue != null) {
+        const before = displayedForecastAmount(row.currentValue, years, scenario.basePlanSnapshot?.investing?.inflationPct ?? rate);
+        const after = displayedForecastAmount(row.scenarioValue, years, rate);
+        return { ...row, currentValue: before, scenarioValue: after, value: `${money(before)} -> ${money(after)}` };
+      }
+      if (row.rawValue != null) {
+        const value = displayedForecastAmount(row.rawValue, years, rate);
+        return { ...row, rawValue: value, value: money(value) };
+      }
+      return { ...row, value: "Reopen this scenario to refresh its forecast display." };
+    });
+    return { ...scenario, keyResultSnapshot: { ...snapshot, rows } };
+  }
+
+  function installAdditionalDollarDisplays() {
+    const nominalComparisonPrint = renderSemiRetirementComparisonPrintReport;
+    renderSemiRetirementComparisonPrintReport = (...args) => {
+      const html = nominalComparisonPrint(...args);
+      const label = forecastDollarBasis === "today" ? "today's dollars, using each scenario's inflation assumption and projection start year" : "future dollars";
+      return html.replace("<h1>Retirement Scenario Comparison</h1>", `<h1>Retirement Scenario Comparison</h1><p>Forecast values: ${label}.</p>`)
+        .replaceAll("Future values include assumed inflation.", forecastDollarBasis === "today" ? "Future values are adjusted to today's purchasing power." : "Future values include assumed inflation.")
+        .replaceAll("Future balances are nominal future dollars.", `Future balances are shown in ${label}.`)
+        .replaceAll("Future balances and projected spending outputs are nominal future values where the existing projection engine inflates them.", `Future balances and projected spending outputs are shown in ${label}.`)
+        .replaceAll("Future balances and projected spending outputs are nominal future values.", `Future balances and projected spending outputs are shown in ${label}.`);
+    };
+    const nominalMilestones = milestoneCards;
+    milestoneCards = result => nominalMilestones({ ...result, milestones: result.milestones.map(item => ({
+      ...window.FFSDollarBasis.convertedFields(item, ["requiredCapital"],
+        Math.max(0, item.age - Number(result.plan?.personal?.person1Age || result.plan?.personal?.person2Age || 0)), result.plan?.investing?.inflationPct, forecastDollarBasis),
+      ...window.FFSDollarBasis.convertedFields({ projectedFiAssets: item.projectedFiAssets, passiveIncomeEstimate: item.passiveIncomeEstimate }, ["projectedFiAssets", "passiveIncomeEstimate"],
+        projectionRowAtAge(result.investmentProjection, item.age)?.year ?? 0, result.plan?.investing?.inflationPct, forecastDollarBasis),
+    })) });
+    const nominalTimeline = renderSemiRetirementTimelineHtml;
+    renderSemiRetirementTimelineHtml = view => {
+      if (forecastDollarBasis !== "today") return nominalTimeline(view);
+      return nominalTimeline({ ...view, timeline: (view.timeline || []).map(group => {
+        const row = view.annualRows?.find(item => item.calendarYear === group.calendarYear);
+        const format = value => forecastMoney(value, row?.yearIndex ?? forecastYearFromCalendarYear(group.calendarYear), window.FFSDollarBasis.inflationPercent(semiRetirementScenarioInputs));
+        return { ...group, events: group.events.map(event => {
+          const income = row?.household?.oneOffIncomeEvents?.find(item => event.title === `One-off income - ${item.description || "scenario income"}`);
+          if (income) return { ...event, detail: `${format(income.projectedAmount)} is added to accessible investments in this scenario year.` };
+          const debt = row?.liabilities?.find(item => event.title === `${item.name || "Debt"} final repayment`);
+          if (debt) return { ...event, detail: `Final repayment projected at ${format(debt.balloonRepayment)}.` };
+          const home = row?.household?.downsizeHomeEvent;
+          if (event.title === "Home downsized" && home) return { ...event, detail: home.netCashReleased >= 0
+            ? [`${format(home.netCashReleased)} net cash released`, home.totalDownsizerContributions > 0 ? `${format(home.totalDownsizerContributions)} to downsizer super` : "", home.accessibleInvestmentContribution > 0 ? `${format(home.accessibleInvestmentContribution)} to accessible investments` : ""].filter(Boolean).join("; ")
+            : `${format(home.additionalFundsRequired)} additional cash required` };
+          return event;
+        }) };
+      }) });
+    };
+    let displayedSavedScenario = null;
+    const nominalScenarioCard = scenarioCardHtml;
+    scenarioCardHtml = scenario => {
+      const previous = displayedSavedScenario;
+      displayedSavedScenario = scenario;
+      try { return nominalScenarioCard(scenarioForDollarDisplay(scenario)); }
+      finally { displayedSavedScenario = previous; }
+    };
+    const nominalScenarioRows = scenarioComparisonRows;
+    scenarioComparisonRows = (left, right) => {
+      const convert = scenario => scenario?.keyResultSnapshot?.retirementOutcome && forecastDollarBasis === "today"
+        ? { ...scenario, keyResultSnapshot: { ...scenario.keyResultSnapshot, retirementOutcome: savedOutcomeForDisplay(scenario.keyResultSnapshot.retirementOutcome, scenario.scenarioInputSnapshot) } }
+        : scenarioForDollarDisplay(scenario);
+      return nominalScenarioRows(convert(left), convert(right));
+    };
+    const nominalRetained = renderRetainedAssetsHtml;
+    renderRetainedAssetsHtml = view => {
+      const retained = view.retainedAssets;
+      if (!retained || forecastDollarBasis !== "today") return nominalRetained(view);
+      return nominalRetained({ ...view, retainedAssets: {
+        ...retirementDisplayFields(retained, ["totalValue", "totalLinkedDebt", "totalNetEquity"], retained.calendarYear),
+        assets: retained.assets.map(asset => retirementDisplayFields(asset, ["projectedValue", "linkedDebt", "netEquity"], retained.calendarYear)),
+      } });
+    };
+    const nominalFunding = renderSemiRetirementFundingHtml;
+    renderSemiRetirementFundingHtml = view => forecastDollarBasis !== "today" ? nominalFunding(view)
+      : nominalFunding({ ...view, semiRetirementFunding: retirementFundingDisplay(view) })
+        .replace("These figures include every year", "Totals sum each year's discounted cashflows. These figures include every year");
+    const nominalPassive = renderSemiRetirementPassiveIncomeHtml;
+    renderSemiRetirementPassiveIncomeHtml = view => {
+      const passive = view.passiveIncome;
+      if (!passive || forecastDollarBasis !== "today") return nominalPassive(view);
+      const convert = (object, fields) => retirementDisplayFields(object, fields, passive.calendarYear);
+      return nominalPassive({ ...view, passiveIncome: {
+        ...convert(passive, ["totalPassiveTaxableIncome", "totalPassiveCashIncome"]),
+        sourceRows: (passive.sourceRows || []).map(row => convert(row, ["taxableIncome", "cashIncome"])),
+        personRows: (passive.personRows || []).map(row => convert(row, ["employmentIncome", "interestIncome", "dividendIncome", "rentalTaxableIncome", "distributionIncome", "otherTaxableIncome", "totalPassiveTaxableIncome", "totalTaxableIncome", "incomeTax", "medicareLevy", "medicareLevySurcharge", "stslRepayment", "netIncome"])),
+      } });
+    };
+    const nominalDebtProperty = renderSemiRetirementDebtPropertyHtml;
+    renderSemiRetirementDebtPropertyHtml = view => {
+      const dp = view.debtProperty;
+      if (!dp || forecastDollarBasis !== "today") return nominalDebtProperty(view);
+      const debtCards = (dp.debtCards || []).map(card => ({
+        ...retirementDisplayFields(card, ["projectedBalanceAtRetirement"], card.projectedBalanceAtRetirementYear),
+        ...retirementDisplayFields({ balloonRepayment: card.balloonRepayment }, ["balloonRepayment"], card.payoff?.calendarYear),
+      }));
+      return nominalDebtProperty({ ...view, debtProperty: { ...dp, debtCards,
+        warnings: { ...dp.warnings, balloonRepayments: (dp.warnings?.balloonRepayments || []).map(item => retirementDisplayFields(item, ["amount"], item.calendarYear)) },
+        accessibleExhaustionPropertyEquity: retirementDisplayFields(dp.accessibleExhaustionPropertyEquity, ["propertyEquity"], dp.accessibleExhaustionPropertyEquity?.calendarYear),
+        milestoneDebt: (dp.milestoneDebt || []).map(item => retirementDisplayFields(item, ["value"], item.row?.calendarYear)),
+        netWorthDistinction: retirementDisplayFields(dp.netWorthDistinction, ["totalPropertyEquity", "totalDebt", "projectedNetWorth", "investableRetirementAssets"], dp.netWorthDistinction?.calendarYear),
+        propertyCards: (dp.propertyCards || []).map(card => retirementDisplayFields(card, ["projectedPropertyValue", "linkedPropertyDebt", "projectedPropertyEquity", "rentalCashIncome", "taxableRentalIncome", "netPropertyCashflow"], card.selectedYear)),
+      } });
+    };
+    const nominalMetrics = reportScenarioMetrics;
+    reportScenarioMetrics = (...args) => {
+      const metrics = nominalMetrics(...args);
+      const rate = metrics.result.plan?.investing?.inflationPct;
+      return { ...window.FFSDollarBasis.convertedFields(metrics, ["netWorth10", "investments10", "super10", "debt10"], 10, rate, forecastDollarBasis),
+        netWorthLongTerm: displayedForecastAmount(metrics.netWorthLongTerm, metrics.result.netWorthProjection.at(-1)?.year ?? 30, rate) };
+    };
+    const nominalSaved = savedRetirementOutcomeHtml;
+    savedRetirementOutcomeHtml = (snapshot, scenario) => {
+      if (forecastDollarBasis !== "today" || !snapshot?.retirementOutcome) return nominalSaved(snapshot);
+      const inputs = (scenario || displayedSavedScenario)?.scenarioInputSnapshot;
+      if (!inputs?.projectionStartYear || window.FFSDollarBasis.inflationPercent(inputs) == null) {
+        return '<p class="scenario-muted">Reopen this older scenario to display forecasts using its inflation assumption and start year.</p>';
+      }
+      return nominalSaved({ ...snapshot, retirementOutcome: savedOutcomeForDisplay(snapshot.retirementOutcome, inputs) })
+        .replace("Values are nominal closing balances", "Values are closing balances in today's dollars");
+    };
+  }
+
+  function installDollarBasisPresentation() {
+    // Keep audited renderers intact. Presentation-only adapters receive nominal inputs.
+    // Never pass discounted data back into calculators, persistence or saved snapshots.
+    const nominalrenderInvestments = renderInvestments;
+    renderInvestments = (...args) => forecastDollarBasis === "today" ? renderInvestmentsDollarBasis(...args) : nominalrenderInvestments(...args);
+    const nominalrenderSuper = renderSuper;
+    renderSuper = (...args) => forecastDollarBasis === "today" ? renderSuperDollarBasis(...args) : nominalrenderSuper(...args);
+    const nominalrenderForecast = renderForecast;
+    renderForecast = (...args) => forecastDollarBasis === "today" ? renderForecastDollarBasis(...args) : nominalrenderForecast(...args);
+    const nominalrenderSemiRetirementSnapshotHtml = renderSemiRetirementSnapshotHtml;
+    renderSemiRetirementSnapshotHtml = (...args) => forecastDollarBasis === "today" ? renderSemiRetirementSnapshotHtmlDollarBasis(...args) : nominalrenderSemiRetirementSnapshotHtml(...args);
+    const nominalsemiRetirementComparisonSummary = semiRetirementComparisonSummary;
+    semiRetirementComparisonSummary = (...args) => forecastDollarBasis === "today" ? semiRetirementComparisonSummaryDollarBasis(...args) : nominalsemiRetirementComparisonSummary(...args);
+    const nominalsemiRetirementComparisonScenarioSet = semiRetirementComparisonScenarioSet;
+    semiRetirementComparisonScenarioSet = (...args) => forecastDollarBasis === "today" ? semiRetirementComparisonScenarioSetDollarBasis(...args) : nominalsemiRetirementComparisonScenarioSet(...args);
+    const nominalsemiRetirementComparisonBreakdownRows = semiRetirementComparisonBreakdownRows;
+    semiRetirementComparisonBreakdownRows = (...args) => forecastDollarBasis === "today" ? semiRetirementComparisonBreakdownRowsDollarBasis(...args) : nominalsemiRetirementComparisonBreakdownRows(...args);
+    const nominalrenderSemiRetirementLongevityHtml = renderSemiRetirementLongevityHtml;
+    renderSemiRetirementLongevityHtml = (...args) => forecastDollarBasis === "today" ? renderSemiRetirementLongevityHtmlDollarBasis(...args) : nominalrenderSemiRetirementLongevityHtml(...args);
+    const nominalrenderSemiRetirementAnnualDetailHtml = renderSemiRetirementAnnualDetailHtml;
+    renderSemiRetirementAnnualDetailHtml = (...args) => forecastDollarBasis === "today" ? renderSemiRetirementAnnualDetailHtmlDollarBasis(...args) : nominalrenderSemiRetirementAnnualDetailHtml(...args);
+    const nominalrenderSemiRetirementAnnualProjectionHtml = renderSemiRetirementAnnualProjectionHtml;
+    renderSemiRetirementAnnualProjectionHtml = (...args) => forecastDollarBasis === "today" ? renderSemiRetirementAnnualProjectionHtmlDollarBasis(...args) : nominalrenderSemiRetirementAnnualProjectionHtml(...args);
+    const nominalreportPresentationHtml = reportPresentationHtml;
+    reportPresentationHtml = (...args) => forecastDollarBasis === "today" ? reportPresentationHtmlDollarBasis(...args) : nominalreportPresentationHtml(...args);
+    const nominalrenderComparison = renderComparison;
+    renderComparison = (...args) => forecastDollarBasis === "today" ? renderComparisonDollarBasis(...args) : nominalrenderComparison(...args);
+    const nominalcomparisonSurplusImpactTiles = comparisonSurplusImpactTiles;
+    comparisonSurplusImpactTiles = (...args) => forecastDollarBasis === "today" ? comparisonSurplusImpactTilesDollarBasis(...args) : nominalcomparisonSurplusImpactTiles(...args);
+    const nominalrenderWhatIf = renderWhatIf;
+    renderWhatIf = (...args) => forecastDollarBasis === "today" ? renderWhatIfDollarBasis(...args) : nominalrenderWhatIf(...args);
+    const nominalChart = lineChart;
+    const monetaryCharts = new Set(["netWorthChart", "dashboardInvestmentChart", "dashboardDebtChart", "dashboardSuperChart", "investmentChart", "loanChart", "reportNetWorthChart", "reportFiAssetsChart", "reportDebtChart"]);
+    lineChart = (id, series, options) => nominalChart(id,
+      monetaryCharts.has(id) ? series.map(item => ({ ...item, points: item.points.map(point => ({
+        ...point, y: displayedForecastAmount(point.y, point.x),
+      })) })) : series, options);
+    const nominalDashboard = renderDashboard;
+    renderDashboard = result => {
+      nominalDashboard(result);
+      const row = result.netWorthProjection.at(-1);
+      const note = document.getElementById("netWorthNote");
+      if (row && note) note.textContent = `Age ${row.age}: ${forecastMoney(row.closingBalance, row.year, result.plan?.investing?.inflationPct)}`;
+    };
+    const nominalOutputs = renderOutputs;
+    renderOutputs = (...args) => {
+      nominalOutputs(...args);
+      updateDollarBasisToggle();
+      refreshFutureYouDollarDisplay(calculatePlan(plan));
+      refreshNamedForecastDisplays(calculatePlan(plan));
+    };
+    const nominalFutureAge = updateDashboardFutureAge;
+    updateDashboardFutureAge = (...args) => {
+      nominalFutureAge(...args);
+      refreshFutureYouDollarDisplay(calculatePlan(plan));
+    };
   }
 
   function bindEvents() {
@@ -18606,6 +19805,8 @@
     return;
   }
 
+  installDollarBasisPresentation();
+  installAdditionalDollarDisplays();
   bindEvents();
   renderAll();
   // Keep entry actions below the header and the optional sample-plan banner.
@@ -18656,10 +19857,17 @@
       commitLinkedSetup,
       sampleScenarioList,
       migrateScenarioData,
-      quickScenarioProvenance() {
+      quickScenarioProvenance(incomeItemId = "") {
         const result = calculatePlan(plan);
         return whatIfActions.map((action) => {
-          const adjustments = action.adjustments(result);
+          const adjustments = { ...action.adjustments(result) };
+          if (incomeItemId && (adjustments.incomeRateChange || adjustments.incomeChange)) adjustments.incomeItemId = incomeItemId;
+          const income = resolveScenarioIncome(plan, adjustments);
+          if (income.item) {
+            adjustments.incomeChange = income.amount;
+            adjustments.incomeItemId = income.item.id;
+            delete adjustments.incomeRateChange;
+          }
           const overlay = TRUST?.createScenarioOverlay?.({ actionId: action.id, label: action.label, adjustments });
           return { id: action.id, label: action.label, adjustments, changes: overlay?.changes || decisionChangeRowsFromAdjustments(adjustments) };
         });
