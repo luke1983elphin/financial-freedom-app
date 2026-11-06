@@ -11010,7 +11010,7 @@
       ${pensionRows.length ? `
         <section class="semi-retirement-results-section">
           <h4>Estimated Age Pension</h4>
-          <p>${pensionRows.some(row => row.household.agePension.unsupported) ? "No pension is included where circumstances are unsupported." : `Sum of nominal before-tax pensions over this projection: ${semiRetirementMoney(pensionRows.reduce((sum, row) => sum + Number(row.household.estimatedAgePension || 0), 0))}.`} Private savings exhaustion and unfunded spending are different milestones.</p>
+          <p>${pensionRows.some(row => row.household.agePension.unsupported) ? "No pension is included where circumstances are unsupported." : `Before-tax pension totals across the projection (${forecastDollarBasis === "today" ? "sum of annual today's-dollar amounts" : "nominal sum"}): ${semiRetirementMoney(pensionRows.reduce((sum, row) => sum + (forecastDollarBasis === "today" ? displayedForecastAmount(row.household.estimatedAgePension, forecastYearFromCalendarYear(row.calendarYear), scenarioInflationPct) : Number(row.household.estimatedAgePension || 0)), 0))}.`} Private savings exhaustion and unfunded spending are different milestones.</p>
           <details class="mt-3"><summary>Annual pension estimates</summary>
             <div class="age-pension-table-wrap" role="region" aria-label="Annual Age Pension estimates" tabindex="0">
               <table class="age-pension-table">
