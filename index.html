@@ -190,8 +190,11 @@
               </div>
               <div class="dollar-basis-control" aria-label="Forecast dollar display">
                 <p class="dollar-basis-title">Forecast values</p>
-                <button type="button" class="dollar-basis-button" id="dollarBasisToggle" aria-pressed="false">Show today's dollars</button>
-                <p class="dollar-basis-description" id="dollarBasisDescription" aria-live="polite">Showing future dollars, including projected inflation.</p>
+                <div class="dollar-basis-segments" role="group" aria-label="Forecast dollar values">
+                  <button type="button" class="dollar-basis-segment" data-dollar-basis="today" aria-pressed="false">Today's dollars</button>
+                  <button type="button" class="dollar-basis-segment" data-dollar-basis="future" aria-pressed="true">Future dollars</button>
+                </div>
+                <p class="dollar-basis-description" id="dollarBasisDescription" aria-live="polite">Projected values include future inflation.</p>
               </div>
             </nav>
 
