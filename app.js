@@ -744,7 +744,7 @@
     if (description) description.textContent = today
       ? "Showing purchasing power in today's dollars at the plan's inflation rate."
       : "Showing future dollars, including projected inflation.";
-    if (document.body) document.body.dataset.forecastDollarBasis = forecastDollarBasis;
+    if (document.body?.dataset) document.body.dataset.forecastDollarBasis = forecastDollarBasis;
   }
 
   function percentFromRatio(value) {
@@ -7505,7 +7505,6 @@
     document.querySelectorAll("[data-dashboard-future-results]").forEach((results) => {
       results.outerHTML = dashboardFutureMetricsHtml(future, { resultsId: results.id || null });
     });
-    refreshFutureYouDollarDisplay(result);
     if (options.commit) {
       updateSaveStatus(`Future You preview set to age ${future.age}.`);
     }
@@ -17421,6 +17420,7 @@
       }
       if (target.dataset.dashboardFutureAge !== undefined) {
         updateDashboardFutureAge(target.value);
+        refreshFutureYouDollarDisplay(calculatePlan(plan));
         return;
       }
       if (target.closest("[data-timing-editor]")) {
