@@ -10038,26 +10038,37 @@ body.scenario-save-modal-open {
   font-weight: 850;
   text-transform: uppercase;
 }
-.dollar-basis-button {
-  display: block;
+.dollar-basis-segments {
+  display: flex;
   width: 100%;
-  padding: 11px 10px;
+  padding: 3px;
+  gap: 3px;
   border: 1px solid #cbd5e1;
   border-radius: 12px;
-  background: #eff6ff;
-  color: #0f2742;
+  background: #f1f5f9;
+}
+.dollar-basis-segment {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 9px 4px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: #475569;
+  font-size: 11px;
   font-weight: 750;
-  font-size: 13px;
-  text-align: center;
+  line-height: 1.35;
   cursor: pointer;
 }
-.dollar-basis-button:hover, .dollar-basis-button:focus-visible {
+.dollar-basis-segment[aria-pressed="true"] {
+  background: #fff;
+  color: #0f2742;
+  border-color: #cbd5e1;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 10%);
+}
+.dollar-basis-segment:focus-visible {
   outline: 2px solid #0f9f6e;
   outline-offset: 2px;
-}
-.dollar-basis-button[aria-pressed="true"] {
-  background: #e4f8ee;
-  border-color: #0f9f6e;
 }
 .dollar-basis-description {
   margin: 9px 1px 0;
