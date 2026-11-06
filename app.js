@@ -735,15 +735,14 @@
   }
 
   function updateDollarBasisToggle() {
-    const control = document.getElementById("dollarBasisToggle");
+    const controls = document.querySelectorAll("[data-dollar-basis]");
     const description = document.getElementById("dollarBasisDescription");
-    if (!control) return;
-    const today = forecastDollarBasis === "today";
-    control.textContent = today ? "Show future dollars" : "Show today's dollars";
-    control.setAttribute("aria-pressed", String(today));
-    if (description) description.textContent = today
-      ? "Showing purchasing power in today's dollars at the plan's inflation rate."
-      : "Showing future dollars, including projected inflation.";
+    controls.forEach((control) => {
+      control.setAttribute("aria-pressed", String(control.dataset.dollarBasis === forecastDollarBasis));
+    });
+    if (description) description.textContent = forecastDollarBasis === "today"
+      ? "Values adjusted for inflation to show today's purchasing power."
+      : "Projected values include future inflation.";
     if (document.body?.dataset) document.body.dataset.forecastDollarBasis = forecastDollarBasis;
   }
 
@@ -17375,11 +17374,15 @@
   }
 
   function bindEvents() {
-    document.getElementById("dollarBasisToggle")?.addEventListener("click", () => {
-      forecastDollarBasis = forecastDollarBasis === "today" ? "future" : "today";
-      try { localStorage.setItem(DOLLAR_BASIS_KEY, forecastDollarBasis); }
-      catch { /* Toggle remains usable without persistence. */ }
-      renderOutputs();
+    document.querySelectorAll("[data-dollar-basis]").forEach((control) => {
+      control.addEventListener("click", () => {
+        const selected = control.dataset.dollarBasis;
+        if (!["today", "future"].includes(selected) || selected === forecastDollarBasis) return;
+        forecastDollarBasis = selected;
+        try { localStorage.setItem(DOLLAR_BASIS_KEY, forecastDollarBasis); }
+        catch { /* Selector remains usable without persistence. */ }
+        renderOutputs();
+      });
     });
     const moreNavigation = document.getElementById("moreNavigation");
     if (moreNavigation) {
