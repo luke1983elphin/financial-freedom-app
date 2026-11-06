@@ -11086,7 +11086,7 @@
                 ${semiRetirementDetailRows([
                   { label: "Net cash income", value: byYear(household.totalNetEmploymentIncome, row.calendarYear) },
                   { label: "Lifestyle spending", value: byYear(household.applicableLifestyleSpending, row.calendarYear) },
-                  { label: "Portfolio withdrawal", value: byYear(household.totalPortfolioWithdrawal, row.calendarYear) },
+                  { label: "Portfolio withdrawal", value: semiRetirementMoney(household.totalPortfolioWithdrawal) },
                   { label: "Accessible investments", value: byYear(household.closingAccessibleInvestmentBalance, row.calendarYear) },
                   { label: "Super balance", value: byYear(household.totalSuperBalance, row.calendarYear) },
                 ])}
