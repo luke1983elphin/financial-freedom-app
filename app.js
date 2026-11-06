@@ -608,6 +608,11 @@
   let userState = loadUserState(savedDraft);
   // Viewing age is session-only UI state, never a saved financial assumption.
   let futureYouSelectedAge = null;
+  const DOLLAR_BASIS_KEY = "ffs.ui.forecastDollarBasis";
+  let forecastDollarBasis = "future";
+  try { forecastDollarBasis = localStorage.getItem(DOLLAR_BASIS_KEY) === "today" ? "today" : "future"; }
+  catch { /* Keep the default when browser storage is restricted. */ }
+
   let plan = ensureCurrentPlanIdentity(migratePlanData(savedDraft || newUserPlan()));
   let activeView = restoredDraftUi.activeView || "dashboard";
   let activeWizardStep = normaliseWizardStep(restoredDraftUi.activeWizardStep);
@@ -713,6 +718,33 @@
     if (Math.abs(number) >= 1000000) return `$${(number / 1000000).toFixed(1)}m`;
     if (Math.abs(number) >= 1000) return `$${Math.round(number / 1000)}k`;
     return money(number);
+  }
+
+  function displayedForecastAmount(value, years = 0, inflation = plan.investing?.inflationPct) {
+    return window.FFSDollarBasis?.displayedValue?.(value, years, inflation, forecastDollarBasis) ?? value;
+  }
+
+  function forecastMoney(value, years = 0, inflation = plan.investing?.inflationPct) {
+    return money(displayedForecastAmount(value, years, inflation));
+  }
+
+  function forecastYearFromCalendarYear(calendarYear) {
+    const calendarBase = Number(new Date().getFullYear());
+    const year = Number(calendarYear);
+    return Number.isFinite(year) ? Math.max(0, year - calendarBase) : 0;
+  }
+
+  function updateDollarBasisToggle() {
+    const control = document.getElementById("dollarBasisToggle");
+    const description = document.getElementById("dollarBasisDescription");
+    if (!control) return;
+    const today = forecastDollarBasis === "today";
+    control.textContent = today ? "Show future dollars" : "Show today's dollars";
+    control.setAttribute("aria-pressed", String(today));
+    if (description) description.textContent = today
+      ? "Showing purchasing power in today's dollars at the plan's inflation rate."
+      : "Showing future dollars, including projected inflation.";
+    document.body.dataset.forecastDollarBasis = forecastDollarBasis;
   }
 
   function percentFromRatio(value) {
@@ -7272,15 +7304,16 @@
   }
 
   function dashboardFutureMetricsHtml(future, options = {}) {
+    const futureMoney = value => forecastMoney(value, future.year);
     const id = options.resultsId === null ? "" : (options.resultsId || "dashboardFutureYouResults");
     return `
       <div class="dashboard-future-results"${id ? ` id="${escapeHtml(id)}"` : ""} data-dashboard-future-results>
-        ${summaryTile("Accessible FI Assets", money(future.accessibleFiAssets), "", "futureAccessibleFiAssets")}
-        ${summaryTile("Investment Property Equity", money(future.investmentPropertyEquity))}
-        ${summaryTile("Total FI Wealth", money(future.totalFiWealth))}
-        ${summaryTile("Home Equity", money(future.principalResidenceEquity))}
-        ${summaryTile("Projected net worth", money(future.netWorth))}
-        ${summaryTile("Projected passive income", `${money(future.passiveIncome)} pa`, "", "passiveIncome")}
+        ${summaryTile("Accessible FI Assets", futureMoney(future.accessibleFiAssets), "", "futureAccessibleFiAssets")}
+        ${summaryTile("Investment Property Equity", futureMoney(future.investmentPropertyEquity))}
+        ${summaryTile("Total FI Wealth", futureMoney(future.totalFiWealth))}
+        ${summaryTile("Home Equity", futureMoney(future.principalResidenceEquity))}
+        ${summaryTile("Projected net worth", futureMoney(future.netWorth))}
+        ${summaryTile("Projected passive income", `${futureMoney(future.passiveIncome)} pa`, "", "passiveIncome")}
         ${summaryTile("Financial Freedom %", plainPercent(future.progress), "", "financialFreedomProgress")}
       </div>
     `;
@@ -7583,12 +7616,12 @@
     lineChart("netWorthChart", [{
       label: "Net worth",
       color: "#2563eb",
-      points: [{ x: 0, y: result.currentNetWorth }, ...result.netWorthProjection.map((row) => ({ x: row.year, y: row.closingBalance }))],
+      points: [{ x: 0, y: result.currentNetWorth }, ...result.netWorthProjection.map((row) => ({ x: row.year, y: displayedForecastAmount(row.closingBalance, row.year) }))],
     }], { xMarks: [0, 10, 20, 30], xLabel: (mark) => `${mark}y` });
     lineChart("dashboardInvestmentChart", [{
       label: "Investments",
       color: "#0f9f6e",
-      points: [{ x: 0, y: result.investmentBalance }, ...result.investmentProjection.map((row) => ({ x: row.year, y: row.closingBalance }))],
+      points: [{ x: 0, y: result.investmentBalance }, ...result.investmentProjection.map((row) => ({ x: row.year, y: displayedForecastAmount(row.closingBalance, row.year) }))],
     }], { xMarks: [0, 10, 20, 30], xLabel: (mark) => `${mark}y` });
     lineChart("dashboardDebtChart", [{
       label: "Debt balance",
@@ -8614,7 +8647,7 @@
     if (linkedInvestmentSetup) linkedInvestmentSetup.innerHTML = linkedInvestmentRecordsHtml();
     document.getElementById("investmentCards").innerHTML = [5, 10, 20, 30].map((year) => {
       const row = result.investmentProjection.find((item) => item.year === year) || result.investmentProjection.at(-1);
-      return `<div class="mini-card"><span>${year} years</span><strong>${money(row?.closingBalance || 0)}</strong><small>${money(row?.passiveIncome || 0)} pa passive income</small></div>`;
+      return `<div class="mini-card"><span>${year} years</span><strong>${forecastMoney(row?.closingBalance || 0, row?.year ?? year)}</strong><small>${forecastMoney(row?.passiveIncome || 0, row?.year ?? year)} pa passive income</small></div>`;
     }).join("");
     lineChart("investmentChart", [{
       label: "Investment balance",
@@ -8626,7 +8659,7 @@
   function renderSuper(result) {
     document.getElementById("superCards").innerHTML = [50, 55, 60, 65].map((age) => {
       const row = result.superProjection.find((item) => item.age >= age) || result.superProjection.at(-1);
-      return `<div class="mini-card"><span>Age ${age}</span><strong>${money(row?.closingBalance || 0)}</strong><small>${money(row?.passiveIncome || 0)} pa at withdrawal rate</small></div>`;
+      return `<div class="mini-card"><span>Age ${age}</span><strong>${forecastMoney(row?.closingBalance || 0, row?.year ?? 0)}</strong><small>${forecastMoney(row?.passiveIncome || 0, row?.year ?? 0)} pa at withdrawal rate</small></div>`;
     }).join("");
     const extra = result.taxEstimate.extraSuper;
     document.getElementById("superSummary").innerHTML = `
@@ -8652,16 +8685,16 @@
 
   function renderForecast(result) {
     const cards = [
-      ["1 year projected net worth", netWorthAtYear(result, 1)],
-      ["2 year projected net worth", netWorthAtYear(result, 2)],
-      ["5 year net worth", result.netWorthProjection[4]?.closingBalance || 0],
-      ["10 year net worth", result.netWorthProjection[9]?.closingBalance || 0],
-      ["20 year net worth", result.netWorthProjection[19]?.closingBalance || 0],
-      ["30 year net worth", result.netWorthProjection[29]?.closingBalance || 0],
-      ["Age-60+ sustainability assets", result.totalRetirementAssets],
+      ["1 year projected net worth", netWorthAtYear(result, 1), 1],
+      ["2 year projected net worth", netWorthAtYear(result, 2), 2],
+      ["5 year net worth", result.netWorthProjection[4]?.closingBalance || 0, 5],
+      ["10 year net worth", result.netWorthProjection[9]?.closingBalance || 0, 10],
+      ["20 year net worth", result.netWorthProjection[19]?.closingBalance || 0, 20],
+      ["30 year net worth", result.netWorthProjection[29]?.closingBalance || 0, 30],
+      ["Age-60+ sustainability assets", result.totalRetirementAssets, Math.max(0, Number(result.sustainabilityStartAge || 60) - Number(plan.personal.person1Age || 0))],
       ["Target FI Capital", result.targetCapital],
     ];
-    document.getElementById("forecastCards").innerHTML = cards.map(([label, value]) => metricCard(label, money(value), "", "", label === "Target FI Capital" ? "targetFiCapital" : "")).join("");
+    document.getElementById("forecastCards").innerHTML = cards.map(([label, value, year]) => metricCard(label, year === undefined ? money(value) : forecastMoney(value, year), "", "", label === "Target FI Capital" ? "targetFiCapital" : "")).join("");
   }
 
   function renderGoalsSummary(result) {
@@ -15245,11 +15278,11 @@
         ${result.investmentReturnSummary ? `<p class="report-note">Configured investments retain ${money(result.investmentReturnSummary.retainedReturn)} of projected financial return and pay ${money(result.investmentReturnSummary.cashIncome)} as investment cash income: ${money(result.investmentReturnSummary.totalReturn)} total financial investment return. Cash distributions are removed from portfolio growth and included once in passive cash income.</p>` : ""}
         ${CALC.investmentIncomeReviewItems(p).length ? `<p class="report-note"><strong>Investment income review.</strong> Dividend or distribution income has been entered separately from investment assets. Confirm that it is not already included in the investment return assumption; the combined figure can overlap with passive income.</p>` : ""}
       `, "report-page-break")}
-      ${reportSection("Future Outlook", "Estimates under the current plan, shown in future nominal dollars.", `
+      ${reportSection("Future Outlook", forecastDollarBasis === "today" ? "Estimates under the current plan, shown in today\'s purchasing-power dollars." : "Estimates under the current plan, shown in future nominal dollars.", `
         ${result.investmentPropertyDebt > 0 ? '<p class="report-warning"><strong>Projection limit:</strong> The existing future net-worth and debt forecasts omit investment-property loan balances. They can overstate net worth and understate debt. Current liabilities and investment-property equity do include this debt.</p>' : ""}
-        ${reportGroup("Near term", m("1-year projected net worth", money(netWorthAtYear(result,1))) + m("2-year projected net worth", money(netWorthAtYear(result,2))))}
-        ${reportGroup("10-year outlook", m("Projected net worth", money(netWorthAtYear(result,10)), "Projected household assets less modelled liabilities.", true) + m("Projected FI assets", money(projectedFiAssetsAtYear(result,10)), "Includes super only when each person reaches the modelled access age.") + m("Projected investment portfolio", money(investmentAtYear(result,10)), "Non-super portfolio after modelled growth and affordable contributions.") + m("Projected debt", money(projectedDebtAtYear(result,10)), "Existing report estimate from the loan schedule, STSL and other entered debts."))}
-        ${reportGroup("Long term", m("30-year projected net worth", money(netWorthAtYear(result,30))) + m("Modelled Financial Freedom age", targetAgeOutcome(result), "First forecast year reaching the full spending-based target."))}
+        ${reportGroup("Near term", m("1-year projected net worth", forecastMoney(netWorthAtYear(result,1), 1)) + m("2-year projected net worth", forecastMoney(netWorthAtYear(result,2), 2)))}
+        ${reportGroup("10-year outlook", m("Projected net worth", forecastMoney(netWorthAtYear(result,10), 10), "Projected household assets less modelled liabilities.", true) + m("Projected FI assets", forecastMoney(projectedFiAssetsAtYear(result,10), 10), "Includes super only when each person reaches the modelled access age.") + m("Projected investment portfolio", forecastMoney(investmentAtYear(result,10), 10), "Non-super portfolio after modelled growth and affordable contributions.") + m("Projected debt", forecastMoney(projectedDebtAtYear(result,10), 10), "Existing report estimate from the loan schedule, STSL and other entered debts."))}
+        ${reportGroup("Long term", m("30-year projected net worth", forecastMoney(netWorthAtYear(result,30), 30)) + m("Modelled Financial Freedom age", targetAgeOutcome(result), "First forecast year reaching the full spending-based target."))}
         <p class="report-narrative">Over 10 years, the model estimates net worth of ${money(netWorthAtYear(result,10))}, an investment portfolio of ${money(investmentAtYear(result,10))} and debt of ${money(projectedDebtAtYear(result,10))}. Actual returns, tax, income, spending and inflation will vary.</p>
       `, "report-page-break")}
       ${reportSection("Progress and Wealth Over Time", "Future progress uses each year's inflation-adjusted spending target and includes super as it becomes accessible.", `
@@ -15335,12 +15368,12 @@
     lineChart("reportFiAssetsChart", [{
       label: "FI assets",
       color: "#0f9f6e",
-      points: projectionYears.map((year) => ({ x: year, y: year === 0 ? result.financialIndependenceAssets : projectedFiAssetsAtYear(result, year) })),
+      points: projectionYears.map((year) => ({ x: year, y: year === 0 ? result.financialIndependenceAssets : displayedForecastAmount(projectedFiAssetsAtYear(result, year), year) })),
     }], { width, height: 280, xMarks: [0, 10, 20, 30], xLabel: (mark) => `${mark}y` });
     lineChart("reportDebtChart", [{
       label: "Debt",
       color: "#dc4c3e",
-      points: projectionYears.map((year) => ({ x: year, y: year === 0 ? result.totalLiabilities : projectedDebtAtYear(result, year) })),
+      points: projectionYears.map((year) => ({ x: year, y: year === 0 ? result.totalLiabilities : displayedForecastAmount(projectedDebtAtYear(result, year), year) })),
     }], { width, height: 280, xMarks: [0, 10, 20, 30], xLabel: (mark) => `${mark}y` });
   }
 
@@ -16734,6 +16767,7 @@
     }
     decisionScenarioPlanKey = scenarioPlanKey;
     const result = calculatePlan(plan);
+    updateDollarBasisToggle();
     safeRenderModule("Demo banner", () => renderDemoModeBanner());
     safeRenderModule("Sample plan options", () => renderSamplePlanOptions());
     safeRenderModule("Setup labels", () => {
@@ -17305,6 +17339,12 @@
   }
 
   function bindEvents() {
+    document.getElementById("dollarBasisToggle")?.addEventListener("click", () => {
+      forecastDollarBasis = forecastDollarBasis === "today" ? "future" : "today";
+      try { localStorage.setItem(DOLLAR_BASIS_KEY, forecastDollarBasis); }
+      catch { /* Toggle remains usable without persistence. */ }
+      renderOutputs();
+    });
     const moreNavigation = document.getElementById("moreNavigation");
     if (moreNavigation) {
       try { moreNavigation.open = localStorage.getItem("ffs.ui.moreNavigationOpen") !== "false"; } catch { moreNavigation.open = true; }
