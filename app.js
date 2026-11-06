@@ -744,7 +744,7 @@
     if (description) description.textContent = today
       ? "Showing purchasing power in today's dollars at the plan's inflation rate."
       : "Showing future dollars, including projected inflation.";
-    document.body.dataset.forecastDollarBasis = forecastDollarBasis;
+    if (document.body) document.body.dataset.forecastDollarBasis = forecastDollarBasis;
   }
 
   function percentFromRatio(value) {
@@ -7304,16 +7304,15 @@
   }
 
   function dashboardFutureMetricsHtml(future, options = {}) {
-    const futureMoney = value => forecastMoney(value, future.year);
     const id = options.resultsId === null ? "" : (options.resultsId || "dashboardFutureYouResults");
     return `
       <div class="dashboard-future-results"${id ? ` id="${escapeHtml(id)}"` : ""} data-dashboard-future-results>
-        ${summaryTile("Accessible FI Assets", futureMoney(future.accessibleFiAssets), "", "futureAccessibleFiAssets")}
-        ${summaryTile("Investment Property Equity", futureMoney(future.investmentPropertyEquity))}
-        ${summaryTile("Total FI Wealth", futureMoney(future.totalFiWealth))}
-        ${summaryTile("Home Equity", futureMoney(future.principalResidenceEquity))}
-        ${summaryTile("Projected net worth", futureMoney(future.netWorth))}
-        ${summaryTile("Projected passive income", `${futureMoney(future.passiveIncome)} pa`, "", "passiveIncome")}
+        ${summaryTile("Accessible FI Assets", money(future.accessibleFiAssets), "", "futureAccessibleFiAssets")}
+        ${summaryTile("Investment Property Equity", money(future.investmentPropertyEquity))}
+        ${summaryTile("Total FI Wealth", money(future.totalFiWealth))}
+        ${summaryTile("Home Equity", money(future.principalResidenceEquity))}
+        ${summaryTile("Projected net worth", money(future.netWorth))}
+        ${summaryTile("Projected passive income", `${money(future.passiveIncome)} pa`, "", "passiveIncome")}
         ${summaryTile("Financial Freedom %", plainPercent(future.progress), "", "financialFreedomProgress")}
       </div>
     `;
@@ -7475,6 +7474,22 @@
     if (legacyMission) legacyMission.innerHTML = "";
   }
 
+  function refreshFutureYouDollarDisplay(result) {
+    if (forecastDollarBasis !== "today") return;
+    const future = futureYouPreview(result);
+    const values = [
+      future.accessibleFiAssets, future.investmentPropertyEquity, future.totalFiWealth,
+      future.principalResidenceEquity, future.netWorth, future.passiveIncome,
+    ];
+    document.querySelectorAll("[data-dashboard-future-results]").forEach((panel) => {
+      const fields = panel.querySelectorAll(".summary-tile strong");
+      values.forEach((value, index) => {
+        if (!fields[index]) return;
+        fields[index].textContent = forecastMoney(value, future.year) + (index === 5 ? " pa" : "");
+      });
+    });
+  }
+
   function updateDashboardFutureAge(value, options = {}) {
     const age = Math.max(0, Math.round(Number(value)));
     if (!Number.isFinite(age) || age <= 0) return;
@@ -7490,6 +7505,7 @@
     document.querySelectorAll("[data-dashboard-future-results]").forEach((results) => {
       results.outerHTML = dashboardFutureMetricsHtml(future, { resultsId: results.id || null });
     });
+    refreshFutureYouDollarDisplay(result);
     if (options.commit) {
       updateSaveStatus(`Future You preview set to age ${future.age}.`);
     }
@@ -15211,6 +15227,8 @@
 
   function reportPresentationHtml(result, generatedDate) {
     const p = result.plan, m = reportMetric;
+    const reportBasis = typeof forecastDollarBasis === "undefined" ? "future" : forecastDollarBasis;
+    const reportForecastMoney = typeof forecastMoney === "function" ? forecastMoney : money;
     const progress = freedomPercent(result), fi = milestoneReachEstimate(result, 75);
     const annual = result.finalProjectedCashSurplus;
     const passive = result.passiveIncomeBreakdown;
@@ -15296,11 +15314,11 @@
         ${result.investmentReturnSummary ? `<p class="report-note">Configured investments retain ${money(result.investmentReturnSummary.retainedReturn)} of projected financial return and pay ${money(result.investmentReturnSummary.cashIncome)} as investment cash income: ${money(result.investmentReturnSummary.totalReturn)} total financial investment return. Cash distributions are removed from portfolio growth and included once in passive cash income.</p>` : ""}
         ${CALC.investmentIncomeReviewItems(p).length ? `<p class="report-note"><strong>Investment income review.</strong> Dividend or distribution income has been entered separately from investment assets. Confirm that it is not already included in the investment return assumption; the combined figure can overlap with passive income.</p>` : ""}
       `, "report-page-break")}
-      ${reportSection("Future Outlook", forecastDollarBasis === "today" ? "Estimates under the current plan, shown in today\'s purchasing-power dollars." : "Estimates under the current plan, shown in future nominal dollars.", `
+      ${reportSection("Future Outlook", reportBasis === "today" ? "Estimates under the current plan, shown in today\'s purchasing-power dollars." : "Estimates under the current plan, shown in future nominal dollars.", `
         ${result.investmentPropertyDebt > 0 ? '<p class="report-warning"><strong>Projection limit:</strong> The existing future net-worth and debt forecasts omit investment-property loan balances. They can overstate net worth and understate debt. Current liabilities and investment-property equity do include this debt.</p>' : ""}
-        ${reportGroup("Near term", m("1-year projected net worth", forecastMoney(netWorthAtYear(result,1), 1)) + m("2-year projected net worth", forecastMoney(netWorthAtYear(result,2), 2)))}
-        ${reportGroup("10-year outlook", m("Projected net worth", forecastMoney(netWorthAtYear(result,10), 10), "Projected household assets less modelled liabilities.", true) + m("Projected FI assets", forecastMoney(projectedFiAssetsAtYear(result,10), 10), "Includes super only when each person reaches the modelled access age.") + m("Projected investment portfolio", forecastMoney(investmentAtYear(result,10), 10), "Non-super portfolio after modelled growth and affordable contributions.") + m("Projected debt", forecastMoney(projectedDebtAtYear(result,10), 10), "Existing report estimate from the loan schedule, STSL and other entered debts."))}
-        ${reportGroup("Long term", m("30-year projected net worth", forecastMoney(netWorthAtYear(result,30), 30)) + m("Modelled Financial Freedom age", targetAgeOutcome(result), "First forecast year reaching the full spending-based target."))}
+        ${reportGroup("Near term", m("1-year projected net worth", reportForecastMoney(netWorthAtYear(result,1), 1)) + m("2-year projected net worth", reportForecastMoney(netWorthAtYear(result,2), 2)))}
+        ${reportGroup("10-year outlook", m("Projected net worth", reportForecastMoney(netWorthAtYear(result,10), 10), "Projected household assets less modelled liabilities.", true) + m("Projected FI assets", reportForecastMoney(projectedFiAssetsAtYear(result,10), 10), "Includes super only when each person reaches the modelled access age.") + m("Projected investment portfolio", reportForecastMoney(investmentAtYear(result,10), 10), "Non-super portfolio after modelled growth and affordable contributions.") + m("Projected debt", reportForecastMoney(projectedDebtAtYear(result,10), 10), "Existing report estimate from the loan schedule, STSL and other entered debts."))}
+        ${reportGroup("Long term", m("30-year projected net worth", reportForecastMoney(netWorthAtYear(result,30), 30)) + m("Modelled Financial Freedom age", targetAgeOutcome(result), "First forecast year reaching the full spending-based target."))}
         <p class="report-narrative">Over 10 years, the model estimates net worth of ${money(netWorthAtYear(result,10))}, an investment portfolio of ${money(investmentAtYear(result,10))} and debt of ${money(projectedDebtAtYear(result,10))}. Actual returns, tax, income, spending and inflation will vary.</p>
       `, "report-page-break")}
       ${reportSection("Progress and Wealth Over Time", "Future progress uses each year's inflation-adjusted spending target and includes super as it becomes accessible.", `
@@ -16798,6 +16816,7 @@
     safeRenderModule("Home preview", () => updatePreview(result));
     safeRenderModule("AI Insights card", () => renderAiInsightsHomeCard(result));
     safeRenderModule("Dashboard", () => renderDashboard(result));
+    safeRenderModule("Future dollar display", () => refreshFutureYouDollarDisplay(result));
     safeRenderModule("Financial Progress", () => renderFinancialProgress(result));
     safeRenderModule("Cashflow", () => renderCashflow(result));
     safeRenderModule("Loans", () => renderLoan(result));
