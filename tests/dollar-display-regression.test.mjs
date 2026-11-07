@@ -142,3 +142,38 @@ test('sustainability cards use the actual final forecast row when a requested ag
     taxEstimate: { extraSuper: {} } });
   assert.match(elements.superSummary.innerHTML, /sustainability assets: 1000/);
 });
+
+test('loan display copies only checkpoint balances at their own years and preserves nominal calculations', () => {
+  const ctx = context();
+  vm.runInNewContext(extract('loanResultForDollarDisplay'), ctx);
+  for (const rate of [0, 5]) {
+    const result = { plan: { investing: { inflationPct: rate } }, loan: {
+      balanceAtYears: { 5: 100000, 10: 80000, 20: 40000, 30: 0 },
+      schedule: [{ closingBalance: 123456 }], finalBalance: 0, totalInterestPaid: 4567,
+    } };
+    const before = JSON.stringify(result);
+    ctx.forecastDollarBasis = 'today';
+    const display = ctx.loanResultForDollarDisplay(result);
+    for (const year of [5, 10, 20, 30]) close(display.loan.balanceAtYears[year], result.loan.balanceAtYears[year] / (1 + rate / 100) ** year);
+    assert.equal(display.loan.schedule, result.loan.schedule, 'chart schedule stays nominal for single conversion');
+    assert.equal(display.loan.totalInterestPaid, result.loan.totalInterestPaid);
+    assert.equal(JSON.stringify(result), before);
+    ctx.forecastDollarBasis = 'future';
+    assert.equal(ctx.loanResultForDollarDisplay(result), result);
+  }
+});
+
+test('FI gap discounts the target at its projection year before subtracting current assets', () => {
+  const ctx = context();
+  vm.runInNewContext(extract('displayedFiTargetGap'), ctx);
+  for (const rate of [0, 10]) for (const assets of [100, 2000]) {
+    const result = { plan: { investing: { inflationPct: rate } }, targetCapital: 1210,
+      targetProjectionYear: 2, financialIndependenceAssets: assets, fiTargetRemaining: Math.max(0, 1210 - assets) };
+    const before = JSON.stringify(result);
+    ctx.forecastDollarBasis = 'today';
+    close(ctx.displayedFiTargetGap(result), Math.max(0, 1210 / (1 + rate / 100) ** 2 - assets));
+    ctx.forecastDollarBasis = 'future';
+    assert.equal(ctx.displayedFiTargetGap(result), result.fiTargetRemaining);
+    assert.equal(JSON.stringify(result), before);
+  }
+});

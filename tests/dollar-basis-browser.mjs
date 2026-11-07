@@ -122,6 +122,9 @@ before(async () => {
         .replace('  function lineChart(svgId, series, options = {}) {', '  function lineChart(svgId, series, options = {}) { window.__dollarCharts ||= {}; window.__dollarCharts[svgId] = structuredClone(series);')
         .replace('  installDollarBasisPresentation();', `  window.__dollarTest = {
           result: () => calculatePlan(plan),
+          savedScenarios: () => loadScenarios(),
+          seedSavedScenario: () => saveScenarios(sampleScenarioList().slice(0, 1).map(scenario => ({ ...scenario, id: "dollar-regression", source: "user" }))),
+          renderReportPresentation: () => { const result = calculatePlan(plan); document.getElementById("financialReportBody").innerHTML = reportPresentationHtml(result, "Regression fixture"); renderReportCharts(result); },
           future: () => futureYouPreview(calculatePlan(plan)),
           retirement: () => ({ inputs: semiRetirementScenarioInputs, result: semiRetirementScenarioResult,
             view: window.FFSSemiRetirementUi.buildSemiRetirementResultsViewModel(semiRetirementScenarioResult, semiRetirementScenarioInputs, semiRetirementScenarioDraft) }),
@@ -232,6 +235,62 @@ for (const width of [1366, 375]) test(`forecast cards, charts, Future You and re
   const reversed = await evaluate('__dollarCharts');
   assert.deepEqual(reversed,nominal,'chart reversal restores nominal data exactly');
   assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),before);
+});
+
+for (const inflation of [5, 0]) test(`loan checkpoints and report gap reconcile in both bases at ${inflation}% inflation`, async () => {
+  await fixture();
+  await evaluate(`(() => { const p = FFSStage1BrowserTestHooks.getPlan(); p.investing.inflationPct = ${inflation}; FFSStage1BrowserTestHooks.setPlan(p, 'dashboard'); })()`);
+  await select('future');
+  const result = await evaluate('__dollarTest.result()');
+  assert.equal(result.plan.investing.inflationPct, inflation);
+  assert.ok(result.targetProjectionYear > 0);
+  assert.ok(result.loan.balanceAtYears[5] > 0, 'fixture must exercise a future loan balance');
+  await evaluate('__dollarTest.seedSavedScenario()');
+  const snapshot = () => evaluate(`JSON.stringify({ result: __dollarTest.result(), plan: FFSStage1BrowserTestHooks.getPlan(),
+    scenarios: __dollarTest.savedScenarios(), storage: Object.fromEntries(Object.entries(localStorage).filter(([key]) => /scenario/i.test(key))) })`);
+  const before = await snapshot();
+  assert.ok((await evaluate('__dollarTest.savedScenarios()')).length > 0, 'saved comparison fixtures are present');
+  let nominal;
+  for (const basis of ['future', 'today', 'future']) {
+    await select(basis);
+    // Existing readiness policy requires positive inflation. Exercise the actual
+    // report presentation at zero without changing or bypassing that production policy.
+    if (inflation === 0) {
+      assert.equal(await evaluate('FFSStage1BrowserTestHooks.getReadiness().readyForPersonalisedResults'), false);
+      await evaluate("FFSStage1BrowserTestHooks.showWorkspace('reports');__dollarTest.renderReportPresentation()");
+    }
+    const display = await evaluate(`({
+      cards: Object.fromEntries([...document.querySelectorAll('#loanSummary .summary-tile')].map(tile => [tile.querySelector('span').firstChild.textContent.trim(), tile.querySelector('strong').textContent])),
+      chart: __dollarCharts.loanChart[0].points,
+      gap: [...document.querySelectorAll('#financialReportBody .report-metric')].find(tile => tile.querySelector('h3').textContent === 'Gap to target').querySelector('strong').textContent,
+      narrative: [...document.querySelectorAll('#financialReportBody .report-review-action')].find(tile => tile.querySelector('h4').textContent === 'Financial Independence target').textContent,
+      cashflow: document.querySelector('#financialReportBody .report-waterfall').textContent,
+    })`);
+    for (const year of [5, 10, 20, 30]) {
+      const expected = result.loan.balanceAtYears[year] / (basis === 'today' ? (1 + inflation / 100) ** year : 1);
+      close(amount(display.cards[`Balance at ${year} years`]), expected);
+      close(amount(display.cards[`Balance at ${year} years`]), display.chart.find(point => point.x === year).y);
+    }
+    const expectedGap = basis === 'today'
+      ? Math.max(0, result.targetCapital / (1 + inflation / 100) ** result.targetProjectionYear - result.financialIndependenceAssets)
+      : result.fiTargetRemaining;
+    close(amount(display.gap), expectedGap);
+    assert.ok(display.narrative.includes(`remaining target gap of ${display.gap}.`));
+    if (!nominal) nominal = display;
+    else {
+      assert.equal(display.cashflow, nominal.cashflow, 'current cashflow table is unchanged');
+      if (basis === 'future' || inflation === 0) assert.deepEqual(display, nominal);
+    }
+    assert.equal(await snapshot(), before, 'calculations, assumptions and saved scenarios stay unchanged');
+    if (inflation === 0) await evaluate("document.body.dataset.printMode = 'financial-report'");
+    else await evaluate("FFSStage1BrowserTestHooks.showWorkspace('reports');document.getElementById('reportPrintButton').click()");
+    assert.ok(await evaluate(`document.getElementById('financialReportBody').textContent.includes(${JSON.stringify(`remaining target gap of ${display.gap}.`)})`));
+    const pdf = await cdp.send('Page.printToPDF', { printBackground: true });
+    assert.ok(pdf.data.length > 1000);
+    await mkdir(path.join(root, 'test-results/dollar-basis'), { recursive: true });
+    await writeFile(path.join(root, `test-results/dollar-basis/final-gap-${inflation}-${basis}.pdf`), Buffer.from(pdf.data, 'base64'));
+    await evaluate('delete document.body.dataset.printMode');
+  }
 });
 
 test('Quick What-If discounts each forecast and preserves current cashflow', async () => {

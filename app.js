@@ -18088,7 +18088,7 @@
         <p class="report-note">These amounts are already reflected in household cash income. Rental loan principal reduces household cashflow separately; it does not reduce the passive rental income measure.</p>
       `, "report-passive-section") : ""}
       ${reportSection("Financial Freedom Progress", "Current accessible FI assets compared with the lifestyle-based target.", `
-        <div class="report-metrics report-columns-3 report-target-bridge">${m("Current FI assets", money(result.financialIndependenceAssets), "Accessible assets counted by the model.", true)}${m("Gap to target", money(Math.max(0, displayedForecastAmount(result.targetCapital, result.targetProjectionYear, p.investing?.inflationPct) - result.financialIndependenceAssets)), "Additional assets needed under these assumptions.")}${m("Target FI assets", reportForecastMoney(result.targetCapital, result.targetProjectionYear), "Capital needed for the target lifestyle.")}</div>
+        <div class="report-metrics report-columns-3 report-target-bridge">${m("Current FI assets", money(result.financialIndependenceAssets), "Accessible assets counted by the model.", true)}${m("Gap to target", money(displayedFiTargetGap(result)), "Additional assets needed under these assumptions.")}${m("Target FI assets", reportForecastMoney(result.targetCapital, result.targetProjectionYear), "Capital needed for the target lifestyle.")}</div>
         <p class="report-progress-label">${plainPercent(progress)} of the estimated target</p>${reportProgressBar(progress)}
         ${reportGroup("What is supporting wealth creation?", [
           m("Modelled annual withdrawal amount", `${money(result.estimatedSustainableIncomeFromCurrentFiAssets)} p.a.`, modellingCopy().withdrawal),
@@ -18323,10 +18323,26 @@
     } catch (error) { showScenarioInputError(output, error); }
   }
 
+  function displayedFiTargetGap(result) {
+    if (forecastDollarBasis !== "today") return result.fiTargetRemaining;
+    return Math.max(0, displayedForecastAmount(result.targetCapital, result.targetProjectionYear,
+      result.plan?.investing?.inflationPct) - result.financialIndependenceAssets);
+  }
+
+  function loanResultForDollarDisplay(result) {
+    if (forecastDollarBasis !== "today") return result;
+    // Only the forecast cards consume balanceAtYears. Keep the schedule nominal:
+    // the chart presentation layer discounts its points once, at the same years.
+    return { ...result, loan: { ...result.loan, balanceAtYears: Object.fromEntries(
+      Object.entries(result.loan.balanceAtYears).map(([year, balance]) =>
+        [year, displayedForecastAmount(balance, Number(year), result.plan?.investing?.inflationPct)])
+    ) } };
+  }
+
   function refreshNamedForecastDisplays(result) {
     const rate = result.plan?.investing?.inflationPct;
     const target = displayedForecastAmount(result.targetCapital, result.targetProjectionYear, rate);
-    const gap = forecastDollarBasis === "today" ? Math.max(0, target - result.financialIndependenceAssets) : result.fiTargetRemaining;
+    const gap = displayedFiTargetGap(result);
     const update = (selector, values) => document.querySelectorAll(selector).forEach(tile => {
       const label = tile.querySelector("span")?.firstChild?.textContent?.trim();
       const field = tile.querySelector("strong");
@@ -18404,6 +18420,11 @@
   }
 
   function installAdditionalDollarDisplays() {
+    const nominalLoan = renderLoan;
+    renderLoan = result => nominalLoan(loanResultForDollarDisplay(result));
+    const nominalReviewActions = reportReviewActions;
+    reportReviewActions = result => nominalReviewActions(forecastDollarBasis === "today"
+      ? { ...result, fiTargetRemaining: displayedFiTargetGap(result) } : result);
     const nominalComparisonPrint = renderSemiRetirementComparisonPrintReport;
     renderSemiRetirementComparisonPrintReport = (...args) => {
       const html = nominalComparisonPrint(...args);
