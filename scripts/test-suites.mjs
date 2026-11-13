@@ -1,6 +1,7 @@
 export const DEFAULT_SUITE_TIMEOUT_MS = 120_000;
 
 export const ACTIVE_TEST_SUITES = [
+  { id: "retirement-results", file: "tests/retirement-results.test.mjs", groups: ["all", "mjs", "presentation"] },
   { id: "dollar-display-regression", file: "tests/dollar-display-regression.test.mjs", groups: ["all", "mjs", "presentation"] },
   { id: "dollar-basis", file: "tests/dollar-basis.test.mjs", groups: ["all", "mjs", "presentation"] },
   { id: "try-change-targeted", file: "tests/try-change-targeted.test.mjs", groups: ["all", "mjs", "try-change"] },
@@ -64,6 +65,8 @@ export const ACTIVE_TEST_SUITES = [
 ];
 
 export const SYNTAX_CHECK_FILES = [
+  "retirement-results.js",
+  "tests/retirement-results.test.mjs",
   "dollar-basis.js",
   "tests/dollar-display-regression.test.mjs",
   "tests/dollar-basis-browser.mjs",

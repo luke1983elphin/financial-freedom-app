@@ -1,0 +1,122 @@
+{
+  "inputs": {
+    "projectionStartYear": 2026,
+    "inflationRate": 0.025,
+    "minimumAccessibleBalance": 0
+  },
+  "milestone": {
+    "calendarYear": 2067,
+    "person1Age": 73,
+    "person2Age": 72
+  },
+  "rows": [
+    {
+      "year": 2058,
+      "closing": 553468.54,
+      "withdrawal": 164561.61,
+      "super": 4377189.48,
+      "unmet": 0,
+      "offset": 0,
+      "unallocated": 0
+    },
+    {
+      "year": 2059,
+      "closing": 417585.47,
+      "withdrawal": 168720.65,
+      "super": 4617934.9,
+      "unmet": 0,
+      "offset": 0,
+      "unallocated": 0
+    },
+    {
+      "year": 2060,
+      "closing": 267778.35,
+      "withdrawal": 172983.67,
+      "super": 4871921.32,
+      "unmet": 0,
+      "offset": 0,
+      "unallocated": 0
+    },
+    {
+      "year": 2061,
+      "closing": 102962.21,
+      "withdrawal": 177353.26,
+      "super": 5139877,
+      "unmet": 0,
+      "offset": 0,
+      "unallocated": 0
+    },
+    {
+      "year": 2062,
+      "closing": 3603.68,
+      "withdrawal": 102962.21,
+      "super": 5341531.43,
+      "unmet": 0,
+      "offset": 0,
+      "unallocated": 0
+    },
+    {
+      "year": 2063,
+      "closing": 126.13,
+      "withdrawal": 3603.68,
+      "super": 5447468.92,
+      "unmet": 0,
+      "offset": 0,
+      "unallocated": 0
+    },
+    {
+      "year": 2064,
+      "closing": 4.41,
+      "withdrawal": 126.13,
+      "super": 5550824.81,
+      "unmet": 0,
+      "offset": 0,
+      "unallocated": 0
+    },
+    {
+      "year": 2065,
+      "closing": 0.15,
+      "withdrawal": 4.41,
+      "super": 5654784.36,
+      "unmet": 0,
+      "offset": 0,
+      "unallocated": 0
+    },
+    {
+      "year": 2066,
+      "closing": 0.01,
+      "withdrawal": 0.15,
+      "super": 5759377.56,
+      "unmet": 0,
+      "offset": 0,
+      "unallocated": 0
+    },
+    {
+      "year": 2067,
+      "closing": 0,
+      "withdrawal": 0.01,
+      "super": 5864516.5,
+      "unmet": 0,
+      "offset": 0,
+      "unallocated": 0
+    },
+    {
+      "year": 2068,
+      "closing": 0,
+      "withdrawal": 0,
+      "super": 5970101.17,
+      "unmet": 0,
+      "offset": 0,
+      "unallocated": 0
+    },
+    {
+      "year": 2069,
+      "closing": 0,
+      "withdrawal": 0,
+      "super": 6076022.67,
+      "unmet": 0,
+      "offset": 0,
+      "unallocated": 0
+    }
+  ]
+}

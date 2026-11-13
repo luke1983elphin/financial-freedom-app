@@ -118,9 +118,22 @@ before(async () => {
       let body = await readFile(resolved);
       // Test-only alternate-year fixture; production files and calculation logic remain unchanged.
       if (relative === "calculator.js" && evidenceFinancialYear) body = Buffer.from(body.toString().replace('const FINANCIAL_YEAR = "2026-27";', `const FINANCIAL_YEAR = "${evidenceFinancialYear}";`));
+      if (relative === "semiRetirementUi.js") body = Buffer.from(body.toString().replace('  function runSemiRetirementProjection(engine, draft) {', '  function runSemiRetirementProjection(engine, draft) { window.__retirementRuns = (window.__retirementRuns || 0) + 1;'));
       if (relative === "app.js") body = Buffer.from(body.toString()
         .replace('  function lineChart(svgId, series, options = {}) {', '  function lineChart(svgId, series, options = {}) { window.__dollarCharts ||= {}; window.__dollarCharts[svgId] = structuredClone(series);')
-        .replace('  installDollarBasisPresentation();', `  window.__dollarTest = {
+        .replace('  installDollarBasisPresentation();', `  const originalRetirementResult = renderSemiRetirementScenarioResultHtml;
+        window.__dollarTest = {
+          originalRetirementHtml: () => originalRetirementResult(),
+          redesignContext: () => {
+            const view = window.FFSSemiRetirementUi.buildSemiRetirementResultsViewModel(semiRetirementScenarioResult, semiRetirementScenarioInputs, semiRetirementScenarioResultDraft || semiRetirementScenarioDraft);
+            return { view, inputs: semiRetirementScenarioInputs, basis: forecastDollarBasis, money: semiRetirementMoney,
+              state: semiRetirementDetailsState, outcome: window.FFSSemiRetirementUi.buildSavedRetirementOutcome(view),
+              debtFree: semiRetirementDebtFreeLabel(view.debtProperty || {}), baseline: semiRetirementAdjustmentBaseline,
+              adjustment: window.FFSSemiRetirementUi.buildScenarioAdjustmentDisplayState({ projection: semiRetirementScenarioResult,
+                inputs: semiRetirementScenarioInputs, resultDraft: semiRetirementScenarioResultDraft, currentDraft: semiRetirementScenarioDraft,
+                baseline: semiRetirementAdjustmentBaseline, hasValidationErrors: semiRetirementAdjustmentErrors.length > 0 }) };
+          },
+          configureRetirement: fields => { for (const [path, value] of Object.entries(fields)) window.FFSSemiRetirementUi.setDraftPath(semiRetirementScenarioDraft, path, value); calculateSemiRetirementScenario(); },
           result: () => calculatePlan(plan),
           savedScenarios: () => loadScenarios(),
           seedSavedScenario: () => saveScenarios(sampleScenarioList().slice(0, 1).map(scenario => ({ ...scenario, id: "dollar-regression", source: "user" }))),
@@ -378,4 +391,185 @@ test('restricted storage still permits reversible display switching', async () =
   await select('future');await select('today');await select('future');
   await evaluate('Storage.prototype.setItem=window.__originalSetItem');
   assert.deepEqual(browserMessages,[],'no renderer errors or CSP violations');
+});
+
+for (const width of [1366, 375, 430]) test(`retirement redesign structure, controls and expansion at ${width}px`, async () => {
+  await cdp.send('Emulation.setDeviceMetricsOverride', { width, height: 1000, deviceScaleFactor: 1, mobile: width < 600 });
+  await navigate();
+  await fixture(); await select('future');
+  await evaluate("FFSStage1BrowserTestHooks.showWorkspace('semiretirement');document.querySelector('[data-semi-action=calculate]').click()");
+  const read = () => evaluate('JSON.stringify(__dollarTest.retirement().result)');
+  const before = await read();
+  const plan = await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())');
+  const saved = await evaluate('JSON.stringify(__dollarTest.savedScenarios())');
+  const structure = await evaluate(`(() => { const root = document.querySelector('.retirement-redesign'); return {
+    sections: [...root.children].map(node => node.id),
+    cards: [...root.querySelectorAll('.rr-summary-grid > article > span')].map(node => node.textContent),
+    funding: [...root.querySelectorAll('h3,h4')].filter(node => node.textContent === 'Funding Outlook').length,
+    overflow: document.documentElement.scrollWidth > innerWidth + 1,
+    events: root.querySelectorAll('.rr-journey > li').length,
+    expectedEvents: __dollarTest.retirement().view.timeline.reduce((n, group) => n + group.events.length, 0),
+  }; })()`);
+  assert.deepEqual(structure.sections, ['retirement-outlook','retirement-journey','retirement-adjustments','retirement-funding','retirement-details']);
+  assert.deepEqual(structure.cards, ['Fully Retired','Lifestyle Funded Through','Non-Super Investments Remaining','Superannuation Remaining']);
+  assert.equal(await evaluate("document.querySelector('[data-rr-impact-state]').dataset.rrImpactState"),'unchanged');
+  assert.ok(await evaluate("document.querySelector('[data-rr-impact-state]').textContent.includes('No changes made yet.')"));
+  assert.ok(await evaluate("(() => {const r=[...document.querySelectorAll('#retirement-journey > .rr-journey > li')].map(n=>n.getBoundingClientRect());return r.every((n,i)=>!i||n.top>=r[i-1].bottom);})()"), 'timeline is vertical');
+  assert.equal(structure.funding, 0); assert.equal(structure.overflow, false); assert.equal(structure.events, structure.expectedEvents);
+  assert.ok(await evaluate("['rr-pension','rr-comparison','rr-annual','rr-assumptions'].every(key=>!document.querySelector('[data-semi-detail-state='+key+']').open)"), 'detail panels are collapsed by default');
+  const retained = await evaluate(`(() => { const template = document.createElement('template'); template.innerHTML = __dollarTest.originalRetirementHtml();
+    return ['.semi-retirement-annual-table', '.retained-asset-list', '.semi-retirement-comparison-table'].every(selector => template.content.querySelector(selector)?.textContent === document.querySelector('.retirement-redesign ' + selector)?.textContent); })()`);
+  assert.ok(retained, 'annual values, retained assets and comparison text are preserved verbatim');
+  // Close any panels deliberately opened by preceding test cases, then exercise native keyboard behaviour.
+  await evaluate("document.querySelectorAll('.retirement-redesign details').forEach(node=>node.open=false)");
+  await evaluate("document.querySelector('[data-semi-detail-state=rr-annual] > summary').focus()");
+  const runs = await evaluate('window.__retirementRuns');
+  await key('Enter');
+  await waitFor(() => evaluate("document.querySelector('[data-semi-detail-state=rr-annual]').open"));
+  assert.equal(await read(), before, 'opening a panel leaves the model result unchanged');
+  assert.equal(await evaluate('window.__retirementRuns'), runs, 'opening a panel does not run the projection');
+  const chart = await evaluate("[...document.querySelectorAll('.rr-chart-point')].map(node=>({year:Number(node.dataset.year),value:Number(node.dataset.value)}))");
+  const { view, inputs } = await evaluate('__dollarTest.retirement()');
+  const full = view.keyResults.accessibleWhenBothFullyRetired.row;
+  assert.equal(await evaluate("document.querySelector('[data-rr-metric=retired] > strong').textContent"),String(full.calendarYear));
+  for (const person of (full.ages || full.people)) assert.ok(await evaluate(`document.querySelector('[data-rr-metric=retired] > small').textContent.includes(${JSON.stringify(`${person.name}: Age ${person.age}`)})`));
+  assert.equal(chart.length, view.annualRows.length);
+  assert.ok(await evaluate(`(() => { const svg=document.querySelector('.rr-chart svg'), box=svg.getBoundingClientRect();
+    const labels=[...svg.querySelectorAll('text')].map(n=>n.getBoundingClientRect());
+    return labels.every((r,i)=>r.left>=box.left-1&&r.right<=box.right+1&&r.top>=box.top-1&&r.bottom<=box.bottom+1
+      &&labels.slice(i+1).every(s=>r.right<=s.left||s.right<=r.left||r.bottom<=s.top||s.bottom<=r.top)); })()`),'chart axis labels fit without overlap');
+  chart.forEach((point,index) => close(point.value,view.annualRows[index].household.closingAccessibleInvestmentBalance,0.000001));
+  await select('today');
+  assert.ok(await evaluate("document.querySelector('[data-semi-detail-state=rr-annual]').open"), 'annual panel survives toggle');
+  const realChart = await evaluate("[...document.querySelectorAll('.rr-chart-point')].map(node=>Number(node.dataset.value))");
+  realChart.forEach((value,index) => close(value,chart[index].value/(1+inputs.inflationRate)**view.annualRows[index].yearIndex,0.000001));
+  close(amount(await evaluate("document.querySelector('[data-rr-metric=remaining] > strong').textContent")),realChart.at(-1));
+  close(amount(await evaluate("document.querySelector('[data-rr-metric=super] > strong').textContent")),view.annualRows.at(-1).household.totalSuperBalance/(1+inputs.inflationRate)**view.annualRows.at(-1).yearIndex);
+  assert.equal(await read(), before);
+  await evaluate("document.querySelector('[data-semi-detail-state=rr-annual] > summary').click();document.querySelector('[data-rr-open=rr-comparison]').click()");
+  assert.ok(await evaluate("document.querySelector('[data-semi-detail-state=rr-comparison]').open"));
+  assert.equal(await evaluate("document.activeElement === document.querySelector('[data-semi-detail-state=rr-comparison] > summary')"),true);
+  const originalSpending = await evaluate("Number(document.querySelector('[data-semi-adjustment]').value)");
+  await evaluate("(() => {const slider=document.querySelector('[data-semi-adjustment-range]');slider.value=Number(slider.value)+5000;slider.dispatchEvent(new Event('input',{bubbles:true}));})()");
+  await waitFor(async () => (await read()) !== before);
+  assert.equal(await evaluate("document.querySelector('[data-rr-impact-state]').dataset.rrImpactState"),'changed');
+  const delta = await evaluate("(() => {const c=__dollarTest.redesignContext();return FFSRetirementResults.adjustmentPresentation(c.adjustment,c.baseline,c.inputs,c.basis).endDelta;})()");
+  close(amount((await evaluate("document.querySelector('[data-rr-metric=change-assets] > strong').textContent")).replace('−','-')),delta);
+  await mkdir(path.join(root,'test-results/retirement-redesign'),{recursive:true});
+  await evaluate("window.scrollTo({top:0,behavior:'instant'})");
+  const adjustmentClip=await evaluate("(() => {const r=document.querySelector('#retirement-adjustments').getBoundingClientRect();return {x:r.left+scrollX,y:r.top+scrollY,width:r.width,height:r.height,scale:1};})()");
+  await writeFile(path.join(root,`test-results/retirement-redesign/retirement-adjustments-${width}.png`),Buffer.from((await cdp.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip:adjustmentClip})).data,'base64'));
+  assert.ok(await evaluate("document.querySelector('[data-semi-detail-state=rr-comparison]').open"), 'comparison panel survives adjustment');
+  assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),plan);
+  assert.equal(await evaluate('JSON.stringify(__dollarTest.savedScenarios())'),saved);
+  await evaluate("document.querySelector('[data-semi-action=reset-adjustments]').click()");
+  await waitFor(async () => (await read()) === before);
+  assert.equal(await evaluate("document.querySelector('[data-rr-impact-state]').dataset.rrImpactState"),'unchanged');
+  assert.equal(await evaluate("Number(document.querySelector('[data-semi-adjustment]').value)"),originalSpending);
+  await evaluate("document.querySelector('[data-semi-action=manage-one-off-lifestyle-events]').click()");
+  assert.ok(await evaluate("document.querySelector('[data-one-off-lifestyle-spending]').getBoundingClientRect().height > 0"));
+  await evaluate("document.querySelectorAll('.retirement-redesign details').forEach(node=>node.open=false);window.scrollTo({top:0,behavior:'instant'})");
+  assert.ok(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'));
+  const output=path.join(root,'test-results/retirement-redesign');await mkdir(output,{recursive:true});
+  const clip=await evaluate("(() => { const r=document.querySelector('.retirement-redesign').getBoundingClientRect();return {x:r.left+scrollX,y:r.top+scrollY,width:r.width,height:Math.min(r.height,1800),scale:1};})()");
+  await writeFile(path.join(output,`retirement-${width}.png`),Buffer.from((await cdp.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip})).data,'base64'));
+  const journeyClip=await evaluate("(() => {const r=document.querySelector('#retirement-journey').getBoundingClientRect();return {x:r.left+scrollX,y:r.top+scrollY,width:r.width,height:r.height,scale:1};})()");
+  await writeFile(path.join(output,`retirement-journey-${width}.png`),Buffer.from((await cdp.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip:journeyClip})).data,'base64'));
+  const detailClip=await evaluate("(() => { const r=document.querySelector('#retirement-funding').getBoundingClientRect();const end=document.querySelector('#retirement-details').getBoundingClientRect();return {x:r.left+scrollX,y:r.top+scrollY,width:r.width,height:end.bottom-r.top,scale:1};})()");
+  await writeFile(path.join(output,`retirement-details-${width}.png`),Buffer.from((await cdp.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip:detailClip})).data,'base64'));
+  await evaluate("document.querySelector('[data-semi-detail-state=rr-property]').open=true;document.querySelector('[data-semi-detail-state=rr-annual]').open=true");
+  await evaluate("document.querySelectorAll('[data-semi-detail-state=rr-property] details').forEach(n=>n.open=true)");
+  assert.ok(await evaluate(`(() => {const rows=[...document.querySelectorAll('[data-semi-detail-state=rr-property] .semi-retirement-person-values > div')];
+    return rows.length>0&&rows.every(row=>{const [label,value]=[...row.children].map(n=>n.getBoundingClientRect());return !value||label.right<=value.left+1||value.right<=label.left+1||label.bottom<=value.top+1||value.bottom<=label.top+1;});})()`),'debt and property labels do not overlap values');
+  const propertyClip=await evaluate("(() => {const r=document.querySelector('[data-semi-detail-state=rr-property]').getBoundingClientRect();return {x:r.left+scrollX,y:r.top+scrollY,width:r.width,height:r.height,scale:1};})()");
+  await writeFile(path.join(output,`retirement-property-${width}.png`),Buffer.from((await cdp.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip:propertyClip})).data,'base64'));
+  assert.ok(await evaluate(`(() => {const value=[...document.querySelectorAll('.semi-retirement-debt-card strong')].find(n=>n.textContent.includes('Projected payoff'));
+    if(!value)return false;const original=value.textContent;value.textContent+=' — Alexandra Montgomery age 56 / Christopher Montgomery age 55, based on the current repayment assumptions.';
+    const label=value.previousElementSibling, r=value.getBoundingClientRect(), l=label.getBoundingClientRect();
+    const fits=r.top>=l.bottom-1&&value.scrollWidth<=value.clientWidth+1&&document.documentElement.scrollWidth<=innerWidth+1;
+    value.textContent=original;return fits;})()`),'long payoff descriptions wrap without clipping or overlapping labels');
+  assert.ok(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'), 'expanded content stays within viewport');
+  assert.ok(await evaluate("document.querySelector('.semi-retirement-projection-scroll').getBoundingClientRect().width>0"), 'full annual table remains scrollable on phones');
+});
+
+test('retirement redesign keeps zero-inflation values and pension inclusion accurate', async () => {
+  await fixture(); await select('future');
+  await evaluate("FFSStage1BrowserTestHooks.showWorkspace('semiretirement');document.querySelector('[data-semi-action=calculate]').click();__dollarTest.configureRetirement({'assumptions.inflationRatePct':0,'scenario.agePension.enabled':true})");
+  const nominal=await evaluate("[...document.querySelectorAll('.rr-chart-point')].map(node=>node.dataset.value)");
+  const source=await evaluate('JSON.stringify(__dollarTest.retirement())');
+  await select('today');
+  assert.deepEqual(await evaluate("[...document.querySelectorAll('.rr-chart-point')].map(node=>node.dataset.value)"),nominal);
+  assert.equal(await evaluate('JSON.stringify(__dollarTest.retirement())'),source);
+  const included=await evaluate('__dollarTest.retirement().view.annualRows.some(row=>row.household.estimatedAgePension>0)');
+  if(included) assert.ok(await evaluate("document.querySelector('[data-semi-detail-state=rr-pension] > summary').textContent.includes('included in funding') && !document.querySelector('.retirement-redesign').textContent.includes('Age Pension not included.')"));
+  await evaluate("__dollarTest.configureRetirement({'scenario.agePension.unsupported':true})");
+  assert.ok(await evaluate("document.querySelector('[data-semi-detail-state=rr-pension] > summary').textContent.includes('no pension included')"));
+  assert.deepEqual(browserMessages, [], 'no renderer errors or CSP violations');
+});
+
+test('retirement redesign shows an actual single-person shortfall without claiming future funding', async () => {
+  await navigate();
+  await evaluate("FFSStage1BrowserTestHooks.setPlan(FFS_DATA.samplePlans[0].plan,'semiretirement');FFSStage1BrowserTestHooks.closeDurabilityDialog();document.querySelector('[data-semi-action=calculate]').click();__dollarTest.configureRetirement({'household.fullRetirementLifestyleSpending':500000})");
+  const { view, inputs } = await evaluate('__dollarTest.retirement()');
+  assert.equal(view.people.length,1);
+  assert.ok(view.longevity.firstUnfundedSpending?.calendarYear);
+  for(const basis of ['future','today']) {
+    await select(basis);
+    assert.ok(await evaluate("document.querySelector('#retirement-outlook').classList.contains('rr-warning')"));
+    const first = view.annualRows.find(row=>row.calendarYear===view.longevity.firstUnfundedSpending.calendarYear);
+    assert.equal(await evaluate("document.querySelector('[data-rr-metric=funded] > strong').textContent"),`First shortfall: Age ${first.ages[0].age}`);
+    const expected = view.annualRows.reduce((sum,row)=>sum+row.household.unmetSpending/(basis==='today'?(1+inputs.inflationRate)**row.yearIndex:1),0);
+    close(amount(await evaluate("document.querySelector('[data-rr-metric=shortfall] > strong').textContent")),expected);
+    assert.ok(await evaluate("document.querySelector('#retirement-outlook .rr-headline').textContent.includes('projected spending shortfall')"));
+    assert.ok(await evaluate("[...document.querySelectorAll('.rr-exhaustion.is-warning')].some(n=>n.textContent.includes('first spending shortfall'))"));
+  }
+  assert.deepEqual(browserMessages,[]);
+});
+
+test('chart investigation records exact balances around modelled depletion', async () => {
+  await navigate();await fixture();await select('today');
+  await evaluate("FFSStage1BrowserTestHooks.showWorkspace('semiretirement');document.querySelector('[data-semi-action=calculate]').click()");
+  const trace=await evaluate(`(()=>{const {view,inputs}=__dollarTest.retirement();return {inputs:{projectionStartYear:inputs.projectionStartYear,inflationRate:inputs.inflationRate,minimumAccessibleBalance:inputs.scenario.minimumAccessibleBalance},milestone:view.longevity.accessibleFundsExhausted,rows:view.annualRows.filter(r=>r.calendarYear>=2058&&r.calendarYear<=2069).map(r=>({year:r.calendarYear,closing:r.household.closingAccessibleInvestmentBalance,withdrawal:r.household.totalAccessibleWithdrawal,super:r.household.totalSuperBalance,unmet:r.household.unmetSpending,offset:r.household.offsetClosingBalance,unallocated:r.household.totalAccessibleAssets-r.household.closingAccessibleInvestmentBalance}))};})()`);
+  await mkdir(path.join(root,'test-results/retirement-redesign'),{recursive:true});
+  await writeFile(path.join(root,'test-results/retirement-redesign/exhaustion-trace.json'),JSON.stringify(trace,null,2));
+  assert.equal(trace.milestone.calendarYear,2067);
+  assert.equal(trace.rows.find(r=>r.year===2066).closing,.01);
+  assert.equal(trace.rows.find(r=>r.year===2067).closing,0);
+  assert.ok(trace.rows.every(r=>r.unmet===0&&r.super>0&&r.offset===0&&r.unallocated===0));
+  assert.equal(await evaluate("Number(document.querySelector('[data-exhaustion-year]').dataset.exhaustionYear)"),2067);
+  assert.ok(await evaluate("document.querySelector('.rr-exact-balances').textContent.includes('Less than $0.01')"));
+  assert.ok(await evaluate("document.querySelector('.rr-exhaustion').classList.contains('is-information')"));
+  for (const basis of ['future','today']) {
+    await select(basis);
+    const rows=await evaluate("[...document.querySelectorAll('.rr-exact-balances tbody tr')].map(r=>({year:Number(r.firstElementChild.textContent),text:r.lastElementChild.textContent}))");
+    for(const row of rows) {
+      const nominal=trace.rows.find(r=>r.year===row.year).closing;
+      const value=nominal/(basis==='today'?(1+trace.inputs.inflationRate)**(row.year-trace.inputs.projectionStartYear):1);
+      if(value>0&&value<.01) assert.equal(row.text,'Less than $0.01');
+      else close(amount(row.text),value,.0051);
+    }
+  }
+});
+
+test('stable section markers tolerate heading changes and missing markup preserves complete original results', async () => {
+  await fixture();await select('future');
+  await evaluate("FFSStage1BrowserTestHooks.showWorkspace('semiretirement');document.querySelector('[data-semi-action=calculate]').click()");
+  const checks=await evaluate(`(() => {const context=__dollarTest.redesignContext(),original=__dollarTest.originalRetirementHtml();
+    const template=document.createElement('template');template.innerHTML=original;
+    template.content.querySelectorAll('h3,h4').forEach(n=>n.textContent='Reworded heading');
+    const changed=document.createElement('template');changed.innerHTML=FFSRetirementResults.redesign(template.innerHTML,context);
+    const retained=['.semi-retirement-annual-table','.retained-asset-list','.semi-retirement-comparison-table'].every(s=>template.content.querySelector(s)?.textContent===changed.content.querySelector(s)?.textContent);
+    template.content.querySelector('[data-rr-source=snapshot]').removeAttribute('data-rr-source');
+    const fallback=document.createElement('template');fallback.innerHTML=FFSRetirementResults.redesign(template.innerHTML,context);
+    const fallbackComplete=[...template.content.querySelector('[data-semi-results-dashboard]').children].every(n=>[...fallback.content.querySelector('[data-semi-results-dashboard]').children].some(copy=>copy.outerHTML===n.outerHTML));
+    return {redesigned:!!changed.content.querySelector('.retirement-redesign'),retained,fallbackComplete,notice:fallback.content.textContent.includes('complete original results remain below')};})()`);
+  assert.deepEqual(checks,{redesigned:true,retained:true,fallbackComplete:true,notice:true});
+  assert.ok(await evaluate(`(() => {const context=__dollarTest.redesignContext();context.view=structuredClone(context.view);
+    context.view.annualRows.forEach(row=>row.household.closingAccessibleInvestmentBalance=0);
+    context.view.longevity.accessibleFundsExhausted=null;
+    const template=document.createElement('template');template.innerHTML=FFSRetirementResults.redesign(__dollarTest.originalRetirementHtml(),context);
+    const svg=template.content.querySelector('.rr-chart svg');
+    return [...svg.querySelectorAll('.rr-chart-point')].every(n=>Number(n.dataset.value)===0)
+      &&[...svg.querySelectorAll('text')].filter(n=>n.textContent.startsWith('$')).map(n=>n.textContent).join()==='$0'
+      &&template.content.textContent.includes('All recorded non-super closing balances are zero.');})()`),'all-zero chart has a zero scale and does not imply a shortfall');
 });
