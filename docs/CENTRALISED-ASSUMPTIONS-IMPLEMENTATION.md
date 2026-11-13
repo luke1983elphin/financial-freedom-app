@@ -1,36 +1,50 @@
-# Centralised Forecast Assumptions — PR 1 implementation contract
+# Centralised Forecast Assumptions — PR #57 completion review
 
-Status: implementation specification; no financial engine or UI behaviour changes in this commit.
+## Delivered
+The Assumptions utility sits directly beneath Forecast Values and retains the Future Dollars / Today's Dollars selector. Essential controls cover investment return, super return, home growth, investment-property growth and inflation. Advanced controls cover applicable wage growth, illustrative withdrawal rate, individual investment total return/income yield/treatment, effective property overrides and a Retirement Planning link.
 
-## Objective
-Expose existing effective forecast assumptions in a dedicated workspace beneath Forecast Values. Retain schema v3, current plan storage, existing defaults, per-asset precedence, and all protected calculation paths. This PR must not include Lower/Base/Higher comparisons or Monte Carlo.
+Each field explains its effect and saved/default/imported source. Existing duplicate global inputs now link to this workspace. Edits remain isolated until explicit Save; Undo reloads saved values. Restore App Defaults shows a confirmation preview and stages values for Save, retaining asset overrides. Stale drafts cannot overwrite a plan changed elsewhere. Validation and storage errors preserve retryable edits and the saved forecast. Sample changes apply only to the preview.
 
-## Canonical assumptions (do not introduce a second source of truth)
-- `plan.investing.expectedInvestmentReturnPct`: default 7%, fallback for legacy investments; explicit `assetItems[]` rates take precedence.
-- `plan.investing.expectedSuperReturnPct`: default 6.5%; retirement drafts may have independent per-person pre/post retirement rates.
-- `plan.investing.inflationPct`: default 2.5%.
-- `plan.investing.wageGrowthPct`: default 3%; not effective in the legacy accumulation wage path.
-- `plan.investing.safeWithdrawalRatePct`: default 4%; illustrative FI targets, not the detailed retirement withdrawal engine.
-- Property growth: resolve effective asset-specific values, then plan-level home/investment property values and legacy aliases; fallback 3%.
-- Rental cash income: currently CPI-indexed by the retirement engine; do not expose an independent editable rental growth field unless it is actually supported.
-- Asset total returns, income yields, and reinvestment/cash treatment must retain current reconciliation and deduplication logic.
-- Retirement draft assumptions are independent snapshots and must not be silently overwritten when global plan assumptions change.
+## Separate financial dependency review
+Reviewed the adapter, existing calculator/property resolvers, retirement defaults/application, display conversion and persistence boundary. No engine or protected function bodies were changed.
 
-## UI
-Add an `Assumptions` navigation entry directly below the Forecast Values dollar-basis selector, opening a full-width workspace. Present an Essential group (investment, super, property, inflation) and an Advanced group (wage growth, withdrawal rate, per-asset overrides and existing supported settings). Show effective rate, provenance (default / plan / asset / retirement draft), unit, effect, and whether a control is effective in the active engine. Link to Retirement Planning for independent retirement-draft settings. Avoid duplicate authoritative inputs.
+| Assumption | Existing source/default | Dependency and boundary |
+|---|---|---|
+| Investment return | investing.expectedInvestmentReturnPct; 7% | Legacy/unconfigured investment fallback; explicit asset total-return settings take precedence. |
+| Super return | investing.expectedSuperReturnPct; 6.5% | Plan super projection; new retirement defaults use this before retirement and max(0, rate minus 1 percentage point) afterwards. Saved scenario inputs remain independent. |
+| Home/property growth | Existing percent/decimal aliases; 3% | Existing resolver precedence retained; edits update the effective imported path in its original units. Property equity is not automatically spendable retirement funding. |
+| Inflation | investing.inflationPct; 2.5% | Existing retirement spending/rental escalation and today's-dollar conversion. The display toggle is unchanged and does not mutate assumptions. |
+| Wage growth | investing.wageGrowthPct; 3% | Editable when saved retirement timing activates the plan retirement path; read-only for legacy accumulation, which keeps wages fixed. |
+| Withdrawal rate | investing.safeWithdrawalRatePct; 4% | Illustrative FI target/income only. The existing entered-zero-to-4% calculation fallback is explained, not changed. |
+| Asset returns/income | Existing assetItems fields | Yield is a component of total return, not an additional return. Existing validation, cash/reinvestment tax treatment and linked-income deduplication are retained. |
 
-## Editing and resets
-Edit a draft copy of existing plan fields; do not mutate the saved plan until explicit Save. Validate finite numeric rates and existing engine-specific constraints; distinguish missing from explicit zero. Offer Undo Unsaved Edits, Restore App Defaults with a preview, and Use Plan Default for asset overrides. Preserve imported aliases and asset IDs. Persist via the existing plan save/backup path. Failed saves must not claim success.
+Unchanged-plan tests compare complete calculation outputs exactly in both legacy and saved-retirement paths. Imported aliases, missing fields, explicit zero/null/blank semantics, property precedence, default resets, asset-specific rates and backup round trips are covered. Changed-field-only patches leave unrelated values and saved scenario arrays intact. Browser coverage confirms an opened saved retirement snapshot retains its inputs/results through plan assumption saves and both dollar bases.
 
-## Acceptance tests
-1. Exact unchanged-plan calculation parity in legacy and retirement paths.
-2. Correct precedence and display for asset overrides, imported aliases, explicit zero and missing fields.
-3. Existing total-return/income-yield handling and linked-income deduplication unchanged.
-4. Retirement snapshots independent; CPI-linked rent and wage-growth applicability clearly explained.
-5. Both dollar-basis modes unchanged; assumption editing does not accidentally change the display preference.
-6. Save, undo, defaults preview, backup round-trip and storage failure behaviour.
-7. Desktop/mobile UI and accessibility; no clipping at 375px and 430px.
-8. Protected hashes, golden tests, `pnpm verify`, `pnpm test:browser` all pass before marking PR ready.
+Persistence uses the existing validated batch-save path. Failed persistence restores the live plan and prior saved storage; no success message is shown. No new plan schema or storage format was introduced.
 
-## Scope guard
-Do not change protected engine functions, schema/storage formats, policy tables, golden fixtures, or default rates. Stop and seek approval if any such changes become necessary. PR 2 will implement isolated Lower/Base/Higher comparison snapshots after PR 1 review.
+## Existing model limitations retained
+- Legacy accumulation does not grow wages. The corresponding control is read-only until retirement timing is saved.
+- Retirement rental cash income remains CPI-indexed; there is no misleading independent rental-growth control.
+- Individual home growth overrides apply to retirement projections, while the legacy home forecast uses the global home growth rate. The property list shows the current engine's effective rate and explains dormant overrides.
+- Use plan return copies the current global rate into an explicit investment record. It preserves income yield/treatment and is not a permanent inheritance relationship; the UI explains this. Unsupported legacy investment income settings remain in their existing setup workflow.
+- Saved retirement scenarios are independent snapshots. Edit their assumptions through Retirement Planning; global changes do not rewrite them.
+- Rates are deterministic assumptions, not probability estimates. Growth comparisons and Monte Carlo remain out of scope.
+
+## Verification
+Executed on Windows with Node 24.19.0:
+- pnpm verify: PASS; 62 suites, 1,234 tests passed, zero failed/skipped/cancelled/todo. Includes syntax, inventory, runner/security checks, exact financial parity and protected-function/golden checks.
+- New adapter regression coverage: 18 tests, all passed (included above).
+- pnpm test:browser: PASS; all 42 tests passed, zero failed/skipped/cancelled/todo, including 9 new assumption browser cases. Existing dollar-basis reports/PDF, retirement redesign, release/CSP, backup and keyboard workflows passed.
+
+Protected whole-file and app-function hashes, golden fixtures, financial methodology, policy values and calculation defaults remain unchanged. No tests or hash exclusions were weakened. No merge or deployment was performed.
+
+## Visual evidence
+Reviewed desktop/tablet and mobile layouts at 1366, 768, 375 and 430 pixels, including the advanced controls, long investment names, visible keyboard focus and absence of horizontal overflow. Screenshots contain test-fixture values (including zero inflation), not replacement app defaults.
+
+- [Desktop essential](forecast-assumptions/assumptions-essential-1366.png)
+- [Desktop advanced](forecast-assumptions/assumptions-advanced-1366.png)
+- [375px essential](forecast-assumptions/assumptions-essential-375.png)
+- [430px advanced](forecast-assumptions/assumptions-advanced-430.png)
+
+## Files
+Adapter/view modules hold assumption resolution and isolated editing. app.js installs the workspace through wrappers without changing protected bodies; index.html/styles.css provide navigation/layout. Adapter and browser tests, test registration and syntax checks cover the integration. This document and screenshots supply review evidence.

@@ -1,6 +1,7 @@
 export const DEFAULT_SUITE_TIMEOUT_MS = 120_000;
 
 export const ACTIVE_TEST_SUITES = [
+  { id: "forecast-assumptions", file: "tests/forecast-assumptions-adapter.test.mjs", groups: ["all", "mjs", "presentation"] },
   { id: "retirement-results", file: "tests/retirement-results.test.mjs", groups: ["all", "mjs", "presentation"] },
   { id: "dollar-display-regression", file: "tests/dollar-display-regression.test.mjs", groups: ["all", "mjs", "presentation"] },
   { id: "dollar-basis", file: "tests/dollar-basis.test.mjs", groups: ["all", "mjs", "presentation"] },

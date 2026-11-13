@@ -135,6 +135,10 @@ before(async () => {
           },
           configureRetirement: fields => { for (const [path, value] of Object.entries(fields)) window.FFSSemiRetirementUi.setDraftPath(semiRetirementScenarioDraft, path, value); calculateSemiRetirementScenario(); },
           result: () => calculatePlan(plan),
+          backup: () => buildCompletePlanBackupPayload(),
+          validateBackup: value => validateImportedPlanPayload(value),
+          retirementSaveContext: () => buildRetirementScenarioSaveContext(),
+          openRetirementSnapshot: value => loadRetirementScenarioSnapshot(value),
           savedScenarios: () => loadScenarios(),
           seedSavedScenario: () => saveScenarios(sampleScenarioList().slice(0, 1).map(scenario => ({ ...scenario, id: "dollar-regression", source: "user" }))),
           renderReportPresentation: () => { const result = calculatePlan(plan); document.getElementById("financialReportBody").innerHTML = reportPresentationHtml(result, "Regression fixture"); renderReportCharts(result); },
@@ -572,4 +576,130 @@ test('stable section markers tolerate heading changes and missing markup preserv
     return [...svg.querySelectorAll('.rr-chart-point')].every(n=>Number(n.dataset.value)===0)
       &&[...svg.querySelectorAll('text')].filter(n=>n.textContent.startsWith('$')).map(n=>n.textContent).join()==='$0'
       &&template.content.textContent.includes('All recorded non-super closing balances are zero.');})()`),'all-zero chart has a zero scale and does not imply a shortfall');
+});
+
+async function assumptionsFixture() {
+  await fixture();
+  await evaluate(`(() => {const p=FFSStage1BrowserTestHooks.getPlan();
+    const asset=p.assetItems.find(a=>FFSCalculator.assetCapabilities(a.category).supportsFinancialInvestmentReturn);
+    if(asset)Object.assign(asset,{investmentReturnMode:'totalReturn',expectedTotalReturnPct:8,expectedIncomeYieldPct:3,incomeTreatment:'cash',name:'Long-term household investment portfolio'});
+    p.assumptions={...(p.assumptions||{}),homeGrowthRate:.035};delete p.investing.principalResidenceGrowthRatePct;
+    FFSStage1BrowserTestHooks.setPlan(p,'assumptions');FFSStage1BrowserTestHooks.closeDurabilityDialog();
+  })()`);
+}
+async function assumptionEdit(key,value) {
+  await evaluate(`(() => {const input=[...document.querySelectorAll('#forecastAssumptionsWorkspace [data-assumption]')].find(n=>n.dataset.assumption===${JSON.stringify(key)});input.value=${JSON.stringify(String(value))};input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+}
+async function assumptionButton(text) {
+  await evaluate(`(() => {const button=[...document.querySelectorAll('#forecastAssumptionsWorkspace button')].find(n=>n.textContent===${JSON.stringify(text)});if(!button)throw new Error('Missing assumption action');button.click();})()`);
+}
+for(const width of [1366,768,375,430])test(`assumptions workspace edits, saves and renders without overflow at ${width}px`,async()=>{
+  await cdp.send('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:width<600});await navigate();await assumptionsFixture();
+  await evaluate("FFSStage1BrowserTestHooks.showWorkspace('dashboard');document.querySelector('.fa-nav').click()");
+  assert.equal(await evaluate('document.body.dataset.activeView'),'assumptions');
+  assert.equal(await evaluate("document.querySelector('.fa-nav').getAttribute('aria-current')"),'page');
+  assert.equal(await evaluate("document.querySelector('.fa-advanced').open"),false);
+  const before=await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),result=await evaluate('JSON.stringify(__dollarTest.result())');
+  const saved=await evaluate('JSON.stringify(__dollarTest.savedScenarios())');
+  await assumptionEdit('inflationPct',0);
+  assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),before);assert.equal(await evaluate('JSON.stringify(__dollarTest.result())'),result);
+  await select('today');assert.equal(await evaluate("document.querySelector('[data-assumption=inflationPct]').value"),'0','toggle preserves unsaved text');
+  await assumptionButton('Undo unsaved edits');
+  assert.equal(await evaluate("Number(document.querySelector('[data-assumption=inflationPct]').value)"),JSON.parse(before).investing.inflationPct);
+  await assumptionEdit('inflationPct',0);await assumptionEdit('principalResidenceGrowthRatePct',4);
+  await assumptionButton('Save assumptions');
+  await waitFor(()=>evaluate("document.querySelector('.forecast-assumptions-status').textContent.includes('Assumptions saved')"));
+  const current=await evaluate('FFSStage1BrowserTestHooks.getPlan()');assert.equal(current.investing.inflationPct,0);assert.equal(current.assumptions.homeGrowthRate,.04);
+  assert.deepEqual(current.assetItems,JSON.parse(before).assetItems);assert.deepEqual(current.incomeItems,JSON.parse(before).incomeItems);
+  assert.equal(await evaluate('JSON.stringify(__dollarTest.savedScenarios())'),saved);
+  const stored=await evaluate("JSON.parse(localStorage.getItem('ffs-current-plan-v3-mobile-dashboard-ux-test')).plan");assert.equal(stored.investing.inflationPct,0);assert.equal(stored.assumptions.homeGrowthRate,.04);
+  assert.ok(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'));
+  await evaluate("document.querySelector('.fa-advanced > summary').focus()");const runs=await evaluate('window.__retirementRuns');await key('Enter');assert.ok(await evaluate("document.querySelector('.fa-advanced').open"));assert.equal(await evaluate('window.__retirementRuns'),runs);
+  assert.ok(await evaluate(`(() => {const controls=[...document.querySelectorAll('#forecastAssumptionsWorkspace input,#forecastAssumptionsWorkspace select')];return controls.every(n=>!!document.querySelector('label[for="'+n.id+'"]')&&!!n.getAttribute('aria-describedby')&&n.scrollWidth<=n.clientWidth+2);})()`));
+  assert.ok(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'));
+  const output=path.join(root,'test-results/forecast-assumptions');await mkdir(output,{recursive:true});
+  for(const expanded of [false,true]) {
+    await evaluate(`document.querySelector('.fa-advanced').open=${expanded};window.scrollTo({top:0,behavior:'instant'})`);
+    const clip=await evaluate("(() => {const r=document.querySelector('.forecast-assumptions-workspace').getBoundingClientRect();return {x:r.left+scrollX,y:r.top+scrollY,width:r.width,height:r.height,scale:1};})()");
+    await writeFile(path.join(output,`assumptions-${expanded?'advanced':'essential'}-${width}.png`),Buffer.from((await cdp.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip})).data,'base64'));
+  }
+  const chart=await evaluate('JSON.stringify(__dollarCharts)');await select('future');assert.equal(await evaluate('JSON.stringify(__dollarCharts)'),chart,'zero-inflation chart amounts are unchanged');
+  await navigate();assert.equal(await evaluate('FFSStage1BrowserTestHooks.getPlan().investing.inflationPct'),0);assert.equal(await evaluate('FFSStage1BrowserTestHooks.getPlan().assumptions.homeGrowthRate'),.04);
+});
+
+test('assumptions defaults require preview and preserve asset overrides; investment changes reconcile',async()=>{
+  await assumptionsFixture();const before=await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())');
+  await assumptionEdit('expectedSuperReturnPct',9);await assumptionButton('Restore app defaults…');
+  assert.ok(await evaluate("!!document.querySelector('[data-defaults-preview]')"));assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),before);
+  await assumptionButton('Cancel');assert.equal(await evaluate("document.querySelector('[data-assumption=expectedSuperReturnPct]').value"),'9');
+  await assumptionButton('Restore app defaults…');await assumptionButton('Use these defaults');assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),before);
+  assert.equal(await evaluate("document.querySelector('[data-assumption=expectedSuperReturnPct]').value"),'6.5');
+  await assumptionButton('Save assumptions');await waitFor(()=>evaluate("document.querySelector('.forecast-assumptions-status').textContent.includes('Assumptions saved')"));
+  assert.deepEqual(await evaluate('FFSStage1BrowserTestHooks.getPlan().assetItems'),JSON.parse(before).assetItems);
+  await evaluate("document.querySelector('.fa-advanced').open=true");
+  const asset=await evaluate("FFSStage1BrowserTestHooks.getPlan().assetItems.find(a=>a.investmentReturnMode==='totalReturn')");
+  await assumptionEdit(`${asset.id}.expectedIncomeYieldPct`,2);await assumptionEdit(`${asset.id}.incomeTreatment`,'reinvest');await assumptionButton('Use plan return');
+  await assumptionButton('Save assumptions');await waitFor(()=>evaluate("document.querySelector('.forecast-assumptions-status').textContent.includes('Assumptions saved')"));
+  const amounts=await evaluate(`FFSCalculator.investmentReturnAmounts(FFSStage1BrowserTestHooks.getPlan().assetItems.find(a=>a.id===${JSON.stringify(asset.id)}))`);
+  assert.equal(amounts.cashIncome,0);assert.equal(amounts.totalReturn,amounts.retainedReturn);assert.ok(amounts.taxableIncome>0);
+  const backup=await evaluate('__dollarTest.backup()');assert.equal(backup.plan.investing.expectedSuperReturnPct,6.5);
+  const roundTrip=await evaluate(`__dollarTest.validateBackup(${JSON.stringify(backup)})`);assert.equal(roundTrip.plan.assetItems.find(a=>a.id===asset.id).incomeTreatment,'reinvest');
+  await assumptionEdit('inflationPct',1);await assumptionButton('Undo unsaved edits');assert.equal(await evaluate("document.querySelector('[data-assumption=inflationPct]').value"),'2.5');
+});
+
+test('assumptions validation and failed persistence retain saved plan, forecasts and retryable edits',async()=>{
+  await assumptionsFixture();const before=await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),result=await evaluate('JSON.stringify(__dollarTest.result())');
+  const storedBefore=await evaluate("JSON.stringify(Object.fromEntries(Object.entries(localStorage).filter(([key])=>key.startsWith('ffs-personal-plan-v1:')||key==='ffs-current-plan-v3-mobile-dashboard-ux-test')))" );
+  await assumptionEdit('inflationPct','');await assumptionButton('Save assumptions');
+  assert.equal(await evaluate("document.querySelector('[data-assumption=inflationPct]').getAttribute('aria-invalid')"),'true');
+  assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),before);
+  await assumptionEdit('inflationPct',3.5);
+  await evaluate("window.__faSetItem=Storage.prototype.setItem;Storage.prototype.setItem=function(key,value){if(key==='ffs-current-plan-v3-mobile-dashboard-ux-test')throw new DOMException('Test storage quota','QuotaExceededError');return __faSetItem.call(this,key,value)}");
+  try {
+    await assumptionButton('Save assumptions');await waitFor(()=>evaluate("document.querySelector('.fa-errors').textContent.includes('Unable to save')"));
+    assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),before);assert.equal(await evaluate('JSON.stringify(__dollarTest.result())'),result);
+    assert.equal(await evaluate("JSON.stringify(Object.fromEntries(Object.entries(localStorage).filter(([key])=>key.startsWith('ffs-personal-plan-v1:')||key==='ffs-current-plan-v3-mobile-dashboard-ux-test')))"),storedBefore,'failed batch restores namespaced and legacy saved records');
+    assert.equal(await evaluate("document.querySelector('[data-assumption=inflationPct]').value"),'3.5');
+  } finally {await evaluate('Storage.prototype.setItem=window.__faSetItem;FFSStage1BrowserTestHooks.closeDurabilityDialog()');}
+  await assumptionButton('Save assumptions');await waitFor(()=>evaluate("document.querySelector('.forecast-assumptions-status').textContent.includes('Assumptions saved')"));
+  assert.equal(await evaluate('FFSStage1BrowserTestHooks.getPlan().investing.inflationPct'),3.5);
+});
+
+test('assumptions protects against stale edits and exposes wage growth only for the applicable engine',async()=>{
+  await assumptionsFixture();await assumptionEdit('inflationPct',8);
+  await evaluate("(() => {const p=FFSStage1BrowserTestHooks.getPlan();p.investing.expectedSuperReturnPct=8;FFSStage1BrowserTestHooks.setPlan(p,'assumptions');})()");
+  assert.ok(await evaluate("document.querySelector('.fa-state').textContent.includes('Saved plan changed')"));assert.ok(await evaluate("document.querySelector('.forecast-assumptions-form button[type=submit]').disabled"));
+  await assumptionButton('Undo unsaved edits');assert.equal(await evaluate("document.querySelector('[data-assumption=expectedSuperReturnPct]').value"),'8');
+  await evaluate("(() => {const p=FFSStage1BrowserTestHooks.getPlan();delete p.personal.retirementTiming;FFSStage1BrowserTestHooks.setPlan(p,'assumptions');})()");
+  assert.ok(await evaluate("document.querySelector('[data-assumption=wageGrowthPct]').disabled"));
+  await evaluate("(() => {const p=FFSStage1BrowserTestHooks.getPlan();p.personal.retirementTiming={people:[{id:'person1',fullRetirementAge:65,hasSemiRetirement:false},{id:'person2',fullRetirementAge:65,hasSemiRetirement:false}]};FFSStage1BrowserTestHooks.setPlan(p,'assumptions');})()");
+  assert.equal(await evaluate("document.querySelector('[data-assumption=wageGrowthPct]').disabled"),false);
+  assert.ok(await evaluate("document.querySelector('.fa-notice').textContent.length>0"));
+  assert.deepEqual(browserMessages,[],'no runtime errors or CSP violations');
+});
+
+test('assumptions saves leave an opened saved retirement scenario and its forecasts unchanged',async()=>{
+  await assumptionsFixture();await evaluate("FFSStage1BrowserTestHooks.showWorkspace('semiretirement');document.querySelector('[data-semi-action=calculate]').click()");
+  await evaluate("__dollarTest.openRetirementSnapshot({...__dollarTest.retirementSaveContext(),id:'assumptions-snapshot'})");
+  const before=await evaluate('JSON.stringify(__dollarTest.retirement())');
+  await evaluate("document.querySelector('.fa-nav').click()");await assumptionEdit('expectedSuperReturnPct',8);await assumptionEdit('inflationPct',3);
+  await assumptionButton('Save assumptions');await waitFor(()=>evaluate("document.querySelector('.forecast-assumptions-status').textContent.includes('Assumptions saved')"));
+  assert.equal(await evaluate('JSON.stringify(__dollarTest.retirement())'),before);
+  await select('future');await select('today');assert.equal(await evaluate('JSON.stringify(__dollarTest.retirement())'),before);
+  await evaluate("document.querySelector('.fa-advanced').open=true");
+  const asset=await evaluate("FFSStage1BrowserTestHooks.getPlan().assetItems.find(a=>a.investmentReturnMode==='totalReturn')");
+  await assumptionEdit(`${asset.id}.expectedTotalReturnPct`,1);await assumptionButton('Save assumptions');assert.ok(await evaluate("document.querySelector('.fa-errors').textContent.includes('Income yield cannot exceed')"));
+  assert.equal(await evaluate(`FFSStage1BrowserTestHooks.getPlan().assetItems.find(a=>a.id===${JSON.stringify(asset.id)}).expectedTotalReturnPct`),asset.expectedTotalReturnPct);
+  await assumptionButton('Undo unsaved edits');
+});
+
+test('assumptions sample preview is isolated from saved personal data',async()=>{
+  await assumptionsFixture();await assumptionEdit('inflationPct',3);await assumptionButton('Save assumptions');await waitFor(()=>evaluate("document.querySelector('.forecast-assumptions-status').textContent.includes('Assumptions saved')"));
+
+  await evaluate("document.getElementById('heroDemoButton').click();FFSStage1BrowserTestHooks.closeDurabilityDialog();document.querySelector('.fa-nav').click()");
+  assert.ok(await evaluate("document.querySelector('.forecast-assumptions-workspace').textContent.includes('Sample plan:')"));
+  const stored=await evaluate("localStorage.getItem('ffs-current-plan-v3-mobile-dashboard-ux-test')");
+  await assumptionEdit('inflationPct',1);await assumptionButton('Apply to sample preview');await waitFor(()=>evaluate("document.querySelector('.forecast-assumptions-status').textContent.includes('Sample preview updated')"));
+  assert.equal(await evaluate("localStorage.getItem('ffs-current-plan-v3-mobile-dashboard-ux-test')"),stored);assert.equal(await evaluate('FFSStage1BrowserTestHooks.getPlan().investing.inflationPct'),1);
+  assert.deepEqual(browserMessages,[]);
 });
