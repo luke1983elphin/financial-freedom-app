@@ -118,9 +118,13 @@ before(async () => {
       let body = await readFile(resolved);
       // Test-only alternate-year fixture; production files and calculation logic remain unchanged.
       if (relative === "calculator.js" && evidenceFinancialYear) body = Buffer.from(body.toString().replace('const FINANCIAL_YEAR = "2026-27";', `const FINANCIAL_YEAR = "${evidenceFinancialYear}";`));
+      if (relative === "semiRetirementUi.js") body = Buffer.from(body.toString().replace('  function runSemiRetirementProjection(engine, draft) {', '  function runSemiRetirementProjection(engine, draft) { window.__retirementRuns = (window.__retirementRuns || 0) + 1;'));
       if (relative === "app.js") body = Buffer.from(body.toString()
         .replace('  function lineChart(svgId, series, options = {}) {', '  function lineChart(svgId, series, options = {}) { window.__dollarCharts ||= {}; window.__dollarCharts[svgId] = structuredClone(series);')
-        .replace('  installDollarBasisPresentation();', `  window.__dollarTest = {
+        .replace('  installDollarBasisPresentation();', `  const originalRetirementResult = renderSemiRetirementScenarioResultHtml;
+        window.__dollarTest = {
+          originalRetirementHtml: () => originalRetirementResult(),
+          configureRetirement: fields => { for (const [path, value] of Object.entries(fields)) window.FFSSemiRetirementUi.setDraftPath(semiRetirementScenarioDraft, path, value); calculateSemiRetirementScenario(); },
           result: () => calculatePlan(plan),
           savedScenarios: () => loadScenarios(),
           seedSavedScenario: () => saveScenarios(sampleScenarioList().slice(0, 1).map(scenario => ({ ...scenario, id: "dollar-regression", source: "user" }))),
@@ -378,4 +382,104 @@ test('restricted storage still permits reversible display switching', async () =
   await select('future');await select('today');await select('future');
   await evaluate('Storage.prototype.setItem=window.__originalSetItem');
   assert.deepEqual(browserMessages,[],'no renderer errors or CSP violations');
+});
+
+for (const width of [1366, 375, 430]) test(`retirement redesign structure, controls and expansion at ${width}px`, async () => {
+  await cdp.send('Emulation.setDeviceMetricsOverride', { width, height: 1000, deviceScaleFactor: 1, mobile: width < 600 });
+  await navigate();
+  await fixture(); await select('future');
+  await evaluate("FFSStage1BrowserTestHooks.showWorkspace('semiretirement');document.querySelector('[data-semi-action=calculate]').click()");
+  const read = () => evaluate('JSON.stringify(__dollarTest.retirement().result)');
+  const before = await read();
+  const plan = await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())');
+  const saved = await evaluate('JSON.stringify(__dollarTest.savedScenarios())');
+  const structure = await evaluate(`(() => { const root = document.querySelector('.retirement-redesign'); return {
+    sections: [...root.children].map(node => node.id),
+    cards: [...root.querySelectorAll('.rr-summary-grid > article > span')].map(node => node.textContent),
+    funding: [...root.querySelectorAll('h3,h4')].filter(node => node.textContent === 'Funding Outlook').length,
+    overflow: document.documentElement.scrollWidth > innerWidth + 1,
+    events: root.querySelectorAll('.rr-journey > li').length,
+    expectedEvents: __dollarTest.retirement().view.timeline.reduce((n, group) => n + group.events.length, 0),
+  }; })()`);
+  assert.deepEqual(structure.sections, ['retirement-outlook','retirement-journey','retirement-adjustments','retirement-funding','retirement-details']);
+  assert.deepEqual(structure.cards, ['Fully Retired At','Lifestyle Funded Until','Retirement Investments Remaining','Retirement Spending Shortfall']);
+  assert.equal(structure.funding, 0); assert.equal(structure.overflow, false); assert.equal(structure.events, structure.expectedEvents);
+  assert.ok(await evaluate("['rr-pension','rr-comparison','rr-annual','rr-assumptions'].every(key=>!document.querySelector('[data-semi-detail-state='+key+']').open)"), 'detail panels are collapsed by default');
+  const retained = await evaluate(`(() => { const template = document.createElement('template'); template.innerHTML = __dollarTest.originalRetirementHtml();
+    return ['.semi-retirement-annual-table', '.retained-asset-list', '.semi-retirement-comparison-table'].every(selector => template.content.querySelector(selector)?.textContent === document.querySelector('.retirement-redesign ' + selector)?.textContent); })()`);
+  assert.ok(retained, 'annual values, retained assets and comparison text are preserved verbatim');
+  // Close any panels deliberately opened by preceding test cases, then exercise native keyboard behaviour.
+  await evaluate("document.querySelectorAll('.retirement-redesign details').forEach(node=>node.open=false)");
+  await evaluate("document.querySelector('[data-semi-detail-state=rr-annual] > summary').focus()");
+  const runs = await evaluate('window.__retirementRuns');
+  await key('Enter');
+  await waitFor(() => evaluate("document.querySelector('[data-semi-detail-state=rr-annual]').open"));
+  assert.equal(await read(), before, 'opening a panel leaves the model result unchanged');
+  assert.equal(await evaluate('window.__retirementRuns'), runs, 'opening a panel does not run the projection');
+  const chart = await evaluate("[...document.querySelectorAll('.rr-chart-point')].map(node=>({year:Number(node.dataset.year),value:Number(node.dataset.value)}))");
+  const { view, inputs } = await evaluate('__dollarTest.retirement()');
+  assert.equal(chart.length, view.annualRows.length);
+  chart.forEach((point,index) => close(point.value,view.annualRows[index].household.closingAccessibleInvestmentBalance,0.000001));
+  await select('today');
+  assert.ok(await evaluate("document.querySelector('[data-semi-detail-state=rr-annual]').open"), 'annual panel survives toggle');
+  const realChart = await evaluate("[...document.querySelectorAll('.rr-chart-point')].map(node=>Number(node.dataset.value))");
+  realChart.forEach((value,index) => close(value,chart[index].value/(1+inputs.inflationRate)**view.annualRows[index].yearIndex,0.000001));
+  close(amount(await evaluate("document.querySelector('[data-rr-metric=remaining] > strong').textContent")),realChart.at(-1));
+  assert.equal(await read(), before);
+  await evaluate("document.querySelector('[data-semi-detail-state=rr-annual] > summary').click();document.querySelector('[data-rr-open=rr-comparison]').click()");
+  assert.ok(await evaluate("document.querySelector('[data-semi-detail-state=rr-comparison]').open"));
+  assert.equal(await evaluate("document.activeElement === document.querySelector('[data-semi-detail-state=rr-comparison] > summary')"),true);
+  const originalSpending = await evaluate("Number(document.querySelector('[data-semi-adjustment]').value)");
+  await evaluate("(() => {const slider=document.querySelector('[data-semi-adjustment-range]');slider.value=Number(slider.value)+5000;slider.dispatchEvent(new Event('input',{bubbles:true}));})()");
+  await waitFor(async () => (await read()) !== before);
+  assert.ok(await evaluate("document.querySelector('[data-semi-detail-state=rr-comparison]').open"), 'comparison panel survives adjustment');
+  assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),plan);
+  assert.equal(await evaluate('JSON.stringify(__dollarTest.savedScenarios())'),saved);
+  await evaluate("document.querySelector('[data-semi-action=reset-adjustments]').click()");
+  await waitFor(async () => (await read()) === before);
+  assert.equal(await evaluate("Number(document.querySelector('[data-semi-adjustment]').value)"),originalSpending);
+  await evaluate("document.querySelector('[data-semi-action=manage-one-off-lifestyle-events]').click()");
+  assert.ok(await evaluate("document.querySelector('[data-one-off-lifestyle-spending]').getBoundingClientRect().height > 0"));
+  await evaluate("document.querySelectorAll('.retirement-redesign details').forEach(node=>node.open=false);window.scrollTo({top:0,behavior:'instant'})");
+  assert.ok(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'));
+  const output=path.join(root,'test-results/retirement-redesign');await mkdir(output,{recursive:true});
+  const clip=await evaluate("(() => { const r=document.querySelector('.retirement-redesign').getBoundingClientRect();return {x:r.left+scrollX,y:r.top+scrollY,width:r.width,height:Math.min(r.height,1800),scale:1};})()");
+  await writeFile(path.join(output,`retirement-${width}.png`),Buffer.from((await cdp.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip})).data,'base64'));
+  const detailClip=await evaluate("(() => { const r=document.querySelector('#retirement-funding').getBoundingClientRect();const end=document.querySelector('#retirement-details').getBoundingClientRect();return {x:r.left+scrollX,y:r.top+scrollY,width:r.width,height:end.bottom-r.top,scale:1};})()");
+  await writeFile(path.join(output,`retirement-details-${width}.png`),Buffer.from((await cdp.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip:detailClip})).data,'base64'));
+  await evaluate("document.querySelector('[data-semi-detail-state=rr-property]').open=true;document.querySelector('[data-semi-detail-state=rr-annual]').open=true");
+  assert.ok(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'), 'expanded content stays within viewport');
+  assert.ok(await evaluate("document.querySelector('.semi-retirement-projection-scroll').getBoundingClientRect().width>0"), 'full annual table remains scrollable on phones');
+});
+
+test('retirement redesign keeps zero-inflation values and pension inclusion accurate', async () => {
+  await fixture(); await select('future');
+  await evaluate("FFSStage1BrowserTestHooks.showWorkspace('semiretirement');document.querySelector('[data-semi-action=calculate]').click();__dollarTest.configureRetirement({'assumptions.inflationRatePct':0,'scenario.agePension.enabled':true})");
+  const nominal=await evaluate("[...document.querySelectorAll('.rr-chart-point')].map(node=>node.dataset.value)");
+  const source=await evaluate('JSON.stringify(__dollarTest.retirement())');
+  await select('today');
+  assert.deepEqual(await evaluate("[...document.querySelectorAll('.rr-chart-point')].map(node=>node.dataset.value)"),nominal);
+  assert.equal(await evaluate('JSON.stringify(__dollarTest.retirement())'),source);
+  const included=await evaluate('__dollarTest.retirement().view.annualRows.some(row=>row.household.estimatedAgePension>0)');
+  if(included) assert.ok(await evaluate("document.querySelector('[data-semi-detail-state=rr-pension] > summary').textContent.includes('included in funding') && !document.querySelector('.retirement-redesign').textContent.includes('Age Pension not included.')"));
+  await evaluate("__dollarTest.configureRetirement({'scenario.agePension.unsupported':true})");
+  assert.ok(await evaluate("document.querySelector('[data-semi-detail-state=rr-pension] > summary').textContent.includes('no pension included')"));
+  assert.deepEqual(browserMessages, [], 'no renderer errors or CSP violations');
+});
+
+test('retirement redesign shows an actual single-person shortfall without claiming future funding', async () => {
+  await navigate();
+  await evaluate("FFSStage1BrowserTestHooks.setPlan(FFS_DATA.samplePlans[0].plan,'semiretirement');FFSStage1BrowserTestHooks.closeDurabilityDialog();document.querySelector('[data-semi-action=calculate]').click();__dollarTest.configureRetirement({'household.fullRetirementLifestyleSpending':500000})");
+  const { view, inputs } = await evaluate('__dollarTest.retirement()');
+  assert.equal(view.people.length,1);
+  assert.ok(view.longevity.firstUnfundedSpending?.calendarYear);
+  for(const basis of ['future','today']) {
+    await select(basis);
+    assert.ok(await evaluate("document.querySelector('#retirement-outlook').classList.contains('rr-warning')"));
+    assert.equal(await evaluate("document.querySelector('[data-rr-metric=funded] > strong').textContent"),`Before ${view.longevity.firstUnfundedSpending.calendarYear}`);
+    const expected = view.annualRows.reduce((sum,row)=>sum+row.household.unmetSpending/(basis==='today'?(1+inputs.inflationRate)**row.yearIndex:1),0);
+    close(amount(await evaluate("document.querySelector('[data-rr-metric=shortfall] > strong').textContent")),expected);
+    assert.ok(await evaluate("document.querySelector('#retirement-outlook .rr-headline').textContent.includes('projected spending shortfall')"));
+  }
+  assert.deepEqual(browserMessages,[]);
 });

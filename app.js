@@ -18535,6 +18535,31 @@
     };
   }
 
+  function installRetirementResultsPresentation() {
+    const original = renderSemiRetirementScenarioResultHtml;
+    renderSemiRetirementScenarioResultHtml = () => {
+      captureSemiRetirementDetailsState();
+      const html = original();
+      if (!semiRetirementScenarioResult || !window.FFSRetirementResults) return html;
+      const view = window.FFSSemiRetirementUi.buildSemiRetirementResultsViewModel(
+        semiRetirementScenarioResult, semiRetirementScenarioInputs,
+        semiRetirementScenarioResultDraft || semiRetirementScenarioDraft);
+      return window.FFSRetirementResults.redesign(html, {
+        view, inputs: semiRetirementScenarioInputs, basis: forecastDollarBasis,
+        money: semiRetirementMoney, state: semiRetirementDetailsState,
+        outcome: window.FFSSemiRetirementUi.buildSavedRetirementOutcome(view),
+        debtFree: semiRetirementDebtFreeLabel(view.debtProperty || {}),
+        adjustment: window.FFSSemiRetirementUi.buildScenarioAdjustmentDisplayState({
+          projection: semiRetirementScenarioResult, inputs: semiRetirementScenarioInputs,
+          resultDraft: semiRetirementScenarioResultDraft || semiRetirementScenarioDraft,
+          currentDraft: semiRetirementScenarioDraft, baseline: semiRetirementAdjustmentBaseline,
+          hasValidationErrors: semiRetirementAdjustmentErrors.length > 0,
+        }),
+      });
+    };
+    window.FFSRetirementResults?.installInteractions();
+  }
+
   function installDollarBasisPresentation() {
     // Keep audited renderers intact. Presentation-only adapters receive nominal inputs.
     // Never pass discounted data back into calculators, persistence or saved snapshots.
@@ -19828,6 +19853,7 @@
 
   installDollarBasisPresentation();
   installAdditionalDollarDisplays();
+  installRetirementResultsPresentation();
   bindEvents();
   renderAll();
   // Keep entry actions below the header and the optional sample-plan banner.
