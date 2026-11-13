@@ -135,6 +135,7 @@ before(async () => {
           },
           configureRetirement: fields => { for (const [path, value] of Object.entries(fields)) window.FFSSemiRetirementUi.setDraftPath(semiRetirementScenarioDraft, path, value); calculateSemiRetirementScenario(); },
           result: () => calculatePlan(plan),
+          growthForecast: candidate => calculatePlan(candidate),
           backup: () => buildCompletePlanBackupPayload(),
           validateBackup: value => validateImportedPlanPayload(value),
           retirementSaveContext: () => buildRetirementScenarioSaveContext(),
@@ -702,4 +703,82 @@ test('assumptions sample preview is isolated from saved personal data',async()=>
   await assumptionEdit('inflationPct',1);await assumptionButton('Apply to sample preview');await waitFor(()=>evaluate("document.querySelector('.forecast-assumptions-status').textContent.includes('Sample preview updated')"));
   assert.equal(await evaluate("localStorage.getItem('ffs-current-plan-v3-mobile-dashboard-ux-test')"),stored);assert.equal(await evaluate('FFSStage1BrowserTestHooks.getPlan().investing.inflationPct'),1);
   assert.deepEqual(browserMessages,[]);
+});
+
+async function growthEdit(name,field,value){await evaluate(`(()=>{const input=document.querySelector('[data-growth-scenario="${name}"][data-growth-field="${field}"]');input.value=${JSON.stringify(String(value))};input.dispatchEvent(new Event('input',{bubbles:true}));})()`);}
+for(const width of [1366,768,430,375])test(`growth comparisons preserve saved data and Base parity at ${width}px`,async()=>{
+  await cdp.send('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:width<600});await navigate();await assumptionsFixture();await select('future');
+  const before=await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),normal=await evaluate('JSON.stringify(__dollarTest.result())'),saved=await evaluate('JSON.stringify(__dollarTest.savedScenarios())'),storage=await evaluate('JSON.stringify({...localStorage})');
+  await evaluate("document.querySelector('[data-growth-open]').focus()");await key('Enter');
+  assert.equal(await evaluate("document.querySelectorAll('.growth-card').length"),3,JSON.stringify(browserMessages.slice(-10)));
+  assert.equal(await evaluate("document.activeElement.textContent"),'Compare growth scenarios');
+  assert.equal(await evaluate("document.querySelectorAll('.growth-card').length"),3);
+  assert.equal(await evaluate("(()=>{const p=FFSStage1BrowserTestHooks.getPlan();return JSON.stringify(FFSGrowthScenarios.calculate(p,FFSGrowthScenarios.suggested(p).Base,__dollarTest.growthForecast).result)})()"),normal);
+  const expected=await evaluate("__dollarTest.result().netWorthProjection.find(r=>r.year===10).closingBalance");
+  close(amount(await evaluate("document.querySelector('[data-growth-result=Base] strong').textContent")),expected);
+  assert.ok(await evaluate("(()=>{const panel=document.querySelector('.growth-panel').getBoundingClientRect();return panel.left>=0&&panel.right<=innerWidth&&document.documentElement.scrollWidth<=innerWidth})()"),JSON.stringify(await evaluate("[...document.querySelectorAll('.growth-panel *')].filter(n=>n.getBoundingClientRect().right>innerWidth).map(n=>({tag:n.tagName,cls:n.className,width:n.getBoundingClientRect().width,text:n.textContent.slice(0,80)}))")));
+  assert.equal(await evaluate("(()=>{const cards=[...document.querySelectorAll('.growth-card')].map(n=>n.getBoundingClientRect());return cards[1].top>cards[0].top})()"),width<=800);
+  await growthEdit('Base','expectedSuperReturnPct',9);
+  assert.notEqual(amount(await evaluate("document.querySelector('[data-growth-result=Base] strong').textContent")),Math.round(expected));
+  await evaluate("[...document.querySelectorAll('.growth-panel button')].find(n=>n.textContent==='Reset Base to saved values').click()");
+  close(amount(await evaluate("document.querySelector('[data-growth-result=Base] strong').textContent")),expected);
+  await growthEdit('Lower','expectedSuperReturnPct',-100);
+  assert.match(await evaluate("document.querySelector('[data-growth-error=Lower]').textContent"),/greater than -100/);
+  assert.equal(await evaluate("document.querySelector('[data-growth-result=Lower] strong')===null"),true);
+  assert.equal(await evaluate("document.querySelector('[data-growth-scenario=Lower][data-growth-field=expectedSuperReturnPct]').getAttribute('aria-invalid')"),'true');
+  await evaluate("[...document.querySelectorAll('.growth-panel button')].find(n=>n.textContent==='Reset to suggested bands').click()");
+  await evaluate("document.querySelector('[data-growth-overrides=Higher]').click()");
+  assert.equal(await evaluate('JSON.stringify({...localStorage})'),storage);
+  await select('today');
+  const todayExpected=await evaluate("(()=>{const p=FFSStage1BrowserTestHooks.getPlan(),r=__dollarTest.result().netWorthProjection.find(r=>r.year===10);return FFSDollarBasis.displayedValue(r.closingBalance,10,p.investing.inflationPct,'today')})()");
+  close(amount(await evaluate("document.querySelector('[data-growth-result=Base] strong').textContent")),todayExpected);
+  close(amount(await evaluate("document.querySelector('.growth-table tbody tr:last-child td:nth-child(3)').textContent")),todayExpected);
+  assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),before);assert.equal(await evaluate('JSON.stringify(__dollarTest.result())'),normal);assert.equal(await evaluate('JSON.stringify(__dollarTest.savedScenarios())'),saved);
+  await evaluate("document.querySelector('[data-growth-year]').value='5';document.querySelector('[data-growth-year]').dispatchEvent(new Event('change'))");
+  assert.match(await evaluate("document.querySelector('.growth-table caption').textContent"),/Year 5/);
+  await evaluate("document.querySelector('.growth-panel').scrollIntoView();document.querySelector('.growth-overrides').open=true");
+  const evidence=path.join(root,'docs/growth-scenarios');await mkdir(evidence,{recursive:true});
+  const clip=await evaluate("(()=>{const r=document.querySelector('.growth-panel').getBoundingClientRect();return {x:r.left+scrollX,y:r.top+scrollY,width:r.width,height:r.height,scale:1}})()");
+  const shot=await cdp.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip});await writeFile(path.join(evidence,`comparison-${width}.png`),Buffer.from(shot.data,'base64'));
+  await evaluate("[...document.querySelectorAll('.growth-panel button')].find(n=>n.textContent==='Close comparison').focus()");await key('Enter');
+  assert.equal(await evaluate("document.activeElement.hasAttribute('data-growth-open')"),true);
+  assert.equal(await evaluate("document.querySelector('.growth-panel').hidden"),true);
+});
+test('growth edits reset on plan, defaults and sample changes; unsaved assumption edits are excluded',async()=>{
+  await navigate();await assumptionsFixture();await evaluate("document.querySelector('[data-growth-open]').click()");await growthEdit('Base','expectedSuperReturnPct',9);await assumptionEdit('expectedSuperReturnPct',11);
+  await evaluate("[...document.querySelectorAll('.growth-panel button')].find(n=>n.textContent==='Reset Base to saved values').click()");
+  assert.notEqual(await evaluate("document.querySelector('[data-growth-scenario=Base][data-growth-field=expectedSuperReturnPct]').value"),'11');
+  await growthEdit('Base','expectedSuperReturnPct',12);
+  await evaluate("FFSStage1BrowserTestHooks.setPlan(FFS_DATA.samplePlans[0].plan,'assumptions');FFSStage1BrowserTestHooks.closeDurabilityDialog()");
+  assert.equal(Number(await evaluate("document.querySelector('[data-growth-scenario=Base][data-growth-field=expectedSuperReturnPct]').value")),await evaluate('FFSGrowthScenarios.savedValues(FFSStage1BrowserTestHooks.getPlan()).expectedSuperReturnPct'));
+  await growthEdit('Base','expectedSuperReturnPct',12);
+  await evaluate("FFSStage1BrowserTestHooks.setPlan(FFSCalculator.emptyPlan(),'assumptions');FFSStage1BrowserTestHooks.closeDurabilityDialog()");
+  assert.equal(await evaluate("document.querySelector('[data-growth-scenario=Base][data-growth-field=expectedSuperReturnPct]').value"),'6.5');
+});
+test('growth comparisons rerun only plan-linked retirement, preserving opened retirement snapshots and storage',async()=>{
+  await navigate();await assumptionsFixture();
+  await evaluate("(()=>{const p=FFSStage1BrowserTestHooks.getPlan();p.personal.retirementTiming={people:[{id:'person1',fullRetirementAge:65,hasSemiRetirement:false},{id:'person2',fullRetirementAge:65,hasSemiRetirement:false}]};FFSStage1BrowserTestHooks.setPlan(p,'semiretirement');FFSStage1BrowserTestHooks.closeDurabilityDialog();document.querySelector('[data-semi-action=calculate]').click();__dollarTest.openRetirementSnapshot({...__dollarTest.retirementSaveContext(),id:'growth-snapshot'});document.querySelector('.fa-nav').click()})()");
+  const before=await evaluate('JSON.stringify(__dollarTest.retirement())'),normal=await evaluate('JSON.stringify(__dollarTest.result())'),stored=await evaluate('JSON.stringify({...localStorage})');
+  await evaluate("document.querySelector('[data-growth-open]').click()");
+  assert.match(await evaluate("document.querySelector('[data-growth-result=Base]').textContent"),/Plan-linked retirement: private funds exhausted/);
+  assert.equal(await evaluate("(()=>{const p=FFSStage1BrowserTestHooks.getPlan();return JSON.stringify(FFSGrowthScenarios.calculate(p,FFSGrowthScenarios.suggested(p).Base,__dollarTest.growthForecast).result)})()"),normal);
+  await growthEdit('Higher','expectedSuperReturnPct',10);await evaluate("document.querySelector('[data-growth-overrides=Higher]').click()");
+  assert.equal(await evaluate('JSON.stringify(__dollarTest.retirement())'),before);assert.equal(await evaluate('JSON.stringify({...localStorage})'),stored);assert.equal(await evaluate('JSON.stringify(__dollarTest.result())'),normal);
+  const evidence=path.join(root,'docs/growth-scenarios');await mkdir(evidence,{recursive:true});
+  const clip=await evaluate("(()=>{const r=document.querySelector('.growth-panel').getBoundingClientRect();return {x:r.left+scrollX,y:r.top+scrollY,width:r.width,height:r.height,scale:1}})()");
+  const shot=await cdp.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip});await writeFile(path.join(evidence,'plan-linked-retirement.png'),Buffer.from(shot.data,'base64'));
+});
+test('growth demo comparison and returning to personal plan never persist scenario edits',async()=>{
+  await navigate();await assumptionsFixture();await assumptionEdit('inflationPct',3);await assumptionButton('Save assumptions');await waitFor(()=>evaluate("document.querySelector('.forecast-assumptions-status').textContent.includes('Assumptions saved')"));
+  const stored=await evaluate("localStorage.getItem('ffs-current-plan-v3-mobile-dashboard-ux-test')");
+  await evaluate("document.getElementById('heroDemoButton').click();FFSStage1BrowserTestHooks.closeDurabilityDialog();document.querySelector('.fa-nav').click();document.querySelector('[data-growth-open]').click()");
+  assert.match(await evaluate("document.querySelector('.growth-panel').textContent"),/Sample plan comparison/);
+  const afterEntry=await evaluate("localStorage.getItem('ffs-current-plan-v3-mobile-dashboard-ux-test')");
+  assert.deepEqual(JSON.parse(afterEntry).plan,JSON.parse(stored).plan);
+  await growthEdit('Base','expectedSuperReturnPct',15);
+  assert.equal(await evaluate("localStorage.getItem('ffs-current-plan-v3-mobile-dashboard-ux-test')"),afterEntry);
+  await evaluate("document.querySelector('[data-demo-return]').click();FFSStage1BrowserTestHooks.closeDurabilityDialog();document.querySelector('.fa-nav').click()");
+  assert.equal(Number(await evaluate("document.querySelector('[data-growth-scenario=Base][data-growth-field=expectedSuperReturnPct]').value")),await evaluate('FFSGrowthScenarios.savedValues(FFSStage1BrowserTestHooks.getPlan()).expectedSuperReturnPct'));
+  assert.deepEqual(JSON.parse(await evaluate("localStorage.getItem('ffs-current-plan-v3-mobile-dashboard-ux-test')")).plan,JSON.parse(stored).plan);
+  assert.deepEqual(browserMessages,[],'growth workflows produce no runtime errors or CSP violations');
 });

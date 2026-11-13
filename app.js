@@ -18537,7 +18537,7 @@
 
   function installForecastAssumptionsWorkspace() {
     const api = window.FFSForecastAssumptions;
-    let editor;
+    let editor, growthComparison;
     const originalField = field;
     field = config => {
       const assumption = api.resolve(plan).find(item => config.path === `investing.${item.key}`);
@@ -18549,12 +18549,12 @@
       const result = originalSetView(view);
       const nav = document.querySelector('.fa-nav');
       nav?.classList.toggle("active", activeView === "assumptions");
-      if (activeView === "assumptions") { nav?.setAttribute("aria-current", "page"); editor?.sync(); }
+      if (activeView === "assumptions") { nav?.setAttribute("aria-current", "page"); editor?.sync(); growthComparison?.sync(); }
       else nav?.removeAttribute("aria-current");
       return result;
     };
     const originalOutputs = renderOutputs;
-    renderOutputs = (...args) => { const result = originalOutputs(...args); editor?.sync(); return result; };
+    renderOutputs = (...args) => { const result = originalOutputs(...args); editor?.sync(); growthComparison?.sync(); return result; };
     editor = window.FFSForecastAssumptionsView.mount(document.getElementById("forecastAssumptionsWorkspace"), {
       getPlan: () => plan,
       getIdentity: () => `${activePlanId}:${isDemoActive()}:${plan.meta?.samplePlanId || ""}`,
@@ -18579,6 +18579,17 @@
         renderAll();
         return true;
       },
+    });
+    const growthContainer = document.createElement("div");
+    growthContainer.className = "growth-workspace";
+    document.getElementById("forecastAssumptionsWorkspace").before(growthContainer);
+    growthComparison = window.FFSGrowthScenariosView.mount(growthContainer, {
+      getPlan: () => plan,
+      getIdentity: () => `${activePlanId}:${isDemoActive()}:${plan.meta?.samplePlanId || ""}`,
+      forecast: candidate => calculatePlan(candidate),
+      getBasis: () => forecastDollarBasis,
+      onRetirement: () => showWorkspace("semiretirement"),
+      isDemo: () => isDemoActive(),
     });
     document.addEventListener("click", event => {
       const trigger = event.target.closest("[data-assumptions-open]");

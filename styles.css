@@ -10225,3 +10225,36 @@ body.scenario-save-modal-open {
   .forecast-assumptions-actions .btn { width: 100%; }
   .fa-asset { padding: 12px; }
 }
+
+/* Session-only growth comparisons, beside the saved assumptions editor. */
+.growth-workspace { margin-top: 1.25rem; min-width: 0; }
+.growth-panel { margin-top: 1rem; padding: clamp(.75rem, 2vw, 1.5rem); background: #fff; border: 1px solid #cbd5e1; border-radius: 16px; color: #172b3a; }
+.growth-panel[hidden] { display: none; }
+.growth-panel p { margin: .75rem 0; }
+.growth-panel h2 { font-size: 1.5rem; }
+.growth-cards { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .8rem; margin: 1rem 0; }
+.growth-card { min-width: 0; border: 1px solid #cbd5e1; border-top: 4px solid #64748b; border-radius: 12px; padding: 1rem; }
+.growth-base { border-top-color: #087e8b; background: #f0fdfa; }
+.growth-higher { border-top-color: #5b4ab5; }
+.growth-card h3 { font-size: 1.25rem; font-weight: 700; }
+.growth-card label { display: block; margin: .8rem 0; font-weight: 600; }
+.growth-card input[type=number] { display: block; width: 100%; min-width: 0; margin-top: .3rem; }
+.growth-include input { margin-right: .5rem; }
+.growth-year { display: block; margin-top: 1rem; font-weight: 600; }
+.growth-year select { width: auto; max-width: 100%; margin-left: .5rem; }
+.growth-total { font-size: 1.5rem; overflow-wrap: anywhere; }
+.growth-overrides { padding: .8rem; border: 1px solid #cbd5e1; border-radius: 8px; }
+.growth-overrides summary { cursor: pointer; font-weight: 600; }
+.growth-bar-row { display: grid; grid-template-columns: 4rem minmax(30px,1fr) minmax(6rem,auto); gap: .6rem; align-items: center; margin: .5rem 0; font-size: .875rem; }
+.growth-bar-row meter { width: 100%; height: 1.5rem; }
+.growth-table-scroll { overflow-x: auto; margin-top: 1rem; }
+.growth-table { border-collapse: collapse; width: 100%; font-size: .875rem; }
+.growth-table caption { text-align: left; font-weight: 600; padding: .7rem 0; }
+.growth-table th, .growth-table td { text-align: right; padding: .6rem; border-bottom: 1px solid #cbd5e1; }
+.growth-table th:first-child { text-align: left; }
+@media(max-width: 800px) { .growth-cards { grid-template-columns: 1fr; } }
+[data-view-panel="assumptions"], .growth-panel, .growth-output { min-width: 0; }
+.growth-table-scroll { max-width: 100%; }
+@media(min-width: 801px) { .growth-card > .field-help { min-height: 4.5rem; } }
+.growth-scroll-hint { display: none; }
+@media(max-width: 600px) { .growth-scroll-hint { display: block; font-size: .8rem; color: #475569; } }
