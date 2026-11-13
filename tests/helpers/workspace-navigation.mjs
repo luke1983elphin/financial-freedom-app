@@ -5,7 +5,7 @@ export const PRIMARY_NAVIGATION = Object.freeze([
   'dashboard:Home', 'setup:My Plan', 'goals:Goals', 'semiretirement:Retirement', 'weeklyplan:Weekly',
 ]);
 export const MORE_NAVIGATION = Object.freeze([
-  'decision:Try a Change', 'investments:Investments', 'super:Super', 'reports:Reports', 'scenarios:Saved Scenarios',
+  'assumptions:Assumptions', 'decision:Try a Change', 'investments:Investments', 'super:Super', 'reports:Reports', 'scenarios:Saved Scenarios',
 ]);
 export function workspaceNavigation(html) {
   const start=html.indexOf('id="sideNav"');
