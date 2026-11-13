@@ -18536,6 +18536,16 @@
   }
 
   function installRetirementResultsPresentation() {
+    // Stable presentation markers without editing the audited renderers.
+    const tag = (renderer, key) => (...args) => window.FFSRetirementResults.tagFragment(renderer(...args), key);
+    renderSemiRetirementSnapshotHtml = tag(renderSemiRetirementSnapshotHtml, "snapshot");
+    renderSemiRetirementTimelineHtml = tag(renderSemiRetirementTimelineHtml, "timeline");
+    renderRetainedAssetsHtml = tag(renderRetainedAssetsHtml, "retained");
+    renderSemiRetirementLongevityHtml = tag(renderSemiRetirementLongevityHtml, "longevity");
+    renderSemiRetirementFundingHtml = tag(renderSemiRetirementFundingHtml, "funding");
+    renderSemiRetirementPassiveIncomeHtml = tag(renderSemiRetirementPassiveIncomeHtml, "passive");
+    renderSemiRetirementAssumptionsHtml = tag(renderSemiRetirementAssumptionsHtml, "assumptions");
+    renderSemiRetirementAnnualProjectionHtml = tag(renderSemiRetirementAnnualProjectionHtml, "annual");
     const original = renderSemiRetirementScenarioResultHtml;
     renderSemiRetirementScenarioResultHtml = () => {
       captureSemiRetirementDetailsState();
@@ -18549,6 +18559,7 @@
         money: semiRetirementMoney, state: semiRetirementDetailsState,
         outcome: window.FFSSemiRetirementUi.buildSavedRetirementOutcome(view),
         debtFree: semiRetirementDebtFreeLabel(view.debtProperty || {}),
+        baseline: semiRetirementAdjustmentBaseline,
         adjustment: window.FFSSemiRetirementUi.buildScenarioAdjustmentDisplayState({
           projection: semiRetirementScenarioResult, inputs: semiRetirementScenarioInputs,
           resultDraft: semiRetirementScenarioResultDraft || semiRetirementScenarioDraft,

@@ -10094,7 +10094,7 @@ body.scenario-save-modal-open {
 .rr-card > strong { font-size: clamp(1.25rem, 1.8vw, 1.7rem); line-height: 1.3; color: #173451; }
 .rr-card > small { font-size: .8rem; line-height: 1.5; color: #526579; }
 .rr-disclaimer { font-size: .85rem; color: #526579; margin: 18px 0 12px; }
-.rr-journey { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0 24px; margin: 0; padding: 0; list-style: none; }
+.rr-journey { display: grid; grid-template-columns: 1fr; gap: 0 24px; margin: 0; padding: 0; list-style: none; }
 .rr-journey > li { border-left: 2px solid #c9d8e4; padding: 0 0 22px 18px; position: relative; min-width: 0; }
 .rr-journey > li::before { content: ''; position: absolute; width: 10px; height: 10px; background: #245d83; border-radius: 50%; left: -6px; top: 4px; }
 .rr-journey > li.has-warning::before { background: #a26815; }
@@ -10152,4 +10152,35 @@ body.scenario-save-modal-open {
 .rr-card .rr-super-balance { padding-top: 10px; border-top: 1px solid #e2e8ee; font-weight: 650; color: #173451; }
 .retirement-redesign .semi-retirement-adjustment-controls { align-items: start; }
 .retirement-redesign .semi-retirement-adjustment-card .field-input { min-height: 44px; height: 48px; }
-@media (max-width: 600px) { .rr-chart svg text { font-size: 30px; } }
+
+
+/* Targeted retirement-results clarity refinements. */
+.rr-shortfall-status { display: grid; gap: 5px; padding: 14px 16px; margin-top: 14px; border-radius: 10px; background: #e6f3ec; color: #244d3a; line-height: 1.5; }
+.rr-shortfall-status.is-warning { background: #fff0d8; color: #754b0b; }
+.rr-shortfall-status small { font-size: .82rem; font-weight: 400; }
+.rr-journey > li { display: grid; grid-template-columns: minmax(120px,170px) minmax(0,1fr); gap: 18px; }
+.rr-exhaustion.is-information { background: #f0f6fa; border-left-color: #668ba8; }
+.retirement-redesign .semi-retirement-impact-panel { background: #f4f7fa; border-color: #d6e0e8; display: block; }
+.retirement-redesign .semi-retirement-impact-panel > h4 { font-size: 1.1rem; margin: 0 0 12px; }
+.retirement-redesign .semi-retirement-impact-panel > p { font-weight: 400; }
+.retirement-redesign .semi-retirement-impact-panel small { font-weight: 400; }
+.retirement-redesign .semi-retirement-impact-panel.rr-impact-warning { background: #fff8ec; border-color: #e6cda2; }
+.rr-chart svg.is-mobile-chart text { font-size: 16px; }
+.rr-chart-exhaustion { stroke: #667d92; stroke-width: 1.5; stroke-dasharray: 4 4; }
+.rr-chart-explanation { background: #f4f7fa; padding: 10px 12px; border-radius: 8px; }
+.rr-exact-balances { width: 100%; font-size: .85rem; border-collapse: collapse; }
+.rr-exact-balances caption { padding: 12px; color: #526579; text-align: left; }
+.rr-exact-balances :is(th,td) { padding: 9px 12px; border-top: 1px solid #e0e7ed; text-align: left; }
+.retirement-redesign [data-semi-detail-state="rr-property"] .semi-retirement-person-values > div { grid-template-columns: minmax(0,1fr) minmax(0,1.2fr); gap: 8px 14px; border-bottom: 1px solid #e7edf2; padding-bottom: 8px; }
+.retirement-redesign [data-semi-detail-state="rr-property"] .semi-retirement-person-values :is(span,strong) { min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; line-height: 1.5; }
+.retirement-redesign :is(.semi-retirement-debt-card,.semi-retirement-property-card) .semi-retirement-person-values > div { grid-template-columns: minmax(0,1fr); }
+.retirement-redesign :is(.semi-retirement-debt-card,.semi-retirement-property-card) .semi-retirement-person-values strong { text-align: left; }
+.retirement-redesign .retained-asset-card :is(dt,dd) { min-width: 0; overflow-wrap: anywhere; white-space: normal; }
+.rr-net-worth-note,.rr-rental-note { color: #526579; font-size: .9rem; }
+@media (max-width: 600px) {
+  .rr-summary-grid .rr-card > span { font-size: .78rem; overflow-wrap: normal; }
+  .rr-journey > li { grid-template-columns: 1fr; gap: 5px; }
+  .retirement-redesign [data-semi-detail-state="rr-property"] .semi-retirement-results-grid { grid-template-columns: minmax(0,1fr); }
+  .retirement-redesign [data-semi-detail-state="rr-property"] .semi-retirement-person-values > div { grid-template-columns: minmax(0,1fr); }
+  .retirement-redesign [data-semi-detail-state="rr-property"] .semi-retirement-person-values strong { text-align: left; }
+}

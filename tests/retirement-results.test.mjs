@@ -24,6 +24,14 @@ for (const [name, configure] of Object.entries(variants)) test('retirement prese
   for (const rate of [0, .05]) for (const basis of ['future', 'today', 'future']) {
     const scenario = { ...inputs, inflationRate: rate };
     const data = display(view, scenario, basis);
+    const full = view.keyResults.accessibleWhenBothFullyRetired?.row;
+    if (full) {
+      assert.equal(data.retirementValue, view.people.length === 1 ? `Age ${(full.ages || full.people)[0].age}` : String(full.calendarYear));
+      if (view.people.length > 1) for (const person of (full.ages || full.people)) assert.ok(data.retirementNote.includes(`${person.name}: Age ${person.age}`));
+    } else assert.equal(data.retirementValue, 'Beyond forecast');
+    const fundingRow = view.annualRows.find(row=>row.calendarYear===view.longevity.firstUnfundedSpending?.calendarYear) || view.annualRows.at(-1);
+    for (const person of fundingRow.ages) assert.ok(data.fundedUntil.includes(`Age ${person.age}`));
+    assert.equal(data.exhaustionYear, view.longevity.accessibleFundsExhausted?.calendarYear ?? null);
     assert.equal(data.shortfall, Boolean(result.summary.firstUnfundedSpending?.calendarYear));
     assert.equal(data.points.length, result.years.length);
     for (const [index, point] of data.points.entries()) {
@@ -48,4 +56,33 @@ for (const [name, configure] of Object.entries(variants)) test('retirement prese
 test('unknown investment balances remain unknown rather than appearing as zero', () => {
   const data = display({ annualRows: [{ calendarYear: 2040, household: {} }] }, { projectionStartYear: 2040, inflationRate: 0 }, 'today');
   assert.equal(data.remaining, null); assert.equal(data.points[0].value, null);
+});
+
+test('adjustment presentation uses existing comparisons, preserves snapshots and handles unavailable or invalid results', () => {
+  const inputs = fixture(); inputs.accessibleInvestments.openingBalance = 1e7;
+  const project = i => context.FFSSemiRetirementProjection.projectRetirementScenario(i);
+  const draft = { household: { fullRetirementLifestyleSpending: inputs.household.fullRetirementLifestyleSpending }, scenario: {} };
+  const baseline = context.FFSSemiRetirementUi.buildScenarioAdjustmentSnapshot(project(inputs), inputs, draft);
+  const unchanged = context.FFSSemiRetirementUi.buildScenarioAdjustmentState(project(inputs), inputs, draft, baseline);
+  const present = context.FFSRetirementResults.adjustmentPresentation;
+  assert.equal(present(unchanged,baseline,inputs,'future').kind,'unchanged');
+  const adjustedInputs = structuredClone(inputs); adjustedInputs.household.fullRetirementLifestyleSpending += 5000;
+  const adjustedDraft = structuredClone(draft); adjustedDraft.household.fullRetirementLifestyleSpending += 5000;
+  const adjusted = context.FFSSemiRetirementUi.buildScenarioAdjustmentState(project(adjustedInputs),adjustedInputs,adjustedDraft,baseline);
+  const before = JSON.stringify({inputs,baseline,adjusted});
+  for (const inflationRate of [0,.05]) for (const basis of ['future','today']) {
+    const scenario={...inputs,inflationRate};
+    const value=present(adjusted,baseline,scenario,basis);
+    assert.equal(value.kind,'changed');
+    const factor=basis==='today'?(1+inflationRate)**(adjusted.impact.projectionEndYear-inputs.projectionStartYear):1;
+    assert.equal(value.endDelta,adjusted.comparison.endAssetsDelta/factor);
+    assert.equal(value.originalEnd,baseline.projectionEndAssets/factor);
+    assert.equal(value.adjustedEnd,adjusted.impact.projectionEndAssets/factor);
+    assert.equal(value.shortfallYearDelta,adjusted.comparison.firstShortfallYearDelta);
+  }
+  assert.equal(JSON.stringify({inputs,baseline,adjusted}),before);
+  assert.equal(present(adjusted,null,inputs,'future').kind,'unavailable');
+  assert.equal(present({...adjusted,comparison:null},baseline,inputs,'future').kind,'unavailable');
+  assert.equal(present({...adjusted,isUsingLastValidResult:true},baseline,inputs,'future').kind,'invalid');
+  assert.equal(present(adjusted,{...baseline,projectionEndYear:1900},inputs,'future').endDelta,null);
 });
