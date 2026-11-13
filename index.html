@@ -195,10 +195,14 @@
                   <button type="button" class="dollar-basis-segment" data-dollar-basis="future" aria-pressed="true">Future dollars</button>
                 </div>
                 <p class="dollar-basis-description" id="dollarBasisDescription" aria-live="polite">Projected values include future inflation.</p>
+                <button type="button" class="nav-button fa-nav" data-assumptions-open>Assumptions</button>
               </div>
             </nav>
 
             <div class="grid gap-6">
+              <section class="view-section hidden" data-view-panel="assumptions" aria-label="Forecast assumptions">
+                <div id="forecastAssumptionsWorkspace"></div>
+              </section>
               <section class="view-section hidden" data-view-panel="setup">
                 <div class="wizard-shell">
                   <div class="wizard-progress">
@@ -815,6 +819,8 @@
     <script src="scenario-overlay.js"></script>
     <script src="dollar-basis.js"></script>
     <script src="retirement-results.js"></script>
+    <script src="forecast-assumptions.js"></script>
+    <script src="forecast-assumptions-view.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

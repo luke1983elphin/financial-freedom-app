@@ -18535,6 +18535,62 @@
     };
   }
 
+  function installForecastAssumptionsWorkspace() {
+    const api = window.FFSForecastAssumptions;
+    let editor;
+    const originalField = field;
+    field = config => {
+      const assumption = api.resolve(plan).find(item => config.path === `investing.${item.key}`);
+      if (!assumption) return originalField(config);
+      return `<div class="fa-existing-setting"><span class="field-label">${escapeHtml(config.label)}</span><strong>${escapeHtml(String(assumption.effective))}%</strong><button type="button" class="btn" data-assumptions-open="${escapeHtml(assumption.key)}">Edit in Assumptions</button></div>`;
+    };
+    const originalSetView = setView;
+    setView = view => {
+      const result = originalSetView(view);
+      const nav = document.querySelector('.fa-nav');
+      nav?.classList.toggle("active", activeView === "assumptions");
+      if (activeView === "assumptions") { nav?.setAttribute("aria-current", "page"); editor?.sync(); }
+      else nav?.removeAttribute("aria-current");
+      return result;
+    };
+    const originalOutputs = renderOutputs;
+    renderOutputs = (...args) => { const result = originalOutputs(...args); editor?.sync(); return result; };
+    editor = window.FFSForecastAssumptionsView.mount(document.getElementById("forecastAssumptionsWorkspace"), {
+      getPlan: () => plan,
+      getIdentity: () => `${activePlanId}:${isDemoActive()}:${plan.meta?.samplePlanId || ""}`,
+      isDemo: () => isDemoActive(),
+      onRetirement: () => showWorkspace("semiretirement"),
+      onSave: candidate => {
+        SECURITY?.assertSafeData(candidate);
+        const validation = PLAN_SCHEMA.validate(PLAN_SCHEMA.migrate(candidate).plan);
+        if (!validation.valid) throw new Error("Linked plan data needs review before it can be saved.");
+        // Validate using the existing engines before touching the live plan or storage.
+        const calculated = calculatePlan(candidate);
+        const finalValues = [calculated.investmentProjection?.at(-1)?.closingBalance,
+          calculated.superProjection?.at(-1)?.closingBalance, calculated.netWorthProjection?.at(-1)?.closingBalance];
+        if (finalValues.some(value => value != null && !Number.isFinite(value))) throw new Error("These rates exceed the forecast's supported range.");
+        const previousPlan = plan, previousUnsaved = planHasUnsavedChanges;
+        plan = candidate;
+        if (!isDemoActive()) {
+          try {
+            if (!writePersonalDraftRecord()) throw new Error("Browser storage could not save these changes. Check the storage notice and retry.");
+          } catch (error) { plan = previousPlan; planHasUnsavedChanges = previousUnsaved; throw error; }
+        }
+        renderAll();
+        return true;
+      },
+    });
+    document.addEventListener("click", event => {
+      const trigger = event.target.closest("[data-assumptions-open]");
+      if (!trigger) return;
+      showWorkspace("assumptions");
+      const key = trigger.dataset.assumptionsOpen;
+      const input = [...document.querySelectorAll('#forecastAssumptionsWorkspace [data-assumption]')].find(node => node.dataset.assumption === key);
+      if (input) { input.closest("details")?.setAttribute("open", ""); input.focus(); }
+      else document.querySelector("#forecastAssumptionsWorkspace h2")?.focus({preventScroll:true});
+    });
+  }
+
   function installRetirementResultsPresentation() {
     // Stable presentation markers without editing the audited renderers.
     const tag = (renderer, key) => (...args) => window.FFSRetirementResults.tagFragment(renderer(...args), key);
@@ -19865,6 +19921,7 @@
   installDollarBasisPresentation();
   installAdditionalDollarDisplays();
   installRetirementResultsPresentation();
+  installForecastAssumptionsWorkspace();
   bindEvents();
   renderAll();
   // Keep entry actions below the header and the optional sample-plan banner.
