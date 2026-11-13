@@ -1,0 +1,226 @@
+{
+  "baseline": "6f3dbf83cc744e765eddf6244313635ea357bc9a",
+  "auditCases": 48,
+  "unchanged": 47,
+  "changed": [
+    {
+      "id": "H47",
+      "changedFields": 122,
+      "before": {
+        "signedCash": 0,
+        "taxWithdrawal": 0,
+        "closing": 2140000
+      },
+      "after": {
+        "signedCash": -9620,
+        "taxWithdrawal": 9620,
+        "closing": 2130043.3
+      }
+    }
+  ],
+  "note": "The main accumulation deficit H41 and all other audit findings intentionally remain unchanged. H47 uses existing annual midpoint tax funding/return timing. These are pinned old/new actual comparisons, not regenerated audit expectations.",
+  "cases": [
+    {
+      "id": "H01",
+      "changedFields": 0
+    },
+    {
+      "id": "H02",
+      "changedFields": 0
+    },
+    {
+      "id": "H03",
+      "changedFields": 0
+    },
+    {
+      "id": "H04",
+      "changedFields": 0
+    },
+    {
+      "id": "H05",
+      "changedFields": 0
+    },
+    {
+      "id": "H06",
+      "changedFields": 0
+    },
+    {
+      "id": "H07",
+      "changedFields": 0
+    },
+    {
+      "id": "H08",
+      "changedFields": 0
+    },
+    {
+      "id": "H09",
+      "changedFields": 0
+    },
+    {
+      "id": "H10",
+      "changedFields": 0
+    },
+    {
+      "id": "H11",
+      "changedFields": 0
+    },
+    {
+      "id": "H12",
+      "changedFields": 0
+    },
+    {
+      "id": "H13",
+      "changedFields": 0
+    },
+    {
+      "id": "H14",
+      "changedFields": 0
+    },
+    {
+      "id": "H15",
+      "changedFields": 0
+    },
+    {
+      "id": "H16",
+      "changedFields": 0
+    },
+    {
+      "id": "H17",
+      "changedFields": 0
+    },
+    {
+      "id": "H18",
+      "changedFields": 0
+    },
+    {
+      "id": "H19",
+      "changedFields": 0
+    },
+    {
+      "id": "H20",
+      "changedFields": 0
+    },
+    {
+      "id": "H21",
+      "changedFields": 0
+    },
+    {
+      "id": "H22",
+      "changedFields": 0
+    },
+    {
+      "id": "H23",
+      "changedFields": 0
+    },
+    {
+      "id": "H24",
+      "changedFields": 0
+    },
+    {
+      "id": "H25",
+      "changedFields": 0
+    },
+    {
+      "id": "H26",
+      "changedFields": 0
+    },
+    {
+      "id": "H27",
+      "changedFields": 0
+    },
+    {
+      "id": "H28",
+      "changedFields": 0
+    },
+    {
+      "id": "H29",
+      "changedFields": 0
+    },
+    {
+      "id": "H30",
+      "changedFields": 0
+    },
+    {
+      "id": "H31",
+      "changedFields": 0
+    },
+    {
+      "id": "H32",
+      "changedFields": 0
+    },
+    {
+      "id": "H33",
+      "changedFields": 0
+    },
+    {
+      "id": "H34",
+      "changedFields": 0
+    },
+    {
+      "id": "H35",
+      "changedFields": 0
+    },
+    {
+      "id": "H36",
+      "changedFields": 0
+    },
+    {
+      "id": "H37",
+      "changedFields": 0
+    },
+    {
+      "id": "H38",
+      "changedFields": 0
+    },
+    {
+      "id": "H39",
+      "changedFields": 0
+    },
+    {
+      "id": "H40",
+      "changedFields": 0
+    },
+    {
+      "id": "H41",
+      "changedFields": 0
+    },
+    {
+      "id": "H42",
+      "changedFields": 0
+    },
+    {
+      "id": "H43",
+      "changedFields": 0
+    },
+    {
+      "id": "H44",
+      "changedFields": 0
+    },
+    {
+      "id": "H45",
+      "changedFields": 0
+    },
+    {
+      "id": "H46",
+      "changedFields": 0
+    },
+    {
+      "id": "H47",
+      "changedFields": 122,
+      "before": {
+        "signedCash": 0,
+        "taxWithdrawal": 0,
+        "closing": 2140000
+      },
+      "after": {
+        "signedCash": -9620,
+        "taxWithdrawal": 9620,
+        "closing": 2130043.3
+      }
+    },
+    {
+      "id": "H48",
+      "changedFields": 0
+    }
+  ]
+}

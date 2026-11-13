@@ -2033,7 +2033,7 @@ test("Stage G2F outlook, funding and debt copy avoid false funding alarms", () =
   assert.match(outlookCopySnippet, /Your lifestyle is projected to be funded through/);
   assert.match(fundingSnippet, /Investments available before super/);
   assert.match(fundingSnippet, /Available super continues funding retirement where required/);
-  assert.match(fundingSnippet, /Unfunded lifestyle spending/);
+  assert.match(fundingSnippet, /Unfunded required cashflow/);
   assert.match(debtSnippet, /Home & debt/);
   assert.match(debtSnippet, /Property equity when you retire/);
   assert.match(debtSnippet, /Projected net worth at \$\{netWorthAge\}/);

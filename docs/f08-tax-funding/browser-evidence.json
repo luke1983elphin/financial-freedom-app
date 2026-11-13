@@ -1,0 +1,14 @@
+{
+  "firstYear": {
+    "taxWithdrawal": 9620,
+    "closing": 2130043.3,
+    "todayClosing": 2078091.024390244
+  },
+  "savedInputsAndHistoricalResultsPreserved": true,
+  "newSnapshotVersion": "2026.27.4-f08",
+  "reopenedResultMatches": true,
+  "unfundedTax": 9620,
+  "pdfPath": "/tmp/ffa-f08-corrected-report.pdf",
+  "pdfBytes": 294260,
+  "runtimeErrors": []
+}

@@ -1,0 +1,29 @@
+{
+  "baseline": "6f3dbf83cc744e765eddf6244313635ea357bc9a",
+  "changed": [
+    {
+      "name": "populated",
+      "previousSha256": "f3615e4455dfec62067c0d82a138855ba760b9e2d73390cfc814a783e1ad3a08",
+      "correctedSha256": "07fa50716c4aace5ad9b15d16e62a8e11afc3d440ca8b4ff6fefbc54472bd2cc",
+      "firstChangedYear": 2050,
+      "firstSignedCash": [
+        82360.79,
+        -27160.83
+      ],
+      "firstClosingBefore": 12493126.93,
+      "firstClosingAfter": 12493126.93
+    },
+    {
+      "name": "simple",
+      "previousSha256": "13690f757c221b0b79a92895aa1bad66a4e0f12a4f21233585901c39f0309462",
+      "correctedSha256": "e9e50041460dd9b7e4856af71f382c971ef8f710cb5fde07ef559a23e7ba722e",
+      "firstChangedYear": 2048,
+      "firstSignedCash": [
+        -23914.2,
+        0
+      ],
+      "firstClosingBefore": 5330157.39,
+      "firstClosingAfter": 5305406.2
+    }
+  ]
+}

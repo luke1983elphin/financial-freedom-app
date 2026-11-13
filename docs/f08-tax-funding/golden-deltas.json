@@ -1,0 +1,166 @@
+{
+  "baseline": "6f3dbf83cc744e765eddf6244313635ea357bc9a",
+  "preservedGoldenSha256": "fcf986eb3d0632c5852da1d2aa325fbcc47849b8a0c12f3f1c64ca41baebc622",
+  "fixtures": 9,
+  "unchangedFixtures": [
+    "young-professional",
+    "young-couple",
+    "growing-family",
+    "established-family-wealth-building",
+    "pre-retirement",
+    "semi-retirement",
+    "retirement-ready"
+  ],
+  "reconciledProjectionYears": 948,
+  "notes": "Only two synthetic investment-return fixtures change, in retirement outputs after owner tax deficits arise. Main results and drafts match exactly. Extreme end balances reflect the existing synthetic horizons/ages shown below, not a typical household forecast.",
+  "deltas": [
+    {
+      "name": "single",
+      "route": "retirement",
+      "firstChangedYear": 2048,
+      "firstChangedOpeningAges": [
+        {
+          "id": "person1",
+          "age": 65
+        },
+        {
+          "id": "person2",
+          "age": 22
+        }
+      ],
+      "signedOwnerCash": [
+        {
+          "id": "person1",
+          "before": 0,
+          "after": -14655.85
+        },
+        {
+          "id": "person2",
+          "before": 0,
+          "after": 0
+        }
+      ],
+      "firstClosingInvestableBefore": 4195045.75,
+      "firstClosingInvestableAfter": 4179876.95,
+      "finalYear": 2116,
+      "finalOpeningAges": [
+        133,
+        90
+      ],
+      "finalInvestableBefore": 186443585.99,
+      "finalInvestableAfter": 108412590.83,
+      "changedFields": 3167
+    },
+    {
+      "name": "single",
+      "route": "scenario",
+      "firstChangedYear": 2046,
+      "firstChangedOpeningAges": [
+        {
+          "id": "person1",
+          "age": 63
+        },
+        {
+          "id": "person2",
+          "age": 20
+        }
+      ],
+      "signedOwnerCash": [
+        {
+          "id": "person1",
+          "before": 0,
+          "after": -11566.42
+        },
+        {
+          "id": "person2",
+          "before": 0,
+          "after": 0
+        }
+      ],
+      "firstClosingInvestableBefore": 3638662.11,
+      "firstClosingInvestableAfter": 3626690.87,
+      "finalYear": 2116,
+      "finalOpeningAges": [
+        133,
+        90
+      ],
+      "finalInvestableBefore": 169107585.86,
+      "finalInvestableAfter": 98026518.67,
+      "changedFields": 3259
+    },
+    {
+      "name": "couple-property-offset",
+      "route": "retirement",
+      "firstChangedYear": 2050,
+      "firstChangedOpeningAges": [
+        {
+          "id": "person1",
+          "age": 67
+        },
+        {
+          "id": "person2",
+          "age": 65
+        }
+      ],
+      "signedOwnerCash": [
+        {
+          "id": "person1",
+          "before": 26031.11,
+          "after": 26031.11
+        },
+        {
+          "id": "person2",
+          "before": 0,
+          "after": -793.45
+        }
+      ],
+      "firstClosingInvestableBefore": 4986203.35,
+      "firstClosingInvestableAfter": 4985384.16,
+      "finalYear": 2075,
+      "finalOpeningAges": [
+        92,
+        90
+      ],
+      "finalInvestableBefore": 21473098.38,
+      "finalInvestableAfter": 20703508.16,
+      "changedFields": 1637
+    },
+    {
+      "name": "couple-property-offset",
+      "route": "scenario",
+      "firstChangedYear": 2049,
+      "firstChangedOpeningAges": [
+        {
+          "id": "person1",
+          "age": 66
+        },
+        {
+          "id": "person2",
+          "age": 64
+        }
+      ],
+      "signedOwnerCash": [
+        {
+          "id": "person1",
+          "before": 24974.47,
+          "after": 24974.47
+        },
+        {
+          "id": "person2",
+          "before": 0,
+          "after": -174.22
+        }
+      ],
+      "firstClosingInvestableBefore": 4568874.75,
+      "firstClosingInvestableAfter": 4568694.92,
+      "finalYear": 2075,
+      "finalOpeningAges": [
+        92,
+        90
+      ],
+      "finalInvestableBefore": 20666857.62,
+      "finalInvestableAfter": 19937721.88,
+      "changedFields": 1699
+    }
+  ]
+}

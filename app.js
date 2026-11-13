@@ -10510,7 +10510,7 @@
           ${semiRetirementMetricCard("Lifestyle funding", unfunded?.calendarYear ? `Shortfall starts in ${unfunded.calendarYear}` : `Funded through ${projectionEnd.value.replace("+", "")}`, unfunded?.calendarYear ? semiRetirementAgeList(milestoneAgesFromObject(unfunded, viewModel.people)) : projectionEnd.note, unfunded?.calendarYear ? "is-warning" : "is-positive")}
           ${semiRetirementMetricCard("Investments available before super", accessibleAlreadyZero ? "None available" : accessibleDepletion ? `Used by ${accessibleLast.value}` : "Remain available", accessibleAlreadyZero ? `${accessibleLast.note}. No accessible investments are available at the retirement milestone; available super may still fund later spending.` : accessibleDepletion ? `${accessibleLast.note}. ${allFunds?.calendarYear && allFunds.calendarYear <= accessibleDepletion.calendarYear ? "Total retirement investments are exhausted by this year." : "Available super continues funding retirement where required."}` : "Through the projection period.", accessibleTone)}
           ${semiRetirementMetricCard("Retirement investments", allFunds?.calendarYear ? `Exhausted by ${semiRetirementFirstAgeLabel(milestoneAgesFromObject(allFunds, viewModel.people))}` : "No exhaustion projected", allFunds?.calendarYear ? semiRetirementAgeList(milestoneAgesFromObject(allFunds, viewModel.people)) : "No retirement investment exhaustion within the projection horizon.", allFunds?.calendarYear ? "is-warning" : "is-positive")}
-          ${semiRetirementMetricCard("Unfunded lifestyle spending", unfunded?.calendarYear ? money(longevity.totalUnfundedSpending || 0) : "None projected", unfunded?.calendarYear ? `${semiRetirementAgeList(milestoneAgesFromObject(unfunded, viewModel.people))} - first shortfall ${unfunded.calendarYear}` : "No projected unfunded lifestyle spending.", unfunded?.calendarYear ? "is-warning" : "is-positive")}
+          ${semiRetirementMetricCard("Unfunded required cashflow", unfunded?.calendarYear ? money(longevity.totalUnfundedSpending || 0) : "None projected", unfunded?.calendarYear ? `${semiRetirementAgeList(milestoneAgesFromObject(unfunded, viewModel.people))} - first shortfall ${unfunded.calendarYear}. Includes required taxes and other cash needs.` : "No projected unfunded required cashflow.", unfunded?.calendarYear ? "is-warning" : "is-positive")}
         </div>
       </section>
       ${renderRetainedAssetsHtml(viewModel)}
@@ -15988,7 +15988,8 @@
   function retirementKeyResultSnapshot(viewModel) {
     const outcome = window.FFSSemiRetirementUi?.buildSavedRetirementOutcome(viewModel);
     const sections = retirementOutcomeSections(outcome);
-    return { version: 2, retirementOutcome: outcome, sections, rows: sections.flatMap(section => section.rows) };
+    return { version: 2, projectionEngineVersion: window.FFSSemiRetirementProjection?.VERSION || null,
+      retirementOutcome: outcome, sections, rows: sections.flatMap(section => section.rows) };
   }
 
   function savedRetirementOutcomeHtml(snapshot) {
@@ -17179,7 +17180,11 @@
     semiRetirementScenarioResultDraft = semiRetirementScenarioResult ? cloneScenarioDraft(semiRetirementScenarioDraft) : null;
     showWorkspace("semiretirement");
     renderOutputs();
-    updateSaveStatus("Retirement Planning scenario opened for review. Financial Plan unchanged.");
+    const previousEngineVersion = scenario.keyResultSnapshot?.projectionEngineVersion;
+    const recalculationNotice = previousEngineVersion !== window.FFSSemiRetirementProjection.VERSION
+      ? " Recalculated with corrected tax funding. Saved inputs and previous results remain unchanged; review before saving a new scenario."
+      : "";
+    updateSaveStatus("Retirement Planning scenario opened for review. Financial Plan unchanged." + recalculationNotice);
   }
 
   function openSavedScenario(id) {
@@ -17661,7 +17666,7 @@
           ${semiRetirementMetricCard("Lifestyle funding", unfunded?.calendarYear ? `Shortfall starts in ${unfunded.calendarYear}` : `Funded through ${projectionEnd.value.replace("+", "")}`, unfunded?.calendarYear ? semiRetirementAgeList(milestoneAgesFromObject(unfunded, viewModel.people)) : projectionEnd.note, unfunded?.calendarYear ? "is-warning" : "is-positive")}
           ${semiRetirementMetricCard("Investments available before super", accessibleAlreadyZero ? "None available" : accessibleDepletion ? `Used by ${accessibleLast.value}` : "Remain available", accessibleAlreadyZero ? `${accessibleLast.note}. No accessible investments are available at the retirement milestone; available super may still fund later spending.` : accessibleDepletion ? `${accessibleLast.note}. ${allFunds?.calendarYear && allFunds.calendarYear <= accessibleDepletion.calendarYear ? "Total retirement investments are exhausted by this year." : "Available super continues funding retirement where required."}` : "Through the projection period.", accessibleTone)}
           ${semiRetirementMetricCard("Retirement investments", allFunds?.calendarYear ? `Exhausted by ${semiRetirementFirstAgeLabel(milestoneAgesFromObject(allFunds, viewModel.people))}` : "No exhaustion projected", allFunds?.calendarYear ? semiRetirementAgeList(milestoneAgesFromObject(allFunds, viewModel.people)) : "No retirement investment exhaustion within the projection horizon.", allFunds?.calendarYear ? "is-warning" : "is-positive")}
-          ${semiRetirementMetricCard("Unfunded lifestyle spending (sum of discounted years)", unfunded?.calendarYear ? money(retirementDisplaySum(viewModel.annualRows || [], row => row.household?.unmetSpending || 0)) : "None projected", unfunded?.calendarYear ? `${semiRetirementAgeList(milestoneAgesFromObject(unfunded, viewModel.people))} - first shortfall ${unfunded.calendarYear}` : "No projected unfunded lifestyle spending.", unfunded?.calendarYear ? "is-warning" : "is-positive")}
+          ${semiRetirementMetricCard("Unfunded required cashflow (sum of discounted years)", unfunded?.calendarYear ? money(retirementDisplaySum(viewModel.annualRows || [], row => row.household?.unmetSpending || 0)) : "None projected", unfunded?.calendarYear ? `${semiRetirementAgeList(milestoneAgesFromObject(unfunded, viewModel.people))} - first shortfall ${unfunded.calendarYear}. Includes required taxes and other cash needs.` : "No projected unfunded required cashflow.", unfunded?.calendarYear ? "is-warning" : "is-positive")}
         </div>
       </section>
       ${renderRetainedAssetsHtml(viewModel)}

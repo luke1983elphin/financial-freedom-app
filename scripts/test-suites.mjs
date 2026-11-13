@@ -1,6 +1,7 @@
 export const DEFAULT_SUITE_TIMEOUT_MS = 120_000;
 
 export const ACTIVE_TEST_SUITES = [
+  { id: "retirement-tax-funding-f08", file: "tests/retirement-tax-funding-f08.test.mjs", groups: ["all", "mjs", "semi-retirement", "audit", "f08"] },
   { id: "growth-scenarios", file: "tests/growth-scenarios.test.mjs", groups: ["all", "mjs", "presentation"] },
   { id: "forecast-assumptions", file: "tests/forecast-assumptions-adapter.test.mjs", groups: ["all", "mjs", "presentation"] },
   { id: "retirement-results", file: "tests/retirement-results.test.mjs", groups: ["all", "mjs", "presentation"] },
