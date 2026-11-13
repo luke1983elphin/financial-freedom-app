@@ -1,0 +1,46 @@
+[
+  {
+    "case": "PROPERTY-legacy",
+    "pdfSha256": "c14210b191affe14af618a8e4f9f86b674ea874cb9f6fc2a13fb97ff18adc53b",
+    "pdfBytes": 328017,
+    "firstYearNominalApp": 618000,
+    "firstYearTodayDisplay": 602927,
+    "independentTodayExpectation": 261463,
+    "renderedAppAmountFoundInPDF": true,
+    "debtProjectionZeroFound": true,
+    "note": "Today-dollar PDF; full PDFs retained in task /tmp. Digest and extracted text check are durable repository evidence."
+  },
+  {
+    "case": "PROPERTY-linked",
+    "pdfSha256": "2d49c3ca7543cb48f46407f7ad38b479036c05df928f45f54ba87daf79af3ccf",
+    "pdfBytes": 328160,
+    "firstYearNominalApp": 868000,
+    "firstYearTodayDisplay": 846829,
+    "independentTodayExpectation": 261463,
+    "renderedAppAmountFoundInPDF": true,
+    "debtProjectionZeroFound": true,
+    "note": "Today-dollar PDF; full PDFs retained in task /tmp. Digest and extracted text check are durable repository evidence."
+  },
+  {
+    "case": "PROPERTY-linked-otherProperty",
+    "pdfSha256": "6882f01258168051adcbb131e6e206be83d4ef1d0c91416f47e39185c3060c01",
+    "pdfBytes": 328195,
+    "firstYearNominalApp": 268000,
+    "firstYearTodayDisplay": 261463,
+    "independentTodayExpectation": 261463,
+    "renderedAppAmountFoundInPDF": true,
+    "debtProjectionZeroFound": true,
+    "note": "Today-dollar PDF; full PDFs retained in task /tmp. Digest and extracted text check are durable repository evidence."
+  },
+  {
+    "case": "TAX-linked",
+    "pdfSha256": "8d9c0da265b694bb38bf6f66578d25ea4e357423a637116f4052a8a6ee8cbdf2",
+    "pdfBytes": 310218,
+    "firstYearNominalApp": 2140000,
+    "firstYearTodayDisplay": 2087805,
+    "independentTodayExpectation": 2078420,
+    "renderedAppAmountFoundInPDF": true,
+    "debtProjectionZeroFound": false,
+    "note": "Today-dollar PDF; full PDFs retained in task /tmp. Digest and extracted text check are durable repository evidence."
+  }
+]

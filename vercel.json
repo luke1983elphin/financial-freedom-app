@@ -1,6 +1,6 @@
 {
   "git": {
-    "deploymentEnabled": { "ui/forecast-assumptions-mobile": false, "ui/assumptions-dedicated-workspace": false }
+    "deploymentEnabled": { "ui/forecast-assumptions-mobile": false, "ui/assumptions-dedicated-workspace": false, "audit/financial-model-before-monte-carlo": false }
   },
   "headers": [
     {
