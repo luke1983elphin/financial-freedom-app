@@ -54,7 +54,7 @@ test('guided switching to Other clears incompatible persisted settings',()=>{
  const r=c.FFSLinkedSetup.upsertInvestment(p,{...share,assetId:'shares',name:'Other asset',investmentType:'otherInvestment',owner:'person1',hasLoan:false});
  assert.equal(r.ok,true);assert.equal(r.plan.assetItems[0].investmentReturnMode,undefined);assert.equal(CALC.investmentReturnAssets(r.plan).length,0);
 });
-for(const fixture of JSON.parse(readFileSync(new URL('./fixtures/investment-ux-parity.json',import.meta.url),'utf8')))test(`PR16 configured ${fixture.name}: all outputs and saved scenario unchanged`,()=>{
+for(const fixture of JSON.parse(readFileSync(new URL('./fixtures/investment-ux-parity.json',import.meta.url),'utf8')))test(`Configured ${fixture.name}: all outputs match approved F08 financial baseline`,()=>{
  const c={console};c.globalThis=c;c.Date=class extends Date{constructor(...args){super(...(args.length?args:['2026-09-29T00:00:00Z']));}static now(){return Date.parse('2026-09-29T00:00:00Z');}};
  for(const f of ['calculator.js','semiRetirementProjection.js','semiRetirementUi.js'])vm.runInNewContext(readFileSync(new URL('../'+f,import.meta.url),'utf8'),c);
  const calc=c.FFSCalculator.calculatePlan(fixture.plan),{draft}=c.FFSSemiRetirementUi.buildSemiRetirementScenarioDefaults(fixture.plan,calc);

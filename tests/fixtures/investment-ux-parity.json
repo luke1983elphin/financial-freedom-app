@@ -244,7 +244,7 @@
         }
       ]
     },
-    "sha256": "f3615e4455dfec62067c0d82a138855ba760b9e2d73390cfc814a783e1ad3a08"
+    "sha256": "07fa50716c4aace5ad9b15d16e62a8e11afc3d440ca8b4ff6fefbc54472bd2cc"
   },
   {
     "name": "simple",
@@ -420,6 +420,6 @@
         }
       ]
     },
-    "sha256": "13690f757c221b0b79a92895aa1bad66a4e0f12a4f21233585901c39f0309462"
+    "sha256": "e9e50041460dd9b7e4856af71f382c971ef8f710cb5fde07ef559a23e7ba722e"
   }
 ]

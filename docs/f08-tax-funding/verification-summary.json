@@ -1,0 +1,62 @@
+{
+  "baseline": "6f3dbf83cc744e765eddf6244313635ea357bc9a",
+  "projectionEngineVersion": "2026.27.4-f08",
+  "nodeVersion": "v24.22.1",
+  "pnpmVersion": "11.25.0",
+  "verify": {
+    "completedSuites": 64,
+    "totals": {
+      "passed": 1263,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0,
+      "total": 1263
+    },
+    "exitCode": 0
+  },
+  "browser": {
+    "passed": 53,
+    "failed": 0,
+    "skipped": 0,
+    "cancelled": 0,
+    "todo": 0,
+    "durationMs": 181004.278209,
+    "exitCode": 0
+  },
+  "newIndependentF08Tests": 15,
+  "newSavedVersionTests": 1,
+  "historicalAudit": {
+    "cases": 48,
+    "unchanged": 47,
+    "changed": [
+      "H47"
+    ]
+  },
+  "mainGoldenCases": {
+    "total": 9,
+    "unchanged": 7,
+    "changed": [
+      "single",
+      "couple-property-offset"
+    ],
+    "independentlyReconciledAnnualRows": 948
+  },
+  "configuredInvestmentHashFixturesChanged": [
+    "populated",
+    "simple"
+  ],
+  "sha256": {
+    "calculator.js": "b9cd8c47af46d838ff5d223bcec160c35957066451d363086a32b9850b606daa",
+    "semiRetirementProjection.js": "42cecba918b1d7d1b65376f5490d607219f7a953e71f5ab90bba24f2ff292594",
+    "semiRetirementUi.js": "4e87341a23a3e38592f1d32619efaf35859d14cf83ac5949fb21dfdf1be524dd",
+    "agePensionEstimate.js": "9f5d57f2c527b41e758dfb0592bceaeb364f1d197737611fcdf5759c25284003",
+    "app.js": "164f54199f16b23a5fb0aed536a55c039bdc670363c3a6fa272e3659b1995d38",
+    "weekly-plan.js": "0aaf2710b38adbacba8b9abf12fa6e9e2e42f42138c017de053237cde481bcb5",
+    "tests/fixtures/age-pension-off-baseline.json": "1c72edd31fe8a78cc9e0ace30129b5880e6a88894bc1010303b8feacf3d05ffd",
+    "tests/fixtures/ux-stage1-before.json.gz": "cf489dd2e88c3e97917afdc626e22d36bee457fe8ec144960cc6e6336185ad97",
+    "tests/fixtures/ux-stage1-before.pre-f08.json.gz": "fcf986eb3d0632c5852da1d2aa325fbcc47849b8a0c12f3f1c64ca41baebc622",
+    "tests/fixtures/investment-ux-parity.json": "d967ad24611c03e45f24ebb13519ac149f4d5765ba3d2d7df68678e22171adfb",
+    "tests/fixtures/investment-ux-parity.pre-f08.json": "f42e786026ded323db4c440208d4eef13a9b71d874db18c1283e1f920725c951"
+  }
+}

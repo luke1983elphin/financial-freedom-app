@@ -2,7 +2,7 @@
   "baseline": "bd23b2a",
   "files": {
     "calculator.js": "b9cd8c47af46d838ff5d223bcec160c35957066451d363086a32b9850b606daa",
-    "semiRetirementProjection.js": "9a973fbcc69b5748daabfc630fbd329ed1f07da2c3439d3aefb43d1f0ab36f8d",
+    "semiRetirementProjection.js": "42cecba918b1d7d1b65376f5490d607219f7a953e71f5ab90bba24f2ff292594",
     "semiRetirementUi.js": "4e87341a23a3e38592f1d32619efaf35859d14cf83ac5949fb21dfdf1be524dd",
     "v2-data.js": "935fb66f828874f0ccc267d99d611a47113a85315cb983e45ff49390a84d8baa",
     "storage.js": "c85374d3b59ad306de5d3657d8ff44c12eb69c1f4d4e1b71228656228a4ff58d",
@@ -495,7 +495,7 @@
     "renderSemiRetirementComparisonPrintReport": "77892363c8a6af86f42a10c7505e92ede926b536eb73b989225bb9bdf856c9a1",
     "renderSemiRetirementTimelineHtml": "0696f516b741974bfe180e73e01631fde316faf3d2f61de44094d8e87c35f646",
     "renderRetainedAssetsHtml": "8e6772e1a42f7e878fa2a9158906baf41a2d896c7af6d3c21145ae085cf51d48",
-    "renderSemiRetirementLongevityHtml": "a6046d2f582420688d8b0a804eae93e92caadc56b23144fa74fe97b8ae6c248a",
+    "renderSemiRetirementLongevityHtml": "40f3c515ad962dc476d4c66aeb6763f1189a1f3846ea64513fa11478ed6a0c97",
     "renderSemiRetirementFundingHtml": "ccc5fc3457c1fdedb5f9d29391a5ce86817136bcb9a4d8c6c0c372d017a7e0f9",
     "renderSemiRetirementPassiveIncomeHtml": "7cff6d4f565e47248957452b8d014d99391dbe8011f5fd9b0c559c7ec3bd657f",
     "renderSemiRetirementDebtWarningsHtml": "043aede987790c5dbaeb97a567b057d99db44703719a9bf74a2ec4eb5b796e21",
@@ -732,7 +732,7 @@
     "scenarioPathValue": "d6cf4a7d7633bd5204ce944c2d2c63e5124cd1ccb60afbe46318aa6cd945ca0b",
     "retirementChangeRows": "a3d5c666471d539050e69c9f6d52837390de260d739f454fcdd5cab22a263bd4",
     "retirementOutcomeSections": "e16c57b1b6ed117b91a0faf606be787b07fc85da7aeeb954a19829acb2e22bcb",
-    "retirementKeyResultSnapshot": "f4269370094f149e67697c8eb7e4226a671aae9382e72b6ddd12bc43f93781ed",
+    "retirementKeyResultSnapshot": "5040fd262c60a978f527fb86702044142a2687c1576f119bc783470c34a213e0",
     "savedRetirementOutcomeHtml": "b45ed24e0e8386a36110c994a4c1e1e6a09da7b4f9d5d3fd1d8c79a61e8beb6e",
     "savedRetirementChangesHtml": "dd9088655574c0bac4672b955bfc7b538d5cf68111b45eb31fe2c0bccbe6e03c",
     "suggestedRetirementScenarioName": "0fe1887c2541c58064c762190ab8e1e054afa098acc92293bde5e4d52b7cd35a",
@@ -783,7 +783,7 @@
     "saveScenario": "03fb44f237491676e9b8e476788102a7699be5f438c74d0340944f00ba13482d",
     "findSavedScenario": "aa26c4cfcade4153b878054c737470ce6b242e813afbade5b370876d049e642c",
     "loadDecisionScenarioSnapshot": "d47382042d47307a9ccf6f7addc83932c127cd558898496f2dd1f7735a387501",
-    "loadRetirementScenarioSnapshot": "5cd4fe467947b53b349265585171ec1c72dba34cf9a0b7c9f2c53dbec3fba710",
+    "loadRetirementScenarioSnapshot": "50b8224bb05f94452994025444d5cac299cd240519cf78a9c13fabd2c496b515",
     "openSavedScenario": "c771c9f010a1ab00e3351e50d09a2c78d3ab52fcb5c0ddf083b41c6c84e8ad91",
     "exploreDecisionOpportunity": "a3cd7773d88a5e1043f85a375c675aba400d75959c940464fe539eaf70e556d3",
     "compareSavedScenario": "5c39bfdd8ba2d54a559dabf8a1f23ff95dc7c230dbe78a2d0ba6926ffba1d68b",
@@ -792,7 +792,8 @@
     "deleteSavedScenario": "ab561977edc319177cfd8c9e8447ba68fb26f0baac9d4472304d4953f7609f9b",
     "duplicateScenario": "48c0fe6ff2b927882b965d823c24bd47a1f8915ca102dfe06a6c0dc6f26bf633",
     "renameScenario": "ac744ddc6ea6e10eee3ee45302abd2ff9905a37eafb6b13b0618bdfd72e79460",
-    "seedSampleScenarios": "1bad72ef2dd36ae2ee73f4221c3adbc11e2e8251b8469ea3ca4c2d9884d4a02e"
+    "seedSampleScenarios": "1bad72ef2dd36ae2ee73f4221c3adbc11e2e8251b8469ea3ca4c2d9884d4a02e",
+    "renderSemiRetirementLongevityHtmlDollarBasis": "a6b7d33424d3faeb65058632184e1026306b1414de778669e7b49d3512bce8e4"
   },
   "presentationSectionsExcluded": [
     "updateSetupNavigationLabel",
@@ -1096,5 +1097,51 @@
     ]
   },
   "releaseSafeguardsReview": "2026-10-19: calculator disclosure-only addition verified against e1e69f8 full sample outputs and tax boundaries; AI handler intentionally locked and hardened. Other hashes unchanged.",
-  "targetedCorrections": "F1-F8: refresh only changed scenario/forecast functions and the presentation adapter; calculator and retirement-engine guards unchanged."
+  "targetedCorrections": "F1-F8: refresh only changed scenario/forecast functions and the presentation adapter; calculator and retirement-engine guards unchanged.",
+  "f08TaxFundingCorrection": {
+    "baseline": "6f3dbf83cc744e765eddf6244313635ea357bc9a",
+    "projectionEngineVersion": "2026.27.4-f08",
+    "authorization": "User authorised proceeding with the F08-only correction and necessary independently verified fixture/guard changes. No other financial findings are corrected.",
+    "changes": [
+      {
+        "group": "files",
+        "key": "semiRetirementProjection.js",
+        "previousHash": "9a973fbcc69b5748daabfc630fbd329ed1f07da2c3439d3aefb43d1f0ab36f8d",
+        "correctedHash": "42cecba918b1d7d1b65376f5490d607219f7a953e71f5ab90bba24f2ff292594"
+      },
+      {
+        "group": "appFunctions",
+        "key": "retirementKeyResultSnapshot",
+        "previousHash": "f4269370094f149e67697c8eb7e4226a671aae9382e72b6ddd12bc43f93781ed",
+        "correctedHash": "5040fd262c60a978f527fb86702044142a2687c1576f119bc783470c34a213e0",
+        "newlyGuarded": false
+      },
+      {
+        "group": "appFunctions",
+        "key": "loadRetirementScenarioSnapshot",
+        "previousHash": "5cd4fe467947b53b349265585171ec1c72dba34cf9a0b7c9f2c53dbec3fba710",
+        "correctedHash": "50b8224bb05f94452994025444d5cac299cd240519cf78a9c13fabd2c496b515",
+        "newlyGuarded": false
+      },
+      {
+        "group": "appFunctions",
+        "key": "renderSemiRetirementLongevityHtml",
+        "previousHash": "b261340f792ce438ff8f8392560e8d45f2e18ab8d8e59936ea4c6239d133c9c1",
+        "previousHashSource": "Actual function in pre-F08 baseline 6f3dbf83cc744e765eddf6244313635ea357bc9a:app.js, extracted using the protected-function test boundaries and trim convention.",
+        "previousRecordedGuardHash": "a6046d2f582420688d8b0a804eae93e92caadc56b23144fa74fe97b8ae6c248a",
+        "previousRecordedGuardHashSource": "Historical appFunctions expectation in the pre-F08 protected fixture. It was stale and excluded from enforcement; it is retained as historical metadata, not as the actual baseline source hash.",
+        "correctedHash": "40f3c515ad962dc476d4c66aeb6763f1189a1f3846ea64513fa11478ed6a0c97",
+        "correctedHashSource": "F08 source at 94687d5635d01dd617f61ffd2dbcb328a65ea7a8:app.js; the renderer source is unchanged by this safeguards correction and its guard is now enforced.",
+        "newlyGuarded": false
+      },
+      {
+        "group": "appFunctions",
+        "key": "renderSemiRetirementLongevityHtmlDollarBasis",
+        "previousHash": "c65eeecac9a536d6b97899ed83c0f7f596218fd039ffaf33b52f6a2999cb9780",
+        "correctedHash": "a6b7d33424d3faeb65058632184e1026306b1414de778669e7b49d3512bce8e4",
+        "newlyGuarded": true
+      }
+    ],
+    "goldenFixture": "Only the single and couple-property-offset retirement outputs change; original full fixture is retained as ux-stage1-before.pre-f08.json.gz. See docs/f08-tax-funding/golden-deltas.json."
+  }
 }

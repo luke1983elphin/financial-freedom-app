@@ -24,6 +24,7 @@
   const FEATURE_FLAGS = {
     semiRetirementProjectionEnabled: resolveSemiRetirementProjectionFlag(),
   };
+  const PROJECTION_VERSION = "2026.27.4-f08";
   const DEFAULT_CONTRIBUTIONS_TAX_RATE = 0.15;
   const DEFAULT_EMPLOYER_SUPER_RATE = 0.12;
   const DOWNSIZER_CONTRIBUTION_LIMIT = 300000;
@@ -2108,7 +2109,9 @@
         person.stslOpeningBalance = stslOpeningBalance;
         person.stslRepayment = stslRepayment;
         person.stslClosingBalance = peopleStates[person.id].stslBalance;
-        person.netEmploymentIncome = roundCurrency(Math.max(0, person.totalCashIncomeBeforeTax - person.incomeTax - person.medicareLevy - person.medicareLevySurcharge - stslRepayment));
+        // Keep tax deficits signed until household cash is pooled. The existing
+        // withdrawal waterfall must fund them or report them as unmet cash needs.
+        person.netEmploymentIncome = roundCurrency(person.totalCashIncomeBeforeTax - person.incomeTax - person.medicareLevy - person.medicareLevySurcharge - stslRepayment);
         person.netIncome = person.netEmploymentIncome;
         person.employerSuperContribution = employerSuper;
         person.surplusAdditionalSuperContribution = 0;
@@ -2257,7 +2260,7 @@
             person.stslRepayment = roundCurrency(Math.min(person.stslOpeningBalance, estimateStslRepayment(person.stslRepaymentIncome, person.stslOpeningBalance)));
             person.stslClosingBalance = roundCurrency(Math.max(0, person.stslOpeningBalance - person.stslRepayment));
             peopleStates[person.id].stslBalance = person.stslClosingBalance;
-            person.netEmploymentIncome = roundCurrency(Math.max(0, person.totalCashIncomeBeforeTax - person.incomeTax - person.medicareLevy - person.medicareLevySurcharge - person.stslRepayment));
+            person.netEmploymentIncome = roundCurrency(person.totalCashIncomeBeforeTax - person.incomeTax - person.medicareLevy - person.medicareLevySurcharge - person.stslRepayment);
             person.netIncome = person.netEmploymentIncome;
           });
         }
@@ -2564,7 +2567,9 @@
         .filter(Boolean);
       const yearWarnings = yearIndex === 0 ? propertyIncomeWarningMessages : [];
       downsizeHomeEvent.warnings.forEach((warning) => yearWarnings.push(warning));
-      if (requiredSuperFunding.unmet > 0) yearWarnings.push("Household spending shortfall could not be fully funded.");
+      if (requiredSuperFunding.unmet > 0) yearWarnings.push(peopleYear.some(person => person.netEmploymentIncome < 0)
+        ? "Required household cashflow, including tax, could not be fully funded."
+        : "Household spending shortfall could not be fully funded.");
       if (closingAccessibleInvestmentBalance === 0 && totalAccessibleWithdrawal > 0 && milestoneIsUnset(summary.accessibleFundsExhausted)) {
         summary.accessibleFundsExhausted = milestoneForYear(calendarYear, peopleYear);
         summary.accessibleFundsExhaustedAge = summary.accessibleFundsExhausted.person1Age;
@@ -2894,6 +2899,7 @@
   }
 
   global.FFSSemiRetirementProjection = {
+    VERSION: PROJECTION_VERSION,
     featureFlags: FEATURE_FLAGS,
     projectRetirementScenario,
     retainedAssetsAtYear,

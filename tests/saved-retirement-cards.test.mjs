@@ -7,11 +7,14 @@ import {fixture} from '../scripts/retirement-exhaustion-fixture.mjs';
 const {CALC,ENGINE,UI}=load();
 const source=readFileSync(new URL('../app.js',import.meta.url),'utf8');
 function functions(names){return names.map(name=>{const start=source.indexOf('  function '+name+'(');assert.ok(start>=0,name);return source.slice(start,source.indexOf('\n  function ',start+5));}).join('\n');}
-const ctx={window:{FFSSemiRetirementUi:UI},console,plan:household(CALC),calculatePlan:CALC.calculatePlan,
+const ctx={window:{FFSSemiRetirementUi:UI,FFSSemiRetirementProjection:ENGINE},console,plan:household(CALC),calculatePlan:CALC.calculatePlan,
  money:n=>'$'+Number(n).toLocaleString('en-AU'),escapeHtml:s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),
  savedScenarioComparisonAnchorId:'',savedScenarioComparisonTargetId:'',SCENARIO_OVERLAY:{isStale:()=>true},scenarioDisplayDate:()=> 'Today'};
 vm.runInNewContext(functions(['retirementScenarioSummary','retirementScenarioSubtitle','semiRetirementMoney','semiRetirementAgeList','retirementOutcomeSections','retirementKeyResultSnapshot','savedRetirementOutcomeHtml','savedRetirementChangesHtml','scenarioChange','scenarioChangeText','changedInputsListHtml','keyResultRows','keyResultsListHtml','normaliseSavedScenarioType','savedScenarioTypeLabel','scenarioCardHtml','scenarioSnapshotRows','scenarioRowDisplayValue','scenarioComparisonRows']),ctx);
 function outcome(change=()=>{}) {const input=fixture();change(input);const result=ENGINE.projectRetirementScenario(input);assert.equal(result.validation.isValid,true,JSON.stringify(result.validation));const view=UI.buildSemiRetirementResultsViewModel(result,input,{people:input.people});return {input,result,view,snapshot:ctx.retirementKeyResultSnapshot(view)};}
+test('new retirement result snapshots record the corrected projection engine version',()=>{
+ assert.equal(outcome().snapshot.projectionEngineVersion,'2026.27.4-f08');
+});
 test('full retirement snapshot separates accessible, super and funding assets',()=>{
  const {snapshot,result}=outcome();const o=snapshot.retirementOutcome,h=result.years[0].household;
  assert.equal(o.accessibleAtRetirement,h.closingAccessibleInvestmentBalance);assert.equal(o.superAtRetirement,h.totalSuperBalance);assert.equal(o.fundingAssetsAtRetirement,o.accessibleAtRetirement+o.superAtRetirement);
