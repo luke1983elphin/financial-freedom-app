@@ -1,4 +1,7 @@
 {
+  "git": {
+    "deploymentEnabled": { "ui/forecast-assumptions-mobile": false }
+  },
   "headers": [
     {
       "source": "/(.*)",

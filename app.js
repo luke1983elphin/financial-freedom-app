@@ -18555,7 +18555,10 @@
     };
     const originalOutputs = renderOutputs;
     renderOutputs = (...args) => { const result = originalOutputs(...args); editor?.sync(); growthComparison?.sync(); return result; };
+    const growthContainer = document.createElement("div");
+    growthContainer.className = "growth-workspace";
     editor = window.FFSForecastAssumptionsView.mount(document.getElementById("forecastAssumptionsWorkspace"), {
+      comparison: growthContainer,
       getPlan: () => plan,
       getIdentity: () => `${activePlanId}:${isDemoActive()}:${plan.meta?.samplePlanId || ""}`,
       isDemo: () => isDemoActive(),
@@ -18580,9 +18583,6 @@
         return true;
       },
     });
-    const growthContainer = document.createElement("div");
-    growthContainer.className = "growth-workspace";
-    document.getElementById("forecastAssumptionsWorkspace").before(growthContainer);
     growthComparison = window.FFSGrowthScenariosView.mount(growthContainer, {
       getPlan: () => plan,
       getIdentity: () => `${activePlanId}:${isDemoActive()}:${plan.meta?.samplePlanId || ""}`,
