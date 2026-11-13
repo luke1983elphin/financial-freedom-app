@@ -1126,8 +1126,12 @@
       {
         "group": "appFunctions",
         "key": "renderSemiRetirementLongevityHtml",
-        "previousHash": "a6046d2f582420688d8b0a804eae93e92caadc56b23144fa74fe97b8ae6c248a",
+        "previousHash": "b261340f792ce438ff8f8392560e8d45f2e18ab8d8e59936ea4c6239d133c9c1",
+        "previousHashSource": "Actual function in pre-F08 baseline 6f3dbf83cc744e765eddf6244313635ea357bc9a:app.js, extracted using the protected-function test boundaries and trim convention.",
+        "previousRecordedGuardHash": "a6046d2f582420688d8b0a804eae93e92caadc56b23144fa74fe97b8ae6c248a",
+        "previousRecordedGuardHashSource": "Historical appFunctions expectation in the pre-F08 protected fixture. It was stale and excluded from enforcement; it is retained as historical metadata, not as the actual baseline source hash.",
         "correctedHash": "40f3c515ad962dc476d4c66aeb6763f1189a1f3846ea64513fa11478ed6a0c97",
+        "correctedHashSource": "F08 source at 94687d5635d01dd617f61ffd2dbcb328a65ea7a8:app.js; the renderer source is unchanged by this safeguards correction and its guard is now enforced.",
         "newlyGuarded": false
       },
       {

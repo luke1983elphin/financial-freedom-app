@@ -67,8 +67,9 @@ test('protected models, data, persistence and app functions match the audited ap
   const matches=[...normalised.matchAll(/^  (?:async )?function (\w+)\(/gm)];
   const actual=Object.fromEntries(matches.map((m,i)=>[m[1],hash(normalised.slice(m.index,matches[i+1]?.index??normalised.length).trim())]));
   // The approved retirement results presentation update intentionally changes these two renderers.
+  // The F08 longevity renderer has an approved current hash and is enforced below.
   // Keep all other audited model, persistence and application functions hash-protected.
-  const approvedPresentationChanges = new Set(['renderSemiRetirementSnapshotHtml', 'renderSemiRetirementScenarioResultHtml', 'renderSemiRetirementLongevityHtml']);
+  const approvedPresentationChanges = new Set(['renderSemiRetirementSnapshotHtml', 'renderSemiRetirementScenarioResultHtml']);
   for(const [name,expected] of Object.entries(guard.appFunctions)) {
     if (approvedPresentationChanges.has(name) || name === 'renderWhatIf' || name === 'recordSuccessfulDurableSave') continue;
     assert.equal(actual[name],expected,name);
