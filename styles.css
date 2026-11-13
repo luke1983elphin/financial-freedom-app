@@ -10258,3 +10258,54 @@ body.scenario-save-modal-open {
 @media(min-width: 801px) { .growth-card > .field-help { min-height: 4.5rem; } }
 .growth-scroll-hint { display: none; }
 @media(max-width: 600px) { .growth-scroll-hint { display: block; font-size: .8rem; color: #475569; } }
+
+/* Keep the saved-assumptions header and session comparison in one panel. */
+.forecast-assumptions-workspace .fa-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 16px 24px;
+}
+.fa-heading { min-width: 0; }
+.forecast-assumptions-workspace .fa-heading h2 {
+  font-size: 1.5rem;
+  line-height: 1.25;
+  letter-spacing: -.02em;
+  margin: 0 0 8px;
+}
+.forecast-assumptions-workspace .fa-intro {
+  font-size: .9375rem;
+  line-height: 1.5;
+  margin: 0;
+  max-width: 62ch;
+}
+.fa-header > .growth-workspace { display: contents; }
+.fa-header [data-growth-open] { align-self: start; margin: 0; }
+.fa-header .growth-panel { grid-column: 1 / -1; margin-top: 0; }
+.forecast-assumptions-workspace > .fa-state { margin: 16px 0 0; padding: 10px 12px; font-size: .875rem; }
+.forecast-assumptions-workspace .fa-group { margin: 20px 0; }
+.forecast-assumptions-workspace .fa-group > legend { font-size: 1.0625rem; padding-bottom: 12px; }
+.forecast-assumptions-workspace .fa-advanced { margin: 16px 0; padding-bottom: 0; }
+.forecast-assumptions-workspace .fa-advanced[open] { padding-bottom: 16px; }
+.forecast-assumptions-workspace .fa-advanced > summary { font-size: 1rem; padding: 14px 0; }
+.forecast-assumptions-form > .forecast-assumptions-actions { margin-top: 16px; }
+.forecast-assumptions-status:empty, .fa-field-error:empty { display: none; }
+@media (max-width: 800px) {
+  .forecast-assumptions-workspace .fa-header { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .fa-header [data-growth-open] { justify-self: start; }
+}
+@media (max-width: 600px) {
+  .forecast-assumptions-workspace { padding: 16px; border-radius: 16px; }
+  .forecast-assumptions-workspace .fa-heading h2 { font-size: 1.25rem; margin-bottom: 6px; }
+  .forecast-assumptions-workspace .fa-intro { font-size: .875rem; line-height: 1.5; }
+  .fa-header [data-growth-open] { width: 100%; padding: 10px 14px; }
+  .forecast-assumptions-workspace > .fa-state { margin-top: 12px; font-size: .8125rem; }
+  .forecast-assumptions-workspace .fa-group { margin: 16px 0; }
+  .forecast-assumptions-workspace .fa-grid { gap: 10px; }
+  .forecast-assumptions-row { padding: 12px; }
+  .forecast-assumptions-row label { font-size: .9375rem; line-height: 1.35; }
+  .forecast-assumptions-row .field-input { margin: 6px 0; }
+  .forecast-assumptions-workspace .field-help { font-size: .8125rem; line-height: 1.45; }
+  .forecast-assumptions-workspace .fa-source { margin: 4px 0; font-size: .75rem; }
+  .forecast-assumptions-form > .forecast-assumptions-actions { gap: 8px; margin-top: 12px; }
+}

@@ -782,3 +782,32 @@ test('growth demo comparison and returning to personal plan never persist scenar
   assert.deepEqual(JSON.parse(await evaluate("localStorage.getItem('ffs-current-plan-v3-mobile-dashboard-ux-test')")).plan,JSON.parse(stored).plan);
   assert.deepEqual(browserMessages,[],'growth workflows produce no runtime errors or CSP violations');
 });
+
+test('assumptions presentation at requested desktop and phone widths',async()=>{
+  const stage=process.env.FFS_ASSUMPTIONS_EVIDENCE==='before'?'before':'after';
+  const evidence=path.join(root,'docs/assumptions-mobile');await mkdir(evidence,{recursive:true});
+  for(const width of [375,390,430,768,1366]){
+    await cdp.send('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:width<600});await navigate();await assumptionsFixture();await select('future');
+    const plan=await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),result=await evaluate('JSON.stringify(__dollarTest.result())');
+    await evaluate("document.querySelector('[data-view-panel=assumptions]').scrollIntoView({block:'start'})");
+    const clip=await evaluate("(()=>{const r=document.querySelector('[data-view-panel=assumptions]').getBoundingClientRect();return {x:r.left+scrollX,y:r.top+scrollY,width:r.width,height:r.height,scale:1}})()");
+    const shot=await cdp.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip});await writeFile(path.join(evidence,`${stage}-${width}.png`),Buffer.from(shot.data,'base64'));
+    assert.ok(await evaluate('document.documentElement.scrollWidth<=innerWidth'));
+    if(stage==='after'){
+      assert.ok(await evaluate("!!document.querySelector('.forecast-assumptions-workspace [data-growth-open]')"));
+      assert.ok(await evaluate("(()=>{const p=document.querySelector('.forecast-assumptions-workspace').getBoundingClientRect(),b=document.querySelector('[data-growth-open]').getBoundingClientRect();return b.left>=p.left&&b.right<=p.right&&b.top>=p.top})()"));
+      assert.equal(await evaluate("document.querySelector('.fa-advanced').open"),false);
+      assert.ok(await evaluate("[...document.querySelectorAll('.fa-source')].every(n=>!n.textContent.includes('3.5000000000000004'))"));
+      assert.ok(await evaluate("document.querySelector('.forecast-assumptions-actions button[type=submit]').disabled"));
+      await evaluate("document.querySelector('[data-growth-open]').focus()");await key('Enter');await growthEdit('Base','expectedSuperReturnPct',9);
+      await assumptionButton('Undo unsaved edits');
+      assert.equal(await evaluate("document.querySelector('[data-growth-scenario=Base][data-growth-field=expectedSuperReturnPct]').value"),'9','editor rerender preserves comparison session');
+      assert.equal(await evaluate("document.querySelector('.growth-panel').hidden"),false);
+      await evaluate("[...document.querySelectorAll('.growth-panel button')].find(n=>n.textContent==='Close comparison').click()");
+      assert.ok(await evaluate("document.activeElement.hasAttribute('data-growth-open')"));
+      assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),plan);
+      assert.equal(await evaluate('JSON.stringify(__dollarTest.result())'),result);
+    }
+  }
+  assert.deepEqual(browserMessages,[]);
+});

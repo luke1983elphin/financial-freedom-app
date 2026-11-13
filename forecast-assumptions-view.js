@@ -5,7 +5,7 @@
     if (text !== undefined) node.textContent = text; return node;
   };
   const copy = value => structuredClone(value);
-  function mount(container, {getPlan, getIdentity = () => "plan", onSave, onRetirement, isDemo = () => false}) {
+  function mount(container, {getPlan, getIdentity = () => "plan", onSave, onRetirement, isDemo = () => false, comparison}) {
     const api = root.FFSForecastAssumptions;
     let basePlan, baseline, draft, signature, identity, busy = false, stale = false, advanced = false, preview = false;
     let status, save, dirtyLabel, errorsBox;
@@ -23,7 +23,14 @@
       container.replaceChildren();
       const shell = make("section", "card forecast-assumptions-workspace");
       const heading = make("h2", "", "Forecast assumptions"); heading.tabIndex = -1;
-      shell.append(heading, make("p", "fa-intro", "Review the growth and inflation assumptions behind your forecasts. Edit here, then save to update your plan."));
+      const header = make("header", "fa-header");
+      const introduction = make("div", "fa-heading");
+      introduction.append(heading, make("p", "fa-intro", "Review the growth and inflation assumptions behind your forecasts. Edit here, then save to update your plan."));
+      header.append(introduction);
+      // Reattach the same comparison DOM across editor renders so its session,
+      // input handlers and focus-return target stay intact.
+      if (comparison) header.append(comparison);
+      shell.append(header);
       dirtyLabel = make("p", "fa-state"); dirtyLabel.setAttribute("role", "status"); shell.append(dirtyLabel);
       if (isDemo()) shell.append(make("p", "fa-notice", "Sample plan: apply changes to this preview only. Your personal plan and saved scenarios will not change."));
       const form = make("form", "forecast-assumptions-form"); form.noValidate = true;
@@ -50,7 +57,7 @@
       details.addEventListener("toggle",()=>{advanced=details.open;});
       const advancedGroup = make("div", "fa-grid"); details.append(advancedGroup);
       for (const field of api.resolve(basePlan)) {
-        const source = `${field.source} · ${field.effective}% effective${field.id === "withdrawal" && field.effective !== field.value ? ` (${field.value}% entered)` : ""}`;
+        const source = `${field.source} · ${Number(field.effective.toFixed(10))}% effective${field.id === "withdrawal" && field.effective !== field.value ? ` (${field.value}% entered)` : ""}`;
         const {row,control} = inputRow({key:field.key,label:field.label,value:draft.values[field.key],source,note:field.note,disabled:!field.editable});
         control.addEventListener("input",()=>{draft.values[field.key]=control.value.trim()===""?NaN:Number(control.value);preview=false;status.textContent="";update();});
         if (!field.editable) row.append(make("p", "fa-notice", "Read-only for this plan. Save retirement timing in Retirement Planning to use wage growth in your plan forecast."));
