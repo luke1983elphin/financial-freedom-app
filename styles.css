@@ -10217,7 +10217,6 @@ body.scenario-save-modal-open {
 .fa-defaults-preview .btn { margin: 8px 8px 0 0; }
 .forecast-assumptions-status { margin-top: 16px; line-height: 1.6; }
 .fa-existing-setting { display: grid; gap: 8px; align-content: start; }
-.fa-nav { width: 100%; margin-top: 12px; }
 @media(max-width:600px) {
   .fa-grid { grid-template-columns: minmax(0,1fr); }
   .fa-advanced { padding-left: 12px; padding-right: 12px; }
@@ -10309,3 +10308,13 @@ body.scenario-save-modal-open {
   .forecast-assumptions-workspace .fa-source { margin: 4px 0; font-size: .75rem; }
   .forecast-assumptions-form > .forecast-assumptions-actions { gap: 8px; margin-top: 12px; }
 }
+
+/* Scope belongs beside the saved-plan actions, separate from session comparisons. */
+.fa-eyebrow { margin: 0 0 6px; color: #526579; font-size: .75rem; font-weight: 700; letter-spacing: .04em; }
+.fa-scope { padding: 16px; border: 1px solid #dbe5ee; border-radius: 12px; background: #f8fafc; margin-top: 16px; }
+.fa-scope h3 { margin: 0 0 8px; font-size: 1rem; color: #173451; }
+.fa-scope ul { margin: 0; padding-left: 18px; font-size: .875rem; line-height: 1.5; color: #526579; }
+.fa-scope li + li { margin-top: 8px; }
+@media(max-width:600px) { .fa-scope { padding: 12px; } .fa-scope ul { font-size: .8125rem; } }
+/* Reveal the Assumptions header below the app's sticky page header on entry. */
+body[data-active-view="assumptions"] #appWorkspace { scroll-margin-top: calc(var(--app-header-height, 96px) + 12px); }

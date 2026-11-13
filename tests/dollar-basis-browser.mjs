@@ -811,3 +811,77 @@ test('assumptions presentation at requested desktop and phone widths',async()=>{
   }
   assert.deepEqual(browserMessages,[]);
 });
+
+test('dedicated Assumptions uses More tools and preserves all five core tabs at every requested width',async()=>{
+  const core=['dashboard','setup','goals','semiretirement','weeklyplan'];
+  const evidence=path.join(root,'docs/assumptions-navigation');await mkdir(evidence,{recursive:true});
+  for(const width of [375,390,430,768,1366]){
+    await cdp.send('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:width<600});await navigate();await assumptionsFixture();
+    const before=await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),forecast=await evaluate('JSON.stringify(__dollarTest.result())');
+    const history=await evaluate('JSON.stringify({length:history.length,state:history.state,url:location.href})');
+    assert.deepEqual(await evaluate("[...document.querySelectorAll('.nav-primary-row button')].map(n=>n.textContent.trim())"),['Home','My Plan','Goals','Retirement','Weekly']);
+    assert.deepEqual(await evaluate("[...document.querySelectorAll('.nav-more-items button')].map(n=>n.dataset.view)"),['assumptions','decision','investments','super','reports','scenarios']);
+    assert.equal(await evaluate("document.querySelectorAll('.dollar-basis-control [data-assumptions-open],.dollar-basis-control [data-view]').length"),0);
+    for(const view of core){
+      await evaluate(`document.querySelector('.nav-primary-row [data-view="${view}"]').click()`);
+      assert.equal(await evaluate('document.body.dataset.activeView'),view);
+      assert.equal(await evaluate(`document.querySelector('.nav-primary-row [data-view="${view}"]').getAttribute('aria-current')`),'page');
+      assert.equal(await evaluate("document.querySelectorAll('.view-section:not(.hidden)').length"),1);
+    }
+    await evaluate("document.getElementById('moreNavigation').open=true;document.querySelector('.nav-more-items [data-view=assumptions]').focus()");await key('Enter');
+    assert.equal(await evaluate('document.body.dataset.activeView'),'assumptions');
+    assert.equal(await evaluate("document.querySelector('.fa-nav').getAttribute('aria-current')"),'page');
+    assert.equal(await evaluate("document.getElementById('moreNavigation').classList.contains('has-active-view')"),true);
+    assert.equal(await evaluate("document.activeElement===document.querySelector('#moreNavigation summary')"),true,'existing More tools focus return');
+    assert.equal(await evaluate("document.querySelectorAll('#forecastAssumptionsWorkspace,.forecast-assumptions-form,[data-growth-open]').length"),3,'one editor and comparison mount');
+    assert.match(await evaluate("document.querySelector('.fa-scope').textContent"),/not silently overwrite or recalculate/);
+    assert.match(await evaluate("document.querySelector('.fa-scope').textContent"),/not legacy accumulation/);
+    assert.ok(await evaluate('document.documentElement.scrollWidth<=innerWidth'));
+    assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),before);
+    assert.equal(await evaluate('JSON.stringify(__dollarTest.result())'),forecast);
+    assert.equal(await evaluate('JSON.stringify({length:history.length,state:history.state,url:location.href})'),history,'workspace navigation preserves existing browser history');
+    await evaluate("document.getElementById('appWorkspace').scrollIntoView({behavior:'instant',block:'start'})");
+    assert.ok(await evaluate("document.querySelector('.nav-primary-row').getBoundingClientRect().top>=document.querySelector('body > div > header').getBoundingClientRect().bottom"),'all five tabs remain below the sticky header');
+    if(width>=1024)assert.ok(await evaluate("document.querySelector('.forecast-assumptions-workspace h2').getBoundingClientRect().top>=document.querySelector('body > div > header').getBoundingClientRect().bottom"),'workspace heading is not obscured by sticky header');
+    // Chromium's beyond-viewport captures can paint a sticky site header over
+    // the crop. Visibility assertions above use its real position; only the
+    // evidence capture makes that unrelated header static, then restores it.
+    const headerPosition=await evaluate("(()=>{const h=document.querySelector('body > div > header'),position=h.style.position;h.style.position='static';return position})()");
+    const clip=await evaluate("(()=>{const r=document.getElementById('appWorkspace').getBoundingClientRect();return {x:r.left+scrollX,y:r.top+scrollY,width:r.width,height:r.height,scale:1}})()");
+    const shot=await cdp.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip});await writeFile(path.join(evidence,`workspace-${width}.png`),Buffer.from(shot.data,'base64'));
+    await evaluate(`document.querySelector('body > div > header').style.position=${JSON.stringify(headerPosition)}`);
+    if([375,1366].includes(width)){
+      await evaluate("document.querySelector('[data-growth-open]').click()");
+      const rect=await evaluate("(()=>{const r=document.querySelector('.growth-panel').getBoundingClientRect();return {x:r.left+scrollX,y:r.top+scrollY,width:r.width,height:r.height,scale:1}})()");
+      const shot=await cdp.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip:rect});await writeFile(path.join(evidence,`comparison-${width}.png`),Buffer.from(shot.data,'base64'));
+    }
+  }
+  assert.deepEqual(browserMessages,[]);
+});
+
+test('Assumptions round trips retain unsaved edits, comparison isolation, save/undo/defaults and other tool routes',async()=>{
+  await navigate();await assumptionsFixture();
+  const plan=await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),result=await evaluate('JSON.stringify(__dollarTest.result())'),stored=await evaluate('JSON.stringify({...localStorage})');
+  await assumptionEdit('inflationPct',4);await evaluate("document.querySelector('[data-growth-open]').click()");await growthEdit('Base','expectedSuperReturnPct',9);
+  for(const view of ['decision','investments','super','reports','scenarios']){
+    await evaluate(`document.querySelector('.nav-more-items [data-view="${view}"]').click()`);assert.equal(await evaluate('document.body.dataset.activeView'),view);
+    await evaluate("document.querySelector('.fa-nav').click()");
+    assert.equal(await evaluate("document.querySelector('[data-assumption=inflationPct]').value"),'4');
+    assert.equal(await evaluate("document.querySelector('[data-growth-scenario=Base][data-growth-field=expectedSuperReturnPct]').value"),'9');
+    assert.match(await evaluate("document.querySelector('.forecast-assumptions-workspace > .fa-state').textContent"),/Unsaved edits/);
+  }
+  assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),plan);
+  assert.equal(await evaluate('JSON.stringify(__dollarTest.result())'),result);
+  // Reports have existing automatic snapshot behavior; compare the financial plan,
+  // not unrelated history/report UI storage generated by visiting that tool.
+  assert.equal(await evaluate("localStorage.getItem('ffs-current-plan-v3-mobile-dashboard-ux-test')"),JSON.parse(stored)['ffs-current-plan-v3-mobile-dashboard-ux-test']??null);
+  await assumptionButton('Undo unsaved edits');assert.equal(await evaluate("document.querySelector('[data-assumption=inflationPct]').value"),'2.5');
+  assert.equal(await evaluate("document.querySelector('[data-growth-scenario=Base][data-growth-field=expectedSuperReturnPct]').value"),'9');
+  await assumptionEdit('inflationPct',0);await assumptionButton('Save assumptions');await waitFor(()=>evaluate("document.querySelector('.forecast-assumptions-status').textContent.includes('Assumptions saved')"));
+  assert.equal(await evaluate('FFSStage1BrowserTestHooks.getPlan().investing.inflationPct'),0);
+  await evaluate("document.querySelector('.nav-primary-row [data-view=dashboard]').click();document.querySelector('.fa-nav').click()");
+  assert.equal(await evaluate("document.querySelector('[data-assumption=inflationPct]').value"),'0');
+  await assumptionButton('Restore app defaults…');await assumptionButton('Use these defaults');assert.equal(await evaluate('FFSStage1BrowserTestHooks.getPlan().investing.inflationPct'),0);
+  await assumptionButton('Undo unsaved edits');assert.equal(await evaluate("document.querySelector('[data-assumption=inflationPct]').value"),'0');
+  assert.deepEqual(browserMessages,[]);
+});

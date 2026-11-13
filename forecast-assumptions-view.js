@@ -25,6 +25,7 @@
       const heading = make("h2", "", "Forecast assumptions"); heading.tabIndex = -1;
       const header = make("header", "fa-header");
       const introduction = make("div", "fa-heading");
+      introduction.append(make("p", "fa-eyebrow", "Plan Assumptions"));
       introduction.append(heading, make("p", "fa-intro", "Review the growth and inflation assumptions behind your forecasts. Edit here, then save to update your plan."));
       header.append(introduction);
       // Reattach the same comparison DOM across editor renders so its session,
@@ -104,6 +105,18 @@
       const retirement=make("div","fa-notice"); retirement.append(make("h3","","Retirement-specific assumptions"),make("p","","Saved retirement scenarios keep their own assumptions and are not overwritten here. Plan-linked forecasts use your updated plan. Review separate fees, return rates, spending and access ages in Retirement Planning."));
       const link=make("button","btn","Open Retirement Planning");link.type="button";link.addEventListener("click",onRetirement);retirement.append(link);details.append(retirement);
       form.append(essential,details);
+      const scope = make("section", "fa-scope");
+      scope.setAttribute("aria-label", "What these affect");
+      scope.append(make("h3", "", "What These Affect"));
+      const scopeList = make("ul");
+      for (const text of [
+        isDemo() ? "Applying updates this sample preview only. Your personal saved plan and retirement snapshots stay unchanged. Individual asset settings still take priority." : "Saving updates your main saved financial plan and applicable future forecasts. Individual asset settings still take priority.",
+        "Plan-linked retirement projections use applicable saved-plan assumptions under the existing model rules. Previously saved retirement scenarios may contain independent snapshots; saving here does not silently overwrite or recalculate them.",
+        "Growth comparison edits are temporary. They do not save or change your main plan.",
+        "Wage growth applies to saved retirement-timing forecasts, not legacy accumulation. The safe withdrawal rate is illustrative; it is not the detailed retirement spending rule.",
+      ]) scopeList.append(make("li", "", text));
+      scope.append(scopeList);
+      form.append(scope);
       errorsBox=make("div","fa-errors"); errorsBox.setAttribute("role","alert"); form.append(errorsBox);
       const actions=make("div","forecast-assumptions-actions");
       save=make("button","btn btn-primary",isDemo()?"Apply to sample preview":"Save assumptions");save.type="submit";

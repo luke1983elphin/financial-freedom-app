@@ -18547,10 +18547,7 @@
     const originalSetView = setView;
     setView = view => {
       const result = originalSetView(view);
-      const nav = document.querySelector('.fa-nav');
-      nav?.classList.toggle("active", activeView === "assumptions");
-      if (activeView === "assumptions") { nav?.setAttribute("aria-current", "page"); editor?.sync(); growthComparison?.sync(); }
-      else nav?.removeAttribute("aria-current");
+      if (result && activeView === "assumptions") { editor?.sync(); growthComparison?.sync(); }
       return result;
     };
     const originalOutputs = renderOutputs;

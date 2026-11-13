@@ -180,6 +180,7 @@
                 <details class="nav-more" id="moreNavigation" open>
                   <summary class="nav-more-toggle">More tools <span aria-hidden="true">⌄</span></summary>
                   <div class="nav-more-items" aria-label="More destinations">
+                    <button class="nav-button nav-more-icon fa-nav" type="button" data-view="assumptions"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="8" cy="18" r="2"/></svg><span>Assumptions</span></button>
                     <button class="nav-button nav-more-icon" type="button" data-view="decision"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 17h16M8 4v6M16 14v6"/></svg><span>Try a Change</span></button>
                     <button class="nav-button nav-more-icon" type="button" data-view="investments"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 17 6-6 4 4 8-9"/><path d="M15 6h6v6"/></svg><span>Investments</span></button>
                     <button class="nav-button nav-more-icon" type="button" data-view="super"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10a8 8 0 1 1 16 0c0 3-2 5-4 6v4h-4v-3H9v3H5v-6a8 8 0 0 1-1-4z"/><circle cx="15" cy="9" r="1"/></svg><span>Super</span></button>
@@ -195,12 +196,11 @@
                   <button type="button" class="dollar-basis-segment" data-dollar-basis="future" aria-pressed="true">Future dollars</button>
                 </div>
                 <p class="dollar-basis-description" id="dollarBasisDescription" aria-live="polite">Projected values include future inflation.</p>
-                <button type="button" class="nav-button fa-nav" data-assumptions-open>Assumptions</button>
               </div>
             </nav>
 
             <div class="grid gap-6">
-              <section class="view-section hidden" data-view-panel="assumptions" aria-label="Forecast assumptions">
+              <section class="view-section hidden" data-view-panel="assumptions" aria-label="Assumptions workspace">
                 <div id="forecastAssumptionsWorkspace"></div>
               </section>
               <section class="view-section hidden" data-view-panel="setup">
