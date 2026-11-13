@@ -1,0 +1,23 @@
+import assert from "node:assert/strict";
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
+const api = require("../forecast-assumptions.js");
+
+const defaults = api.resolve({ investing: {} });
+assert.deepEqual(defaults.map(x => x.value), [7, 6.5, 2.5, 3, 4]);
+assert.ok(defaults.every(x => x.source === "app-default"));
+const original = { investing: { inflationPct: 0, expectedInvestmentReturnPct: 9 }, assetItems: [{ id: "a", totalReturnPct: 11 }] };
+const snapshot = JSON.stringify(original);
+const resolved = api.resolve(original);
+assert.equal(resolved.find(x => x.id === "inflation").value, 0);
+assert.equal(resolved.find(x => x.id === "investment").value, 9);
+const values = api.draft(original);
+values.expectedSuperReturnPct = 5;
+const result = api.apply(original, values);
+assert.equal(result.ok, true);
+assert.equal(result.plan.investing.expectedSuperReturnPct, 5);
+assert.equal(result.plan.assetItems, original.assetItems);
+assert.equal(JSON.stringify(original), snapshot);
+assert.equal(api.apply(original, { ...values, inflationPct: -100 }).ok, false);
+assert.equal(api.apply(original, { ...values, expectedSuperReturnPct: Number.NaN }).ok, false);
+console.log("Forecast assumptions adapter checks passed");
