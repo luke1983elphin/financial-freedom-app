@@ -1,0 +1,5862 @@
+{
+  "reviewedPR": 61,
+  "startingCommit": "065de0410698bb82edb66a4f192ed765e0dd102c",
+  "date": "2026-11-13",
+  "methods": "Fresh production calls; independently derived expected equations; fixtures supply no expected values to new checks. Original 48/99 replayed separately and reviewed by recheck-original.py.",
+  "protectedSha256": {
+    "calculator.js": "b9cd8c47af46d838ff5d223bcec160c35957066451d363086a32b9850b606daa",
+    "semiRetirementProjection.js": "9a973fbcc69b5748daabfc630fbd329ed1f07da2c3439d3aefb43d1f0ab36f8d",
+    "semiRetirementUi.js": "4e87341a23a3e38592f1d32619efaf35859d14cf83ac5949fb21dfdf1be524dd",
+    "agePensionEstimate.js": "9f5d57f2c527b41e758dfb0592bceaeb364f1d197737611fcdf5759c25284003",
+    "weekly-plan.js": "0aaf2710b38adbacba8b9abf12fa6e9e2e42f42138c017de053237cde481bcb5",
+    "forecast-assumptions.js": "da72c9c897edfa9c612e7326dc709eca17ae312156f33a5d5e8e916ac8149716",
+    "growth-scenarios.js": "dcf99088db25128e060a7a8156acaaf1460717126525f6e14647edd699a33f1d",
+    "dollar-basis.js": "f30f11ae0850db908ed8a91b1e804cc0c67a526cb1aa281484f792715d6fb4a5",
+    "app.js": "3066076d67d3834e64892fd252ceb5c9201fe80ae87fb4f6f2446494d4f3c12f",
+    "plan-schema.js": "7c531d4d9b15330f77fdebf9597a73630583edbc452f8e1b9d247b25a17d86a7",
+    "legacy-plan-adapter.js": "d85cfc66e9711b0947665de9e4ba247558e7e0078ad607ff0067c0b27bdaf092"
+  },
+  "originalInventory": {
+    "households": 48,
+    "checks": 99
+  },
+  "diagnostics": [
+    {
+      "id": "TAX-zero",
+      "finding": "F08",
+      "description": "Signed household cash after personal tax",
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 67,
+        "inflationRate": 0,
+        "household": {
+          "currentLifestyleSpending": 0,
+          "semiRetirementLifestyleSpending": 0,
+          "fullRetirementLifestyleSpending": 0,
+          "otherAnnualIncome": 0,
+          "annualLoanPrincipalRepayments": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 100000,
+          "annualReturnRate": 0,
+          "annualFeesRate": 0
+        },
+        "people": [
+          {
+            "id": "person1",
+            "name": "person1",
+            "currentAge": 65,
+            "currentGrossEmploymentIncome": 0,
+            "annualIncomeGrowthRate": 0,
+            "semiRetirementAge": 65,
+            "semiRetirementGrossIncome": 0,
+            "fullRetirementAge": 65,
+            "superAccessAge": 60,
+            "openingSuperBalance": 0,
+            "superReturnBeforeRetirement": 0,
+            "superReturnAfterRetirement": 0,
+            "superAnnualFeesRate": 0,
+            "employerSuperRate": 0.12,
+            "existingAdditionalConcessionalContributions": 0,
+            "additionalContributionsStopAge": 65,
+            "stslOpeningBalance": 0,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "scenario": {
+          "minimumAccessibleBalance": 0,
+          "minimumEstateBalanceAtEndAge": 0,
+          "surplusDestination": "enjoyment"
+        },
+        "passiveIncome": [
+          {
+            "id": "income",
+            "type": "dividends",
+            "owner": "person1",
+            "annualCashIncome": 0,
+            "annualTaxableIncome": 60000
+          }
+        ]
+      },
+      "actual": 0,
+      "independentExpected": -9620,
+      "delta": 9620,
+      "tolerance": 0.03,
+      "matches": false
+    },
+    {
+      "id": "DRAW-zero",
+      "finding": "F08",
+      "description": "Tax deficit must be funded by accessible withdrawal with zero lifestyle spending",
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 67,
+        "inflationRate": 0,
+        "household": {
+          "currentLifestyleSpending": 0,
+          "semiRetirementLifestyleSpending": 0,
+          "fullRetirementLifestyleSpending": 0,
+          "otherAnnualIncome": 0,
+          "annualLoanPrincipalRepayments": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 100000,
+          "annualReturnRate": 0,
+          "annualFeesRate": 0
+        },
+        "people": [
+          {
+            "id": "person1",
+            "name": "person1",
+            "currentAge": 65,
+            "currentGrossEmploymentIncome": 0,
+            "annualIncomeGrowthRate": 0,
+            "semiRetirementAge": 65,
+            "semiRetirementGrossIncome": 0,
+            "fullRetirementAge": 65,
+            "superAccessAge": 60,
+            "openingSuperBalance": 0,
+            "superReturnBeforeRetirement": 0,
+            "superReturnAfterRetirement": 0,
+            "superAnnualFeesRate": 0,
+            "employerSuperRate": 0.12,
+            "existingAdditionalConcessionalContributions": 0,
+            "additionalContributionsStopAge": 65,
+            "stslOpeningBalance": 0,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "scenario": {
+          "minimumAccessibleBalance": 0,
+          "minimumEstateBalanceAtEndAge": 0,
+          "surplusDestination": "enjoyment"
+        },
+        "passiveIncome": [
+          {
+            "id": "income",
+            "type": "dividends",
+            "owner": "person1",
+            "annualCashIncome": 0,
+            "annualTaxableIncome": 60000
+          }
+        ]
+      },
+      "actual": 0,
+      "independentExpected": 9620,
+      "delta": -9620,
+      "tolerance": 0.03,
+      "matches": false
+    },
+    {
+      "id": "CLOSE-zero",
+      "finding": "F08",
+      "description": "Zero-return closing assets after tax deficit settlement",
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 67,
+        "inflationRate": 0,
+        "household": {
+          "currentLifestyleSpending": 0,
+          "semiRetirementLifestyleSpending": 0,
+          "fullRetirementLifestyleSpending": 0,
+          "otherAnnualIncome": 0,
+          "annualLoanPrincipalRepayments": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 100000,
+          "annualReturnRate": 0,
+          "annualFeesRate": 0
+        },
+        "people": [
+          {
+            "id": "person1",
+            "name": "person1",
+            "currentAge": 65,
+            "currentGrossEmploymentIncome": 0,
+            "annualIncomeGrowthRate": 0,
+            "semiRetirementAge": 65,
+            "semiRetirementGrossIncome": 0,
+            "fullRetirementAge": 65,
+            "superAccessAge": 60,
+            "openingSuperBalance": 0,
+            "superReturnBeforeRetirement": 0,
+            "superReturnAfterRetirement": 0,
+            "superAnnualFeesRate": 0,
+            "employerSuperRate": 0.12,
+            "existingAdditionalConcessionalContributions": 0,
+            "additionalContributionsStopAge": 65,
+            "stslOpeningBalance": 0,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "scenario": {
+          "minimumAccessibleBalance": 0,
+          "minimumEstateBalanceAtEndAge": 0,
+          "surplusDestination": "enjoyment"
+        },
+        "passiveIncome": [
+          {
+            "id": "income",
+            "type": "dividends",
+            "owner": "person1",
+            "annualCashIncome": 0,
+            "annualTaxableIncome": 60000
+          }
+        ]
+      },
+      "actual": 100000,
+      "independentExpected": 90380,
+      "delta": 9620,
+      "tolerance": 0.03,
+      "matches": false
+    },
+    {
+      "id": "TAX-partial",
+      "finding": "F08",
+      "description": "Signed household cash after personal tax",
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 67,
+        "inflationRate": 0,
+        "household": {
+          "currentLifestyleSpending": 0,
+          "semiRetirementLifestyleSpending": 0,
+          "fullRetirementLifestyleSpending": 0,
+          "otherAnnualIncome": 0,
+          "annualLoanPrincipalRepayments": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 100000,
+          "annualReturnRate": 0,
+          "annualFeesRate": 0
+        },
+        "people": [
+          {
+            "id": "person1",
+            "name": "person1",
+            "currentAge": 65,
+            "currentGrossEmploymentIncome": 0,
+            "annualIncomeGrowthRate": 0,
+            "semiRetirementAge": 65,
+            "semiRetirementGrossIncome": 0,
+            "fullRetirementAge": 65,
+            "superAccessAge": 60,
+            "openingSuperBalance": 0,
+            "superReturnBeforeRetirement": 0,
+            "superReturnAfterRetirement": 0,
+            "superAnnualFeesRate": 0,
+            "employerSuperRate": 0.12,
+            "existingAdditionalConcessionalContributions": 0,
+            "additionalContributionsStopAge": 65,
+            "stslOpeningBalance": 0,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "scenario": {
+          "minimumAccessibleBalance": 0,
+          "minimumEstateBalanceAtEndAge": 0,
+          "surplusDestination": "enjoyment"
+        },
+        "passiveIncome": [
+          {
+            "id": "income",
+            "type": "dividends",
+            "owner": "person1",
+            "annualCashIncome": 5000,
+            "annualTaxableIncome": 60000
+          }
+        ]
+      },
+      "actual": 0,
+      "independentExpected": -4620,
+      "delta": 4620,
+      "tolerance": 0.03,
+      "matches": false
+    },
+    {
+      "id": "DRAW-partial",
+      "finding": "F08",
+      "description": "Tax deficit must be funded by accessible withdrawal with zero lifestyle spending",
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 67,
+        "inflationRate": 0,
+        "household": {
+          "currentLifestyleSpending": 0,
+          "semiRetirementLifestyleSpending": 0,
+          "fullRetirementLifestyleSpending": 0,
+          "otherAnnualIncome": 0,
+          "annualLoanPrincipalRepayments": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 100000,
+          "annualReturnRate": 0,
+          "annualFeesRate": 0
+        },
+        "people": [
+          {
+            "id": "person1",
+            "name": "person1",
+            "currentAge": 65,
+            "currentGrossEmploymentIncome": 0,
+            "annualIncomeGrowthRate": 0,
+            "semiRetirementAge": 65,
+            "semiRetirementGrossIncome": 0,
+            "fullRetirementAge": 65,
+            "superAccessAge": 60,
+            "openingSuperBalance": 0,
+            "superReturnBeforeRetirement": 0,
+            "superReturnAfterRetirement": 0,
+            "superAnnualFeesRate": 0,
+            "employerSuperRate": 0.12,
+            "existingAdditionalConcessionalContributions": 0,
+            "additionalContributionsStopAge": 65,
+            "stslOpeningBalance": 0,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "scenario": {
+          "minimumAccessibleBalance": 0,
+          "minimumEstateBalanceAtEndAge": 0,
+          "surplusDestination": "enjoyment"
+        },
+        "passiveIncome": [
+          {
+            "id": "income",
+            "type": "dividends",
+            "owner": "person1",
+            "annualCashIncome": 5000,
+            "annualTaxableIncome": 60000
+          }
+        ]
+      },
+      "actual": 0,
+      "independentExpected": 4620,
+      "delta": -4620,
+      "tolerance": 0.03,
+      "matches": false
+    },
+    {
+      "id": "CLOSE-partial",
+      "finding": "F08",
+      "description": "Zero-return closing assets after tax deficit settlement",
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 67,
+        "inflationRate": 0,
+        "household": {
+          "currentLifestyleSpending": 0,
+          "semiRetirementLifestyleSpending": 0,
+          "fullRetirementLifestyleSpending": 0,
+          "otherAnnualIncome": 0,
+          "annualLoanPrincipalRepayments": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 100000,
+          "annualReturnRate": 0,
+          "annualFeesRate": 0
+        },
+        "people": [
+          {
+            "id": "person1",
+            "name": "person1",
+            "currentAge": 65,
+            "currentGrossEmploymentIncome": 0,
+            "annualIncomeGrowthRate": 0,
+            "semiRetirementAge": 65,
+            "semiRetirementGrossIncome": 0,
+            "fullRetirementAge": 65,
+            "superAccessAge": 60,
+            "openingSuperBalance": 0,
+            "superReturnBeforeRetirement": 0,
+            "superReturnAfterRetirement": 0,
+            "superAnnualFeesRate": 0,
+            "employerSuperRate": 0.12,
+            "existingAdditionalConcessionalContributions": 0,
+            "additionalContributionsStopAge": 65,
+            "stslOpeningBalance": 0,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "scenario": {
+          "minimumAccessibleBalance": 0,
+          "minimumEstateBalanceAtEndAge": 0,
+          "surplusDestination": "enjoyment"
+        },
+        "passiveIncome": [
+          {
+            "id": "income",
+            "type": "dividends",
+            "owner": "person1",
+            "annualCashIncome": 5000,
+            "annualTaxableIncome": 60000
+          }
+        ]
+      },
+      "actual": 100000,
+      "independentExpected": 95380,
+      "delta": 4620,
+      "tolerance": 0.03,
+      "matches": false
+    },
+    {
+      "id": "TAX-covered",
+      "finding": "F08",
+      "description": "Signed household cash after personal tax",
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 67,
+        "inflationRate": 0,
+        "household": {
+          "currentLifestyleSpending": 0,
+          "semiRetirementLifestyleSpending": 0,
+          "fullRetirementLifestyleSpending": 0,
+          "otherAnnualIncome": 0,
+          "annualLoanPrincipalRepayments": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 100000,
+          "annualReturnRate": 0,
+          "annualFeesRate": 0
+        },
+        "people": [
+          {
+            "id": "person1",
+            "name": "person1",
+            "currentAge": 65,
+            "currentGrossEmploymentIncome": 0,
+            "annualIncomeGrowthRate": 0,
+            "semiRetirementAge": 65,
+            "semiRetirementGrossIncome": 0,
+            "fullRetirementAge": 65,
+            "superAccessAge": 60,
+            "openingSuperBalance": 0,
+            "superReturnBeforeRetirement": 0,
+            "superReturnAfterRetirement": 0,
+            "superAnnualFeesRate": 0,
+            "employerSuperRate": 0.12,
+            "existingAdditionalConcessionalContributions": 0,
+            "additionalContributionsStopAge": 65,
+            "stslOpeningBalance": 0,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "scenario": {
+          "minimumAccessibleBalance": 0,
+          "minimumEstateBalanceAtEndAge": 0,
+          "surplusDestination": "enjoyment"
+        },
+        "passiveIncome": [
+          {
+            "id": "income",
+            "type": "dividends",
+            "owner": "person1",
+            "annualCashIncome": 20000,
+            "annualTaxableIncome": 60000
+          }
+        ]
+      },
+      "actual": 10380,
+      "independentExpected": 10380,
+      "delta": 0,
+      "tolerance": 0.03,
+      "matches": true
+    },
+    {
+      "id": "DRAW-covered",
+      "finding": "F08",
+      "description": "Tax deficit must be funded by accessible withdrawal with zero lifestyle spending",
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 67,
+        "inflationRate": 0,
+        "household": {
+          "currentLifestyleSpending": 0,
+          "semiRetirementLifestyleSpending": 0,
+          "fullRetirementLifestyleSpending": 0,
+          "otherAnnualIncome": 0,
+          "annualLoanPrincipalRepayments": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 100000,
+          "annualReturnRate": 0,
+          "annualFeesRate": 0
+        },
+        "people": [
+          {
+            "id": "person1",
+            "name": "person1",
+            "currentAge": 65,
+            "currentGrossEmploymentIncome": 0,
+            "annualIncomeGrowthRate": 0,
+            "semiRetirementAge": 65,
+            "semiRetirementGrossIncome": 0,
+            "fullRetirementAge": 65,
+            "superAccessAge": 60,
+            "openingSuperBalance": 0,
+            "superReturnBeforeRetirement": 0,
+            "superReturnAfterRetirement": 0,
+            "superAnnualFeesRate": 0,
+            "employerSuperRate": 0.12,
+            "existingAdditionalConcessionalContributions": 0,
+            "additionalContributionsStopAge": 65,
+            "stslOpeningBalance": 0,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "scenario": {
+          "minimumAccessibleBalance": 0,
+          "minimumEstateBalanceAtEndAge": 0,
+          "surplusDestination": "enjoyment"
+        },
+        "passiveIncome": [
+          {
+            "id": "income",
+            "type": "dividends",
+            "owner": "person1",
+            "annualCashIncome": 20000,
+            "annualTaxableIncome": 60000
+          }
+        ]
+      },
+      "actual": 0,
+      "independentExpected": 0,
+      "delta": 0,
+      "tolerance": 0.03,
+      "matches": true
+    },
+    {
+      "id": "CLOSE-covered",
+      "finding": "F08",
+      "description": "Zero-return closing assets after tax deficit settlement",
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 67,
+        "inflationRate": 0,
+        "household": {
+          "currentLifestyleSpending": 0,
+          "semiRetirementLifestyleSpending": 0,
+          "fullRetirementLifestyleSpending": 0,
+          "otherAnnualIncome": 0,
+          "annualLoanPrincipalRepayments": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 100000,
+          "annualReturnRate": 0,
+          "annualFeesRate": 0
+        },
+        "people": [
+          {
+            "id": "person1",
+            "name": "person1",
+            "currentAge": 65,
+            "currentGrossEmploymentIncome": 0,
+            "annualIncomeGrowthRate": 0,
+            "semiRetirementAge": 65,
+            "semiRetirementGrossIncome": 0,
+            "fullRetirementAge": 65,
+            "superAccessAge": 60,
+            "openingSuperBalance": 0,
+            "superReturnBeforeRetirement": 0,
+            "superReturnAfterRetirement": 0,
+            "superAnnualFeesRate": 0,
+            "employerSuperRate": 0.12,
+            "existingAdditionalConcessionalContributions": 0,
+            "additionalContributionsStopAge": 65,
+            "stslOpeningBalance": 0,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "scenario": {
+          "minimumAccessibleBalance": 0,
+          "minimumEstateBalanceAtEndAge": 0,
+          "surplusDestination": "enjoyment"
+        },
+        "passiveIncome": [
+          {
+            "id": "income",
+            "type": "dividends",
+            "owner": "person1",
+            "annualCashIncome": 20000,
+            "annualTaxableIncome": 60000
+          }
+        ]
+      },
+      "actual": 100000,
+      "independentExpected": 100000,
+      "delta": 0,
+      "tolerance": 0.03,
+      "matches": true
+    },
+    {
+      "id": "REINVEST-TAX",
+      "finding": "F08",
+      "description": "Explicit $2m reinvested 3% yield computes ordinary tax",
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 67,
+        "inflationRate": 0,
+        "household": {
+          "currentLifestyleSpending": 0,
+          "semiRetirementLifestyleSpending": 0,
+          "fullRetirementLifestyleSpending": 0,
+          "otherAnnualIncome": 0,
+          "annualLoanPrincipalRepayments": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 2000000,
+          "annualReturnRate": 0,
+          "annualFeesRate": 0,
+          "components": [
+            {
+              "id": "portfolio",
+              "name": "Shares",
+              "category": "shares",
+              "owner": "person1",
+              "value": 2000000,
+              "investmentReturnMode": "totalReturn",
+              "expectedTotalReturnPct": 7,
+              "expectedIncomeYieldPct": 3,
+              "incomeTreatment": "reinvest"
+            }
+          ]
+        },
+        "people": [
+          {
+            "id": "person1",
+            "name": "person1",
+            "currentAge": 65,
+            "currentGrossEmploymentIncome": 0,
+            "annualIncomeGrowthRate": 0,
+            "semiRetirementAge": 65,
+            "semiRetirementGrossIncome": 0,
+            "fullRetirementAge": 65,
+            "superAccessAge": 60,
+            "openingSuperBalance": 0,
+            "superReturnBeforeRetirement": 0,
+            "superReturnAfterRetirement": 0,
+            "superAnnualFeesRate": 0,
+            "employerSuperRate": 0.12,
+            "existingAdditionalConcessionalContributions": 0,
+            "additionalContributionsStopAge": 65,
+            "stslOpeningBalance": 0,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "scenario": {
+          "minimumAccessibleBalance": 0,
+          "minimumEstateBalanceAtEndAge": 0,
+          "surplusDestination": "enjoyment"
+        }
+      },
+      "actual": 9620,
+      "independentExpected": 9620,
+      "delta": 0,
+      "tolerance": 0.03,
+      "matches": true
+    },
+    {
+      "id": "REINVEST-DRAW",
+      "finding": "F08",
+      "description": "Computed tax must reach withdrawal waterfall",
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 67,
+        "inflationRate": 0,
+        "household": {
+          "currentLifestyleSpending": 0,
+          "semiRetirementLifestyleSpending": 0,
+          "fullRetirementLifestyleSpending": 0,
+          "otherAnnualIncome": 0,
+          "annualLoanPrincipalRepayments": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 2000000,
+          "annualReturnRate": 0,
+          "annualFeesRate": 0,
+          "components": [
+            {
+              "id": "portfolio",
+              "name": "Shares",
+              "category": "shares",
+              "owner": "person1",
+              "value": 2000000,
+              "investmentReturnMode": "totalReturn",
+              "expectedTotalReturnPct": 7,
+              "expectedIncomeYieldPct": 3,
+              "incomeTreatment": "reinvest"
+            }
+          ]
+        },
+        "people": [
+          {
+            "id": "person1",
+            "name": "person1",
+            "currentAge": 65,
+            "currentGrossEmploymentIncome": 0,
+            "annualIncomeGrowthRate": 0,
+            "semiRetirementAge": 65,
+            "semiRetirementGrossIncome": 0,
+            "fullRetirementAge": 65,
+            "superAccessAge": 60,
+            "openingSuperBalance": 0,
+            "superReturnBeforeRetirement": 0,
+            "superReturnAfterRetirement": 0,
+            "superAnnualFeesRate": 0,
+            "employerSuperRate": 0.12,
+            "existingAdditionalConcessionalContributions": 0,
+            "additionalContributionsStopAge": 65,
+            "stslOpeningBalance": 0,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "scenario": {
+          "minimumAccessibleBalance": 0,
+          "minimumEstateBalanceAtEndAge": 0,
+          "surplusDestination": "enjoyment"
+        }
+      },
+      "actual": 0,
+      "independentExpected": 9620,
+      "delta": -9620,
+      "tolerance": 0.03,
+      "matches": false
+    },
+    {
+      "id": "SPOUSE-CASH",
+      "finding": "F08",
+      "description": "Spouse income can fund owner tax; cannot clamp before aggregation",
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 67,
+        "inflationRate": 0,
+        "household": {
+          "currentLifestyleSpending": 0,
+          "semiRetirementLifestyleSpending": 0,
+          "fullRetirementLifestyleSpending": 0,
+          "otherAnnualIncome": 0,
+          "annualLoanPrincipalRepayments": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 2000000,
+          "annualReturnRate": 0,
+          "annualFeesRate": 0,
+          "components": [
+            {
+              "id": "portfolio",
+              "name": "Shares",
+              "category": "shares",
+              "owner": "person1",
+              "value": 2000000,
+              "investmentReturnMode": "totalReturn",
+              "expectedTotalReturnPct": 7,
+              "expectedIncomeYieldPct": 3,
+              "incomeTreatment": "reinvest"
+            }
+          ]
+        },
+        "people": [
+          {
+            "id": "person1",
+            "name": "person1",
+            "currentAge": 65,
+            "currentGrossEmploymentIncome": 0,
+            "annualIncomeGrowthRate": 0,
+            "semiRetirementAge": 65,
+            "semiRetirementGrossIncome": 0,
+            "fullRetirementAge": 65,
+            "superAccessAge": 60,
+            "openingSuperBalance": 0,
+            "superReturnBeforeRetirement": 0,
+            "superReturnAfterRetirement": 0,
+            "superAnnualFeesRate": 0,
+            "employerSuperRate": 0.12,
+            "existingAdditionalConcessionalContributions": 0,
+            "additionalContributionsStopAge": 65,
+            "stslOpeningBalance": 0,
+            "hasPrivateHealthCover": true
+          },
+          {
+            "id": "person2",
+            "name": "person2",
+            "currentAge": 65,
+            "currentGrossEmploymentIncome": 100000,
+            "annualIncomeGrowthRate": 0,
+            "semiRetirementAge": 67,
+            "semiRetirementGrossIncome": 0,
+            "fullRetirementAge": 67,
+            "superAccessAge": 60,
+            "openingSuperBalance": 0,
+            "superReturnBeforeRetirement": 0,
+            "superReturnAfterRetirement": 0,
+            "superAnnualFeesRate": 0,
+            "employerSuperRate": 0.12,
+            "existingAdditionalConcessionalContributions": 0,
+            "additionalContributionsStopAge": 65,
+            "stslOpeningBalance": 0,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "scenario": {
+          "minimumAccessibleBalance": 0,
+          "minimumEstateBalanceAtEndAge": 0,
+          "surplusDestination": "enjoyment"
+        }
+      },
+      "actual": 77480,
+      "independentExpected": 67860,
+      "delta": 9620,
+      "tolerance": 0.03,
+      "matches": false
+    },
+    {
+      "id": "UNFUNDED-TAX",
+      "finding": "F08",
+      "description": "No assets means tax liability must remain explicit, not disappear",
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 67,
+        "inflationRate": 0,
+        "household": {
+          "currentLifestyleSpending": 0,
+          "semiRetirementLifestyleSpending": 0,
+          "fullRetirementLifestyleSpending": 0,
+          "otherAnnualIncome": 0,
+          "annualLoanPrincipalRepayments": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 0,
+          "annualReturnRate": 0,
+          "annualFeesRate": 0
+        },
+        "people": [
+          {
+            "id": "person1",
+            "name": "person1",
+            "currentAge": 65,
+            "currentGrossEmploymentIncome": 0,
+            "annualIncomeGrowthRate": 0,
+            "semiRetirementAge": 65,
+            "semiRetirementGrossIncome": 0,
+            "fullRetirementAge": 65,
+            "superAccessAge": 60,
+            "openingSuperBalance": 0,
+            "superReturnBeforeRetirement": 0,
+            "superReturnAfterRetirement": 0,
+            "superAnnualFeesRate": 0,
+            "employerSuperRate": 0.12,
+            "existingAdditionalConcessionalContributions": 0,
+            "additionalContributionsStopAge": 65,
+            "stslOpeningBalance": 0,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "scenario": {
+          "minimumAccessibleBalance": 0,
+          "minimumEstateBalanceAtEndAge": 0,
+          "surplusDestination": "enjoyment"
+        },
+        "passiveIncome": [
+          {
+            "id": "taxable",
+            "type": "dividends",
+            "owner": "person1",
+            "annualCashIncome": 0,
+            "annualTaxableIncome": 60000
+          }
+        ]
+      },
+      "actual": 0,
+      "independentExpected": 9620,
+      "delta": -9620,
+      "tolerance": 0.03,
+      "matches": false
+    },
+    {
+      "id": "PENSION-PATH",
+      "finding": "F08",
+      "description": "Pension enabled but means-tested to zero still must fund tax",
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 72,
+        "inflationRate": 0,
+        "household": {
+          "currentLifestyleSpending": 0,
+          "semiRetirementLifestyleSpending": 0,
+          "fullRetirementLifestyleSpending": 0,
+          "otherAnnualIncome": 0,
+          "annualLoanPrincipalRepayments": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 2000000,
+          "annualReturnRate": 0,
+          "annualFeesRate": 0,
+          "components": [
+            {
+              "id": "portfolio",
+              "name": "Shares",
+              "category": "shares",
+              "owner": "person1",
+              "value": 2000000,
+              "investmentReturnMode": "totalReturn",
+              "expectedTotalReturnPct": 7,
+              "expectedIncomeYieldPct": 3,
+              "incomeTreatment": "reinvest"
+            }
+          ]
+        },
+        "people": [
+          {
+            "id": "person1",
+            "name": "person1",
+            "currentAge": 70,
+            "currentGrossEmploymentIncome": 0,
+            "annualIncomeGrowthRate": 0,
+            "semiRetirementAge": 70,
+            "semiRetirementGrossIncome": 0,
+            "fullRetirementAge": 70,
+            "superAccessAge": 60,
+            "openingSuperBalance": 0,
+            "superReturnBeforeRetirement": 0,
+            "superReturnAfterRetirement": 0,
+            "superAnnualFeesRate": 0,
+            "employerSuperRate": 0.12,
+            "existingAdditionalConcessionalContributions": 0,
+            "additionalContributionsStopAge": 65,
+            "stslOpeningBalance": 0,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "scenario": {
+          "minimumAccessibleBalance": 0,
+          "minimumEstateBalanceAtEndAge": 0,
+          "surplusDestination": "enjoyment",
+          "agePension": {
+            "enabled": true,
+            "excludeSapto": true
+          }
+        }
+      },
+      "actual": 0,
+      "independentExpected": 9620,
+      "delta": -9620,
+      "tolerance": 0.03,
+      "matches": false
+    },
+    {
+      "id": "PROPERTY-legacy",
+      "finding": "F04",
+      "description": "Year-one net worth is grown property less unchanged IO debt",
+      "input": {
+        "personal": {
+          "person1Name": "A",
+          "person2Name": "",
+          "person1Age": 40,
+          "person2Age": 0,
+          "dependants": 0,
+          "workOptionalAge": 50,
+          "semiRetirementAge": 55,
+          "fullRetirementAge": 65,
+          "targetAnnualSpending": 0
+        },
+        "assets": {
+          "homeValue": 0,
+          "otherPropertyValue": 600000,
+          "offsetBalance": 0,
+          "cash": 0,
+          "sharesEtfs": 0,
+          "crypto": 0,
+          "superPerson1": 0,
+          "superPerson2": 0,
+          "vehiclesPersonalAssets": 0
+        },
+        "liabilities": {
+          "homeLoanBalance": 0,
+          "homeLoanInterestRatePct": 0,
+          "monthlyRepayment": 0,
+          "remainingLoanTermYears": 0,
+          "hecsHelpDebt": 0,
+          "person1HecsHelpDebt": 0,
+          "person2HecsHelpDebt": 0,
+          "person1StslBalance": 0,
+          "person2StslBalance": 0,
+          "unassignedStslBalance": 0,
+          "stslOwnerConfirmationNeeded": false,
+          "otherDebts": 0,
+          "creditCardBalance": 0,
+          "creditCardInterestRatePct": 19.99,
+          "creditCardMonthlyRepayment": 0,
+          "creditCardLimit": 0
+        },
+        "income": {
+          "person1IncomeName": "",
+          "person1Income": 0,
+          "person1Frequency": "fortnightly",
+          "person2IncomeName": "",
+          "person2Income": 0,
+          "person2Frequency": "fortnightly",
+          "otherIncomeName": "",
+          "otherIncome": 0,
+          "otherIncomeFrequency": "annually",
+          "person1HasStslDebt": null,
+          "person2HasStslDebt": null,
+          "person1HospitalCoverStatus": "",
+          "person2HospitalCoverStatus": "",
+          "person1HospitalCoverDays": 0,
+          "person2HospitalCoverDays": 0,
+          "dependantsHospitalCoverStatus": "",
+          "dependantsHospitalCoverDays": 0
+        },
+        "expenses": {
+          "livingName": "",
+          "livingCosts": 0,
+          "livingFrequency": "monthly",
+          "mortgageRepayments": 0,
+          "foodName": "",
+          "food": 0,
+          "foodFrequency": "weekly",
+          "utilitiesName": "",
+          "utilities": 0,
+          "utilitiesFrequency": "annually",
+          "insuranceName": "",
+          "insurance": 0,
+          "insuranceFrequency": "annually",
+          "schoolChildrenName": "",
+          "schoolChildren": 0,
+          "schoolChildrenFrequency": "annually",
+          "ratesPropertyCostsName": "",
+          "ratesPropertyCosts": 0,
+          "ratesPropertyCostsFrequency": "annually",
+          "otherExpensesName": "",
+          "otherExpenses": 0,
+          "otherFrequency": "monthly"
+        },
+        "investing": {
+          "annualInvestingTarget": 0,
+          "employerSuperContributions": 0,
+          "person1EmployerSuperOverrideEnabled": false,
+          "person1EmployerSuperOverride": 0,
+          "person2EmployerSuperOverrideEnabled": false,
+          "person2EmployerSuperOverride": 0,
+          "extraSuperContributions": 0,
+          "expectedInvestmentReturnPct": 0,
+          "expectedSuperReturnPct": 6.5,
+          "inflationPct": 2.5,
+          "wageGrowthPct": 3,
+          "safeWithdrawalRatePct": 4
+        },
+        "downsizing": {
+          "enabled": false,
+          "currentResidenceValue": 0,
+          "futurePropertyValue": 0,
+          "sellingCosts": 0,
+          "buyingCosts": 0,
+          "releasedForInvestment": 0
+        },
+        "assetItems": [
+          {
+            "id": "rental",
+            "name": "Rental",
+            "category": "investmentProperty",
+            "value": 600000
+          }
+        ],
+        "liabilityItems": [
+          {
+            "id": "debt",
+            "name": "Rental loan",
+            "type": "rentalPropertyLoan",
+            "balance": 350000,
+            "interestRatePct": 6,
+            "repayment": 1750,
+            "repaymentFrequency": "monthly",
+            "repaymentType": "interestOnly",
+            "termYears": 30,
+            "linkedAssetId": "rental"
+          }
+        ],
+        "incomeItems": [
+          {
+            "id": "rent",
+            "type": "rentalNetCashIncome",
+            "owner": "person1",
+            "amount": 9000,
+            "frequency": "annually",
+            "rentalCashIncomeAnnual": 30000,
+            "rentalCashflowTreatment": "beforeInterest",
+            "linkedAssetId": "rental",
+            "linkedLoanIds": [
+              "debt"
+            ]
+          }
+        ]
+      },
+      "actual": 618000,
+      "independentExpected": 268000,
+      "delta": 350000,
+      "tolerance": 0.03,
+      "matches": false
+    },
+    {
+      "id": "GROWTH-legacy-Lower",
+      "finding": "F04",
+      "description": "Growth overlay must retain property debt without duplicate assets",
+      "input": {
+        "values": {
+          "expectedInvestmentReturnPct": -3,
+          "expectedSuperReturnPct": 3.5,
+          "principalResidenceGrowthRatePct": 1,
+          "investmentPropertyGrowthRatePct": 1
+        },
+        "includeOverrides": false
+      },
+      "actual": 606000,
+      "independentExpected": 256000,
+      "delta": 350000,
+      "tolerance": 0.03,
+      "matches": false
+    },
+    {
+      "id": "GROWTH-legacy-Base",
+      "finding": "F04",
+      "description": "Growth overlay must retain property debt without duplicate assets",
+      "input": {
+        "values": {
+          "expectedInvestmentReturnPct": 0,
+          "expectedSuperReturnPct": 6.5,
+          "principalResidenceGrowthRatePct": 3,
+          "investmentPropertyGrowthRatePct": 3
+        },
+        "includeOverrides": false
+      },
+      "actual": 618000,
+      "independentExpected": 268000,
+      "delta": 350000,
+      "tolerance": 0.03,
+      "matches": false
+    },
+    {
+      "id": "GROWTH-legacy-Higher",
+      "finding": "F04",
+      "description": "Growth overlay must retain property debt without duplicate assets",
+      "input": {
+        "values": {
+          "expectedInvestmentReturnPct": 3,
+          "expectedSuperReturnPct": 9.5,
+          "principalResidenceGrowthRatePct": 5,
+          "investmentPropertyGrowthRatePct": 5
+        },
+        "includeOverrides": false
+      },
+      "actual": 630000,
+      "independentExpected": 280000,
+      "delta": 350000,
+      "tolerance": 0.03,
+      "matches": false
+    },
+    {
+      "id": "REAL-legacy",
+      "finding": "F04",
+      "description": "Display conversion preserves economic error rather than correcting it",
+      "input": {
+        "personal": {
+          "person1Name": "A",
+          "person2Name": "",
+          "person1Age": 40,
+          "person2Age": 0,
+          "dependants": 0,
+          "workOptionalAge": 50,
+          "semiRetirementAge": 55,
+          "fullRetirementAge": 65,
+          "targetAnnualSpending": 0
+        },
+        "assets": {
+          "homeValue": 0,
+          "otherPropertyValue": 600000,
+          "offsetBalance": 0,
+          "cash": 0,
+          "sharesEtfs": 0,
+          "crypto": 0,
+          "superPerson1": 0,
+          "superPerson2": 0,
+          "vehiclesPersonalAssets": 0
+        },
+        "liabilities": {
+          "homeLoanBalance": 0,
+          "homeLoanInterestRatePct": 0,
+          "monthlyRepayment": 0,
+          "remainingLoanTermYears": 0,
+          "hecsHelpDebt": 0,
+          "person1HecsHelpDebt": 0,
+          "person2HecsHelpDebt": 0,
+          "person1StslBalance": 0,
+          "person2StslBalance": 0,
+          "unassignedStslBalance": 0,
+          "stslOwnerConfirmationNeeded": false,
+          "otherDebts": 0,
+          "creditCardBalance": 0,
+          "creditCardInterestRatePct": 19.99,
+          "creditCardMonthlyRepayment": 0,
+          "creditCardLimit": 0
+        },
+        "income": {
+          "person1IncomeName": "",
+          "person1Income": 0,
+          "person1Frequency": "fortnightly",
+          "person2IncomeName": "",
+          "person2Income": 0,
+          "person2Frequency": "fortnightly",
+          "otherIncomeName": "",
+          "otherIncome": 0,
+          "otherIncomeFrequency": "annually",
+          "person1HasStslDebt": null,
+          "person2HasStslDebt": null,
+          "person1HospitalCoverStatus": "",
+          "person2HospitalCoverStatus": "",
+          "person1HospitalCoverDays": 0,
+          "person2HospitalCoverDays": 0,
+          "dependantsHospitalCoverStatus": "",
+          "dependantsHospitalCoverDays": 0
+        },
+        "expenses": {
+          "livingName": "",
+          "livingCosts": 0,
+          "livingFrequency": "monthly",
+          "mortgageRepayments": 0,
+          "foodName": "",
+          "food": 0,
+          "foodFrequency": "weekly",
+          "utilitiesName": "",
+          "utilities": 0,
+          "utilitiesFrequency": "annually",
+          "insuranceName": "",
+          "insurance": 0,
+          "insuranceFrequency": "annually",
+          "schoolChildrenName": "",
+          "schoolChildren": 0,
+          "schoolChildrenFrequency": "annually",
+          "ratesPropertyCostsName": "",
+          "ratesPropertyCosts": 0,
+          "ratesPropertyCostsFrequency": "annually",
+          "otherExpensesName": "",
+          "otherExpenses": 0,
+          "otherFrequency": "monthly"
+        },
+        "investing": {
+          "annualInvestingTarget": 0,
+          "employerSuperContributions": 0,
+          "person1EmployerSuperOverrideEnabled": false,
+          "person1EmployerSuperOverride": 0,
+          "person2EmployerSuperOverrideEnabled": false,
+          "person2EmployerSuperOverride": 0,
+          "extraSuperContributions": 0,
+          "expectedInvestmentReturnPct": 0,
+          "expectedSuperReturnPct": 6.5,
+          "inflationPct": 2.5,
+          "wageGrowthPct": 3,
+          "safeWithdrawalRatePct": 4
+        },
+        "downsizing": {
+          "enabled": false,
+          "currentResidenceValue": 0,
+          "futurePropertyValue": 0,
+          "sellingCosts": 0,
+          "buyingCosts": 0,
+          "releasedForInvestment": 0
+        },
+        "assetItems": [
+          {
+            "id": "rental",
+            "name": "Rental",
+            "category": "investmentProperty",
+            "value": 600000
+          }
+        ],
+        "liabilityItems": [
+          {
+            "id": "debt",
+            "name": "Rental loan",
+            "type": "rentalPropertyLoan",
+            "balance": 350000,
+            "interestRatePct": 6,
+            "repayment": 1750,
+            "repaymentFrequency": "monthly",
+            "repaymentType": "interestOnly",
+            "termYears": 30,
+            "linkedAssetId": "rental"
+          }
+        ],
+        "incomeItems": [
+          {
+            "id": "rent",
+            "type": "rentalNetCashIncome",
+            "owner": "person1",
+            "amount": 9000,
+            "frequency": "annually",
+            "rentalCashIncomeAnnual": 30000,
+            "rentalCashflowTreatment": "beforeInterest",
+            "linkedAssetId": "rental",
+            "linkedLoanIds": [
+              "debt"
+            ]
+          }
+        ]
+      },
+      "actual": 602926.83,
+      "independentExpected": 261463.41,
+      "delta": 341463.41,
+      "tolerance": 0.03,
+      "matches": false
+    },
+    {
+      "id": "PROPERTY-linked",
+      "finding": "F11",
+      "description": "Year-one net worth is grown property less unchanged IO debt",
+      "input": {
+        "personal": {
+          "person1Name": "A",
+          "person2Name": "",
+          "person1Age": 40,
+          "person2Age": 0,
+          "dependants": 0,
+          "workOptionalAge": 50,
+          "semiRetirementAge": 55,
+          "fullRetirementAge": 65,
+          "targetAnnualSpending": 0,
+          "retirementTiming": {
+            "version": 1,
+            "mode": "individual",
+            "people": [
+              {
+                "id": "person1",
+                "alreadyRetired": false,
+                "hasSemiRetirement": false,
+                "semiRetirementAge": 65,
+                "fullRetirementAge": 65
+              }
+            ]
+          }
+        },
+        "assets": {
+          "homeValue": 0,
+          "otherPropertyValue": 600000,
+          "offsetBalance": 0,
+          "cash": 0,
+          "sharesEtfs": 0,
+          "crypto": 0,
+          "superPerson1": 0,
+          "superPerson2": 0,
+          "vehiclesPersonalAssets": 0
+        },
+        "liabilities": {
+          "homeLoanBalance": 0,
+          "homeLoanInterestRatePct": 0,
+          "monthlyRepayment": 0,
+          "remainingLoanTermYears": 0,
+          "hecsHelpDebt": 0,
+          "person1HecsHelpDebt": 0,
+          "person2HecsHelpDebt": 0,
+          "person1StslBalance": 0,
+          "person2StslBalance": 0,
+          "unassignedStslBalance": 0,
+          "stslOwnerConfirmationNeeded": false,
+          "otherDebts": 0,
+          "creditCardBalance": 0,
+          "creditCardInterestRatePct": 19.99,
+          "creditCardMonthlyRepayment": 0,
+          "creditCardLimit": 0
+        },
+        "income": {
+          "person1IncomeName": "",
+          "person1Income": 0,
+          "person1Frequency": "fortnightly",
+          "person2IncomeName": "",
+          "person2Income": 0,
+          "person2Frequency": "fortnightly",
+          "otherIncomeName": "",
+          "otherIncome": 0,
+          "otherIncomeFrequency": "annually",
+          "person1HasStslDebt": null,
+          "person2HasStslDebt": null,
+          "person1HospitalCoverStatus": "",
+          "person2HospitalCoverStatus": "",
+          "person1HospitalCoverDays": 0,
+          "person2HospitalCoverDays": 0,
+          "dependantsHospitalCoverStatus": "",
+          "dependantsHospitalCoverDays": 0
+        },
+        "expenses": {
+          "livingName": "",
+          "livingCosts": 0,
+          "livingFrequency": "monthly",
+          "mortgageRepayments": 0,
+          "foodName": "",
+          "food": 0,
+          "foodFrequency": "weekly",
+          "utilitiesName": "",
+          "utilities": 0,
+          "utilitiesFrequency": "annually",
+          "insuranceName": "",
+          "insurance": 0,
+          "insuranceFrequency": "annually",
+          "schoolChildrenName": "",
+          "schoolChildren": 0,
+          "schoolChildrenFrequency": "annually",
+          "ratesPropertyCostsName": "",
+          "ratesPropertyCosts": 0,
+          "ratesPropertyCostsFrequency": "annually",
+          "otherExpensesName": "",
+          "otherExpenses": 0,
+          "otherFrequency": "monthly"
+        },
+        "investing": {
+          "annualInvestingTarget": 0,
+          "employerSuperContributions": 0,
+          "person1EmployerSuperOverrideEnabled": false,
+          "person1EmployerSuperOverride": 0,
+          "person2EmployerSuperOverrideEnabled": false,
+          "person2EmployerSuperOverride": 0,
+          "extraSuperContributions": 0,
+          "expectedInvestmentReturnPct": 0,
+          "expectedSuperReturnPct": 6.5,
+          "inflationPct": 2.5,
+          "wageGrowthPct": 3,
+          "safeWithdrawalRatePct": 4
+        },
+        "downsizing": {
+          "enabled": false,
+          "currentResidenceValue": 0,
+          "futurePropertyValue": 0,
+          "sellingCosts": 0,
+          "buyingCosts": 0,
+          "releasedForInvestment": 0
+        },
+        "assetItems": [
+          {
+            "id": "rental",
+            "name": "Rental",
+            "category": "investmentProperty",
+            "value": 600000
+          }
+        ],
+        "liabilityItems": [
+          {
+            "id": "debt",
+            "name": "Rental loan",
+            "type": "rentalPropertyLoan",
+            "balance": 350000,
+            "interestRatePct": 6,
+            "repayment": 1750,
+            "repaymentFrequency": "monthly",
+            "repaymentType": "interestOnly",
+            "termYears": 30,
+            "linkedAssetId": "rental"
+          }
+        ],
+        "incomeItems": [
+          {
+            "id": "rent",
+            "type": "rentalNetCashIncome",
+            "owner": "person1",
+            "amount": 9000,
+            "frequency": "annually",
+            "rentalCashIncomeAnnual": 30000,
+            "rentalCashflowTreatment": "beforeInterest",
+            "linkedAssetId": "rental",
+            "linkedLoanIds": [
+              "debt"
+            ]
+          }
+        ]
+      },
+      "actual": 868000,
+      "independentExpected": 268000,
+      "delta": 600000,
+      "tolerance": 0.03,
+      "matches": false
+    },
+    {
+      "id": "GROWTH-linked-Lower",
+      "finding": "F11",
+      "description": "Growth overlay must retain property debt without duplicate assets",
+      "input": {
+        "values": {
+          "expectedInvestmentReturnPct": -3,
+          "expectedSuperReturnPct": 3.5,
+          "principalResidenceGrowthRatePct": 1,
+          "investmentPropertyGrowthRatePct": 1
+        },
+        "includeOverrides": false
+      },
+      "actual": 856000,
+      "independentExpected": 256000,
+      "delta": 600000,
+      "tolerance": 0.03,
+      "matches": false
+    },
+    {
+      "id": "GROWTH-linked-Base",
+      "finding": "F11",
+      "description": "Growth overlay must retain property debt without duplicate assets",
+      "input": {
+        "values": {
+          "expectedInvestmentReturnPct": 0,
+          "expectedSuperReturnPct": 6.5,
+          "principalResidenceGrowthRatePct": 3,
+          "investmentPropertyGrowthRatePct": 3
+        },
+        "includeOverrides": false
+      },
+      "actual": 868000,
+      "independentExpected": 268000,
+      "delta": 600000,
+      "tolerance": 0.03,
+      "matches": false
+    },
+    {
+      "id": "GROWTH-linked-Higher",
+      "finding": "F11",
+      "description": "Growth overlay must retain property debt without duplicate assets",
+      "input": {
+        "values": {
+          "expectedInvestmentReturnPct": 3,
+          "expectedSuperReturnPct": 9.5,
+          "principalResidenceGrowthRatePct": 5,
+          "investmentPropertyGrowthRatePct": 5
+        },
+        "includeOverrides": false
+      },
+      "actual": 880000,
+      "independentExpected": 280000,
+      "delta": 600000,
+      "tolerance": 0.03,
+      "matches": false
+    },
+    {
+      "id": "REAL-linked",
+      "finding": "F11",
+      "description": "Display conversion preserves economic error rather than correcting it",
+      "input": {
+        "personal": {
+          "person1Name": "A",
+          "person2Name": "",
+          "person1Age": 40,
+          "person2Age": 0,
+          "dependants": 0,
+          "workOptionalAge": 50,
+          "semiRetirementAge": 55,
+          "fullRetirementAge": 65,
+          "targetAnnualSpending": 0,
+          "retirementTiming": {
+            "version": 1,
+            "mode": "individual",
+            "people": [
+              {
+                "id": "person1",
+                "alreadyRetired": false,
+                "hasSemiRetirement": false,
+                "semiRetirementAge": 65,
+                "fullRetirementAge": 65
+              }
+            ]
+          }
+        },
+        "assets": {
+          "homeValue": 0,
+          "otherPropertyValue": 600000,
+          "offsetBalance": 0,
+          "cash": 0,
+          "sharesEtfs": 0,
+          "crypto": 0,
+          "superPerson1": 0,
+          "superPerson2": 0,
+          "vehiclesPersonalAssets": 0
+        },
+        "liabilities": {
+          "homeLoanBalance": 0,
+          "homeLoanInterestRatePct": 0,
+          "monthlyRepayment": 0,
+          "remainingLoanTermYears": 0,
+          "hecsHelpDebt": 0,
+          "person1HecsHelpDebt": 0,
+          "person2HecsHelpDebt": 0,
+          "person1StslBalance": 0,
+          "person2StslBalance": 0,
+          "unassignedStslBalance": 0,
+          "stslOwnerConfirmationNeeded": false,
+          "otherDebts": 0,
+          "creditCardBalance": 0,
+          "creditCardInterestRatePct": 19.99,
+          "creditCardMonthlyRepayment": 0,
+          "creditCardLimit": 0
+        },
+        "income": {
+          "person1IncomeName": "",
+          "person1Income": 0,
+          "person1Frequency": "fortnightly",
+          "person2IncomeName": "",
+          "person2Income": 0,
+          "person2Frequency": "fortnightly",
+          "otherIncomeName": "",
+          "otherIncome": 0,
+          "otherIncomeFrequency": "annually",
+          "person1HasStslDebt": null,
+          "person2HasStslDebt": null,
+          "person1HospitalCoverStatus": "",
+          "person2HospitalCoverStatus": "",
+          "person1HospitalCoverDays": 0,
+          "person2HospitalCoverDays": 0,
+          "dependantsHospitalCoverStatus": "",
+          "dependantsHospitalCoverDays": 0
+        },
+        "expenses": {
+          "livingName": "",
+          "livingCosts": 0,
+          "livingFrequency": "monthly",
+          "mortgageRepayments": 0,
+          "foodName": "",
+          "food": 0,
+          "foodFrequency": "weekly",
+          "utilitiesName": "",
+          "utilities": 0,
+          "utilitiesFrequency": "annually",
+          "insuranceName": "",
+          "insurance": 0,
+          "insuranceFrequency": "annually",
+          "schoolChildrenName": "",
+          "schoolChildren": 0,
+          "schoolChildrenFrequency": "annually",
+          "ratesPropertyCostsName": "",
+          "ratesPropertyCosts": 0,
+          "ratesPropertyCostsFrequency": "annually",
+          "otherExpensesName": "",
+          "otherExpenses": 0,
+          "otherFrequency": "monthly"
+        },
+        "investing": {
+          "annualInvestingTarget": 0,
+          "employerSuperContributions": 0,
+          "person1EmployerSuperOverrideEnabled": false,
+          "person1EmployerSuperOverride": 0,
+          "person2EmployerSuperOverrideEnabled": false,
+          "person2EmployerSuperOverride": 0,
+          "extraSuperContributions": 0,
+          "expectedInvestmentReturnPct": 0,
+          "expectedSuperReturnPct": 6.5,
+          "inflationPct": 2.5,
+          "wageGrowthPct": 3,
+          "safeWithdrawalRatePct": 4
+        },
+        "downsizing": {
+          "enabled": false,
+          "currentResidenceValue": 0,
+          "futurePropertyValue": 0,
+          "sellingCosts": 0,
+          "buyingCosts": 0,
+          "releasedForInvestment": 0
+        },
+        "assetItems": [
+          {
+            "id": "rental",
+            "name": "Rental",
+            "category": "investmentProperty",
+            "value": 600000
+          }
+        ],
+        "liabilityItems": [
+          {
+            "id": "debt",
+            "name": "Rental loan",
+            "type": "rentalPropertyLoan",
+            "balance": 350000,
+            "interestRatePct": 6,
+            "repayment": 1750,
+            "repaymentFrequency": "monthly",
+            "repaymentType": "interestOnly",
+            "termYears": 30,
+            "linkedAssetId": "rental"
+          }
+        ],
+        "incomeItems": [
+          {
+            "id": "rent",
+            "type": "rentalNetCashIncome",
+            "owner": "person1",
+            "amount": 9000,
+            "frequency": "annually",
+            "rentalCashIncomeAnnual": 30000,
+            "rentalCashflowTreatment": "beforeInterest",
+            "linkedAssetId": "rental",
+            "linkedLoanIds": [
+              "debt"
+            ]
+          }
+        ]
+      },
+      "actual": 846829.27,
+      "independentExpected": 261463.41,
+      "delta": 585365.85,
+      "tolerance": 0.03,
+      "matches": false
+    },
+    {
+      "id": "PROPERTY-generic-zero",
+      "finding": "SYSTEM",
+      "description": "Generic otherProperty has documented detailed zero growth without an override",
+      "input": {
+        "personal": {
+          "person1Name": "A",
+          "person2Name": "",
+          "person1Age": 40,
+          "person2Age": 0,
+          "dependants": 0,
+          "workOptionalAge": 50,
+          "semiRetirementAge": 55,
+          "fullRetirementAge": 65,
+          "targetAnnualSpending": 0,
+          "retirementTiming": {
+            "version": 1,
+            "mode": "individual",
+            "people": [
+              {
+                "id": "person1",
+                "alreadyRetired": false,
+                "hasSemiRetirement": false,
+                "semiRetirementAge": 65,
+                "fullRetirementAge": 65
+              }
+            ]
+          }
+        },
+        "assets": {
+          "homeValue": 0,
+          "otherPropertyValue": 600000,
+          "offsetBalance": 0,
+          "cash": 0,
+          "sharesEtfs": 0,
+          "crypto": 0,
+          "superPerson1": 0,
+          "superPerson2": 0,
+          "vehiclesPersonalAssets": 0
+        },
+        "liabilities": {
+          "homeLoanBalance": 0,
+          "homeLoanInterestRatePct": 0,
+          "monthlyRepayment": 0,
+          "remainingLoanTermYears": 0,
+          "hecsHelpDebt": 0,
+          "person1HecsHelpDebt": 0,
+          "person2HecsHelpDebt": 0,
+          "person1StslBalance": 0,
+          "person2StslBalance": 0,
+          "unassignedStslBalance": 0,
+          "stslOwnerConfirmationNeeded": false,
+          "otherDebts": 0,
+          "creditCardBalance": 0,
+          "creditCardInterestRatePct": 19.99,
+          "creditCardMonthlyRepayment": 0,
+          "creditCardLimit": 0
+        },
+        "income": {
+          "person1IncomeName": "",
+          "person1Income": 0,
+          "person1Frequency": "fortnightly",
+          "person2IncomeName": "",
+          "person2Income": 0,
+          "person2Frequency": "fortnightly",
+          "otherIncomeName": "",
+          "otherIncome": 0,
+          "otherIncomeFrequency": "annually",
+          "person1HasStslDebt": null,
+          "person2HasStslDebt": null,
+          "person1HospitalCoverStatus": "",
+          "person2HospitalCoverStatus": "",
+          "person1HospitalCoverDays": 0,
+          "person2HospitalCoverDays": 0,
+          "dependantsHospitalCoverStatus": "",
+          "dependantsHospitalCoverDays": 0
+        },
+        "expenses": {
+          "livingName": "",
+          "livingCosts": 0,
+          "livingFrequency": "monthly",
+          "mortgageRepayments": 0,
+          "foodName": "",
+          "food": 0,
+          "foodFrequency": "weekly",
+          "utilitiesName": "",
+          "utilities": 0,
+          "utilitiesFrequency": "annually",
+          "insuranceName": "",
+          "insurance": 0,
+          "insuranceFrequency": "annually",
+          "schoolChildrenName": "",
+          "schoolChildren": 0,
+          "schoolChildrenFrequency": "annually",
+          "ratesPropertyCostsName": "",
+          "ratesPropertyCosts": 0,
+          "ratesPropertyCostsFrequency": "annually",
+          "otherExpensesName": "",
+          "otherExpenses": 0,
+          "otherFrequency": "monthly"
+        },
+        "investing": {
+          "annualInvestingTarget": 0,
+          "employerSuperContributions": 0,
+          "person1EmployerSuperOverrideEnabled": false,
+          "person1EmployerSuperOverride": 0,
+          "person2EmployerSuperOverrideEnabled": false,
+          "person2EmployerSuperOverride": 0,
+          "extraSuperContributions": 0,
+          "expectedInvestmentReturnPct": 0,
+          "expectedSuperReturnPct": 6.5,
+          "inflationPct": 2.5,
+          "wageGrowthPct": 3,
+          "safeWithdrawalRatePct": 4
+        },
+        "downsizing": {
+          "enabled": false,
+          "currentResidenceValue": 0,
+          "futurePropertyValue": 0,
+          "sellingCosts": 0,
+          "buyingCosts": 0,
+          "releasedForInvestment": 0
+        },
+        "assetItems": [
+          {
+            "id": "rental",
+            "name": "Rental",
+            "category": "otherProperty",
+            "value": 600000,
+            "propertyGrowthRatePct": 3
+          }
+        ],
+        "liabilityItems": [
+          {
+            "id": "debt",
+            "name": "Rental loan",
+            "type": "rentalPropertyLoan",
+            "balance": 350000,
+            "interestRatePct": 6,
+            "repayment": 1750,
+            "repaymentFrequency": "monthly",
+            "repaymentType": "interestOnly",
+            "termYears": 30,
+            "linkedAssetId": "rental"
+          }
+        ],
+        "incomeItems": [
+          {
+            "id": "rent",
+            "type": "rentalNetCashIncome",
+            "owner": "person1",
+            "amount": 9000,
+            "frequency": "annually",
+            "rentalCashIncomeAnnual": 30000,
+            "rentalCashflowTreatment": "beforeInterest",
+            "linkedAssetId": "rental",
+            "linkedLoanIds": [
+              "debt"
+            ]
+          }
+        ]
+      },
+      "actual": 250000,
+      "independentExpected": 250000,
+      "delta": 0,
+      "tolerance": 0.03,
+      "matches": true
+    },
+    {
+      "id": "PROPERTY-linked-otherProperty",
+      "finding": "F04",
+      "description": "Detailed debt subtraction is correct when adapter has no duplicate",
+      "input": {
+        "personal": {
+          "person1Name": "A",
+          "person2Name": "",
+          "person1Age": 40,
+          "person2Age": 0,
+          "dependants": 0,
+          "workOptionalAge": 50,
+          "semiRetirementAge": 55,
+          "fullRetirementAge": 65,
+          "targetAnnualSpending": 0,
+          "retirementTiming": {
+            "version": 1,
+            "mode": "individual",
+            "people": [
+              {
+                "id": "person1",
+                "alreadyRetired": false,
+                "hasSemiRetirement": false,
+                "semiRetirementAge": 65,
+                "fullRetirementAge": 65
+              }
+            ]
+          }
+        },
+        "assets": {
+          "homeValue": 0,
+          "otherPropertyValue": 600000,
+          "offsetBalance": 0,
+          "cash": 0,
+          "sharesEtfs": 0,
+          "crypto": 0,
+          "superPerson1": 0,
+          "superPerson2": 0,
+          "vehiclesPersonalAssets": 0
+        },
+        "liabilities": {
+          "homeLoanBalance": 0,
+          "homeLoanInterestRatePct": 0,
+          "monthlyRepayment": 0,
+          "remainingLoanTermYears": 0,
+          "hecsHelpDebt": 0,
+          "person1HecsHelpDebt": 0,
+          "person2HecsHelpDebt": 0,
+          "person1StslBalance": 0,
+          "person2StslBalance": 0,
+          "unassignedStslBalance": 0,
+          "stslOwnerConfirmationNeeded": false,
+          "otherDebts": 0,
+          "creditCardBalance": 0,
+          "creditCardInterestRatePct": 19.99,
+          "creditCardMonthlyRepayment": 0,
+          "creditCardLimit": 0
+        },
+        "income": {
+          "person1IncomeName": "",
+          "person1Income": 0,
+          "person1Frequency": "fortnightly",
+          "person2IncomeName": "",
+          "person2Income": 0,
+          "person2Frequency": "fortnightly",
+          "otherIncomeName": "",
+          "otherIncome": 0,
+          "otherIncomeFrequency": "annually",
+          "person1HasStslDebt": null,
+          "person2HasStslDebt": null,
+          "person1HospitalCoverStatus": "",
+          "person2HospitalCoverStatus": "",
+          "person1HospitalCoverDays": 0,
+          "person2HospitalCoverDays": 0,
+          "dependantsHospitalCoverStatus": "",
+          "dependantsHospitalCoverDays": 0
+        },
+        "expenses": {
+          "livingName": "",
+          "livingCosts": 0,
+          "livingFrequency": "monthly",
+          "mortgageRepayments": 0,
+          "foodName": "",
+          "food": 0,
+          "foodFrequency": "weekly",
+          "utilitiesName": "",
+          "utilities": 0,
+          "utilitiesFrequency": "annually",
+          "insuranceName": "",
+          "insurance": 0,
+          "insuranceFrequency": "annually",
+          "schoolChildrenName": "",
+          "schoolChildren": 0,
+          "schoolChildrenFrequency": "annually",
+          "ratesPropertyCostsName": "",
+          "ratesPropertyCosts": 0,
+          "ratesPropertyCostsFrequency": "annually",
+          "otherExpensesName": "",
+          "otherExpenses": 0,
+          "otherFrequency": "monthly"
+        },
+        "investing": {
+          "annualInvestingTarget": 0,
+          "employerSuperContributions": 0,
+          "person1EmployerSuperOverrideEnabled": false,
+          "person1EmployerSuperOverride": 0,
+          "person2EmployerSuperOverrideEnabled": false,
+          "person2EmployerSuperOverride": 0,
+          "extraSuperContributions": 0,
+          "expectedInvestmentReturnPct": 0,
+          "expectedSuperReturnPct": 6.5,
+          "inflationPct": 2.5,
+          "wageGrowthPct": 3,
+          "safeWithdrawalRatePct": 4
+        },
+        "downsizing": {
+          "enabled": false,
+          "currentResidenceValue": 0,
+          "futurePropertyValue": 0,
+          "sellingCosts": 0,
+          "buyingCosts": 0,
+          "releasedForInvestment": 0
+        },
+        "assetItems": [
+          {
+            "id": "rental",
+            "name": "Rental",
+            "category": "otherProperty",
+            "value": 600000,
+            "propertyGrowthRatePct": 3
+          }
+        ],
+        "liabilityItems": [
+          {
+            "id": "debt",
+            "name": "Rental loan",
+            "type": "rentalPropertyLoan",
+            "balance": 350000,
+            "interestRatePct": 6,
+            "repayment": 1750,
+            "repaymentFrequency": "monthly",
+            "repaymentType": "interestOnly",
+            "termYears": 30,
+            "linkedAssetId": "rental"
+          }
+        ],
+        "incomeItems": [
+          {
+            "id": "rent",
+            "type": "rentalNetCashIncome",
+            "owner": "person1",
+            "amount": 9000,
+            "frequency": "annually",
+            "rentalCashIncomeAnnual": 30000,
+            "rentalCashflowTreatment": "beforeInterest",
+            "linkedAssetId": "rental",
+            "linkedLoanIds": [
+              "debt"
+            ]
+          }
+        ]
+      },
+      "actual": 268000,
+      "independentExpected": 268000,
+      "delta": 0,
+      "tolerance": 0.03,
+      "matches": true
+    },
+    {
+      "id": "PROPERTY-COUNT",
+      "finding": "F11",
+      "description": "Canonical investmentProperty plus its legacy mirror must represent one property",
+      "input": {
+        "personal": {
+          "person1Name": "A",
+          "person2Name": "",
+          "person1Age": 40,
+          "person2Age": 0,
+          "dependants": 0,
+          "workOptionalAge": 50,
+          "semiRetirementAge": 55,
+          "fullRetirementAge": 65,
+          "targetAnnualSpending": 0
+        },
+        "assets": {
+          "homeValue": 0,
+          "otherPropertyValue": 600000,
+          "offsetBalance": 0,
+          "cash": 0,
+          "sharesEtfs": 0,
+          "crypto": 0,
+          "superPerson1": 0,
+          "superPerson2": 0,
+          "vehiclesPersonalAssets": 0
+        },
+        "liabilities": {
+          "homeLoanBalance": 0,
+          "homeLoanInterestRatePct": 0,
+          "monthlyRepayment": 0,
+          "remainingLoanTermYears": 0,
+          "hecsHelpDebt": 0,
+          "person1HecsHelpDebt": 0,
+          "person2HecsHelpDebt": 0,
+          "person1StslBalance": 0,
+          "person2StslBalance": 0,
+          "unassignedStslBalance": 0,
+          "stslOwnerConfirmationNeeded": false,
+          "otherDebts": 0,
+          "creditCardBalance": 0,
+          "creditCardInterestRatePct": 19.99,
+          "creditCardMonthlyRepayment": 0,
+          "creditCardLimit": 0
+        },
+        "income": {
+          "person1IncomeName": "",
+          "person1Income": 0,
+          "person1Frequency": "fortnightly",
+          "person2IncomeName": "",
+          "person2Income": 0,
+          "person2Frequency": "fortnightly",
+          "otherIncomeName": "",
+          "otherIncome": 0,
+          "otherIncomeFrequency": "annually",
+          "person1HasStslDebt": null,
+          "person2HasStslDebt": null,
+          "person1HospitalCoverStatus": "",
+          "person2HospitalCoverStatus": "",
+          "person1HospitalCoverDays": 0,
+          "person2HospitalCoverDays": 0,
+          "dependantsHospitalCoverStatus": "",
+          "dependantsHospitalCoverDays": 0
+        },
+        "expenses": {
+          "livingName": "",
+          "livingCosts": 0,
+          "livingFrequency": "monthly",
+          "mortgageRepayments": 0,
+          "foodName": "",
+          "food": 0,
+          "foodFrequency": "weekly",
+          "utilitiesName": "",
+          "utilities": 0,
+          "utilitiesFrequency": "annually",
+          "insuranceName": "",
+          "insurance": 0,
+          "insuranceFrequency": "annually",
+          "schoolChildrenName": "",
+          "schoolChildren": 0,
+          "schoolChildrenFrequency": "annually",
+          "ratesPropertyCostsName": "",
+          "ratesPropertyCosts": 0,
+          "ratesPropertyCostsFrequency": "annually",
+          "otherExpensesName": "",
+          "otherExpenses": 0,
+          "otherFrequency": "monthly"
+        },
+        "investing": {
+          "annualInvestingTarget": 0,
+          "employerSuperContributions": 0,
+          "person1EmployerSuperOverrideEnabled": false,
+          "person1EmployerSuperOverride": 0,
+          "person2EmployerSuperOverrideEnabled": false,
+          "person2EmployerSuperOverride": 0,
+          "extraSuperContributions": 0,
+          "expectedInvestmentReturnPct": 0,
+          "expectedSuperReturnPct": 6.5,
+          "inflationPct": 2.5,
+          "wageGrowthPct": 3,
+          "safeWithdrawalRatePct": 4
+        },
+        "downsizing": {
+          "enabled": false,
+          "currentResidenceValue": 0,
+          "futurePropertyValue": 0,
+          "sellingCosts": 0,
+          "buyingCosts": 0,
+          "releasedForInvestment": 0
+        },
+        "assetItems": [
+          {
+            "id": "rental",
+            "name": "Rental",
+            "category": "investmentProperty",
+            "value": 600000
+          }
+        ],
+        "liabilityItems": [
+          {
+            "id": "debt",
+            "name": "Rental loan",
+            "type": "rentalPropertyLoan",
+            "balance": 350000,
+            "interestRatePct": 6,
+            "repayment": 1750,
+            "repaymentFrequency": "monthly",
+            "repaymentType": "interestOnly",
+            "termYears": 30,
+            "linkedAssetId": "rental"
+          }
+        ],
+        "incomeItems": [
+          {
+            "id": "rent",
+            "type": "rentalNetCashIncome",
+            "owner": "person1",
+            "amount": 9000,
+            "frequency": "annually",
+            "rentalCashIncomeAnnual": 30000,
+            "rentalCashflowTreatment": "beforeInterest",
+            "linkedAssetId": "rental",
+            "linkedLoanIds": [
+              "debt"
+            ]
+          }
+        ]
+      },
+      "actual": 2,
+      "independentExpected": 1,
+      "delta": 1,
+      "tolerance": 0.03,
+      "matches": false
+    },
+    {
+      "id": "PROPERTY-DUPLICATES",
+      "finding": "F11",
+      "description": "Exact duplicate entries emitted by adapter",
+      "input": {
+        "personal": {
+          "person1Name": "A",
+          "person2Name": "",
+          "person1Age": 40,
+          "person2Age": 0,
+          "dependants": 0,
+          "workOptionalAge": 50,
+          "semiRetirementAge": 55,
+          "fullRetirementAge": 65,
+          "targetAnnualSpending": 0
+        },
+        "assets": {
+          "homeValue": 0,
+          "otherPropertyValue": 600000,
+          "offsetBalance": 0,
+          "cash": 0,
+          "sharesEtfs": 0,
+          "crypto": 0,
+          "superPerson1": 0,
+          "superPerson2": 0,
+          "vehiclesPersonalAssets": 0
+        },
+        "liabilities": {
+          "homeLoanBalance": 0,
+          "homeLoanInterestRatePct": 0,
+          "monthlyRepayment": 0,
+          "remainingLoanTermYears": 0,
+          "hecsHelpDebt": 0,
+          "person1HecsHelpDebt": 0,
+          "person2HecsHelpDebt": 0,
+          "person1StslBalance": 0,
+          "person2StslBalance": 0,
+          "unassignedStslBalance": 0,
+          "stslOwnerConfirmationNeeded": false,
+          "otherDebts": 0,
+          "creditCardBalance": 0,
+          "creditCardInterestRatePct": 19.99,
+          "creditCardMonthlyRepayment": 0,
+          "creditCardLimit": 0
+        },
+        "income": {
+          "person1IncomeName": "",
+          "person1Income": 0,
+          "person1Frequency": "fortnightly",
+          "person2IncomeName": "",
+          "person2Income": 0,
+          "person2Frequency": "fortnightly",
+          "otherIncomeName": "",
+          "otherIncome": 0,
+          "otherIncomeFrequency": "annually",
+          "person1HasStslDebt": null,
+          "person2HasStslDebt": null,
+          "person1HospitalCoverStatus": "",
+          "person2HospitalCoverStatus": "",
+          "person1HospitalCoverDays": 0,
+          "person2HospitalCoverDays": 0,
+          "dependantsHospitalCoverStatus": "",
+          "dependantsHospitalCoverDays": 0
+        },
+        "expenses": {
+          "livingName": "",
+          "livingCosts": 0,
+          "livingFrequency": "monthly",
+          "mortgageRepayments": 0,
+          "foodName": "",
+          "food": 0,
+          "foodFrequency": "weekly",
+          "utilitiesName": "",
+          "utilities": 0,
+          "utilitiesFrequency": "annually",
+          "insuranceName": "",
+          "insurance": 0,
+          "insuranceFrequency": "annually",
+          "schoolChildrenName": "",
+          "schoolChildren": 0,
+          "schoolChildrenFrequency": "annually",
+          "ratesPropertyCostsName": "",
+          "ratesPropertyCosts": 0,
+          "ratesPropertyCostsFrequency": "annually",
+          "otherExpensesName": "",
+          "otherExpenses": 0,
+          "otherFrequency": "monthly"
+        },
+        "investing": {
+          "annualInvestingTarget": 0,
+          "employerSuperContributions": 0,
+          "person1EmployerSuperOverrideEnabled": false,
+          "person1EmployerSuperOverride": 0,
+          "person2EmployerSuperOverrideEnabled": false,
+          "person2EmployerSuperOverride": 0,
+          "extraSuperContributions": 0,
+          "expectedInvestmentReturnPct": 0,
+          "expectedSuperReturnPct": 6.5,
+          "inflationPct": 2.5,
+          "wageGrowthPct": 3,
+          "safeWithdrawalRatePct": 4
+        },
+        "downsizing": {
+          "enabled": false,
+          "currentResidenceValue": 0,
+          "futurePropertyValue": 0,
+          "sellingCosts": 0,
+          "buyingCosts": 0,
+          "releasedForInvestment": 0
+        },
+        "assetItems": [
+          {
+            "id": "rental",
+            "name": "Rental",
+            "category": "investmentProperty",
+            "value": 600000
+          }
+        ],
+        "liabilityItems": [
+          {
+            "id": "debt",
+            "name": "Rental loan",
+            "type": "rentalPropertyLoan",
+            "balance": 350000,
+            "interestRatePct": 6,
+            "repayment": 1750,
+            "repaymentFrequency": "monthly",
+            "repaymentType": "interestOnly",
+            "termYears": 30,
+            "linkedAssetId": "rental"
+          }
+        ],
+        "incomeItems": [
+          {
+            "id": "rent",
+            "type": "rentalNetCashIncome",
+            "owner": "person1",
+            "amount": 9000,
+            "frequency": "annually",
+            "rentalCashIncomeAnnual": 30000,
+            "rentalCashflowTreatment": "beforeInterest",
+            "linkedAssetId": "rental",
+            "linkedLoanIds": [
+              "debt"
+            ]
+          }
+        ]
+      },
+      "observed": [
+        {
+          "id": "rental",
+          "name": "Rental",
+          "type": "investmentProperty",
+          "owner": "joint",
+          "ownershipPercent": 100,
+          "openingValue": 600000,
+          "annualGrowthRatePct": 3,
+          "assetSpecificGrowthRatePct": null,
+          "growthRateSource": "investment-property-default",
+          "propertyTypeGroup": "investment-property",
+          "includeInNetWorth": true,
+          "isAccessibleAsset": false,
+          "isPersonalUse": false
+        },
+        {
+          "id": "legacy-other-property",
+          "name": "Other property",
+          "type": "otherProperty",
+          "openingValue": 600000,
+          "annualGrowthRatePct": 0,
+          "growthRateSource": "zero-fallback",
+          "propertyTypeGroup": "other-property",
+          "includeInNetWorth": true,
+          "isAccessibleAsset": false
+        }
+      ]
+    },
+    {
+      "id": "START-legacy",
+      "finding": "F07",
+      "description": "Already retiring at opening has $500k, not a future closing balance",
+      "input": {
+        "personal": {
+          "person1Name": "A",
+          "person2Name": "",
+          "person1Age": 65,
+          "person2Age": 0,
+          "dependants": 0,
+          "workOptionalAge": 50,
+          "semiRetirementAge": 55,
+          "fullRetirementAge": 65,
+          "targetAnnualSpending": 0
+        },
+        "assets": {
+          "homeValue": 0,
+          "otherPropertyValue": 0,
+          "offsetBalance": 0,
+          "cash": 0,
+          "sharesEtfs": 0,
+          "crypto": 0,
+          "superPerson1": 500000,
+          "superPerson2": 0,
+          "vehiclesPersonalAssets": 0
+        },
+        "liabilities": {
+          "homeLoanBalance": 0,
+          "homeLoanInterestRatePct": 0,
+          "monthlyRepayment": 0,
+          "remainingLoanTermYears": 0,
+          "hecsHelpDebt": 0,
+          "person1HecsHelpDebt": 0,
+          "person2HecsHelpDebt": 0,
+          "person1StslBalance": 0,
+          "person2StslBalance": 0,
+          "unassignedStslBalance": 0,
+          "stslOwnerConfirmationNeeded": false,
+          "otherDebts": 0,
+          "creditCardBalance": 0,
+          "creditCardInterestRatePct": 19.99,
+          "creditCardMonthlyRepayment": 0,
+          "creditCardLimit": 0
+        },
+        "income": {
+          "person1IncomeName": "",
+          "person1Income": 0,
+          "person1Frequency": "fortnightly",
+          "person2IncomeName": "",
+          "person2Income": 0,
+          "person2Frequency": "fortnightly",
+          "otherIncomeName": "",
+          "otherIncome": 0,
+          "otherIncomeFrequency": "annually",
+          "person1HasStslDebt": null,
+          "person2HasStslDebt": null,
+          "person1HospitalCoverStatus": "",
+          "person2HospitalCoverStatus": "",
+          "person1HospitalCoverDays": 0,
+          "person2HospitalCoverDays": 0,
+          "dependantsHospitalCoverStatus": "",
+          "dependantsHospitalCoverDays": 0
+        },
+        "expenses": {
+          "livingName": "",
+          "livingCosts": 0,
+          "livingFrequency": "monthly",
+          "mortgageRepayments": 0,
+          "foodName": "",
+          "food": 0,
+          "foodFrequency": "weekly",
+          "utilitiesName": "",
+          "utilities": 0,
+          "utilitiesFrequency": "annually",
+          "insuranceName": "",
+          "insurance": 0,
+          "insuranceFrequency": "annually",
+          "schoolChildrenName": "",
+          "schoolChildren": 0,
+          "schoolChildrenFrequency": "annually",
+          "ratesPropertyCostsName": "",
+          "ratesPropertyCosts": 0,
+          "ratesPropertyCostsFrequency": "annually",
+          "otherExpensesName": "",
+          "otherExpenses": 0,
+          "otherFrequency": "monthly"
+        },
+        "investing": {
+          "annualInvestingTarget": 0,
+          "employerSuperContributions": 0,
+          "person1EmployerSuperOverrideEnabled": false,
+          "person1EmployerSuperOverride": 0,
+          "person2EmployerSuperOverrideEnabled": false,
+          "person2EmployerSuperOverride": 0,
+          "extraSuperContributions": 0,
+          "expectedInvestmentReturnPct": 7,
+          "expectedSuperReturnPct": 6.5,
+          "inflationPct": 2.5,
+          "wageGrowthPct": 3,
+          "safeWithdrawalRatePct": 4
+        },
+        "downsizing": {
+          "enabled": false,
+          "currentResidenceValue": 0,
+          "futurePropertyValue": 0,
+          "sellingCosts": 0,
+          "buyingCosts": 0,
+          "releasedForInvestment": 0
+        },
+        "assetItems": [
+          {
+            "id": "asset-super-1",
+            "category": "super",
+            "value": 500000,
+            "owner": "person1"
+          }
+        ]
+      },
+      "actual": 533485.9,
+      "independentExpected": 500000,
+      "delta": 33485.9,
+      "tolerance": 0.03,
+      "matches": false
+    },
+    {
+      "id": "RETIRE-70-legacy",
+      "finding": "F07",
+      "description": "Five annual no-flow years from the true opening at account return",
+      "input": {
+        "personal": {
+          "person1Name": "A",
+          "person2Name": "",
+          "person1Age": 65,
+          "person2Age": 0,
+          "dependants": 0,
+          "workOptionalAge": 50,
+          "semiRetirementAge": 55,
+          "fullRetirementAge": 65,
+          "targetAnnualSpending": 0
+        },
+        "assets": {
+          "homeValue": 0,
+          "otherPropertyValue": 0,
+          "offsetBalance": 0,
+          "cash": 0,
+          "sharesEtfs": 0,
+          "crypto": 0,
+          "superPerson1": 500000,
+          "superPerson2": 0,
+          "vehiclesPersonalAssets": 0
+        },
+        "liabilities": {
+          "homeLoanBalance": 0,
+          "homeLoanInterestRatePct": 0,
+          "monthlyRepayment": 0,
+          "remainingLoanTermYears": 0,
+          "hecsHelpDebt": 0,
+          "person1HecsHelpDebt": 0,
+          "person2HecsHelpDebt": 0,
+          "person1StslBalance": 0,
+          "person2StslBalance": 0,
+          "unassignedStslBalance": 0,
+          "stslOwnerConfirmationNeeded": false,
+          "otherDebts": 0,
+          "creditCardBalance": 0,
+          "creditCardInterestRatePct": 19.99,
+          "creditCardMonthlyRepayment": 0,
+          "creditCardLimit": 0
+        },
+        "income": {
+          "person1IncomeName": "",
+          "person1Income": 0,
+          "person1Frequency": "fortnightly",
+          "person2IncomeName": "",
+          "person2Income": 0,
+          "person2Frequency": "fortnightly",
+          "otherIncomeName": "",
+          "otherIncome": 0,
+          "otherIncomeFrequency": "annually",
+          "person1HasStslDebt": null,
+          "person2HasStslDebt": null,
+          "person1HospitalCoverStatus": "",
+          "person2HospitalCoverStatus": "",
+          "person1HospitalCoverDays": 0,
+          "person2HospitalCoverDays": 0,
+          "dependantsHospitalCoverStatus": "",
+          "dependantsHospitalCoverDays": 0
+        },
+        "expenses": {
+          "livingName": "",
+          "livingCosts": 0,
+          "livingFrequency": "monthly",
+          "mortgageRepayments": 0,
+          "foodName": "",
+          "food": 0,
+          "foodFrequency": "weekly",
+          "utilitiesName": "",
+          "utilities": 0,
+          "utilitiesFrequency": "annually",
+          "insuranceName": "",
+          "insurance": 0,
+          "insuranceFrequency": "annually",
+          "schoolChildrenName": "",
+          "schoolChildren": 0,
+          "schoolChildrenFrequency": "annually",
+          "ratesPropertyCostsName": "",
+          "ratesPropertyCosts": 0,
+          "ratesPropertyCostsFrequency": "annually",
+          "otherExpensesName": "",
+          "otherExpenses": 0,
+          "otherFrequency": "monthly"
+        },
+        "investing": {
+          "annualInvestingTarget": 0,
+          "employerSuperContributions": 0,
+          "person1EmployerSuperOverrideEnabled": false,
+          "person1EmployerSuperOverride": 0,
+          "person2EmployerSuperOverrideEnabled": false,
+          "person2EmployerSuperOverride": 0,
+          "extraSuperContributions": 0,
+          "expectedInvestmentReturnPct": 7,
+          "expectedSuperReturnPct": 6.5,
+          "inflationPct": 2.5,
+          "wageGrowthPct": 3,
+          "safeWithdrawalRatePct": 4
+        },
+        "downsizing": {
+          "enabled": false,
+          "currentResidenceValue": 0,
+          "futurePropertyValue": 0,
+          "sellingCosts": 0,
+          "buyingCosts": 0,
+          "releasedForInvestment": 0
+        },
+        "assetItems": [
+          {
+            "id": "asset-super-1",
+            "category": "super",
+            "value": 500000,
+            "owner": "person1"
+          }
+        ]
+      },
+      "actual": 748241.56,
+      "independentExpected": 685043.33,
+      "delta": 63198.23,
+      "tolerance": 0.15,
+      "matches": false
+    },
+    {
+      "id": "SUPER-PATH-legacy",
+      "finding": "F07",
+      "description": "Detailed/main first closing super and sustainability input",
+      "input": {
+        "personal": {
+          "person1Name": "A",
+          "person2Name": "",
+          "person1Age": 65,
+          "person2Age": 0,
+          "dependants": 0,
+          "workOptionalAge": 50,
+          "semiRetirementAge": 55,
+          "fullRetirementAge": 65,
+          "targetAnnualSpending": 0
+        },
+        "assets": {
+          "homeValue": 0,
+          "otherPropertyValue": 0,
+          "offsetBalance": 0,
+          "cash": 0,
+          "sharesEtfs": 0,
+          "crypto": 0,
+          "superPerson1": 500000,
+          "superPerson2": 0,
+          "vehiclesPersonalAssets": 0
+        },
+        "liabilities": {
+          "homeLoanBalance": 0,
+          "homeLoanInterestRatePct": 0,
+          "monthlyRepayment": 0,
+          "remainingLoanTermYears": 0,
+          "hecsHelpDebt": 0,
+          "person1HecsHelpDebt": 0,
+          "person2HecsHelpDebt": 0,
+          "person1StslBalance": 0,
+          "person2StslBalance": 0,
+          "unassignedStslBalance": 0,
+          "stslOwnerConfirmationNeeded": false,
+          "otherDebts": 0,
+          "creditCardBalance": 0,
+          "creditCardInterestRatePct": 19.99,
+          "creditCardMonthlyRepayment": 0,
+          "creditCardLimit": 0
+        },
+        "income": {
+          "person1IncomeName": "",
+          "person1Income": 0,
+          "person1Frequency": "fortnightly",
+          "person2IncomeName": "",
+          "person2Income": 0,
+          "person2Frequency": "fortnightly",
+          "otherIncomeName": "",
+          "otherIncome": 0,
+          "otherIncomeFrequency": "annually",
+          "person1HasStslDebt": null,
+          "person2HasStslDebt": null,
+          "person1HospitalCoverStatus": "",
+          "person2HospitalCoverStatus": "",
+          "person1HospitalCoverDays": 0,
+          "person2HospitalCoverDays": 0,
+          "dependantsHospitalCoverStatus": "",
+          "dependantsHospitalCoverDays": 0
+        },
+        "expenses": {
+          "livingName": "",
+          "livingCosts": 0,
+          "livingFrequency": "monthly",
+          "mortgageRepayments": 0,
+          "foodName": "",
+          "food": 0,
+          "foodFrequency": "weekly",
+          "utilitiesName": "",
+          "utilities": 0,
+          "utilitiesFrequency": "annually",
+          "insuranceName": "",
+          "insurance": 0,
+          "insuranceFrequency": "annually",
+          "schoolChildrenName": "",
+          "schoolChildren": 0,
+          "schoolChildrenFrequency": "annually",
+          "ratesPropertyCostsName": "",
+          "ratesPropertyCosts": 0,
+          "ratesPropertyCostsFrequency": "annually",
+          "otherExpensesName": "",
+          "otherExpenses": 0,
+          "otherFrequency": "monthly"
+        },
+        "investing": {
+          "annualInvestingTarget": 0,
+          "employerSuperContributions": 0,
+          "person1EmployerSuperOverrideEnabled": false,
+          "person1EmployerSuperOverride": 0,
+          "person2EmployerSuperOverrideEnabled": false,
+          "person2EmployerSuperOverride": 0,
+          "extraSuperContributions": 0,
+          "expectedInvestmentReturnPct": 7,
+          "expectedSuperReturnPct": 6.5,
+          "inflationPct": 2.5,
+          "wageGrowthPct": 3,
+          "safeWithdrawalRatePct": 4
+        },
+        "downsizing": {
+          "enabled": false,
+          "currentResidenceValue": 0,
+          "futurePropertyValue": 0,
+          "sellingCosts": 0,
+          "buyingCosts": 0,
+          "releasedForInvestment": 0
+        },
+        "assetItems": [
+          {
+            "id": "asset-super-1",
+            "category": "super",
+            "value": 500000,
+            "owner": "person1"
+          }
+        ]
+      },
+      "observed": {
+        "superFirst": 533485.9,
+        "retirementStart": 533485.9
+      }
+    },
+    {
+      "id": "START-linked",
+      "finding": "F07",
+      "description": "Already retiring at opening has $500k, not a future closing balance",
+      "input": {
+        "personal": {
+          "person1Name": "A",
+          "person2Name": "",
+          "person1Age": 65,
+          "person2Age": 0,
+          "dependants": 0,
+          "workOptionalAge": 50,
+          "semiRetirementAge": 55,
+          "fullRetirementAge": 65,
+          "targetAnnualSpending": 0,
+          "retirementTiming": {
+            "version": 1,
+            "mode": "individual",
+            "people": [
+              {
+                "id": "person1",
+                "alreadyRetired": true,
+                "hasSemiRetirement": false,
+                "semiRetirementAge": 65,
+                "fullRetirementAge": 65
+              }
+            ]
+          }
+        },
+        "assets": {
+          "homeValue": 0,
+          "otherPropertyValue": 0,
+          "offsetBalance": 0,
+          "cash": 0,
+          "sharesEtfs": 0,
+          "crypto": 0,
+          "superPerson1": 500000,
+          "superPerson2": 0,
+          "vehiclesPersonalAssets": 0
+        },
+        "liabilities": {
+          "homeLoanBalance": 0,
+          "homeLoanInterestRatePct": 0,
+          "monthlyRepayment": 0,
+          "remainingLoanTermYears": 0,
+          "hecsHelpDebt": 0,
+          "person1HecsHelpDebt": 0,
+          "person2HecsHelpDebt": 0,
+          "person1StslBalance": 0,
+          "person2StslBalance": 0,
+          "unassignedStslBalance": 0,
+          "stslOwnerConfirmationNeeded": false,
+          "otherDebts": 0,
+          "creditCardBalance": 0,
+          "creditCardInterestRatePct": 19.99,
+          "creditCardMonthlyRepayment": 0,
+          "creditCardLimit": 0
+        },
+        "income": {
+          "person1IncomeName": "",
+          "person1Income": 0,
+          "person1Frequency": "fortnightly",
+          "person2IncomeName": "",
+          "person2Income": 0,
+          "person2Frequency": "fortnightly",
+          "otherIncomeName": "",
+          "otherIncome": 0,
+          "otherIncomeFrequency": "annually",
+          "person1HasStslDebt": null,
+          "person2HasStslDebt": null,
+          "person1HospitalCoverStatus": "",
+          "person2HospitalCoverStatus": "",
+          "person1HospitalCoverDays": 0,
+          "person2HospitalCoverDays": 0,
+          "dependantsHospitalCoverStatus": "",
+          "dependantsHospitalCoverDays": 0
+        },
+        "expenses": {
+          "livingName": "",
+          "livingCosts": 0,
+          "livingFrequency": "monthly",
+          "mortgageRepayments": 0,
+          "foodName": "",
+          "food": 0,
+          "foodFrequency": "weekly",
+          "utilitiesName": "",
+          "utilities": 0,
+          "utilitiesFrequency": "annually",
+          "insuranceName": "",
+          "insurance": 0,
+          "insuranceFrequency": "annually",
+          "schoolChildrenName": "",
+          "schoolChildren": 0,
+          "schoolChildrenFrequency": "annually",
+          "ratesPropertyCostsName": "",
+          "ratesPropertyCosts": 0,
+          "ratesPropertyCostsFrequency": "annually",
+          "otherExpensesName": "",
+          "otherExpenses": 0,
+          "otherFrequency": "monthly"
+        },
+        "investing": {
+          "annualInvestingTarget": 0,
+          "employerSuperContributions": 0,
+          "person1EmployerSuperOverrideEnabled": false,
+          "person1EmployerSuperOverride": 0,
+          "person2EmployerSuperOverrideEnabled": false,
+          "person2EmployerSuperOverride": 0,
+          "extraSuperContributions": 0,
+          "expectedInvestmentReturnPct": 7,
+          "expectedSuperReturnPct": 6.5,
+          "inflationPct": 2.5,
+          "wageGrowthPct": 3,
+          "safeWithdrawalRatePct": 4
+        },
+        "downsizing": {
+          "enabled": false,
+          "currentResidenceValue": 0,
+          "futurePropertyValue": 0,
+          "sellingCosts": 0,
+          "buyingCosts": 0,
+          "releasedForInvestment": 0
+        },
+        "assetItems": [
+          {
+            "id": "asset-super-1",
+            "category": "super",
+            "value": 500000,
+            "owner": "person1"
+          }
+        ]
+      },
+      "actual": 527500,
+      "independentExpected": 500000,
+      "delta": 27500,
+      "tolerance": 0.03,
+      "matches": false
+    },
+    {
+      "id": "RETIRE-70-linked",
+      "finding": "F07",
+      "description": "Five annual no-flow years from the true opening at account return",
+      "input": {
+        "personal": {
+          "person1Name": "A",
+          "person2Name": "",
+          "person1Age": 65,
+          "person2Age": 0,
+          "dependants": 0,
+          "workOptionalAge": 50,
+          "semiRetirementAge": 55,
+          "fullRetirementAge": 65,
+          "targetAnnualSpending": 0,
+          "retirementTiming": {
+            "version": 1,
+            "mode": "individual",
+            "people": [
+              {
+                "id": "person1",
+                "alreadyRetired": true,
+                "hasSemiRetirement": false,
+                "semiRetirementAge": 65,
+                "fullRetirementAge": 65
+              }
+            ]
+          }
+        },
+        "assets": {
+          "homeValue": 0,
+          "otherPropertyValue": 0,
+          "offsetBalance": 0,
+          "cash": 0,
+          "sharesEtfs": 0,
+          "crypto": 0,
+          "superPerson1": 500000,
+          "superPerson2": 0,
+          "vehiclesPersonalAssets": 0
+        },
+        "liabilities": {
+          "homeLoanBalance": 0,
+          "homeLoanInterestRatePct": 0,
+          "monthlyRepayment": 0,
+          "remainingLoanTermYears": 0,
+          "hecsHelpDebt": 0,
+          "person1HecsHelpDebt": 0,
+          "person2HecsHelpDebt": 0,
+          "person1StslBalance": 0,
+          "person2StslBalance": 0,
+          "unassignedStslBalance": 0,
+          "stslOwnerConfirmationNeeded": false,
+          "otherDebts": 0,
+          "creditCardBalance": 0,
+          "creditCardInterestRatePct": 19.99,
+          "creditCardMonthlyRepayment": 0,
+          "creditCardLimit": 0
+        },
+        "income": {
+          "person1IncomeName": "",
+          "person1Income": 0,
+          "person1Frequency": "fortnightly",
+          "person2IncomeName": "",
+          "person2Income": 0,
+          "person2Frequency": "fortnightly",
+          "otherIncomeName": "",
+          "otherIncome": 0,
+          "otherIncomeFrequency": "annually",
+          "person1HasStslDebt": null,
+          "person2HasStslDebt": null,
+          "person1HospitalCoverStatus": "",
+          "person2HospitalCoverStatus": "",
+          "person1HospitalCoverDays": 0,
+          "person2HospitalCoverDays": 0,
+          "dependantsHospitalCoverStatus": "",
+          "dependantsHospitalCoverDays": 0
+        },
+        "expenses": {
+          "livingName": "",
+          "livingCosts": 0,
+          "livingFrequency": "monthly",
+          "mortgageRepayments": 0,
+          "foodName": "",
+          "food": 0,
+          "foodFrequency": "weekly",
+          "utilitiesName": "",
+          "utilities": 0,
+          "utilitiesFrequency": "annually",
+          "insuranceName": "",
+          "insurance": 0,
+          "insuranceFrequency": "annually",
+          "schoolChildrenName": "",
+          "schoolChildren": 0,
+          "schoolChildrenFrequency": "annually",
+          "ratesPropertyCostsName": "",
+          "ratesPropertyCosts": 0,
+          "ratesPropertyCostsFrequency": "annually",
+          "otherExpensesName": "",
+          "otherExpenses": 0,
+          "otherFrequency": "monthly"
+        },
+        "investing": {
+          "annualInvestingTarget": 0,
+          "employerSuperContributions": 0,
+          "person1EmployerSuperOverrideEnabled": false,
+          "person1EmployerSuperOverride": 0,
+          "person2EmployerSuperOverrideEnabled": false,
+          "person2EmployerSuperOverride": 0,
+          "extraSuperContributions": 0,
+          "expectedInvestmentReturnPct": 7,
+          "expectedSuperReturnPct": 6.5,
+          "inflationPct": 2.5,
+          "wageGrowthPct": 3,
+          "safeWithdrawalRatePct": 4
+        },
+        "downsizing": {
+          "enabled": false,
+          "currentResidenceValue": 0,
+          "futurePropertyValue": 0,
+          "sellingCosts": 0,
+          "buyingCosts": 0,
+          "releasedForInvestment": 0
+        },
+        "assetItems": [
+          {
+            "id": "asset-super-1",
+            "category": "super",
+            "value": 500000,
+            "owner": "person1"
+          }
+        ]
+      },
+      "actual": 739846.03,
+      "independentExpected": 653480,
+      "delta": 86366.03,
+      "tolerance": 0.15,
+      "matches": false
+    },
+    {
+      "id": "SUPER-PATH-linked",
+      "finding": "F07",
+      "description": "Detailed/main first closing super and sustainability input",
+      "input": {
+        "personal": {
+          "person1Name": "A",
+          "person2Name": "",
+          "person1Age": 65,
+          "person2Age": 0,
+          "dependants": 0,
+          "workOptionalAge": 50,
+          "semiRetirementAge": 55,
+          "fullRetirementAge": 65,
+          "targetAnnualSpending": 0,
+          "retirementTiming": {
+            "version": 1,
+            "mode": "individual",
+            "people": [
+              {
+                "id": "person1",
+                "alreadyRetired": true,
+                "hasSemiRetirement": false,
+                "semiRetirementAge": 65,
+                "fullRetirementAge": 65
+              }
+            ]
+          }
+        },
+        "assets": {
+          "homeValue": 0,
+          "otherPropertyValue": 0,
+          "offsetBalance": 0,
+          "cash": 0,
+          "sharesEtfs": 0,
+          "crypto": 0,
+          "superPerson1": 500000,
+          "superPerson2": 0,
+          "vehiclesPersonalAssets": 0
+        },
+        "liabilities": {
+          "homeLoanBalance": 0,
+          "homeLoanInterestRatePct": 0,
+          "monthlyRepayment": 0,
+          "remainingLoanTermYears": 0,
+          "hecsHelpDebt": 0,
+          "person1HecsHelpDebt": 0,
+          "person2HecsHelpDebt": 0,
+          "person1StslBalance": 0,
+          "person2StslBalance": 0,
+          "unassignedStslBalance": 0,
+          "stslOwnerConfirmationNeeded": false,
+          "otherDebts": 0,
+          "creditCardBalance": 0,
+          "creditCardInterestRatePct": 19.99,
+          "creditCardMonthlyRepayment": 0,
+          "creditCardLimit": 0
+        },
+        "income": {
+          "person1IncomeName": "",
+          "person1Income": 0,
+          "person1Frequency": "fortnightly",
+          "person2IncomeName": "",
+          "person2Income": 0,
+          "person2Frequency": "fortnightly",
+          "otherIncomeName": "",
+          "otherIncome": 0,
+          "otherIncomeFrequency": "annually",
+          "person1HasStslDebt": null,
+          "person2HasStslDebt": null,
+          "person1HospitalCoverStatus": "",
+          "person2HospitalCoverStatus": "",
+          "person1HospitalCoverDays": 0,
+          "person2HospitalCoverDays": 0,
+          "dependantsHospitalCoverStatus": "",
+          "dependantsHospitalCoverDays": 0
+        },
+        "expenses": {
+          "livingName": "",
+          "livingCosts": 0,
+          "livingFrequency": "monthly",
+          "mortgageRepayments": 0,
+          "foodName": "",
+          "food": 0,
+          "foodFrequency": "weekly",
+          "utilitiesName": "",
+          "utilities": 0,
+          "utilitiesFrequency": "annually",
+          "insuranceName": "",
+          "insurance": 0,
+          "insuranceFrequency": "annually",
+          "schoolChildrenName": "",
+          "schoolChildren": 0,
+          "schoolChildrenFrequency": "annually",
+          "ratesPropertyCostsName": "",
+          "ratesPropertyCosts": 0,
+          "ratesPropertyCostsFrequency": "annually",
+          "otherExpensesName": "",
+          "otherExpenses": 0,
+          "otherFrequency": "monthly"
+        },
+        "investing": {
+          "annualInvestingTarget": 0,
+          "employerSuperContributions": 0,
+          "person1EmployerSuperOverrideEnabled": false,
+          "person1EmployerSuperOverride": 0,
+          "person2EmployerSuperOverrideEnabled": false,
+          "person2EmployerSuperOverride": 0,
+          "extraSuperContributions": 0,
+          "expectedInvestmentReturnPct": 7,
+          "expectedSuperReturnPct": 6.5,
+          "inflationPct": 2.5,
+          "wageGrowthPct": 3,
+          "safeWithdrawalRatePct": 4
+        },
+        "downsizing": {
+          "enabled": false,
+          "currentResidenceValue": 0,
+          "futurePropertyValue": 0,
+          "sellingCosts": 0,
+          "buyingCosts": 0,
+          "releasedForInvestment": 0
+        },
+        "assetItems": [
+          {
+            "id": "asset-super-1",
+            "category": "super",
+            "value": 500000,
+            "owner": "person1"
+          }
+        ]
+      },
+      "observed": {
+        "superFirst": 527500,
+        "retirementStart": 527500
+      }
+    },
+    {
+      "id": "INCOME-linked-cash",
+      "finding": "F03",
+      "description": "Economic growth plus cash yield, with identity stated in case",
+      "input": {
+        "personal": {
+          "person1Name": "A",
+          "person2Name": "",
+          "person1Age": 40,
+          "person2Age": 0,
+          "dependants": 0,
+          "workOptionalAge": 50,
+          "semiRetirementAge": 55,
+          "fullRetirementAge": 65,
+          "targetAnnualSpending": 0
+        },
+        "assets": {
+          "homeValue": 0,
+          "otherPropertyValue": 0,
+          "offsetBalance": 0,
+          "cash": 0,
+          "sharesEtfs": 0,
+          "crypto": 0,
+          "superPerson1": 0,
+          "superPerson2": 0,
+          "vehiclesPersonalAssets": 0
+        },
+        "liabilities": {
+          "homeLoanBalance": 0,
+          "homeLoanInterestRatePct": 0,
+          "monthlyRepayment": 0,
+          "remainingLoanTermYears": 0,
+          "hecsHelpDebt": 0,
+          "person1HecsHelpDebt": 0,
+          "person2HecsHelpDebt": 0,
+          "person1StslBalance": 0,
+          "person2StslBalance": 0,
+          "unassignedStslBalance": 0,
+          "stslOwnerConfirmationNeeded": false,
+          "otherDebts": 0,
+          "creditCardBalance": 0,
+          "creditCardInterestRatePct": 19.99,
+          "creditCardMonthlyRepayment": 0,
+          "creditCardLimit": 0
+        },
+        "income": {
+          "person1IncomeName": "",
+          "person1Income": 0,
+          "person1Frequency": "fortnightly",
+          "person2IncomeName": "",
+          "person2Income": 0,
+          "person2Frequency": "fortnightly",
+          "otherIncomeName": "",
+          "otherIncome": 0,
+          "otherIncomeFrequency": "annually",
+          "person1HasStslDebt": null,
+          "person2HasStslDebt": null,
+          "person1HospitalCoverStatus": "",
+          "person2HospitalCoverStatus": "",
+          "person1HospitalCoverDays": 0,
+          "person2HospitalCoverDays": 0,
+          "dependantsHospitalCoverStatus": "",
+          "dependantsHospitalCoverDays": 0
+        },
+        "expenses": {
+          "livingName": "",
+          "livingCosts": 0,
+          "livingFrequency": "monthly",
+          "mortgageRepayments": 0,
+          "foodName": "",
+          "food": 0,
+          "foodFrequency": "weekly",
+          "utilitiesName": "",
+          "utilities": 0,
+          "utilitiesFrequency": "annually",
+          "insuranceName": "",
+          "insurance": 0,
+          "insuranceFrequency": "annually",
+          "schoolChildrenName": "",
+          "schoolChildren": 0,
+          "schoolChildrenFrequency": "annually",
+          "ratesPropertyCostsName": "",
+          "ratesPropertyCosts": 0,
+          "ratesPropertyCostsFrequency": "annually",
+          "otherExpensesName": "",
+          "otherExpenses": 0,
+          "otherFrequency": "monthly"
+        },
+        "investing": {
+          "annualInvestingTarget": 0,
+          "employerSuperContributions": 0,
+          "person1EmployerSuperOverrideEnabled": false,
+          "person1EmployerSuperOverride": 0,
+          "person2EmployerSuperOverrideEnabled": false,
+          "person2EmployerSuperOverride": 0,
+          "extraSuperContributions": 0,
+          "expectedInvestmentReturnPct": 7,
+          "expectedSuperReturnPct": 6.5,
+          "inflationPct": 2.5,
+          "wageGrowthPct": 3,
+          "safeWithdrawalRatePct": 4
+        },
+        "downsizing": {
+          "enabled": false,
+          "currentResidenceValue": 0,
+          "futurePropertyValue": 0,
+          "sellingCosts": 0,
+          "buyingCosts": 0,
+          "releasedForInvestment": 0
+        },
+        "assetItems": [
+          {
+            "id": "portfolio",
+            "name": "Shares",
+            "category": "shares",
+            "owner": "person1",
+            "value": 500000,
+            "investmentReturnMode": "totalReturn",
+            "expectedTotalReturnPct": 7,
+            "expectedIncomeYieldPct": 3,
+            "incomeTreatment": "cash"
+          }
+        ],
+        "incomeItems": [
+          {
+            "id": "dividend",
+            "type": "dividends",
+            "owner": "person1",
+            "amount": 15000,
+            "frequency": "annually",
+            "linkedAssetId": "portfolio"
+          }
+        ]
+      },
+      "actual": 35000,
+      "independentExpected": 35000,
+      "delta": 0,
+      "tolerance": 0.03,
+      "matches": true
+    },
+    {
+      "id": "REVIEW-linked-cash",
+      "finding": "F03",
+      "description": "Overlap review warnings are metadata, not cash suppression",
+      "input": {
+        "personal": {
+          "person1Name": "A",
+          "person2Name": "",
+          "person1Age": 40,
+          "person2Age": 0,
+          "dependants": 0,
+          "workOptionalAge": 50,
+          "semiRetirementAge": 55,
+          "fullRetirementAge": 65,
+          "targetAnnualSpending": 0
+        },
+        "assets": {
+          "homeValue": 0,
+          "otherPropertyValue": 0,
+          "offsetBalance": 0,
+          "cash": 0,
+          "sharesEtfs": 0,
+          "crypto": 0,
+          "superPerson1": 0,
+          "superPerson2": 0,
+          "vehiclesPersonalAssets": 0
+        },
+        "liabilities": {
+          "homeLoanBalance": 0,
+          "homeLoanInterestRatePct": 0,
+          "monthlyRepayment": 0,
+          "remainingLoanTermYears": 0,
+          "hecsHelpDebt": 0,
+          "person1HecsHelpDebt": 0,
+          "person2HecsHelpDebt": 0,
+          "person1StslBalance": 0,
+          "person2StslBalance": 0,
+          "unassignedStslBalance": 0,
+          "stslOwnerConfirmationNeeded": false,
+          "otherDebts": 0,
+          "creditCardBalance": 0,
+          "creditCardInterestRatePct": 19.99,
+          "creditCardMonthlyRepayment": 0,
+          "creditCardLimit": 0
+        },
+        "income": {
+          "person1IncomeName": "",
+          "person1Income": 0,
+          "person1Frequency": "fortnightly",
+          "person2IncomeName": "",
+          "person2Income": 0,
+          "person2Frequency": "fortnightly",
+          "otherIncomeName": "",
+          "otherIncome": 0,
+          "otherIncomeFrequency": "annually",
+          "person1HasStslDebt": null,
+          "person2HasStslDebt": null,
+          "person1HospitalCoverStatus": "",
+          "person2HospitalCoverStatus": "",
+          "person1HospitalCoverDays": 0,
+          "person2HospitalCoverDays": 0,
+          "dependantsHospitalCoverStatus": "",
+          "dependantsHospitalCoverDays": 0
+        },
+        "expenses": {
+          "livingName": "",
+          "livingCosts": 0,
+          "livingFrequency": "monthly",
+          "mortgageRepayments": 0,
+          "foodName": "",
+          "food": 0,
+          "foodFrequency": "weekly",
+          "utilitiesName": "",
+          "utilities": 0,
+          "utilitiesFrequency": "annually",
+          "insuranceName": "",
+          "insurance": 0,
+          "insuranceFrequency": "annually",
+          "schoolChildrenName": "",
+          "schoolChildren": 0,
+          "schoolChildrenFrequency": "annually",
+          "ratesPropertyCostsName": "",
+          "ratesPropertyCosts": 0,
+          "ratesPropertyCostsFrequency": "annually",
+          "otherExpensesName": "",
+          "otherExpenses": 0,
+          "otherFrequency": "monthly"
+        },
+        "investing": {
+          "annualInvestingTarget": 0,
+          "employerSuperContributions": 0,
+          "person1EmployerSuperOverrideEnabled": false,
+          "person1EmployerSuperOverride": 0,
+          "person2EmployerSuperOverrideEnabled": false,
+          "person2EmployerSuperOverride": 0,
+          "extraSuperContributions": 0,
+          "expectedInvestmentReturnPct": 7,
+          "expectedSuperReturnPct": 6.5,
+          "inflationPct": 2.5,
+          "wageGrowthPct": 3,
+          "safeWithdrawalRatePct": 4
+        },
+        "downsizing": {
+          "enabled": false,
+          "currentResidenceValue": 0,
+          "futurePropertyValue": 0,
+          "sellingCosts": 0,
+          "buyingCosts": 0,
+          "releasedForInvestment": 0
+        },
+        "assetItems": [
+          {
+            "id": "portfolio",
+            "name": "Shares",
+            "category": "shares",
+            "owner": "person1",
+            "value": 500000,
+            "investmentReturnMode": "totalReturn",
+            "expectedTotalReturnPct": 7,
+            "expectedIncomeYieldPct": 3,
+            "incomeTreatment": "cash"
+          }
+        ],
+        "incomeItems": [
+          {
+            "id": "dividend",
+            "type": "dividends",
+            "owner": "person1",
+            "amount": 15000,
+            "frequency": "annually",
+            "linkedAssetId": "portfolio"
+          }
+        ]
+      },
+      "observed": []
+    },
+    {
+      "id": "INCOME-linked-reinvest",
+      "finding": "F03",
+      "description": "Economic growth plus cash yield, with identity stated in case",
+      "input": {
+        "personal": {
+          "person1Name": "A",
+          "person2Name": "",
+          "person1Age": 40,
+          "person2Age": 0,
+          "dependants": 0,
+          "workOptionalAge": 50,
+          "semiRetirementAge": 55,
+          "fullRetirementAge": 65,
+          "targetAnnualSpending": 0
+        },
+        "assets": {
+          "homeValue": 0,
+          "otherPropertyValue": 0,
+          "offsetBalance": 0,
+          "cash": 0,
+          "sharesEtfs": 0,
+          "crypto": 0,
+          "superPerson1": 0,
+          "superPerson2": 0,
+          "vehiclesPersonalAssets": 0
+        },
+        "liabilities": {
+          "homeLoanBalance": 0,
+          "homeLoanInterestRatePct": 0,
+          "monthlyRepayment": 0,
+          "remainingLoanTermYears": 0,
+          "hecsHelpDebt": 0,
+          "person1HecsHelpDebt": 0,
+          "person2HecsHelpDebt": 0,
+          "person1StslBalance": 0,
+          "person2StslBalance": 0,
+          "unassignedStslBalance": 0,
+          "stslOwnerConfirmationNeeded": false,
+          "otherDebts": 0,
+          "creditCardBalance": 0,
+          "creditCardInterestRatePct": 19.99,
+          "creditCardMonthlyRepayment": 0,
+          "creditCardLimit": 0
+        },
+        "income": {
+          "person1IncomeName": "",
+          "person1Income": 0,
+          "person1Frequency": "fortnightly",
+          "person2IncomeName": "",
+          "person2Income": 0,
+          "person2Frequency": "fortnightly",
+          "otherIncomeName": "",
+          "otherIncome": 0,
+          "otherIncomeFrequency": "annually",
+          "person1HasStslDebt": null,
+          "person2HasStslDebt": null,
+          "person1HospitalCoverStatus": "",
+          "person2HospitalCoverStatus": "",
+          "person1HospitalCoverDays": 0,
+          "person2HospitalCoverDays": 0,
+          "dependantsHospitalCoverStatus": "",
+          "dependantsHospitalCoverDays": 0
+        },
+        "expenses": {
+          "livingName": "",
+          "livingCosts": 0,
+          "livingFrequency": "monthly",
+          "mortgageRepayments": 0,
+          "foodName": "",
+          "food": 0,
+          "foodFrequency": "weekly",
+          "utilitiesName": "",
+          "utilities": 0,
+          "utilitiesFrequency": "annually",
+          "insuranceName": "",
+          "insurance": 0,
+          "insuranceFrequency": "annually",
+          "schoolChildrenName": "",
+          "schoolChildren": 0,
+          "schoolChildrenFrequency": "annually",
+          "ratesPropertyCostsName": "",
+          "ratesPropertyCosts": 0,
+          "ratesPropertyCostsFrequency": "annually",
+          "otherExpensesName": "",
+          "otherExpenses": 0,
+          "otherFrequency": "monthly"
+        },
+        "investing": {
+          "annualInvestingTarget": 0,
+          "employerSuperContributions": 0,
+          "person1EmployerSuperOverrideEnabled": false,
+          "person1EmployerSuperOverride": 0,
+          "person2EmployerSuperOverrideEnabled": false,
+          "person2EmployerSuperOverride": 0,
+          "extraSuperContributions": 0,
+          "expectedInvestmentReturnPct": 7,
+          "expectedSuperReturnPct": 6.5,
+          "inflationPct": 2.5,
+          "wageGrowthPct": 3,
+          "safeWithdrawalRatePct": 4
+        },
+        "downsizing": {
+          "enabled": false,
+          "currentResidenceValue": 0,
+          "futurePropertyValue": 0,
+          "sellingCosts": 0,
+          "buyingCosts": 0,
+          "releasedForInvestment": 0
+        },
+        "assetItems": [
+          {
+            "id": "portfolio",
+            "name": "Shares",
+            "category": "shares",
+            "owner": "person1",
+            "value": 500000,
+            "investmentReturnMode": "totalReturn",
+            "expectedTotalReturnPct": 7,
+            "expectedIncomeYieldPct": 3,
+            "incomeTreatment": "reinvest"
+          }
+        ],
+        "incomeItems": [
+          {
+            "id": "dividend",
+            "type": "dividends",
+            "owner": "person1",
+            "amount": 15000,
+            "frequency": "annually",
+            "linkedAssetId": "portfolio"
+          }
+        ]
+      },
+      "actual": 35000,
+      "independentExpected": 35000,
+      "delta": 0,
+      "tolerance": 0.03,
+      "matches": true
+    },
+    {
+      "id": "REVIEW-linked-reinvest",
+      "finding": "F03",
+      "description": "Overlap review warnings are metadata, not cash suppression",
+      "input": {
+        "personal": {
+          "person1Name": "A",
+          "person2Name": "",
+          "person1Age": 40,
+          "person2Age": 0,
+          "dependants": 0,
+          "workOptionalAge": 50,
+          "semiRetirementAge": 55,
+          "fullRetirementAge": 65,
+          "targetAnnualSpending": 0
+        },
+        "assets": {
+          "homeValue": 0,
+          "otherPropertyValue": 0,
+          "offsetBalance": 0,
+          "cash": 0,
+          "sharesEtfs": 0,
+          "crypto": 0,
+          "superPerson1": 0,
+          "superPerson2": 0,
+          "vehiclesPersonalAssets": 0
+        },
+        "liabilities": {
+          "homeLoanBalance": 0,
+          "homeLoanInterestRatePct": 0,
+          "monthlyRepayment": 0,
+          "remainingLoanTermYears": 0,
+          "hecsHelpDebt": 0,
+          "person1HecsHelpDebt": 0,
+          "person2HecsHelpDebt": 0,
+          "person1StslBalance": 0,
+          "person2StslBalance": 0,
+          "unassignedStslBalance": 0,
+          "stslOwnerConfirmationNeeded": false,
+          "otherDebts": 0,
+          "creditCardBalance": 0,
+          "creditCardInterestRatePct": 19.99,
+          "creditCardMonthlyRepayment": 0,
+          "creditCardLimit": 0
+        },
+        "income": {
+          "person1IncomeName": "",
+          "person1Income": 0,
+          "person1Frequency": "fortnightly",
+          "person2IncomeName": "",
+          "person2Income": 0,
+          "person2Frequency": "fortnightly",
+          "otherIncomeName": "",
+          "otherIncome": 0,
+          "otherIncomeFrequency": "annually",
+          "person1HasStslDebt": null,
+          "person2HasStslDebt": null,
+          "person1HospitalCoverStatus": "",
+          "person2HospitalCoverStatus": "",
+          "person1HospitalCoverDays": 0,
+          "person2HospitalCoverDays": 0,
+          "dependantsHospitalCoverStatus": "",
+          "dependantsHospitalCoverDays": 0
+        },
+        "expenses": {
+          "livingName": "",
+          "livingCosts": 0,
+          "livingFrequency": "monthly",
+          "mortgageRepayments": 0,
+          "foodName": "",
+          "food": 0,
+          "foodFrequency": "weekly",
+          "utilitiesName": "",
+          "utilities": 0,
+          "utilitiesFrequency": "annually",
+          "insuranceName": "",
+          "insurance": 0,
+          "insuranceFrequency": "annually",
+          "schoolChildrenName": "",
+          "schoolChildren": 0,
+          "schoolChildrenFrequency": "annually",
+          "ratesPropertyCostsName": "",
+          "ratesPropertyCosts": 0,
+          "ratesPropertyCostsFrequency": "annually",
+          "otherExpensesName": "",
+          "otherExpenses": 0,
+          "otherFrequency": "monthly"
+        },
+        "investing": {
+          "annualInvestingTarget": 0,
+          "employerSuperContributions": 0,
+          "person1EmployerSuperOverrideEnabled": false,
+          "person1EmployerSuperOverride": 0,
+          "person2EmployerSuperOverrideEnabled": false,
+          "person2EmployerSuperOverride": 0,
+          "extraSuperContributions": 0,
+          "expectedInvestmentReturnPct": 7,
+          "expectedSuperReturnPct": 6.5,
+          "inflationPct": 2.5,
+          "wageGrowthPct": 3,
+          "safeWithdrawalRatePct": 4
+        },
+        "downsizing": {
+          "enabled": false,
+          "currentResidenceValue": 0,
+          "futurePropertyValue": 0,
+          "sellingCosts": 0,
+          "buyingCosts": 0,
+          "releasedForInvestment": 0
+        },
+        "assetItems": [
+          {
+            "id": "portfolio",
+            "name": "Shares",
+            "category": "shares",
+            "owner": "person1",
+            "value": 500000,
+            "investmentReturnMode": "totalReturn",
+            "expectedTotalReturnPct": 7,
+            "expectedIncomeYieldPct": 3,
+            "incomeTreatment": "reinvest"
+          }
+        ],
+        "incomeItems": [
+          {
+            "id": "dividend",
+            "type": "dividends",
+            "owner": "person1",
+            "amount": 15000,
+            "frequency": "annually",
+            "linkedAssetId": "portfolio"
+          }
+        ]
+      },
+      "observed": []
+    },
+    {
+      "id": "INCOME-unlinked-overlap",
+      "finding": "F03",
+      "description": "Economic growth plus cash yield, with identity stated in case",
+      "input": {
+        "personal": {
+          "person1Name": "A",
+          "person2Name": "",
+          "person1Age": 40,
+          "person2Age": 0,
+          "dependants": 0,
+          "workOptionalAge": 50,
+          "semiRetirementAge": 55,
+          "fullRetirementAge": 65,
+          "targetAnnualSpending": 0
+        },
+        "assets": {
+          "homeValue": 0,
+          "otherPropertyValue": 0,
+          "offsetBalance": 0,
+          "cash": 0,
+          "sharesEtfs": 0,
+          "crypto": 0,
+          "superPerson1": 0,
+          "superPerson2": 0,
+          "vehiclesPersonalAssets": 0
+        },
+        "liabilities": {
+          "homeLoanBalance": 0,
+          "homeLoanInterestRatePct": 0,
+          "monthlyRepayment": 0,
+          "remainingLoanTermYears": 0,
+          "hecsHelpDebt": 0,
+          "person1HecsHelpDebt": 0,
+          "person2HecsHelpDebt": 0,
+          "person1StslBalance": 0,
+          "person2StslBalance": 0,
+          "unassignedStslBalance": 0,
+          "stslOwnerConfirmationNeeded": false,
+          "otherDebts": 0,
+          "creditCardBalance": 0,
+          "creditCardInterestRatePct": 19.99,
+          "creditCardMonthlyRepayment": 0,
+          "creditCardLimit": 0
+        },
+        "income": {
+          "person1IncomeName": "",
+          "person1Income": 0,
+          "person1Frequency": "fortnightly",
+          "person2IncomeName": "",
+          "person2Income": 0,
+          "person2Frequency": "fortnightly",
+          "otherIncomeName": "",
+          "otherIncome": 0,
+          "otherIncomeFrequency": "annually",
+          "person1HasStslDebt": null,
+          "person2HasStslDebt": null,
+          "person1HospitalCoverStatus": "",
+          "person2HospitalCoverStatus": "",
+          "person1HospitalCoverDays": 0,
+          "person2HospitalCoverDays": 0,
+          "dependantsHospitalCoverStatus": "",
+          "dependantsHospitalCoverDays": 0
+        },
+        "expenses": {
+          "livingName": "",
+          "livingCosts": 0,
+          "livingFrequency": "monthly",
+          "mortgageRepayments": 0,
+          "foodName": "",
+          "food": 0,
+          "foodFrequency": "weekly",
+          "utilitiesName": "",
+          "utilities": 0,
+          "utilitiesFrequency": "annually",
+          "insuranceName": "",
+          "insurance": 0,
+          "insuranceFrequency": "annually",
+          "schoolChildrenName": "",
+          "schoolChildren": 0,
+          "schoolChildrenFrequency": "annually",
+          "ratesPropertyCostsName": "",
+          "ratesPropertyCosts": 0,
+          "ratesPropertyCostsFrequency": "annually",
+          "otherExpensesName": "",
+          "otherExpenses": 0,
+          "otherFrequency": "monthly"
+        },
+        "investing": {
+          "annualInvestingTarget": 0,
+          "employerSuperContributions": 0,
+          "person1EmployerSuperOverrideEnabled": false,
+          "person1EmployerSuperOverride": 0,
+          "person2EmployerSuperOverrideEnabled": false,
+          "person2EmployerSuperOverride": 0,
+          "extraSuperContributions": 0,
+          "expectedInvestmentReturnPct": 7,
+          "expectedSuperReturnPct": 6.5,
+          "inflationPct": 2.5,
+          "wageGrowthPct": 3,
+          "safeWithdrawalRatePct": 4
+        },
+        "downsizing": {
+          "enabled": false,
+          "currentResidenceValue": 0,
+          "futurePropertyValue": 0,
+          "sellingCosts": 0,
+          "buyingCosts": 0,
+          "releasedForInvestment": 0
+        },
+        "assetItems": [
+          {
+            "id": "portfolio",
+            "name": "Shares",
+            "category": "shares",
+            "owner": "person1",
+            "value": 500000,
+            "investmentReturnMode": "totalReturn",
+            "expectedTotalReturnPct": 7,
+            "expectedIncomeYieldPct": 3,
+            "incomeTreatment": "cash"
+          }
+        ],
+        "incomeItems": [
+          {
+            "id": "dividend",
+            "type": "dividends",
+            "owner": "person1",
+            "amount": 15000,
+            "frequency": "annually"
+          }
+        ]
+      },
+      "actual": 50000,
+      "independentExpected": 35000,
+      "delta": 15000,
+      "tolerance": 0.03,
+      "matches": false
+    },
+    {
+      "id": "REVIEW-unlinked-overlap",
+      "finding": "F03",
+      "description": "Overlap review warnings are metadata, not cash suppression",
+      "input": {
+        "personal": {
+          "person1Name": "A",
+          "person2Name": "",
+          "person1Age": 40,
+          "person2Age": 0,
+          "dependants": 0,
+          "workOptionalAge": 50,
+          "semiRetirementAge": 55,
+          "fullRetirementAge": 65,
+          "targetAnnualSpending": 0
+        },
+        "assets": {
+          "homeValue": 0,
+          "otherPropertyValue": 0,
+          "offsetBalance": 0,
+          "cash": 0,
+          "sharesEtfs": 0,
+          "crypto": 0,
+          "superPerson1": 0,
+          "superPerson2": 0,
+          "vehiclesPersonalAssets": 0
+        },
+        "liabilities": {
+          "homeLoanBalance": 0,
+          "homeLoanInterestRatePct": 0,
+          "monthlyRepayment": 0,
+          "remainingLoanTermYears": 0,
+          "hecsHelpDebt": 0,
+          "person1HecsHelpDebt": 0,
+          "person2HecsHelpDebt": 0,
+          "person1StslBalance": 0,
+          "person2StslBalance": 0,
+          "unassignedStslBalance": 0,
+          "stslOwnerConfirmationNeeded": false,
+          "otherDebts": 0,
+          "creditCardBalance": 0,
+          "creditCardInterestRatePct": 19.99,
+          "creditCardMonthlyRepayment": 0,
+          "creditCardLimit": 0
+        },
+        "income": {
+          "person1IncomeName": "",
+          "person1Income": 0,
+          "person1Frequency": "fortnightly",
+          "person2IncomeName": "",
+          "person2Income": 0,
+          "person2Frequency": "fortnightly",
+          "otherIncomeName": "",
+          "otherIncome": 0,
+          "otherIncomeFrequency": "annually",
+          "person1HasStslDebt": null,
+          "person2HasStslDebt": null,
+          "person1HospitalCoverStatus": "",
+          "person2HospitalCoverStatus": "",
+          "person1HospitalCoverDays": 0,
+          "person2HospitalCoverDays": 0,
+          "dependantsHospitalCoverStatus": "",
+          "dependantsHospitalCoverDays": 0
+        },
+        "expenses": {
+          "livingName": "",
+          "livingCosts": 0,
+          "livingFrequency": "monthly",
+          "mortgageRepayments": 0,
+          "foodName": "",
+          "food": 0,
+          "foodFrequency": "weekly",
+          "utilitiesName": "",
+          "utilities": 0,
+          "utilitiesFrequency": "annually",
+          "insuranceName": "",
+          "insurance": 0,
+          "insuranceFrequency": "annually",
+          "schoolChildrenName": "",
+          "schoolChildren": 0,
+          "schoolChildrenFrequency": "annually",
+          "ratesPropertyCostsName": "",
+          "ratesPropertyCosts": 0,
+          "ratesPropertyCostsFrequency": "annually",
+          "otherExpensesName": "",
+          "otherExpenses": 0,
+          "otherFrequency": "monthly"
+        },
+        "investing": {
+          "annualInvestingTarget": 0,
+          "employerSuperContributions": 0,
+          "person1EmployerSuperOverrideEnabled": false,
+          "person1EmployerSuperOverride": 0,
+          "person2EmployerSuperOverrideEnabled": false,
+          "person2EmployerSuperOverride": 0,
+          "extraSuperContributions": 0,
+          "expectedInvestmentReturnPct": 7,
+          "expectedSuperReturnPct": 6.5,
+          "inflationPct": 2.5,
+          "wageGrowthPct": 3,
+          "safeWithdrawalRatePct": 4
+        },
+        "downsizing": {
+          "enabled": false,
+          "currentResidenceValue": 0,
+          "futurePropertyValue": 0,
+          "sellingCosts": 0,
+          "buyingCosts": 0,
+          "releasedForInvestment": 0
+        },
+        "assetItems": [
+          {
+            "id": "portfolio",
+            "name": "Shares",
+            "category": "shares",
+            "owner": "person1",
+            "value": 500000,
+            "investmentReturnMode": "totalReturn",
+            "expectedTotalReturnPct": 7,
+            "expectedIncomeYieldPct": 3,
+            "incomeTreatment": "cash"
+          }
+        ],
+        "incomeItems": [
+          {
+            "id": "dividend",
+            "type": "dividends",
+            "owner": "person1",
+            "amount": 15000,
+            "frequency": "annually"
+          }
+        ]
+      },
+      "observed": [
+        {
+          "id": "dividend",
+          "type": "dividends",
+          "owner": "person1",
+          "amount": 15000,
+          "frequency": "annually",
+          "cashDividend": 0,
+          "frankingCredits": 0,
+          "totalTaxableGrossedUpDividend": 0,
+          "person1AllocationPercentage": 0,
+          "person2AllocationPercentage": 0
+        }
+      ]
+    },
+    {
+      "id": "INCOME-genuine-separate",
+      "finding": "F03",
+      "description": "Economic growth plus cash yield, with identity stated in case",
+      "input": {
+        "personal": {
+          "person1Name": "A",
+          "person2Name": "",
+          "person1Age": 40,
+          "person2Age": 0,
+          "dependants": 0,
+          "workOptionalAge": 50,
+          "semiRetirementAge": 55,
+          "fullRetirementAge": 65,
+          "targetAnnualSpending": 0
+        },
+        "assets": {
+          "homeValue": 0,
+          "otherPropertyValue": 0,
+          "offsetBalance": 0,
+          "cash": 0,
+          "sharesEtfs": 0,
+          "crypto": 0,
+          "superPerson1": 0,
+          "superPerson2": 0,
+          "vehiclesPersonalAssets": 0
+        },
+        "liabilities": {
+          "homeLoanBalance": 0,
+          "homeLoanInterestRatePct": 0,
+          "monthlyRepayment": 0,
+          "remainingLoanTermYears": 0,
+          "hecsHelpDebt": 0,
+          "person1HecsHelpDebt": 0,
+          "person2HecsHelpDebt": 0,
+          "person1StslBalance": 0,
+          "person2StslBalance": 0,
+          "unassignedStslBalance": 0,
+          "stslOwnerConfirmationNeeded": false,
+          "otherDebts": 0,
+          "creditCardBalance": 0,
+          "creditCardInterestRatePct": 19.99,
+          "creditCardMonthlyRepayment": 0,
+          "creditCardLimit": 0
+        },
+        "income": {
+          "person1IncomeName": "",
+          "person1Income": 0,
+          "person1Frequency": "fortnightly",
+          "person2IncomeName": "",
+          "person2Income": 0,
+          "person2Frequency": "fortnightly",
+          "otherIncomeName": "",
+          "otherIncome": 0,
+          "otherIncomeFrequency": "annually",
+          "person1HasStslDebt": null,
+          "person2HasStslDebt": null,
+          "person1HospitalCoverStatus": "",
+          "person2HospitalCoverStatus": "",
+          "person1HospitalCoverDays": 0,
+          "person2HospitalCoverDays": 0,
+          "dependantsHospitalCoverStatus": "",
+          "dependantsHospitalCoverDays": 0
+        },
+        "expenses": {
+          "livingName": "",
+          "livingCosts": 0,
+          "livingFrequency": "monthly",
+          "mortgageRepayments": 0,
+          "foodName": "",
+          "food": 0,
+          "foodFrequency": "weekly",
+          "utilitiesName": "",
+          "utilities": 0,
+          "utilitiesFrequency": "annually",
+          "insuranceName": "",
+          "insurance": 0,
+          "insuranceFrequency": "annually",
+          "schoolChildrenName": "",
+          "schoolChildren": 0,
+          "schoolChildrenFrequency": "annually",
+          "ratesPropertyCostsName": "",
+          "ratesPropertyCosts": 0,
+          "ratesPropertyCostsFrequency": "annually",
+          "otherExpensesName": "",
+          "otherExpenses": 0,
+          "otherFrequency": "monthly"
+        },
+        "investing": {
+          "annualInvestingTarget": 0,
+          "employerSuperContributions": 0,
+          "person1EmployerSuperOverrideEnabled": false,
+          "person1EmployerSuperOverride": 0,
+          "person2EmployerSuperOverrideEnabled": false,
+          "person2EmployerSuperOverride": 0,
+          "extraSuperContributions": 0,
+          "expectedInvestmentReturnPct": 7,
+          "expectedSuperReturnPct": 6.5,
+          "inflationPct": 2.5,
+          "wageGrowthPct": 3,
+          "safeWithdrawalRatePct": 4
+        },
+        "downsizing": {
+          "enabled": false,
+          "currentResidenceValue": 0,
+          "futurePropertyValue": 0,
+          "sellingCosts": 0,
+          "buyingCosts": 0,
+          "releasedForInvestment": 0
+        },
+        "assetItems": [
+          {
+            "id": "portfolio",
+            "name": "Shares",
+            "category": "shares",
+            "owner": "person1",
+            "value": 500000,
+            "investmentReturnMode": "totalReturn",
+            "expectedTotalReturnPct": 7,
+            "expectedIncomeYieldPct": 3,
+            "incomeTreatment": "cash"
+          }
+        ],
+        "incomeItems": [
+          {
+            "id": "dividend",
+            "type": "dividends",
+            "owner": "person1",
+            "amount": 15000,
+            "frequency": "annually",
+            "confirmedSeparateInvestmentIncome": true
+          }
+        ]
+      },
+      "actual": 50000,
+      "independentExpected": 50000,
+      "delta": 0,
+      "tolerance": 0.03,
+      "matches": true
+    },
+    {
+      "id": "REVIEW-genuine-separate",
+      "finding": "F03",
+      "description": "Overlap review warnings are metadata, not cash suppression",
+      "input": {
+        "personal": {
+          "person1Name": "A",
+          "person2Name": "",
+          "person1Age": 40,
+          "person2Age": 0,
+          "dependants": 0,
+          "workOptionalAge": 50,
+          "semiRetirementAge": 55,
+          "fullRetirementAge": 65,
+          "targetAnnualSpending": 0
+        },
+        "assets": {
+          "homeValue": 0,
+          "otherPropertyValue": 0,
+          "offsetBalance": 0,
+          "cash": 0,
+          "sharesEtfs": 0,
+          "crypto": 0,
+          "superPerson1": 0,
+          "superPerson2": 0,
+          "vehiclesPersonalAssets": 0
+        },
+        "liabilities": {
+          "homeLoanBalance": 0,
+          "homeLoanInterestRatePct": 0,
+          "monthlyRepayment": 0,
+          "remainingLoanTermYears": 0,
+          "hecsHelpDebt": 0,
+          "person1HecsHelpDebt": 0,
+          "person2HecsHelpDebt": 0,
+          "person1StslBalance": 0,
+          "person2StslBalance": 0,
+          "unassignedStslBalance": 0,
+          "stslOwnerConfirmationNeeded": false,
+          "otherDebts": 0,
+          "creditCardBalance": 0,
+          "creditCardInterestRatePct": 19.99,
+          "creditCardMonthlyRepayment": 0,
+          "creditCardLimit": 0
+        },
+        "income": {
+          "person1IncomeName": "",
+          "person1Income": 0,
+          "person1Frequency": "fortnightly",
+          "person2IncomeName": "",
+          "person2Income": 0,
+          "person2Frequency": "fortnightly",
+          "otherIncomeName": "",
+          "otherIncome": 0,
+          "otherIncomeFrequency": "annually",
+          "person1HasStslDebt": null,
+          "person2HasStslDebt": null,
+          "person1HospitalCoverStatus": "",
+          "person2HospitalCoverStatus": "",
+          "person1HospitalCoverDays": 0,
+          "person2HospitalCoverDays": 0,
+          "dependantsHospitalCoverStatus": "",
+          "dependantsHospitalCoverDays": 0
+        },
+        "expenses": {
+          "livingName": "",
+          "livingCosts": 0,
+          "livingFrequency": "monthly",
+          "mortgageRepayments": 0,
+          "foodName": "",
+          "food": 0,
+          "foodFrequency": "weekly",
+          "utilitiesName": "",
+          "utilities": 0,
+          "utilitiesFrequency": "annually",
+          "insuranceName": "",
+          "insurance": 0,
+          "insuranceFrequency": "annually",
+          "schoolChildrenName": "",
+          "schoolChildren": 0,
+          "schoolChildrenFrequency": "annually",
+          "ratesPropertyCostsName": "",
+          "ratesPropertyCosts": 0,
+          "ratesPropertyCostsFrequency": "annually",
+          "otherExpensesName": "",
+          "otherExpenses": 0,
+          "otherFrequency": "monthly"
+        },
+        "investing": {
+          "annualInvestingTarget": 0,
+          "employerSuperContributions": 0,
+          "person1EmployerSuperOverrideEnabled": false,
+          "person1EmployerSuperOverride": 0,
+          "person2EmployerSuperOverrideEnabled": false,
+          "person2EmployerSuperOverride": 0,
+          "extraSuperContributions": 0,
+          "expectedInvestmentReturnPct": 7,
+          "expectedSuperReturnPct": 6.5,
+          "inflationPct": 2.5,
+          "wageGrowthPct": 3,
+          "safeWithdrawalRatePct": 4
+        },
+        "downsizing": {
+          "enabled": false,
+          "currentResidenceValue": 0,
+          "futurePropertyValue": 0,
+          "sellingCosts": 0,
+          "buyingCosts": 0,
+          "releasedForInvestment": 0
+        },
+        "assetItems": [
+          {
+            "id": "portfolio",
+            "name": "Shares",
+            "category": "shares",
+            "owner": "person1",
+            "value": 500000,
+            "investmentReturnMode": "totalReturn",
+            "expectedTotalReturnPct": 7,
+            "expectedIncomeYieldPct": 3,
+            "incomeTreatment": "cash"
+          }
+        ],
+        "incomeItems": [
+          {
+            "id": "dividend",
+            "type": "dividends",
+            "owner": "person1",
+            "amount": 15000,
+            "frequency": "annually",
+            "confirmedSeparateInvestmentIncome": true
+          }
+        ]
+      },
+      "observed": []
+    },
+    {
+      "id": "APR-invest",
+      "finding": "F02",
+      "description": "Monthly nominal APR identity",
+      "input": {
+        "personal": {
+          "person1Name": "A",
+          "person2Name": "",
+          "person1Age": 40,
+          "person2Age": 0,
+          "dependants": 0,
+          "workOptionalAge": 50,
+          "semiRetirementAge": 55,
+          "fullRetirementAge": 65,
+          "targetAnnualSpending": 0
+        },
+        "assets": {
+          "homeValue": 0,
+          "otherPropertyValue": 0,
+          "offsetBalance": 0,
+          "cash": 0,
+          "sharesEtfs": 500000,
+          "crypto": 0,
+          "superPerson1": 0,
+          "superPerson2": 0,
+          "vehiclesPersonalAssets": 0
+        },
+        "liabilities": {
+          "homeLoanBalance": 0,
+          "homeLoanInterestRatePct": 0,
+          "monthlyRepayment": 0,
+          "remainingLoanTermYears": 0,
+          "hecsHelpDebt": 0,
+          "person1HecsHelpDebt": 0,
+          "person2HecsHelpDebt": 0,
+          "person1StslBalance": 0,
+          "person2StslBalance": 0,
+          "unassignedStslBalance": 0,
+          "stslOwnerConfirmationNeeded": false,
+          "otherDebts": 0,
+          "creditCardBalance": 0,
+          "creditCardInterestRatePct": 19.99,
+          "creditCardMonthlyRepayment": 0,
+          "creditCardLimit": 0
+        },
+        "income": {
+          "person1IncomeName": "",
+          "person1Income": 0,
+          "person1Frequency": "fortnightly",
+          "person2IncomeName": "",
+          "person2Income": 0,
+          "person2Frequency": "fortnightly",
+          "otherIncomeName": "",
+          "otherIncome": 0,
+          "otherIncomeFrequency": "annually",
+          "person1HasStslDebt": null,
+          "person2HasStslDebt": null,
+          "person1HospitalCoverStatus": "",
+          "person2HospitalCoverStatus": "",
+          "person1HospitalCoverDays": 0,
+          "person2HospitalCoverDays": 0,
+          "dependantsHospitalCoverStatus": "",
+          "dependantsHospitalCoverDays": 0
+        },
+        "expenses": {
+          "livingName": "",
+          "livingCosts": 0,
+          "livingFrequency": "monthly",
+          "mortgageRepayments": 0,
+          "foodName": "",
+          "food": 0,
+          "foodFrequency": "weekly",
+          "utilitiesName": "",
+          "utilities": 0,
+          "utilitiesFrequency": "annually",
+          "insuranceName": "",
+          "insurance": 0,
+          "insuranceFrequency": "annually",
+          "schoolChildrenName": "",
+          "schoolChildren": 0,
+          "schoolChildrenFrequency": "annually",
+          "ratesPropertyCostsName": "",
+          "ratesPropertyCosts": 0,
+          "ratesPropertyCostsFrequency": "annually",
+          "otherExpensesName": "",
+          "otherExpenses": 0,
+          "otherFrequency": "monthly"
+        },
+        "investing": {
+          "annualInvestingTarget": 0,
+          "employerSuperContributions": 0,
+          "person1EmployerSuperOverrideEnabled": false,
+          "person1EmployerSuperOverride": 0,
+          "person2EmployerSuperOverrideEnabled": false,
+          "person2EmployerSuperOverride": 0,
+          "extraSuperContributions": 0,
+          "expectedInvestmentReturnPct": 7,
+          "expectedSuperReturnPct": 6.5,
+          "inflationPct": 2.5,
+          "wageGrowthPct": 3,
+          "safeWithdrawalRatePct": 4
+        },
+        "downsizing": {
+          "enabled": false,
+          "currentResidenceValue": 0,
+          "futurePropertyValue": 0,
+          "sellingCosts": 0,
+          "buyingCosts": 0,
+          "releasedForInvestment": 0
+        }
+      },
+      "actual": 536145.03,
+      "independentExpected": 536145.04,
+      "delta": -0.01,
+      "tolerance": 0.04,
+      "matches": true
+    },
+    {
+      "id": "EAR-invest",
+      "finding": "F02",
+      "description": "Effective annual alternative for same displayed input",
+      "input": {
+        "personal": {
+          "person1Name": "A",
+          "person2Name": "",
+          "person1Age": 40,
+          "person2Age": 0,
+          "dependants": 0,
+          "workOptionalAge": 50,
+          "semiRetirementAge": 55,
+          "fullRetirementAge": 65,
+          "targetAnnualSpending": 0
+        },
+        "assets": {
+          "homeValue": 0,
+          "otherPropertyValue": 0,
+          "offsetBalance": 0,
+          "cash": 0,
+          "sharesEtfs": 500000,
+          "crypto": 0,
+          "superPerson1": 0,
+          "superPerson2": 0,
+          "vehiclesPersonalAssets": 0
+        },
+        "liabilities": {
+          "homeLoanBalance": 0,
+          "homeLoanInterestRatePct": 0,
+          "monthlyRepayment": 0,
+          "remainingLoanTermYears": 0,
+          "hecsHelpDebt": 0,
+          "person1HecsHelpDebt": 0,
+          "person2HecsHelpDebt": 0,
+          "person1StslBalance": 0,
+          "person2StslBalance": 0,
+          "unassignedStslBalance": 0,
+          "stslOwnerConfirmationNeeded": false,
+          "otherDebts": 0,
+          "creditCardBalance": 0,
+          "creditCardInterestRatePct": 19.99,
+          "creditCardMonthlyRepayment": 0,
+          "creditCardLimit": 0
+        },
+        "income": {
+          "person1IncomeName": "",
+          "person1Income": 0,
+          "person1Frequency": "fortnightly",
+          "person2IncomeName": "",
+          "person2Income": 0,
+          "person2Frequency": "fortnightly",
+          "otherIncomeName": "",
+          "otherIncome": 0,
+          "otherIncomeFrequency": "annually",
+          "person1HasStslDebt": null,
+          "person2HasStslDebt": null,
+          "person1HospitalCoverStatus": "",
+          "person2HospitalCoverStatus": "",
+          "person1HospitalCoverDays": 0,
+          "person2HospitalCoverDays": 0,
+          "dependantsHospitalCoverStatus": "",
+          "dependantsHospitalCoverDays": 0
+        },
+        "expenses": {
+          "livingName": "",
+          "livingCosts": 0,
+          "livingFrequency": "monthly",
+          "mortgageRepayments": 0,
+          "foodName": "",
+          "food": 0,
+          "foodFrequency": "weekly",
+          "utilitiesName": "",
+          "utilities": 0,
+          "utilitiesFrequency": "annually",
+          "insuranceName": "",
+          "insurance": 0,
+          "insuranceFrequency": "annually",
+          "schoolChildrenName": "",
+          "schoolChildren": 0,
+          "schoolChildrenFrequency": "annually",
+          "ratesPropertyCostsName": "",
+          "ratesPropertyCosts": 0,
+          "ratesPropertyCostsFrequency": "annually",
+          "otherExpensesName": "",
+          "otherExpenses": 0,
+          "otherFrequency": "monthly"
+        },
+        "investing": {
+          "annualInvestingTarget": 0,
+          "employerSuperContributions": 0,
+          "person1EmployerSuperOverrideEnabled": false,
+          "person1EmployerSuperOverride": 0,
+          "person2EmployerSuperOverrideEnabled": false,
+          "person2EmployerSuperOverride": 0,
+          "extraSuperContributions": 0,
+          "expectedInvestmentReturnPct": 7,
+          "expectedSuperReturnPct": 6.5,
+          "inflationPct": 2.5,
+          "wageGrowthPct": 3,
+          "safeWithdrawalRatePct": 4
+        },
+        "downsizing": {
+          "enabled": false,
+          "currentResidenceValue": 0,
+          "futurePropertyValue": 0,
+          "sellingCosts": 0,
+          "buyingCosts": 0,
+          "releasedForInvestment": 0
+        }
+      },
+      "actual": 536145.03,
+      "independentExpected": 535000,
+      "delta": 1145.03,
+      "tolerance": 0.03,
+      "matches": false
+    },
+    {
+      "id": "APR-super",
+      "finding": "F02",
+      "description": "Monthly nominal APR identity",
+      "input": {
+        "personal": {
+          "person1Name": "A",
+          "person2Name": "",
+          "person1Age": 40,
+          "person2Age": 0,
+          "dependants": 0,
+          "workOptionalAge": 50,
+          "semiRetirementAge": 55,
+          "fullRetirementAge": 65,
+          "targetAnnualSpending": 0
+        },
+        "assets": {
+          "homeValue": 0,
+          "otherPropertyValue": 0,
+          "offsetBalance": 0,
+          "cash": 0,
+          "sharesEtfs": 0,
+          "crypto": 0,
+          "superPerson1": 500000,
+          "superPerson2": 0,
+          "vehiclesPersonalAssets": 0
+        },
+        "liabilities": {
+          "homeLoanBalance": 0,
+          "homeLoanInterestRatePct": 0,
+          "monthlyRepayment": 0,
+          "remainingLoanTermYears": 0,
+          "hecsHelpDebt": 0,
+          "person1HecsHelpDebt": 0,
+          "person2HecsHelpDebt": 0,
+          "person1StslBalance": 0,
+          "person2StslBalance": 0,
+          "unassignedStslBalance": 0,
+          "stslOwnerConfirmationNeeded": false,
+          "otherDebts": 0,
+          "creditCardBalance": 0,
+          "creditCardInterestRatePct": 19.99,
+          "creditCardMonthlyRepayment": 0,
+          "creditCardLimit": 0
+        },
+        "income": {
+          "person1IncomeName": "",
+          "person1Income": 0,
+          "person1Frequency": "fortnightly",
+          "person2IncomeName": "",
+          "person2Income": 0,
+          "person2Frequency": "fortnightly",
+          "otherIncomeName": "",
+          "otherIncome": 0,
+          "otherIncomeFrequency": "annually",
+          "person1HasStslDebt": null,
+          "person2HasStslDebt": null,
+          "person1HospitalCoverStatus": "",
+          "person2HospitalCoverStatus": "",
+          "person1HospitalCoverDays": 0,
+          "person2HospitalCoverDays": 0,
+          "dependantsHospitalCoverStatus": "",
+          "dependantsHospitalCoverDays": 0
+        },
+        "expenses": {
+          "livingName": "",
+          "livingCosts": 0,
+          "livingFrequency": "monthly",
+          "mortgageRepayments": 0,
+          "foodName": "",
+          "food": 0,
+          "foodFrequency": "weekly",
+          "utilitiesName": "",
+          "utilities": 0,
+          "utilitiesFrequency": "annually",
+          "insuranceName": "",
+          "insurance": 0,
+          "insuranceFrequency": "annually",
+          "schoolChildrenName": "",
+          "schoolChildren": 0,
+          "schoolChildrenFrequency": "annually",
+          "ratesPropertyCostsName": "",
+          "ratesPropertyCosts": 0,
+          "ratesPropertyCostsFrequency": "annually",
+          "otherExpensesName": "",
+          "otherExpenses": 0,
+          "otherFrequency": "monthly"
+        },
+        "investing": {
+          "annualInvestingTarget": 0,
+          "employerSuperContributions": 0,
+          "person1EmployerSuperOverrideEnabled": false,
+          "person1EmployerSuperOverride": 0,
+          "person2EmployerSuperOverrideEnabled": false,
+          "person2EmployerSuperOverride": 0,
+          "extraSuperContributions": 0,
+          "expectedInvestmentReturnPct": 7,
+          "expectedSuperReturnPct": 6.5,
+          "inflationPct": 2.5,
+          "wageGrowthPct": 3,
+          "safeWithdrawalRatePct": 4
+        },
+        "downsizing": {
+          "enabled": false,
+          "currentResidenceValue": 0,
+          "futurePropertyValue": 0,
+          "sellingCosts": 0,
+          "buyingCosts": 0,
+          "releasedForInvestment": 0
+        }
+      },
+      "actual": 533485.9,
+      "independentExpected": 533485.93,
+      "delta": -0.03,
+      "tolerance": 0.04,
+      "matches": true
+    },
+    {
+      "id": "EAR-super",
+      "finding": "F02",
+      "description": "Effective annual alternative for same displayed input",
+      "input": {
+        "personal": {
+          "person1Name": "A",
+          "person2Name": "",
+          "person1Age": 40,
+          "person2Age": 0,
+          "dependants": 0,
+          "workOptionalAge": 50,
+          "semiRetirementAge": 55,
+          "fullRetirementAge": 65,
+          "targetAnnualSpending": 0
+        },
+        "assets": {
+          "homeValue": 0,
+          "otherPropertyValue": 0,
+          "offsetBalance": 0,
+          "cash": 0,
+          "sharesEtfs": 0,
+          "crypto": 0,
+          "superPerson1": 500000,
+          "superPerson2": 0,
+          "vehiclesPersonalAssets": 0
+        },
+        "liabilities": {
+          "homeLoanBalance": 0,
+          "homeLoanInterestRatePct": 0,
+          "monthlyRepayment": 0,
+          "remainingLoanTermYears": 0,
+          "hecsHelpDebt": 0,
+          "person1HecsHelpDebt": 0,
+          "person2HecsHelpDebt": 0,
+          "person1StslBalance": 0,
+          "person2StslBalance": 0,
+          "unassignedStslBalance": 0,
+          "stslOwnerConfirmationNeeded": false,
+          "otherDebts": 0,
+          "creditCardBalance": 0,
+          "creditCardInterestRatePct": 19.99,
+          "creditCardMonthlyRepayment": 0,
+          "creditCardLimit": 0
+        },
+        "income": {
+          "person1IncomeName": "",
+          "person1Income": 0,
+          "person1Frequency": "fortnightly",
+          "person2IncomeName": "",
+          "person2Income": 0,
+          "person2Frequency": "fortnightly",
+          "otherIncomeName": "",
+          "otherIncome": 0,
+          "otherIncomeFrequency": "annually",
+          "person1HasStslDebt": null,
+          "person2HasStslDebt": null,
+          "person1HospitalCoverStatus": "",
+          "person2HospitalCoverStatus": "",
+          "person1HospitalCoverDays": 0,
+          "person2HospitalCoverDays": 0,
+          "dependantsHospitalCoverStatus": "",
+          "dependantsHospitalCoverDays": 0
+        },
+        "expenses": {
+          "livingName": "",
+          "livingCosts": 0,
+          "livingFrequency": "monthly",
+          "mortgageRepayments": 0,
+          "foodName": "",
+          "food": 0,
+          "foodFrequency": "weekly",
+          "utilitiesName": "",
+          "utilities": 0,
+          "utilitiesFrequency": "annually",
+          "insuranceName": "",
+          "insurance": 0,
+          "insuranceFrequency": "annually",
+          "schoolChildrenName": "",
+          "schoolChildren": 0,
+          "schoolChildrenFrequency": "annually",
+          "ratesPropertyCostsName": "",
+          "ratesPropertyCosts": 0,
+          "ratesPropertyCostsFrequency": "annually",
+          "otherExpensesName": "",
+          "otherExpenses": 0,
+          "otherFrequency": "monthly"
+        },
+        "investing": {
+          "annualInvestingTarget": 0,
+          "employerSuperContributions": 0,
+          "person1EmployerSuperOverrideEnabled": false,
+          "person1EmployerSuperOverride": 0,
+          "person2EmployerSuperOverrideEnabled": false,
+          "person2EmployerSuperOverride": 0,
+          "extraSuperContributions": 0,
+          "expectedInvestmentReturnPct": 7,
+          "expectedSuperReturnPct": 6.5,
+          "inflationPct": 2.5,
+          "wageGrowthPct": 3,
+          "safeWithdrawalRatePct": 4
+        },
+        "downsizing": {
+          "enabled": false,
+          "currentResidenceValue": 0,
+          "futurePropertyValue": 0,
+          "sellingCosts": 0,
+          "buyingCosts": 0,
+          "releasedForInvestment": 0
+        }
+      },
+      "actual": 533485.9,
+      "independentExpected": 532500,
+      "delta": 985.9,
+      "tolerance": 0.03,
+      "matches": false
+    },
+    {
+      "id": "FEE-INV",
+      "finding": "F01",
+      "description": "Explicit investment fee deducted once; no blanket return tax",
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 67,
+        "inflationRate": 0,
+        "household": {
+          "currentLifestyleSpending": 0,
+          "semiRetirementLifestyleSpending": 0,
+          "fullRetirementLifestyleSpending": 0,
+          "otherAnnualIncome": 0,
+          "annualLoanPrincipalRepayments": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 500000,
+          "annualReturnRate": 0.07,
+          "annualFeesRate": 0.01
+        },
+        "people": [
+          {
+            "id": "person1",
+            "name": "person1",
+            "currentAge": 65,
+            "currentGrossEmploymentIncome": 0,
+            "annualIncomeGrowthRate": 0,
+            "semiRetirementAge": 65,
+            "semiRetirementGrossIncome": 0,
+            "fullRetirementAge": 65,
+            "superAccessAge": 60,
+            "openingSuperBalance": 500000,
+            "superReturnBeforeRetirement": 0,
+            "superReturnAfterRetirement": 0.065,
+            "superAnnualFeesRate": 0.01,
+            "employerSuperRate": 0.12,
+            "existingAdditionalConcessionalContributions": 0,
+            "additionalContributionsStopAge": 65,
+            "stslOpeningBalance": 0,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "scenario": {
+          "minimumAccessibleBalance": 0,
+          "minimumEstateBalanceAtEndAge": 0,
+          "surplusDestination": "enjoyment"
+        }
+      },
+      "actual": 530000,
+      "independentExpected": 530000,
+      "delta": 0,
+      "tolerance": 0.03,
+      "matches": true
+    },
+    {
+      "id": "FEE-SUPER",
+      "finding": "F01",
+      "description": "Explicit super fee, entered return fully credited",
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 67,
+        "inflationRate": 0,
+        "household": {
+          "currentLifestyleSpending": 0,
+          "semiRetirementLifestyleSpending": 0,
+          "fullRetirementLifestyleSpending": 0,
+          "otherAnnualIncome": 0,
+          "annualLoanPrincipalRepayments": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 500000,
+          "annualReturnRate": 0.07,
+          "annualFeesRate": 0.01
+        },
+        "people": [
+          {
+            "id": "person1",
+            "name": "person1",
+            "currentAge": 65,
+            "currentGrossEmploymentIncome": 0,
+            "annualIncomeGrowthRate": 0,
+            "semiRetirementAge": 65,
+            "semiRetirementGrossIncome": 0,
+            "fullRetirementAge": 65,
+            "superAccessAge": 60,
+            "openingSuperBalance": 500000,
+            "superReturnBeforeRetirement": 0,
+            "superReturnAfterRetirement": 0.065,
+            "superAnnualFeesRate": 0.01,
+            "employerSuperRate": 0.12,
+            "existingAdditionalConcessionalContributions": 0,
+            "additionalContributionsStopAge": 65,
+            "stslOpeningBalance": 0,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "scenario": {
+          "minimumAccessibleBalance": 0,
+          "minimumEstateBalanceAtEndAge": 0,
+          "surplusDestination": "enjoyment"
+        }
+      },
+      "actual": 527500,
+      "independentExpected": 527500,
+      "delta": 0,
+      "tolerance": 0.03,
+      "matches": true
+    },
+    {
+      "id": "GROSS-SUPER",
+      "finding": "F01",
+      "description": "Hypothetical fully taxable gross super earnings alternative, not universal rule",
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 67,
+        "inflationRate": 0,
+        "household": {
+          "currentLifestyleSpending": 0,
+          "semiRetirementLifestyleSpending": 0,
+          "fullRetirementLifestyleSpending": 0,
+          "otherAnnualIncome": 0,
+          "annualLoanPrincipalRepayments": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 500000,
+          "annualReturnRate": 0.07,
+          "annualFeesRate": 0.01
+        },
+        "people": [
+          {
+            "id": "person1",
+            "name": "person1",
+            "currentAge": 65,
+            "currentGrossEmploymentIncome": 0,
+            "annualIncomeGrowthRate": 0,
+            "semiRetirementAge": 65,
+            "semiRetirementGrossIncome": 0,
+            "fullRetirementAge": 65,
+            "superAccessAge": 60,
+            "openingSuperBalance": 500000,
+            "superReturnBeforeRetirement": 0,
+            "superReturnAfterRetirement": 0.065,
+            "superAnnualFeesRate": 0.01,
+            "employerSuperRate": 0.12,
+            "existingAdditionalConcessionalContributions": 0,
+            "additionalContributionsStopAge": 65,
+            "stslOpeningBalance": 0,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "scenario": {
+          "minimumAccessibleBalance": 0,
+          "minimumEstateBalanceAtEndAge": 0,
+          "surplusDestination": "enjoyment"
+        }
+      },
+      "actual": 527500,
+      "independentExpected": 522625,
+      "delta": 4875,
+      "tolerance": 0.03,
+      "matches": false
+    },
+    {
+      "id": "FRANKING-low",
+      "finding": "F05",
+      "description": "Eligible resident cash after gross-up tax and refundable offset",
+      "input": {
+        "personal": {
+          "person1Name": "A",
+          "person2Name": "",
+          "person1Age": 65,
+          "person2Age": 0,
+          "dependants": 0,
+          "workOptionalAge": 50,
+          "semiRetirementAge": 55,
+          "fullRetirementAge": 65,
+          "targetAnnualSpending": 0
+        },
+        "assets": {
+          "homeValue": 0,
+          "otherPropertyValue": 0,
+          "offsetBalance": 0,
+          "cash": 0,
+          "sharesEtfs": 0,
+          "crypto": 0,
+          "superPerson1": 0,
+          "superPerson2": 0,
+          "vehiclesPersonalAssets": 0
+        },
+        "liabilities": {
+          "homeLoanBalance": 0,
+          "homeLoanInterestRatePct": 0,
+          "monthlyRepayment": 0,
+          "remainingLoanTermYears": 0,
+          "hecsHelpDebt": 0,
+          "person1HecsHelpDebt": 0,
+          "person2HecsHelpDebt": 0,
+          "person1StslBalance": 0,
+          "person2StslBalance": 0,
+          "unassignedStslBalance": 0,
+          "stslOwnerConfirmationNeeded": false,
+          "otherDebts": 0,
+          "creditCardBalance": 0,
+          "creditCardInterestRatePct": 19.99,
+          "creditCardMonthlyRepayment": 0,
+          "creditCardLimit": 0
+        },
+        "income": {
+          "person1IncomeName": "",
+          "person1Income": 0,
+          "person1Frequency": "fortnightly",
+          "person2IncomeName": "",
+          "person2Income": 0,
+          "person2Frequency": "fortnightly",
+          "otherIncomeName": "",
+          "otherIncome": 0,
+          "otherIncomeFrequency": "annually",
+          "person1HasStslDebt": null,
+          "person2HasStslDebt": null,
+          "person1HospitalCoverStatus": "full-year",
+          "person2HospitalCoverStatus": "",
+          "person1HospitalCoverDays": 365,
+          "person2HospitalCoverDays": 0,
+          "dependantsHospitalCoverStatus": "",
+          "dependantsHospitalCoverDays": 0
+        },
+        "expenses": {
+          "livingName": "",
+          "livingCosts": 0,
+          "livingFrequency": "monthly",
+          "mortgageRepayments": 0,
+          "foodName": "",
+          "food": 0,
+          "foodFrequency": "weekly",
+          "utilitiesName": "",
+          "utilities": 0,
+          "utilitiesFrequency": "annually",
+          "insuranceName": "",
+          "insurance": 0,
+          "insuranceFrequency": "annually",
+          "schoolChildrenName": "",
+          "schoolChildren": 0,
+          "schoolChildrenFrequency": "annually",
+          "ratesPropertyCostsName": "",
+          "ratesPropertyCosts": 0,
+          "ratesPropertyCostsFrequency": "annually",
+          "otherExpensesName": "",
+          "otherExpenses": 0,
+          "otherFrequency": "monthly"
+        },
+        "investing": {
+          "annualInvestingTarget": 0,
+          "employerSuperContributions": 0,
+          "person1EmployerSuperOverrideEnabled": false,
+          "person1EmployerSuperOverride": 0,
+          "person2EmployerSuperOverrideEnabled": false,
+          "person2EmployerSuperOverride": 0,
+          "extraSuperContributions": 0,
+          "expectedInvestmentReturnPct": 7,
+          "expectedSuperReturnPct": 6.5,
+          "inflationPct": 2.5,
+          "wageGrowthPct": 3,
+          "safeWithdrawalRatePct": 4
+        },
+        "downsizing": {
+          "enabled": false,
+          "currentResidenceValue": 0,
+          "futurePropertyValue": 0,
+          "sellingCosts": 0,
+          "buyingCosts": 0,
+          "releasedForInvestment": 0
+        },
+        "incomeItems": [
+          {
+            "id": "div",
+            "type": "dividends",
+            "owner": "person1",
+            "amount": 7000,
+            "cashDividend": 7000,
+            "frankingCredits": 3000,
+            "frequency": "annually"
+          }
+        ]
+      },
+      "actual": 7000,
+      "independentExpected": 10000,
+      "delta": -3000,
+      "tolerance": 0.03,
+      "matches": false
+    },
+    {
+      "id": "FRANKING-working",
+      "finding": "F05",
+      "description": "Eligible resident cash after gross-up tax and refundable offset",
+      "input": {
+        "personal": {
+          "person1Name": "A",
+          "person2Name": "",
+          "person1Age": 65,
+          "person2Age": 0,
+          "dependants": 0,
+          "workOptionalAge": 50,
+          "semiRetirementAge": 55,
+          "fullRetirementAge": 65,
+          "targetAnnualSpending": 0
+        },
+        "assets": {
+          "homeValue": 0,
+          "otherPropertyValue": 0,
+          "offsetBalance": 0,
+          "cash": 0,
+          "sharesEtfs": 0,
+          "crypto": 0,
+          "superPerson1": 0,
+          "superPerson2": 0,
+          "vehiclesPersonalAssets": 0
+        },
+        "liabilities": {
+          "homeLoanBalance": 0,
+          "homeLoanInterestRatePct": 0,
+          "monthlyRepayment": 0,
+          "remainingLoanTermYears": 0,
+          "hecsHelpDebt": 0,
+          "person1HecsHelpDebt": 0,
+          "person2HecsHelpDebt": 0,
+          "person1StslBalance": 0,
+          "person2StslBalance": 0,
+          "unassignedStslBalance": 0,
+          "stslOwnerConfirmationNeeded": false,
+          "otherDebts": 0,
+          "creditCardBalance": 0,
+          "creditCardInterestRatePct": 19.99,
+          "creditCardMonthlyRepayment": 0,
+          "creditCardLimit": 0
+        },
+        "income": {
+          "person1IncomeName": "",
+          "person1Income": 0,
+          "person1Frequency": "fortnightly",
+          "person2IncomeName": "",
+          "person2Income": 0,
+          "person2Frequency": "fortnightly",
+          "otherIncomeName": "",
+          "otherIncome": 0,
+          "otherIncomeFrequency": "annually",
+          "person1HasStslDebt": null,
+          "person2HasStslDebt": null,
+          "person1HospitalCoverStatus": "full-year",
+          "person2HospitalCoverStatus": "",
+          "person1HospitalCoverDays": 365,
+          "person2HospitalCoverDays": 0,
+          "dependantsHospitalCoverStatus": "",
+          "dependantsHospitalCoverDays": 0
+        },
+        "expenses": {
+          "livingName": "",
+          "livingCosts": 0,
+          "livingFrequency": "monthly",
+          "mortgageRepayments": 0,
+          "foodName": "",
+          "food": 0,
+          "foodFrequency": "weekly",
+          "utilitiesName": "",
+          "utilities": 0,
+          "utilitiesFrequency": "annually",
+          "insuranceName": "",
+          "insurance": 0,
+          "insuranceFrequency": "annually",
+          "schoolChildrenName": "",
+          "schoolChildren": 0,
+          "schoolChildrenFrequency": "annually",
+          "ratesPropertyCostsName": "",
+          "ratesPropertyCosts": 0,
+          "ratesPropertyCostsFrequency": "annually",
+          "otherExpensesName": "",
+          "otherExpenses": 0,
+          "otherFrequency": "monthly"
+        },
+        "investing": {
+          "annualInvestingTarget": 0,
+          "employerSuperContributions": 0,
+          "person1EmployerSuperOverrideEnabled": false,
+          "person1EmployerSuperOverride": 0,
+          "person2EmployerSuperOverrideEnabled": false,
+          "person2EmployerSuperOverride": 0,
+          "extraSuperContributions": 0,
+          "expectedInvestmentReturnPct": 7,
+          "expectedSuperReturnPct": 6.5,
+          "inflationPct": 2.5,
+          "wageGrowthPct": 3,
+          "safeWithdrawalRatePct": 4
+        },
+        "downsizing": {
+          "enabled": false,
+          "currentResidenceValue": 0,
+          "futurePropertyValue": 0,
+          "sellingCosts": 0,
+          "buyingCosts": 0,
+          "releasedForInvestment": 0
+        },
+        "incomeItems": [
+          {
+            "id": "div",
+            "type": "dividends",
+            "owner": "person1",
+            "amount": 7000,
+            "cashDividend": 7000,
+            "frankingCredits": 3000,
+            "frequency": "annually"
+          },
+          {
+            "id": "wage",
+            "type": "salaryWages",
+            "owner": "person1",
+            "amount": 100000,
+            "frequency": "annually"
+          }
+        ]
+      },
+      "actual": 82240,
+      "independentExpected": 84280,
+      "delta": -2040,
+      "tolerance": 0.03,
+      "matches": false
+    },
+    {
+      "id": "DIV293-230000",
+      "finding": "F06",
+      "description": "Total ordinary plus additional contributions tax with threshold excess",
+      "input": {
+        "personal": {
+          "person1Name": "A",
+          "person2Name": "",
+          "person1Age": 40,
+          "person2Age": 0,
+          "dependants": 0,
+          "workOptionalAge": 50,
+          "semiRetirementAge": 55,
+          "fullRetirementAge": 65,
+          "targetAnnualSpending": 0
+        },
+        "assets": {
+          "homeValue": 0,
+          "otherPropertyValue": 0,
+          "offsetBalance": 0,
+          "cash": 0,
+          "sharesEtfs": 0,
+          "crypto": 0,
+          "superPerson1": 0,
+          "superPerson2": 0,
+          "vehiclesPersonalAssets": 0
+        },
+        "liabilities": {
+          "homeLoanBalance": 0,
+          "homeLoanInterestRatePct": 0,
+          "monthlyRepayment": 0,
+          "remainingLoanTermYears": 0,
+          "hecsHelpDebt": 0,
+          "person1HecsHelpDebt": 0,
+          "person2HecsHelpDebt": 0,
+          "person1StslBalance": 0,
+          "person2StslBalance": 0,
+          "unassignedStslBalance": 0,
+          "stslOwnerConfirmationNeeded": false,
+          "otherDebts": 0,
+          "creditCardBalance": 0,
+          "creditCardInterestRatePct": 19.99,
+          "creditCardMonthlyRepayment": 0,
+          "creditCardLimit": 0
+        },
+        "income": {
+          "person1IncomeName": "",
+          "person1Income": 0,
+          "person1Frequency": "fortnightly",
+          "person2IncomeName": "",
+          "person2Income": 0,
+          "person2Frequency": "fortnightly",
+          "otherIncomeName": "",
+          "otherIncome": 0,
+          "otherIncomeFrequency": "annually",
+          "person1HasStslDebt": null,
+          "person2HasStslDebt": null,
+          "person1HospitalCoverStatus": "",
+          "person2HospitalCoverStatus": "",
+          "person1HospitalCoverDays": 0,
+          "person2HospitalCoverDays": 0,
+          "dependantsHospitalCoverStatus": "",
+          "dependantsHospitalCoverDays": 0
+        },
+        "expenses": {
+          "livingName": "",
+          "livingCosts": 0,
+          "livingFrequency": "monthly",
+          "mortgageRepayments": 0,
+          "foodName": "",
+          "food": 0,
+          "foodFrequency": "weekly",
+          "utilitiesName": "",
+          "utilities": 0,
+          "utilitiesFrequency": "annually",
+          "insuranceName": "",
+          "insurance": 0,
+          "insuranceFrequency": "annually",
+          "schoolChildrenName": "",
+          "schoolChildren": 0,
+          "schoolChildrenFrequency": "annually",
+          "ratesPropertyCostsName": "",
+          "ratesPropertyCosts": 0,
+          "ratesPropertyCostsFrequency": "annually",
+          "otherExpensesName": "",
+          "otherExpenses": 0,
+          "otherFrequency": "monthly"
+        },
+        "investing": {
+          "annualInvestingTarget": 0,
+          "employerSuperContributions": 0,
+          "person1EmployerSuperOverrideEnabled": false,
+          "person1EmployerSuperOverride": 0,
+          "person2EmployerSuperOverrideEnabled": false,
+          "person2EmployerSuperOverride": 0,
+          "extraSuperContributions": 0,
+          "expectedInvestmentReturnPct": 7,
+          "expectedSuperReturnPct": 6.5,
+          "inflationPct": 2.5,
+          "wageGrowthPct": 3,
+          "safeWithdrawalRatePct": 4
+        },
+        "downsizing": {
+          "enabled": false,
+          "currentResidenceValue": 0,
+          "futurePropertyValue": 0,
+          "sellingCosts": 0,
+          "buyingCosts": 0,
+          "releasedForInvestment": 0
+        },
+        "incomeItems": [
+          {
+            "id": "w",
+            "type": "salaryWages",
+            "owner": "person1",
+            "amount": 230000,
+            "frequency": "annually"
+          }
+        ]
+      },
+      "actual": 4140,
+      "independentExpected": 5280,
+      "delta": -1140,
+      "tolerance": 0.03,
+      "matches": false
+    },
+    {
+      "id": "DIV293-245000",
+      "finding": "F06",
+      "description": "Total ordinary plus additional contributions tax with threshold excess",
+      "input": {
+        "personal": {
+          "person1Name": "A",
+          "person2Name": "",
+          "person1Age": 40,
+          "person2Age": 0,
+          "dependants": 0,
+          "workOptionalAge": 50,
+          "semiRetirementAge": 55,
+          "fullRetirementAge": 65,
+          "targetAnnualSpending": 0
+        },
+        "assets": {
+          "homeValue": 0,
+          "otherPropertyValue": 0,
+          "offsetBalance": 0,
+          "cash": 0,
+          "sharesEtfs": 0,
+          "crypto": 0,
+          "superPerson1": 0,
+          "superPerson2": 0,
+          "vehiclesPersonalAssets": 0
+        },
+        "liabilities": {
+          "homeLoanBalance": 0,
+          "homeLoanInterestRatePct": 0,
+          "monthlyRepayment": 0,
+          "remainingLoanTermYears": 0,
+          "hecsHelpDebt": 0,
+          "person1HecsHelpDebt": 0,
+          "person2HecsHelpDebt": 0,
+          "person1StslBalance": 0,
+          "person2StslBalance": 0,
+          "unassignedStslBalance": 0,
+          "stslOwnerConfirmationNeeded": false,
+          "otherDebts": 0,
+          "creditCardBalance": 0,
+          "creditCardInterestRatePct": 19.99,
+          "creditCardMonthlyRepayment": 0,
+          "creditCardLimit": 0
+        },
+        "income": {
+          "person1IncomeName": "",
+          "person1Income": 0,
+          "person1Frequency": "fortnightly",
+          "person2IncomeName": "",
+          "person2Income": 0,
+          "person2Frequency": "fortnightly",
+          "otherIncomeName": "",
+          "otherIncome": 0,
+          "otherIncomeFrequency": "annually",
+          "person1HasStslDebt": null,
+          "person2HasStslDebt": null,
+          "person1HospitalCoverStatus": "",
+          "person2HospitalCoverStatus": "",
+          "person1HospitalCoverDays": 0,
+          "person2HospitalCoverDays": 0,
+          "dependantsHospitalCoverStatus": "",
+          "dependantsHospitalCoverDays": 0
+        },
+        "expenses": {
+          "livingName": "",
+          "livingCosts": 0,
+          "livingFrequency": "monthly",
+          "mortgageRepayments": 0,
+          "foodName": "",
+          "food": 0,
+          "foodFrequency": "weekly",
+          "utilitiesName": "",
+          "utilities": 0,
+          "utilitiesFrequency": "annually",
+          "insuranceName": "",
+          "insurance": 0,
+          "insuranceFrequency": "annually",
+          "schoolChildrenName": "",
+          "schoolChildren": 0,
+          "schoolChildrenFrequency": "annually",
+          "ratesPropertyCostsName": "",
+          "ratesPropertyCosts": 0,
+          "ratesPropertyCostsFrequency": "annually",
+          "otherExpensesName": "",
+          "otherExpenses": 0,
+          "otherFrequency": "monthly"
+        },
+        "investing": {
+          "annualInvestingTarget": 0,
+          "employerSuperContributions": 0,
+          "person1EmployerSuperOverrideEnabled": false,
+          "person1EmployerSuperOverride": 0,
+          "person2EmployerSuperOverrideEnabled": false,
+          "person2EmployerSuperOverride": 0,
+          "extraSuperContributions": 0,
+          "expectedInvestmentReturnPct": 7,
+          "expectedSuperReturnPct": 6.5,
+          "inflationPct": 2.5,
+          "wageGrowthPct": 3,
+          "safeWithdrawalRatePct": 4
+        },
+        "downsizing": {
+          "enabled": false,
+          "currentResidenceValue": 0,
+          "futurePropertyValue": 0,
+          "sellingCosts": 0,
+          "buyingCosts": 0,
+          "releasedForInvestment": 0
+        },
+        "incomeItems": [
+          {
+            "id": "w",
+            "type": "salaryWages",
+            "owner": "person1",
+            "amount": 245000,
+            "frequency": "annually"
+          }
+        ]
+      },
+      "actual": 4410,
+      "independentExpected": 8070,
+      "delta": -3660,
+      "tolerance": 0.03,
+      "matches": false
+    },
+    {
+      "id": "DIV293-300000",
+      "finding": "F06",
+      "description": "Total ordinary plus additional contributions tax with threshold excess",
+      "input": {
+        "personal": {
+          "person1Name": "A",
+          "person2Name": "",
+          "person1Age": 40,
+          "person2Age": 0,
+          "dependants": 0,
+          "workOptionalAge": 50,
+          "semiRetirementAge": 55,
+          "fullRetirementAge": 65,
+          "targetAnnualSpending": 0
+        },
+        "assets": {
+          "homeValue": 0,
+          "otherPropertyValue": 0,
+          "offsetBalance": 0,
+          "cash": 0,
+          "sharesEtfs": 0,
+          "crypto": 0,
+          "superPerson1": 0,
+          "superPerson2": 0,
+          "vehiclesPersonalAssets": 0
+        },
+        "liabilities": {
+          "homeLoanBalance": 0,
+          "homeLoanInterestRatePct": 0,
+          "monthlyRepayment": 0,
+          "remainingLoanTermYears": 0,
+          "hecsHelpDebt": 0,
+          "person1HecsHelpDebt": 0,
+          "person2HecsHelpDebt": 0,
+          "person1StslBalance": 0,
+          "person2StslBalance": 0,
+          "unassignedStslBalance": 0,
+          "stslOwnerConfirmationNeeded": false,
+          "otherDebts": 0,
+          "creditCardBalance": 0,
+          "creditCardInterestRatePct": 19.99,
+          "creditCardMonthlyRepayment": 0,
+          "creditCardLimit": 0
+        },
+        "income": {
+          "person1IncomeName": "",
+          "person1Income": 0,
+          "person1Frequency": "fortnightly",
+          "person2IncomeName": "",
+          "person2Income": 0,
+          "person2Frequency": "fortnightly",
+          "otherIncomeName": "",
+          "otherIncome": 0,
+          "otherIncomeFrequency": "annually",
+          "person1HasStslDebt": null,
+          "person2HasStslDebt": null,
+          "person1HospitalCoverStatus": "",
+          "person2HospitalCoverStatus": "",
+          "person1HospitalCoverDays": 0,
+          "person2HospitalCoverDays": 0,
+          "dependantsHospitalCoverStatus": "",
+          "dependantsHospitalCoverDays": 0
+        },
+        "expenses": {
+          "livingName": "",
+          "livingCosts": 0,
+          "livingFrequency": "monthly",
+          "mortgageRepayments": 0,
+          "foodName": "",
+          "food": 0,
+          "foodFrequency": "weekly",
+          "utilitiesName": "",
+          "utilities": 0,
+          "utilitiesFrequency": "annually",
+          "insuranceName": "",
+          "insurance": 0,
+          "insuranceFrequency": "annually",
+          "schoolChildrenName": "",
+          "schoolChildren": 0,
+          "schoolChildrenFrequency": "annually",
+          "ratesPropertyCostsName": "",
+          "ratesPropertyCosts": 0,
+          "ratesPropertyCostsFrequency": "annually",
+          "otherExpensesName": "",
+          "otherExpenses": 0,
+          "otherFrequency": "monthly"
+        },
+        "investing": {
+          "annualInvestingTarget": 0,
+          "employerSuperContributions": 0,
+          "person1EmployerSuperOverrideEnabled": false,
+          "person1EmployerSuperOverride": 0,
+          "person2EmployerSuperOverrideEnabled": false,
+          "person2EmployerSuperOverride": 0,
+          "extraSuperContributions": 0,
+          "expectedInvestmentReturnPct": 7,
+          "expectedSuperReturnPct": 6.5,
+          "inflationPct": 2.5,
+          "wageGrowthPct": 3,
+          "safeWithdrawalRatePct": 4
+        },
+        "downsizing": {
+          "enabled": false,
+          "currentResidenceValue": 0,
+          "futurePropertyValue": 0,
+          "sellingCosts": 0,
+          "buyingCosts": 0,
+          "releasedForInvestment": 0
+        },
+        "incomeItems": [
+          {
+            "id": "w",
+            "type": "salaryWages",
+            "owner": "person1",
+            "amount": 300000,
+            "frequency": "annually"
+          }
+        ]
+      },
+      "actual": 4874.94,
+      "independentExpected": 9749.88,
+      "delta": -4874.94,
+      "tolerance": 0.03,
+      "matches": false
+    },
+    {
+      "id": "PENSION-ASSET",
+      "finding": "F09",
+      "description": "Current schedule asset taper independently recomputed",
+      "input": {
+        "partnered": false,
+        "person1Age": 70,
+        "homeowner": true,
+        "assessableAssets": 433000,
+        "assessableAnnualIncome": 0
+      },
+      "actual": 24380.2,
+      "independentExpected": 24380.2,
+      "delta": 0,
+      "tolerance": 0.03,
+      "matches": true
+    },
+    {
+      "id": "SENIOR-LEVY",
+      "finding": "F09",
+      "description": "Ordinary levy charged where eligible SAPTO senior concession would exempt this income",
+      "input": {
+        "partnered": false,
+        "person1Age": 70,
+        "homeowner": true,
+        "assessableAssets": 433000,
+        "assessableAnnualIncome": 0
+      },
+      "actual": 230.76,
+      "independentExpected": 0,
+      "delta": 230.76,
+      "tolerance": 0.03,
+      "matches": false
+    },
+    {
+      "id": "NEGATIVE-SPLIT",
+      "finding": "F10",
+      "description": "Economically possible -20% total plus 3% cash yield rejected",
+      "input": {
+        "id": "portfolio",
+        "name": "Shares",
+        "category": "shares",
+        "owner": "person1",
+        "value": 500000,
+        "investmentReturnMode": "totalReturn",
+        "expectedTotalReturnPct": -20,
+        "expectedIncomeYieldPct": 3,
+        "incomeTreatment": "cash"
+      },
+      "observed": [
+        "Enter a non-negative expected total return.",
+        "Income yield cannot exceed the expected total return under this modelling method."
+      ]
+    },
+    {
+      "id": "NEGATIVE-AGG",
+      "finding": "F10",
+      "description": "Aggregate midpoint loss is supported",
+      "input": {
+        "projectionStartYear": 2026,
+        "projectionEndAge": 67,
+        "inflationRate": 0,
+        "household": {
+          "currentLifestyleSpending": 40000,
+          "semiRetirementLifestyleSpending": 40000,
+          "fullRetirementLifestyleSpending": 40000,
+          "otherAnnualIncome": 0,
+          "annualLoanPrincipalRepayments": 0
+        },
+        "accessibleInvestments": {
+          "openingBalance": 500000,
+          "annualReturnRate": -0.2,
+          "annualFeesRate": 0
+        },
+        "people": [
+          {
+            "id": "person1",
+            "name": "person1",
+            "currentAge": 65,
+            "currentGrossEmploymentIncome": 0,
+            "annualIncomeGrowthRate": 0,
+            "semiRetirementAge": 65,
+            "semiRetirementGrossIncome": 0,
+            "fullRetirementAge": 65,
+            "superAccessAge": 60,
+            "openingSuperBalance": 0,
+            "superReturnBeforeRetirement": 0,
+            "superReturnAfterRetirement": 0,
+            "superAnnualFeesRate": 0,
+            "employerSuperRate": 0.12,
+            "existingAdditionalConcessionalContributions": 0,
+            "additionalContributionsStopAge": 65,
+            "stslOpeningBalance": 0,
+            "hasPrivateHealthCover": true
+          }
+        ],
+        "scenario": {
+          "minimumAccessibleBalance": 0,
+          "minimumEstateBalanceAtEndAge": 0,
+          "surplusDestination": "enjoyment"
+        }
+      },
+      "actual": 364000,
+      "independentExpected": 364000,
+      "delta": 0,
+      "tolerance": 0.03,
+      "matches": true
+    },
+    {
+      "id": "WEEKLY-NOCASH",
+      "finding": "SYSTEM",
+      "description": "Weekly money-in/out and source tax deficit",
+      "input": {
+        "personal": {
+          "person1Name": "A",
+          "person2Name": "",
+          "person1Age": 40,
+          "person2Age": 0,
+          "dependants": 0,
+          "workOptionalAge": 50,
+          "semiRetirementAge": 55,
+          "fullRetirementAge": 65,
+          "targetAnnualSpending": 0
+        },
+        "assets": {
+          "homeValue": 0,
+          "otherPropertyValue": 0,
+          "offsetBalance": 0,
+          "cash": 0,
+          "sharesEtfs": 0,
+          "crypto": 0,
+          "superPerson1": 0,
+          "superPerson2": 0,
+          "vehiclesPersonalAssets": 0
+        },
+        "liabilities": {
+          "homeLoanBalance": 0,
+          "homeLoanInterestRatePct": 0,
+          "monthlyRepayment": 0,
+          "remainingLoanTermYears": 0,
+          "hecsHelpDebt": 0,
+          "person1HecsHelpDebt": 0,
+          "person2HecsHelpDebt": 0,
+          "person1StslBalance": 0,
+          "person2StslBalance": 0,
+          "unassignedStslBalance": 0,
+          "stslOwnerConfirmationNeeded": false,
+          "otherDebts": 0,
+          "creditCardBalance": 0,
+          "creditCardInterestRatePct": 19.99,
+          "creditCardMonthlyRepayment": 0,
+          "creditCardLimit": 0
+        },
+        "income": {
+          "person1IncomeName": "",
+          "person1Income": 0,
+          "person1Frequency": "fortnightly",
+          "person2IncomeName": "",
+          "person2Income": 0,
+          "person2Frequency": "fortnightly",
+          "otherIncomeName": "",
+          "otherIncome": 0,
+          "otherIncomeFrequency": "annually",
+          "person1HasStslDebt": null,
+          "person2HasStslDebt": null,
+          "person1HospitalCoverStatus": "",
+          "person2HospitalCoverStatus": "",
+          "person1HospitalCoverDays": 0,
+          "person2HospitalCoverDays": 0,
+          "dependantsHospitalCoverStatus": "",
+          "dependantsHospitalCoverDays": 0
+        },
+        "expenses": {
+          "livingName": "",
+          "livingCosts": 0,
+          "livingFrequency": "monthly",
+          "mortgageRepayments": 0,
+          "foodName": "",
+          "food": 0,
+          "foodFrequency": "weekly",
+          "utilitiesName": "",
+          "utilities": 0,
+          "utilitiesFrequency": "annually",
+          "insuranceName": "",
+          "insurance": 0,
+          "insuranceFrequency": "annually",
+          "schoolChildrenName": "",
+          "schoolChildren": 0,
+          "schoolChildrenFrequency": "annually",
+          "ratesPropertyCostsName": "",
+          "ratesPropertyCosts": 0,
+          "ratesPropertyCostsFrequency": "annually",
+          "otherExpensesName": "",
+          "otherExpenses": 0,
+          "otherFrequency": "monthly"
+        },
+        "investing": {
+          "annualInvestingTarget": 0,
+          "employerSuperContributions": 0,
+          "person1EmployerSuperOverrideEnabled": false,
+          "person1EmployerSuperOverride": 0,
+          "person2EmployerSuperOverrideEnabled": false,
+          "person2EmployerSuperOverride": 0,
+          "extraSuperContributions": 0,
+          "expectedInvestmentReturnPct": 7,
+          "expectedSuperReturnPct": 6.5,
+          "inflationPct": 2.5,
+          "wageGrowthPct": 3,
+          "safeWithdrawalRatePct": 4
+        },
+        "downsizing": {
+          "enabled": false,
+          "currentResidenceValue": 0,
+          "futurePropertyValue": 0,
+          "sellingCosts": 0,
+          "buyingCosts": 0,
+          "releasedForInvestment": 0
+        },
+        "assetItems": [
+          {
+            "id": "portfolio",
+            "name": "Shares",
+            "category": "shares",
+            "owner": "person1",
+            "value": 2000000,
+            "investmentReturnMode": "totalReturn",
+            "expectedTotalReturnPct": 7,
+            "expectedIncomeYieldPct": 3,
+            "incomeTreatment": "reinvest"
+          }
+        ]
+      },
+      "observed": {
+        "netHousehold": -9620,
+        "timing": [],
+        "weeks": [
+          {
+            "weekNumber": 1,
+            "startDate": "2026-11-16",
+            "endDate": "2026-11-22",
+            "isCompleted": false,
+            "planned": {
+              "openingBalance": 0,
+              "expectedOpeningBalance": 0,
+              "expectedClosingBalance": 0,
+              "forecastClosingBalance": 0,
+              "openingBalanceDifference": 0,
+              "hasOpeningBalanceAdjustment": false,
+              "income": 0,
+              "essentialCosts": 0,
+              "billsDue": 0,
+              "amountSetAside": 0,
+              "provisions": 0,
+              "discretionaryAllowance": 0,
+              "investment": 0,
+              "extraSuper": 0,
+              "extraDebtRepayment": 0,
+              "offsetTransfer": 0,
+              "otherTransfers": 0,
+              "closingBalance": 0,
+              "status": "action-needed",
+              "statusLabel": "Action needed",
+              "statusMessage": "Your expected bank balance falls below the minimum buffer this week. Review bills, spending or optional transfers.",
+              "adjustmentReason": "Warning: this schedule falls below the minimum cash buffer this week. Review timing, bills, income or planned transfers."
+            },
+            "detail": {
+              "incomeItems": [],
+              "billItems": [],
+              "provisionItems": [],
+              "setAsideItems": [],
+              "discretionaryItems": [],
+              "transferItems": []
+            }
+          },
+          {
+            "weekNumber": 2,
+            "startDate": "2026-11-23",
+            "endDate": "2026-11-29",
+            "isCompleted": false,
+            "planned": {
+              "openingBalance": 0,
+              "expectedOpeningBalance": 0,
+              "expectedClosingBalance": 0,
+              "forecastClosingBalance": 0,
+              "openingBalanceDifference": 0,
+              "hasOpeningBalanceAdjustment": false,
+              "income": 0,
+              "essentialCosts": 0,
+              "billsDue": 0,
+              "amountSetAside": 0,
+              "provisions": 0,
+              "discretionaryAllowance": 0,
+              "investment": 0,
+              "extraSuper": 0,
+              "extraDebtRepayment": 0,
+              "offsetTransfer": 0,
+              "otherTransfers": 0,
+              "closingBalance": 0,
+              "status": "action-needed",
+              "statusLabel": "Action needed",
+              "statusMessage": "Your expected bank balance falls below the minimum buffer this week. Review bills, spending or optional transfers.",
+              "adjustmentReason": "Warning: this schedule falls below the minimum cash buffer this week. Review timing, bills, income or planned transfers."
+            },
+            "detail": {
+              "incomeItems": [],
+              "billItems": [],
+              "provisionItems": [],
+              "setAsideItems": [],
+              "discretionaryItems": [],
+              "transferItems": []
+            }
+          }
+        ],
+        "totals": {
+          "income": 0,
+          "essential": 0
+        }
+      }
+    }
+  ]
+}

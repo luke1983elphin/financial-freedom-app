@@ -1,0 +1,68 @@
+{
+  "startingCommit": "065de0410698bb82edb66a4f192ed765e0dd102c",
+  "nodeVersion": "v24.22.1",
+  "pnpmVersion": "11.25.0",
+  "verify": {
+    "exitCode": 0,
+    "completedSuites": 63,
+    "totals": {
+      "passed": 1247,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0,
+      "total": 1247
+    }
+  },
+  "existingBrowserRegression": {
+    "exitCode": 0,
+    "passed": 52,
+    "failed": 0,
+    "skipped": 0,
+    "cancelled": 0,
+    "todo": 0,
+    "durationMs": 181418.15454
+  },
+  "stage1Replay": {
+    "households": 48,
+    "checks": 99,
+    "outputsByteIdentical": true
+  },
+  "independentPythonReview": {
+    "arithmeticAgrees": 99,
+    "notFullPolicyCertification": true
+  },
+  "newDiagnostics": {
+    "total": 59,
+    "numerical": 50,
+    "observations": 9,
+    "matches": 15,
+    "divergences": 35,
+    "meaning": "Divergences include confirmed errors, conditional conventions and desired unsupported scope; see REVIEW.md. Generator success is not a financial pass."
+  },
+  "browserTraces": {
+    "cases": [
+      "PROPERTY-legacy",
+      "PROPERTY-linked",
+      "PROPERTY-linked-otherProperty",
+      "TAX-linked"
+    ],
+    "savedInputAndResultRoundTripChecks": 8,
+    "pdfsExportedAndTextChecked": 4,
+    "runtimeErrors": []
+  },
+  "protectedSourceSha256": {
+    "calculator.js": "b9cd8c47af46d838ff5d223bcec160c35957066451d363086a32b9850b606daa",
+    "semiRetirementProjection.js": "9a973fbcc69b5748daabfc630fbd329ed1f07da2c3439d3aefb43d1f0ab36f8d",
+    "semiRetirementUi.js": "4e87341a23a3e38592f1d32619efaf35859d14cf83ac5949fb21dfdf1be524dd",
+    "agePensionEstimate.js": "9f5d57f2c527b41e758dfb0592bceaeb364f1d197737611fcdf5759c25284003",
+    "weekly-plan.js": "0aaf2710b38adbacba8b9abf12fa6e9e2e42f42138c017de053237cde481bcb5",
+    "forecast-assumptions.js": "da72c9c897edfa9c612e7326dc709eca17ae312156f33a5d5e8e916ac8149716",
+    "growth-scenarios.js": "dcf99088db25128e060a7a8156acaaf1460717126525f6e14647edd699a33f1d",
+    "dollar-basis.js": "f30f11ae0850db908ed8a91b1e804cc0c67a526cb1aa281484f792715d6fb4a5",
+    "app.js": "3066076d67d3834e64892fd252ceb5c9201fe80ae87fb4f6f2446494d4f3c12f",
+    "plan-schema.js": "7c531d4d9b15330f77fdebf9597a73630583edbc452f8e1b9d247b25a17d86a7",
+    "legacy-plan-adapter.js": "d85cfc66e9711b0947665de9e4ba247558e7e0078ad607ff0067c0b27bdaf092"
+  },
+  "sourceDiff": "No changes outside docs/audit-2026-11-13/stage2 relative to PR61 starting commit; original reports/fixtures retained."
+}

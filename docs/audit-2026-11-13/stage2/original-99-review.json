@@ -1,0 +1,998 @@
+{
+  "households": 48,
+  "checks": 99,
+  "arithmeticAgrees": 99,
+  "method": "Independent Python formulas; no production imports; prior expected values used only for final comparison. Confirms arithmetic under stated assumptions, not legal or product-scope correctness.",
+  "rows": [
+    {
+      "household": "H01",
+      "metric": "ordinary income tax plus Medicare",
+      "stage2Expected": 0.0,
+      "stage1Expected": 0,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 0,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H01",
+      "metric": "gross salary",
+      "stage2Expected": 0,
+      "stage1Expected": 0,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 0,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H01",
+      "metric": "employer SG",
+      "stage2Expected": 0.0,
+      "stage1Expected": 0,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 0,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H02",
+      "metric": "ordinary income tax plus Medicare",
+      "stage2Expected": 0,
+      "stage1Expected": 0,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 0,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H02",
+      "metric": "gross salary",
+      "stage2Expected": 18200,
+      "stage1Expected": 18200,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 18200,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H02",
+      "metric": "employer SG",
+      "stage2Expected": 2184.0,
+      "stage1Expected": 2184,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 2184,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H03",
+      "metric": "ordinary income tax plus Medicare",
+      "stage2Expected": 1268.9,
+      "stage1Expected": 1268.9,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 1268.9,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H03",
+      "metric": "gross salary",
+      "stage2Expected": 30000,
+      "stage1Expected": 30000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 30000,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H03",
+      "metric": "employer SG",
+      "stage2Expected": 3600.0,
+      "stage1Expected": 3600,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 3600,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H04",
+      "metric": "ordinary income tax plus Medicare",
+      "stage2Expected": 4595.0,
+      "stage1Expected": 4595,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 4595,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H04",
+      "metric": "gross salary",
+      "stage2Expected": 45000,
+      "stage1Expected": 45000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 45000,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H04",
+      "metric": "employer SG",
+      "stage2Expected": 5400.0,
+      "stage1Expected": 5400,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 5400,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H05",
+      "metric": "ordinary income tax plus Medicare",
+      "stage2Expected": 16120.0,
+      "stage1Expected": 16120,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 16120,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H05",
+      "metric": "gross salary",
+      "stage2Expected": 80000,
+      "stage1Expected": 80000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 80000,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H05",
+      "metric": "employer SG",
+      "stage2Expected": 9600.0,
+      "stage1Expected": 9600,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 9600,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H06",
+      "metric": "ordinary income tax plus Medicare",
+      "stage2Expected": 33720.0,
+      "stage1Expected": 33720,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 33720,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H06",
+      "metric": "gross salary",
+      "stage2Expected": 135000,
+      "stage1Expected": 135000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 135000,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H06",
+      "metric": "employer SG",
+      "stage2Expected": 16200.0,
+      "stage1Expected": 16200,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 16200,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H07",
+      "metric": "ordinary income tax plus Medicare",
+      "stage2Expected": 55170.0,
+      "stage1Expected": 55170,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 55170,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H07",
+      "metric": "gross salary",
+      "stage2Expected": 190000,
+      "stage1Expected": 190000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 190000,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H07",
+      "metric": "employer SG",
+      "stage2Expected": 22800.0,
+      "stage1Expected": 22800,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 22800,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H08",
+      "metric": "ordinary income tax plus Medicare",
+      "stage2Expected": 83370.0,
+      "stage1Expected": 83370,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 83370,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H08",
+      "metric": "gross salary",
+      "stage2Expected": 250000,
+      "stage1Expected": 250000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 250000,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H08",
+      "metric": "employer SG",
+      "stage2Expected": 30000.0,
+      "stage1Expected": 30000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 30000,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H09",
+      "metric": "household tax plus Medicare",
+      "stage2Expected": 25740.0,
+      "stage1Expected": 25740,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 25740,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H09",
+      "metric": "net household income",
+      "stage2Expected": 114260.0,
+      "stage1Expected": 114260,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 114260,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H09",
+      "metric": "net SG after 15% contribution tax",
+      "stage2Expected": 14280.0,
+      "stage1Expected": 14280,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 14280,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H10",
+      "metric": "compulsory HELP repayment",
+      "stage2Expected": 2527.8,
+      "stage1Expected": 2527.8,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 2527.8,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H11",
+      "metric": "compulsory HELP repayment",
+      "stage2Expected": 10276.99,
+      "stage1Expected": 10276.99,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 10276.99,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H12",
+      "metric": "compulsory HELP repayment",
+      "stage2Expected": 1000,
+      "stage1Expected": 1000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 1000,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H13",
+      "metric": "income tax saving",
+      "stage2Expected": 3200.0,
+      "stage1Expected": 3200,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 3200,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H13",
+      "metric": "net extra super contribution",
+      "stage2Expected": 8500.0,
+      "stage1Expected": 8500,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 8500,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H14",
+      "metric": "total contribution tax including Division 293",
+      "stage2Expected": 9749.88,
+      "stage1Expected": 9749.88,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 4874.94,
+      "appDelta": -4874.94,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H15",
+      "metric": "grossed up taxable income",
+      "stage2Expected": 10000,
+      "stage1Expected": 10000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 7000,
+      "appDelta": -3000,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H15",
+      "metric": "cash including refundable franking credit",
+      "stage2Expected": 10000,
+      "stage1Expected": 10000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 7000,
+      "appDelta": -3000,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H16",
+      "metric": "economic return: retained growth plus cash income",
+      "stage2Expected": 35000.0,
+      "stage1Expected": 35000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 50000,
+      "appDelta": 15000.0,
+      "interpretation": "Conditional on separate-income identity"
+    },
+    {
+      "household": "H17",
+      "metric": "nominal total return",
+      "stage2Expected": 35000,
+      "stage1Expected": 35000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 35000,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H17",
+      "metric": "retained growth",
+      "stage2Expected": 20000,
+      "stage1Expected": 20000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 20000,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H17",
+      "metric": "cash income",
+      "stage2Expected": 15000,
+      "stage1Expected": 15000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 15000,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H17",
+      "metric": "taxable income counted once",
+      "stage2Expected": 15000,
+      "stage1Expected": 15000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 15000,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H17",
+      "metric": "economic growth metric",
+      "stage2Expected": 35000,
+      "stage1Expected": 35000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 35000,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H18",
+      "metric": "nominal total return",
+      "stage2Expected": 35000,
+      "stage1Expected": 35000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 35000,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H18",
+      "metric": "retained growth",
+      "stage2Expected": 35000,
+      "stage1Expected": 35000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 35000,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H18",
+      "metric": "cash income",
+      "stage2Expected": 0,
+      "stage1Expected": 0,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 0,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H18",
+      "metric": "taxable income counted once",
+      "stage2Expected": 15000,
+      "stage1Expected": 15000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 15000,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H18",
+      "metric": "economic growth metric",
+      "stage2Expected": 35000,
+      "stage1Expected": 35000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 35000,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H19",
+      "metric": "economic return without duplicate dividend",
+      "stage2Expected": 35000.0,
+      "stage1Expected": 35000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 50000,
+      "appDelta": 15000.0,
+      "interpretation": "Conditional on separate-income identity"
+    },
+    {
+      "household": "H20",
+      "metric": "year-one effective annual closing investment balance",
+      "stage2Expected": 535000.0,
+      "stage1Expected": 535000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 536145.03,
+      "appDelta": 1145.03,
+      "interpretation": "Conditional effective/gross return convention"
+    },
+    {
+      "household": "H21",
+      "metric": "year-one effective annual closing super",
+      "stage2Expected": 532500.0,
+      "stage1Expected": 532500,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 533485.9,
+      "appDelta": 985.9,
+      "interpretation": "Conditional effective/gross return convention"
+    },
+    {
+      "household": "H22",
+      "metric": "current net worth",
+      "stage2Expected": 250000,
+      "stage1Expected": 250000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 250000,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H22",
+      "metric": "year-one net worth after property growth and debt",
+      "stage2Expected": 268000.0,
+      "stage1Expected": 268000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 618000,
+      "appDelta": 350000.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H22",
+      "metric": "property capital growth",
+      "stage2Expected": 18000.0,
+      "stage1Expected": 18000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 18000,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H23",
+      "metric": "rental cash to household after principal",
+      "stage2Expected": 1000,
+      "stage1Expected": 1000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 1000,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H23",
+      "metric": "passive rent before principal",
+      "stage2Expected": 7000,
+      "stage1Expected": 7000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 7000,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H24",
+      "metric": "rental cash to household after principal",
+      "stage2Expected": 1000,
+      "stage1Expected": 1000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 1000,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H24",
+      "metric": "passive rent before principal",
+      "stage2Expected": 7000,
+      "stage1Expected": 7000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 7000,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H25",
+      "metric": "first-month interest",
+      "stage2Expected": 1250.0,
+      "stage1Expected": 1250,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 1250,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H25",
+      "metric": "12-month loan balance",
+      "stage2Expected": 290748.33,
+      "stage1Expected": 290748.33,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 290748.32,
+      "appDelta": -0.01,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H26",
+      "metric": "eligible super only",
+      "stage2Expected": 300000,
+      "stage1Expected": 300000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 300000,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H26",
+      "metric": "current FI assets",
+      "stage2Expected": 300000,
+      "stage1Expected": 300000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 300000,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H27",
+      "metric": "nominal target spending",
+      "stage2Expected": 102406.76,
+      "stage1Expected": 102406.76,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 102406.76,
+      "appDelta": -0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H27",
+      "metric": "4% target capital",
+      "stage2Expected": 2560169.0,
+      "stage1Expected": 2560169,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 2560169,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H27",
+      "metric": "today-dollar round trip",
+      "stage2Expected": 80000.0,
+      "stage1Expected": 80000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 80000,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H28",
+      "metric": "investment earnings",
+      "stage2Expected": 68600.0,
+      "stage1Expected": 68600,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 68600,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H28",
+      "metric": "investment fees",
+      "stage2Expected": 9800.0,
+      "stage1Expected": 9800,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 9800,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H28",
+      "metric": "closing assets",
+      "stage2Expected": 1018800.0,
+      "stage1Expected": 1018800,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 1018800,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H29",
+      "metric": "required unfunded spending before age 60",
+      "stage2Expected": 30000,
+      "stage1Expected": 30000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 30000,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H29",
+      "metric": "restricted super untouched",
+      "stage2Expected": 500000,
+      "stage1Expected": 500000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 500000,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H29",
+      "metric": "age-60 access funds next year",
+      "stage2Expected": 0,
+      "stage1Expected": 0,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 0,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H30",
+      "metric": "super draw after liquid exhaustion",
+      "stage2Expected": 30000,
+      "stage1Expected": 30000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 30000,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H30",
+      "metric": "closing super",
+      "stage2Expected": 470000,
+      "stage1Expected": 470000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 470000,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H30",
+      "metric": "unfunded spending",
+      "stage2Expected": 0,
+      "stage1Expected": 0,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 0,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H31",
+      "metric": "year-two closing assets",
+      "stage2Expected": 119000.0,
+      "stage1Expected": 119000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 119000,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H32",
+      "metric": "annual gross pension under dated schedule",
+      "stage2Expected": 32180.2,
+      "stage1Expected": 32180.2,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 32180.2,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H33",
+      "metric": "annual gross pension under dated schedule",
+      "stage2Expected": 48516,
+      "stage1Expected": 48516,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 48516,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H34",
+      "metric": "annual gross pension under dated schedule",
+      "stage2Expected": 20358.0,
+      "stage1Expected": 20358,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 20358,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H35",
+      "metric": "annual gross pension under dated schedule",
+      "stage2Expected": 24380.2,
+      "stage1Expected": 24380.2,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 24380.2,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H36",
+      "metric": "annual gross pension under dated schedule",
+      "stage2Expected": 27180.2,
+      "stage1Expected": 27180.2,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 27180.2,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H37",
+      "metric": "assessable assets exclude home and younger super",
+      "stage2Expected": 100000,
+      "stage1Expected": 100000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 100000,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H37",
+      "metric": "deeming lower tier",
+      "stage2Expected": 1750.0,
+      "stage1Expected": 1750,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 1750,
+      "appDelta": -0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H37",
+      "metric": "one partnered pension",
+      "stage2Expected": 24258,
+      "stage1Expected": 24258,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 24258,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H38",
+      "metric": "closing super under gross-return interpretation",
+      "stage2Expected": 522625.0,
+      "stage1Expected": 522625,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 527500,
+      "appDelta": 4875.0,
+      "interpretation": "Conditional effective/gross return convention"
+    },
+    {
+      "household": "H39",
+      "metric": "annual retirement closing investment balance",
+      "stage2Expected": 535000.0,
+      "stage1Expected": 535000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 535000,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H40",
+      "metric": "retirement starting assets when already retiring today",
+      "stage2Expected": 500000,
+      "stage1Expected": 500000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 533485.9,
+      "appDelta": 33485.9,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H40",
+      "metric": "simple retirement age-70 balance at entered super rate",
+      "stage2Expected": 730921.92,
+      "stage1Expected": 730921.92,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 748241.56,
+      "appDelta": 17319.64,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H41",
+      "metric": "portfolio closing after funding year-end income tax",
+      "stage2Expected": 2134302.58,
+      "stage1Expected": 2134302.58,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 2144580.16,
+      "appDelta": 10277.58,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H42",
+      "metric": "integrated gross pension under dated schedule",
+      "stage2Expected": 32180.2,
+      "stage1Expected": 32180.2,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 32180.2,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H42",
+      "metric": "pension funds required spending",
+      "stage2Expected": 0,
+      "stage1Expected": 0,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 0,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H43",
+      "metric": "downside midpoint closing assets",
+      "stage2Expected": 364000.0,
+      "stage1Expected": 364000,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 364000,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H44",
+      "metric": "validation errors for economically possible downside return",
+      "stage2Expected": 0,
+      "stage1Expected": 0,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 2,
+      "appDelta": 2,
+      "interpretation": "Desired future domain support"
+    },
+    {
+      "household": "H45",
+      "metric": "deflation year-two closing cash",
+      "stage2Expected": 20800.0,
+      "stage1Expected": 20800,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 20800,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H46",
+      "metric": "before-retirement default super return percent",
+      "stage2Expected": 6.5,
+      "stage1Expected": 6.5,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 6.5,
+      "appDelta": 0.0,
+      "interpretation": "Existing default mapping only"
+    },
+    {
+      "household": "H46",
+      "metric": "after-retirement default super return percent",
+      "stage2Expected": 5.5,
+      "stage1Expected": 5.5,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 5.5,
+      "appDelta": 0.0,
+      "interpretation": "Existing default mapping only"
+    },
+    {
+      "household": "H46",
+      "metric": "default explicit super fee percent",
+      "stage2Expected": 0,
+      "stage1Expected": 0,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 0,
+      "appDelta": 0,
+      "interpretation": "Existing default mapping only"
+    },
+    {
+      "household": "H46",
+      "metric": "default explicit investment fee percent",
+      "stage2Expected": 0,
+      "stage1Expected": 0,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 0,
+      "appDelta": 0,
+      "interpretation": "Existing default mapping only"
+    },
+    {
+      "household": "H47",
+      "metric": "income tax and Medicare computed on reinvested yield",
+      "stage2Expected": 9620.0,
+      "stage1Expected": 9620,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 9620,
+      "appDelta": 0.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H47",
+      "metric": "tax liability funded from portfolio",
+      "stage2Expected": 9620.0,
+      "stage1Expected": 9620,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 0,
+      "appDelta": -9620.0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H48",
+      "metric": "SAPTO threshold from statutory $445 constant",
+      "stage2Expected": 36034,
+      "stage1Expected": 36034,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 36034,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    },
+    {
+      "household": "H48",
+      "metric": "income tax after LITO and SAPTO",
+      "stage2Expected": 0,
+      "stage1Expected": 0,
+      "arithmeticAgrees": true,
+      "appActualAfterReplay": 0,
+      "appDelta": 0,
+      "interpretation": "Eligibility or timing assumptions apply; see technical review"
+    }
+  ]
+}
