@@ -1,0 +1,539 @@
+{
+  "command": "PNPM_HOME=/tmp/ffa-pnpm XDG_DATA_HOME=/tmp/ffa-xdg COREPACK_HOME=/tmp/ffa-corepack pnpm run verify",
+  "nodeVersion": "v24.22.1",
+  "pnpmVersion": "11.25.0",
+  "exitCode": 0,
+  "completedSuites": 63,
+  "totals": {
+    "passed": 1247,
+    "failed": 0,
+    "skipped": 0,
+    "todo": 0,
+    "cancelled": 0,
+    "total": 1247
+  },
+  "suites": [
+    {
+      "id": "growth-scenarios",
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "forecast-assumptions",
+      "passed": 18,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "retirement-results",
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "dollar-display-regression",
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "dollar-basis",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "try-change-targeted",
+      "passed": 22,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "release-safeguards",
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "custom-what-if",
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "age-pension",
+      "passed": 22,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "retirement-goals-redesign",
+      "passed": 17,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "ux-stage1",
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "future-you-default",
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "new-plan-projection-default",
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "educational-wording",
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "minor-presentation",
+      "passed": 14,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "investment-asset-ux",
+      "passed": 25,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "investment-return-split",
+      "passed": 29,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "financial-report-presentation",
+      "passed": 31,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "saved-retirement-cards",
+      "passed": 32,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "final-modelling-assurance",
+      "passed": 25,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "fi-wealth-cashflow",
+      "passed": 41,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "retirement-exhaustion-retained-assets",
+      "passed": 26,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "calculations",
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "engagement",
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "tax-integration",
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "payslip-assistant",
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "financial-progress-history",
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "calculation-audit-2026-27",
+      "passed": 22,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "main-calculator-zero-balance-loan-r3-blocker",
+      "passed": 44,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "semi-retirement-projection",
+      "passed": 64,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "semi-retirement-ui",
+      "passed": 169,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "semi-retirement-integration-v1",
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "stage-a",
+      "passed": 23,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "stage-a1",
+      "passed": 21,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "stage-b",
+      "passed": 26,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "stage-b1",
+      "passed": 17,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "stage-b1a",
+      "passed": 14,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "stage-c",
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "stage-c1",
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "stage-d",
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "stage-e",
+      "passed": 22,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "stage-e1",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "stage-g2ea",
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "stage-g2es",
+      "passed": 15,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "stage-g2es1",
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "stage-g2g",
+      "passed": 11,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "stage-g2h",
+      "passed": 20,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "ai-containment-r1",
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "browser-security-r4a",
+      "passed": 15,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "data-durability-r5",
+      "passed": 33,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "integrated-release-candidate-r6",
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "stage-readiness-r6a",
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "canonical-salary-timing-r6b",
+      "passed": 18,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "retirement-timing-presentation-r6c",
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "completed-week-edit-gating-r6d",
+      "passed": 15,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "dst-safe-week-bucketing-r6e",
+      "passed": 18,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "linked-investment-setup",
+      "passed": 27,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "trust-readiness-stage1",
+      "passed": 21,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "consumer-first-stage2",
+      "passed": 17,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "consumer-ux-stage2b",
+      "passed": 18,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "canonical-plan-stage3",
+      "passed": 39,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "canonical-integrity-stage3a",
+      "passed": 21,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    {
+      "id": "release-parity-stage4",
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    }
+  ],
+  "browser": {
+    "command": "node --test --test-concurrency=1 tests/dollar-basis-browser.mjs tests/stage1-browser-workflows.mjs tests/age-pension-browser.mjs tests/release-browser.mjs",
+    "exitCode": 0,
+    "passed": 52,
+    "failed": 0,
+    "skipped": 0,
+    "cancelled": 0,
+    "todo": 0,
+    "durationMs": 215010.33702,
+    "runtime": "local Chromium, outside network-isolated sandbox"
+  },
+  "independentAudit": {
+    "households": 48,
+    "checks": 99,
+    "matchingHouseholds": 36,
+    "discrepancyHouseholds": 12,
+    "outcome": "not ready for user-facing Monte Carlo"
+  }
+}
