@@ -26,5 +26,12 @@
     768,
     1366
   ],
-  "screenshots": 40
+  "screenshots": 40,
+  "follow_up_browser": {
+    "passed": 4,
+    "failed": 0,
+    "skipped": 0,
+    "duration_seconds": 10.1,
+    "scope": "Retirement-card heading retains live current-plan scope; U04/U05 history, basis and four-width viewer checks."
+  }
 }

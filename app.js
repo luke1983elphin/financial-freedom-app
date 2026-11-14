@@ -18603,7 +18603,7 @@
       return originalCard(copy)
         .replace('>Open</button>', `>${label}</button>`)
         .replace(/>Compare<\/button>/, `>${compare}</button>`)
-        .replace('Changes from the current plan', 'Financial changes recorded when saved')
+        .replace('Changes from the current plan', type === "retirement" ? 'Changes from the current plan' : 'Financial changes recorded when saved')
         .replace('Opening this scenario will apply its saved settings to your current plan.', 'Saved settings open in a temporary draft. Your current financial plan is unchanged.')
         .replace('<div class="scenario-actions">', `<p class="stage2-scenario-scope">${escapeHtml(scope)}</p><div class="scenario-actions">${type === "retirement" || type === "decision" ? `<button class="btn" type="button" data-stage2-view="${escapeHtml(scenario.id)}">View saved snapshot</button>` : ""}${type !== "retirement" ? `<button class="btn" type="button" data-stage2-current="${escapeHtml(scenario.id)}">Compare with current plan</button>` : ""}`);
     };

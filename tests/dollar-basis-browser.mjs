@@ -1158,6 +1158,7 @@ test('U04 spending comparison, calculate, saved inputs and retirement editing re
   const id=await evaluate("__dollarTest.savedScenarios().find(s=>s.name==='Exact Retirement Spending').id"),history=await evaluate('JSON.stringify(__dollarTest.savedScenarios())');
   assert.equal(await evaluate("__dollarTest.savedScenarios().find(s=>s.name==='Exact Retirement Spending').scenarioInputSnapshot.household.fullRetirementLifestyleSpending"),75490.37);
   assert.equal(await evaluate(`document.querySelector('[data-open-scenario="${id}"]').textContent`),'Open retirement scenario');
+  assert.ok(await evaluate(`document.querySelector('[data-open-scenario="${id}"]').closest('article').textContent.includes('Changes from the current plan')`),'retirement differences keep their live current-plan scope');
   await evaluate(`document.querySelector('[data-stage2-view="${id}"]').click()`);assert.match(await evaluate("document.querySelector('#stage2SnapshotViewer').textContent"),/Read-only view/);
   await evaluate(`document.querySelector('[data-open-scenario="${id}"]').click()`);assert.equal(await evaluate('document.body.dataset.activeView'),'semiretirement');assert.equal(await evaluate('__stage2Test.retirementDraft().household.fullRetirementLifestyleSpending'),75490.37);
   assert.equal(await evaluate('JSON.stringify(__dollarTest.savedScenarios())'),history);assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),plan);
