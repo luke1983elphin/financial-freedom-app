@@ -10372,3 +10372,32 @@ body[data-active-view="assumptions"] #appWorkspace { scroll-margin-top: calc(var
 @media print {
   .retirement-redesign .maf-years, .retirement-redesign .maf-guide { display: none !important; }
 }
+
+/* Stage 2 U02: retain existing engine-rendered strings in labelled mobile rows. */
+.stage2-comparison-label { display: none; }
+.stage2-comparison-value { display: inline; }
+@media screen and (max-width: 900px) {
+  .what-if-forecast { overflow: visible; min-width: 0; }
+  .what-if-forecast .what-if-forecast-head { display: none; }
+  .what-if-forecast .what-if-forecast-row { min-width: 0; grid-template-columns: minmax(0,1fr); gap: 8px; padding: 14px 12px; margin: 12px 0; border: 1px solid #cbded1; border-radius: 12px; background: #fff; }
+  .what-if-forecast-row > strong { overflow-wrap: anywhere; }
+  .what-if-forecast-row > :is(span,b) { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.2fr); gap: 12px; text-align: right; min-width: 0; align-items: start; }
+  .what-if-forecast-row .stage2-comparison-label { display: block; text-align: left; font-size: .8125rem; font-weight: 600; }
+  .what-if-forecast-row .stage2-comparison-value { min-width: 0; overflow-wrap: anywhere; }
+  .what-if-forecast-row > b { border-top: 1px solid #dce9e1; padding-top: 8px; font-size: 1rem; }
+  .what-if-metrics > div { min-width: 0; }
+  .what-if-metrics strong { overflow-wrap: anywhere; }
+}
+.stage2-scenario-scope { font-size: .875rem; line-height: 1.5; color: #526579; }
+.stage2-snapshot-viewer { padding: 16px; margin: 16px 0; border: 1px solid #cbded1; border-radius: 12px; background: #f8fafc; overflow-wrap: anywhere; scroll-margin-top: calc(var(--app-header-height, 96px) + 12px); }
+.stage2-snapshot-viewer[hidden] { display: none; }
+.stage2-snapshot-viewer h3 { font-size: 1.125rem; font-weight: 700; }
+.stage2-snapshot-viewer p, .stage2-snapshot-viewer li { margin: 10px 0; font-size: .875rem; }
+.stage2-snapshot-viewer button { min-height: 44px; margin: 8px 8px 0 0; }
+.stage2-snapshot-viewer summary { padding: 12px 0; cursor: pointer; }
+.stage2-snapshot-results > div { padding: 12px 0; border-bottom: 1px solid #dbe5ee; }
+.stage2-snapshot-results dt { font-weight: 700; }
+.scenario-library-card { overflow-wrap: anywhere; min-width: 0; }
+.scenario-actions .btn { min-height: 44px; white-space: normal; }
+.what-if-actions .btn, .semi-retirement-adjustments .btn { min-height: 44px; }
+.semi-retirement-adjustment-range { min-height: 44px; }

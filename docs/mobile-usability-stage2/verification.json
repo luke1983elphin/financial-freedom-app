@@ -1,0 +1,30 @@
+{
+  "baseline": "cfe63844eb762dc4e89cda16cb73334428bc0683",
+  "node": "24.22.1",
+  "pnpm": "11.25.0",
+  "regression": {
+    "suites": 66,
+    "passed": 1297,
+    "failed": 0,
+    "skipped": 0,
+    "todo": 0,
+    "cancelled": 0,
+    "total": 1297
+  },
+  "browser": {
+    "tests": 69,
+    "pass": 69,
+    "fail": 0,
+    "skipped": 0
+  },
+  "browser_duration_seconds": 234.6367285,
+  "comparison_cases": 24,
+  "forecast_rows": 72,
+  "screen_widths": [
+    375,
+    390,
+    768,
+    1366
+  ],
+  "screenshots": 40
+}
