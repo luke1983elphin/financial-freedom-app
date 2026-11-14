@@ -1,0 +1,602 @@
+[
+  {
+    "width": 375,
+    "basis": "future",
+    "preset": "expenses-500",
+    "rows": [
+      [
+        "Net worth after 1 year",
+        "$735,655",
+        "$735,655",
+        "+$0"
+      ],
+      [
+        "Net worth after 5 years",
+        "$1,197,358",
+        "$1,197,358",
+        "+$0"
+      ],
+      [
+        "Net worth after 10 years",
+        "$1,950,006",
+        "$1,950,006",
+        "+$0"
+      ]
+    ]
+  },
+  {
+    "width": 375,
+    "basis": "today",
+    "preset": "expenses-500",
+    "rows": [
+      [
+        "Net worth after 1 year",
+        "$717,712",
+        "$717,712",
+        "+$0"
+      ],
+      [
+        "Net worth after 5 years",
+        "$1,058,290",
+        "$1,058,290",
+        "+$0"
+      ],
+      [
+        "Net worth after 10 years",
+        "$1,523,341",
+        "$1,523,341",
+        "+$0"
+      ]
+    ]
+  },
+  {
+    "width": 375,
+    "basis": "future",
+    "preset": "car-50000",
+    "rows": [
+      [
+        "Net worth after 1 year",
+        "$735,655",
+        "$682,041",
+        "−$53,615"
+      ],
+      [
+        "Net worth after 5 years",
+        "$1,197,358",
+        "$1,126,477",
+        "−$70,881"
+      ],
+      [
+        "Net worth after 10 years",
+        "$1,950,006",
+        "$1,849,523",
+        "−$100,483"
+      ]
+    ]
+  },
+  {
+    "width": 375,
+    "basis": "today",
+    "preset": "car-50000",
+    "rows": [
+      [
+        "Net worth after 1 year",
+        "$717,712",
+        "$665,405",
+        "−$52,307"
+      ],
+      [
+        "Net worth after 5 years",
+        "$1,058,290",
+        "$995,641",
+        "−$62,649"
+      ],
+      [
+        "Net worth after 10 years",
+        "$1,523,341",
+        "$1,444,844",
+        "−$78,497"
+      ]
+    ]
+  },
+  {
+    "width": 375,
+    "basis": "future",
+    "preset": "invest-250",
+    "rows": [
+      [
+        "Net worth after 1 year",
+        "$735,655",
+        "$749,159",
+        "+$13,504"
+      ],
+      [
+        "Net worth after 5 years",
+        "$1,197,358",
+        "$1,275,369",
+        "+$78,011"
+      ],
+      [
+        "Net worth after 10 years",
+        "$1,950,006",
+        "$2,138,607",
+        "+$188,602"
+      ]
+    ]
+  },
+  {
+    "width": 375,
+    "basis": "today",
+    "preset": "invest-250",
+    "rows": [
+      [
+        "Net worth after 1 year",
+        "$717,712",
+        "$730,886",
+        "+$13,174"
+      ],
+      [
+        "Net worth after 5 years",
+        "$1,058,290",
+        "$1,127,240",
+        "+$68,950"
+      ],
+      [
+        "Net worth after 10 years",
+        "$1,523,341",
+        "$1,670,677",
+        "+$147,335"
+      ]
+    ]
+  },
+  {
+    "width": 390,
+    "basis": "future",
+    "preset": "expenses-500",
+    "rows": [
+      [
+        "Net worth after 1 year",
+        "$735,655",
+        "$735,655",
+        "+$0"
+      ],
+      [
+        "Net worth after 5 years",
+        "$1,197,358",
+        "$1,197,358",
+        "+$0"
+      ],
+      [
+        "Net worth after 10 years",
+        "$1,950,006",
+        "$1,950,006",
+        "+$0"
+      ]
+    ]
+  },
+  {
+    "width": 390,
+    "basis": "today",
+    "preset": "expenses-500",
+    "rows": [
+      [
+        "Net worth after 1 year",
+        "$717,712",
+        "$717,712",
+        "+$0"
+      ],
+      [
+        "Net worth after 5 years",
+        "$1,058,290",
+        "$1,058,290",
+        "+$0"
+      ],
+      [
+        "Net worth after 10 years",
+        "$1,523,341",
+        "$1,523,341",
+        "+$0"
+      ]
+    ]
+  },
+  {
+    "width": 390,
+    "basis": "future",
+    "preset": "car-50000",
+    "rows": [
+      [
+        "Net worth after 1 year",
+        "$735,655",
+        "$682,041",
+        "−$53,615"
+      ],
+      [
+        "Net worth after 5 years",
+        "$1,197,358",
+        "$1,126,477",
+        "−$70,881"
+      ],
+      [
+        "Net worth after 10 years",
+        "$1,950,006",
+        "$1,849,523",
+        "−$100,483"
+      ]
+    ]
+  },
+  {
+    "width": 390,
+    "basis": "today",
+    "preset": "car-50000",
+    "rows": [
+      [
+        "Net worth after 1 year",
+        "$717,712",
+        "$665,405",
+        "−$52,307"
+      ],
+      [
+        "Net worth after 5 years",
+        "$1,058,290",
+        "$995,641",
+        "−$62,649"
+      ],
+      [
+        "Net worth after 10 years",
+        "$1,523,341",
+        "$1,444,844",
+        "−$78,497"
+      ]
+    ]
+  },
+  {
+    "width": 390,
+    "basis": "future",
+    "preset": "invest-250",
+    "rows": [
+      [
+        "Net worth after 1 year",
+        "$735,655",
+        "$749,159",
+        "+$13,504"
+      ],
+      [
+        "Net worth after 5 years",
+        "$1,197,358",
+        "$1,275,369",
+        "+$78,011"
+      ],
+      [
+        "Net worth after 10 years",
+        "$1,950,006",
+        "$2,138,607",
+        "+$188,602"
+      ]
+    ]
+  },
+  {
+    "width": 390,
+    "basis": "today",
+    "preset": "invest-250",
+    "rows": [
+      [
+        "Net worth after 1 year",
+        "$717,712",
+        "$730,886",
+        "+$13,174"
+      ],
+      [
+        "Net worth after 5 years",
+        "$1,058,290",
+        "$1,127,240",
+        "+$68,950"
+      ],
+      [
+        "Net worth after 10 years",
+        "$1,523,341",
+        "$1,670,677",
+        "+$147,335"
+      ]
+    ]
+  },
+  {
+    "width": 768,
+    "basis": "future",
+    "preset": "expenses-500",
+    "rows": [
+      [
+        "Net worth after 1 year",
+        "$735,655",
+        "$735,655",
+        "+$0"
+      ],
+      [
+        "Net worth after 5 years",
+        "$1,197,358",
+        "$1,197,358",
+        "+$0"
+      ],
+      [
+        "Net worth after 10 years",
+        "$1,950,006",
+        "$1,950,006",
+        "+$0"
+      ]
+    ]
+  },
+  {
+    "width": 768,
+    "basis": "today",
+    "preset": "expenses-500",
+    "rows": [
+      [
+        "Net worth after 1 year",
+        "$717,712",
+        "$717,712",
+        "+$0"
+      ],
+      [
+        "Net worth after 5 years",
+        "$1,058,290",
+        "$1,058,290",
+        "+$0"
+      ],
+      [
+        "Net worth after 10 years",
+        "$1,523,341",
+        "$1,523,341",
+        "+$0"
+      ]
+    ]
+  },
+  {
+    "width": 768,
+    "basis": "future",
+    "preset": "car-50000",
+    "rows": [
+      [
+        "Net worth after 1 year",
+        "$735,655",
+        "$682,041",
+        "−$53,615"
+      ],
+      [
+        "Net worth after 5 years",
+        "$1,197,358",
+        "$1,126,477",
+        "−$70,881"
+      ],
+      [
+        "Net worth after 10 years",
+        "$1,950,006",
+        "$1,849,523",
+        "−$100,483"
+      ]
+    ]
+  },
+  {
+    "width": 768,
+    "basis": "today",
+    "preset": "car-50000",
+    "rows": [
+      [
+        "Net worth after 1 year",
+        "$717,712",
+        "$665,405",
+        "−$52,307"
+      ],
+      [
+        "Net worth after 5 years",
+        "$1,058,290",
+        "$995,641",
+        "−$62,649"
+      ],
+      [
+        "Net worth after 10 years",
+        "$1,523,341",
+        "$1,444,844",
+        "−$78,497"
+      ]
+    ]
+  },
+  {
+    "width": 768,
+    "basis": "future",
+    "preset": "invest-250",
+    "rows": [
+      [
+        "Net worth after 1 year",
+        "$735,655",
+        "$749,159",
+        "+$13,504"
+      ],
+      [
+        "Net worth after 5 years",
+        "$1,197,358",
+        "$1,275,369",
+        "+$78,011"
+      ],
+      [
+        "Net worth after 10 years",
+        "$1,950,006",
+        "$2,138,607",
+        "+$188,602"
+      ]
+    ]
+  },
+  {
+    "width": 768,
+    "basis": "today",
+    "preset": "invest-250",
+    "rows": [
+      [
+        "Net worth after 1 year",
+        "$717,712",
+        "$730,886",
+        "+$13,174"
+      ],
+      [
+        "Net worth after 5 years",
+        "$1,058,290",
+        "$1,127,240",
+        "+$68,950"
+      ],
+      [
+        "Net worth after 10 years",
+        "$1,523,341",
+        "$1,670,677",
+        "+$147,335"
+      ]
+    ]
+  },
+  {
+    "width": 1366,
+    "basis": "future",
+    "preset": "expenses-500",
+    "rows": [
+      [
+        "Net worth after 1 year",
+        "$735,655",
+        "$735,655",
+        "+$0"
+      ],
+      [
+        "Net worth after 5 years",
+        "$1,197,358",
+        "$1,197,358",
+        "+$0"
+      ],
+      [
+        "Net worth after 10 years",
+        "$1,950,006",
+        "$1,950,006",
+        "+$0"
+      ]
+    ]
+  },
+  {
+    "width": 1366,
+    "basis": "today",
+    "preset": "expenses-500",
+    "rows": [
+      [
+        "Net worth after 1 year",
+        "$717,712",
+        "$717,712",
+        "+$0"
+      ],
+      [
+        "Net worth after 5 years",
+        "$1,058,290",
+        "$1,058,290",
+        "+$0"
+      ],
+      [
+        "Net worth after 10 years",
+        "$1,523,341",
+        "$1,523,341",
+        "+$0"
+      ]
+    ]
+  },
+  {
+    "width": 1366,
+    "basis": "future",
+    "preset": "car-50000",
+    "rows": [
+      [
+        "Net worth after 1 year",
+        "$735,655",
+        "$682,041",
+        "−$53,615"
+      ],
+      [
+        "Net worth after 5 years",
+        "$1,197,358",
+        "$1,126,477",
+        "−$70,881"
+      ],
+      [
+        "Net worth after 10 years",
+        "$1,950,006",
+        "$1,849,523",
+        "−$100,483"
+      ]
+    ]
+  },
+  {
+    "width": 1366,
+    "basis": "today",
+    "preset": "car-50000",
+    "rows": [
+      [
+        "Net worth after 1 year",
+        "$717,712",
+        "$665,405",
+        "−$52,307"
+      ],
+      [
+        "Net worth after 5 years",
+        "$1,058,290",
+        "$995,641",
+        "−$62,649"
+      ],
+      [
+        "Net worth after 10 years",
+        "$1,523,341",
+        "$1,444,844",
+        "−$78,497"
+      ]
+    ]
+  },
+  {
+    "width": 1366,
+    "basis": "future",
+    "preset": "invest-250",
+    "rows": [
+      [
+        "Net worth after 1 year",
+        "$735,655",
+        "$749,159",
+        "+$13,504"
+      ],
+      [
+        "Net worth after 5 years",
+        "$1,197,358",
+        "$1,275,369",
+        "+$78,011"
+      ],
+      [
+        "Net worth after 10 years",
+        "$1,950,006",
+        "$2,138,607",
+        "+$188,602"
+      ]
+    ]
+  },
+  {
+    "width": 1366,
+    "basis": "today",
+    "preset": "invest-250",
+    "rows": [
+      [
+        "Net worth after 1 year",
+        "$717,712",
+        "$730,886",
+        "+$13,174"
+      ],
+      [
+        "Net worth after 5 years",
+        "$1,058,290",
+        "$1,127,240",
+        "+$68,950"
+      ],
+      [
+        "Net worth after 10 years",
+        "$1,523,341",
+        "$1,670,677",
+        "+$147,335"
+      ]
+    ]
+  }
+]

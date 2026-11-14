@@ -1,6 +1,7 @@
 export const DEFAULT_SUITE_TIMEOUT_MS = 120_000;
 
 export const ACTIVE_TEST_SUITES = [
+  { id: "mobile-usability-stage2", file: "tests/mobile-usability-stage2.test.mjs", groups: ["all", "mjs", "presentation"] },
   { id: "property-debt-f04", file: "tests/property-debt-f04.test.mjs", groups: ["all", "mjs", "audit", "f04"] },
   { id: "retirement-tax-funding-f08", file: "tests/retirement-tax-funding-f08.test.mjs", groups: ["all", "mjs", "semi-retirement", "audit", "f08"] },
   { id: "growth-scenarios", file: "tests/growth-scenarios.test.mjs", groups: ["all", "mjs", "presentation"] },

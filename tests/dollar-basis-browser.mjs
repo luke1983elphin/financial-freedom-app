@@ -142,6 +142,9 @@ before(async () => {
       if (relative === "semiRetirementUi.js") body = Buffer.from(body.toString().replace('  function runSemiRetirementProjection(engine, draft) {', '  function runSemiRetirementProjection(engine, draft) { window.__retirementRuns = (window.__retirementRuns || 0) + 1;'));
       if (relative === "app.js") body = Buffer.from(body.toString()
         .replace('  function lineChart(svgId, series, options = {}) {', '  function lineChart(svgId, series, options = {}) { window.__dollarCharts ||= {}; window.__dollarCharts[svgId] = structuredClone(series);')
+        .replace('  installMobileUsabilityStage2();', `  const stage2OriginalWhatIf=renderWhatIf;
+        window.__stage2Test={originalWhatIfHtml:()=>{const node=document.getElementById('whatIfResult'),shown=node.innerHTML;stage2OriginalWhatIf(calculatePlan(plan));const html=node.innerHTML;node.innerHTML=shown;return html;},retirementDraft:()=>cloneScenarioDraft(semiRetirementScenarioDraft)};
+  installMobileUsabilityStage2();`)
         .replace('  installDollarBasisPresentation();', `  const originalRetirementResult = renderSemiRetirementScenarioResultHtml;
         window.__dollarTest = {
           originalRetirementHtml: () => originalRetirementResult(),
@@ -1043,4 +1046,148 @@ test('mobile annual forecast single-person shortfall notes remain readable',asyn
     assert.equal(await evaluate('JSON.stringify(__dollarTest.retirement().result)'),model);
     if(width===375)await mobileScreenshot('after/annual-shortfall-375.png');
   }
+});
+
+const stage2Phase=process.env.FFS_STAGE2_PHASE==='before'?'before':'after';
+async function stage2Shot(screen,width,selector){
+  const dir=path.join(root,'docs/mobile-usability-stage2',stage2Phase);await mkdir(dir,{recursive:true});
+  const clip=await evaluate(`(()=>{const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return {x:r.left+scrollX,y:r.top+scrollY,width:r.width,height:r.height,scale:1}})()`);
+  const shot=await cdp.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip});await writeFile(path.join(dir,`${screen}-${width}.png`),Buffer.from(shot.data,'base64'));
+}
+test('Stage 2 before and after screen evidence at all required widths',async()=>{
+  for(const width of [375,390,768,1366]){
+    await cdp.send('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:width<600});await navigate();await evaluate('localStorage.clear()');await navigate();await fixture();await select('future');
+    await evaluate("FFSStage1BrowserTestHooks.showWorkspace('decision')");await stage2Shot('u02',width,'#whatIfResult');
+    await evaluate("FFSStage1BrowserTestHooks.setPlan(FFSCalculator.emptyPlan(),'setup');FFSStage1BrowserTestHooks.setWizardStep(0);FFSStage1BrowserTestHooks.closeDurabilityDialog()");await stage2Shot('u03',width,'.wizard-shell');
+    await fixture();await evaluate("FFSStage1BrowserTestHooks.showWorkspace('semiretirement');document.querySelector('[data-semi-action=calculate]').click()");
+    await stage2Shot('u04',width,'[data-semi-adjustments]');
+    await evaluate("FFSStage1BrowserTestHooks.showWorkspace('scenarios');document.getElementById('scenarioName').value='Stage 2 historical snapshot';document.getElementById('saveScenarioPanelButton').click()");
+    await stage2Shot('u05',width,'#scenarioList');
+  }
+});
+
+test('U02 labelled mobile comparisons retain every original money string through positive, negative, custom and saved changes',async()=>{
+  const records=[];
+  for(const width of [375,390,768,1366]){
+    await cdp.send('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:width<600});await navigate();await fixture();await evaluate("(()=>{const p=FFSStage1BrowserTestHooks.getPlan();p.assetItems.find(a=>a.category==='cash').value=100000;FFSStage1BrowserTestHooks.setPlan(p,'decision')})()");
+    const plan=await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())');
+    for(const preset of ['expenses-500','car-50000','invest-250']){
+      // Exercise real preset IDs rather than injecting financial results.
+      const id=await evaluate(`(()=>{const nodes=[...document.querySelectorAll('[data-what-if]')];return nodes.find(n=>n.dataset.whatIf===${JSON.stringify(preset)}).dataset.whatIf})()`);
+      await evaluate(`document.querySelector('[data-what-if="${id}"]').click()`);
+      for(const basis of ['future','today']){await select(basis);await evaluate("FFSMobileUsabilityStage2.decorateComparison(document.getElementById('whatIfResult'))");
+        const parity=await evaluate(`(()=>{const t=document.createElement('template');t.innerHTML=__stage2Test.originalWhatIfHtml();const expected=[...t.content.querySelectorAll('.what-if-forecast-row:not(.what-if-forecast-head)')].map(row=>[...row.children].map(n=>n.textContent));const actual=[...document.querySelectorAll('.what-if-forecast-row:not(.what-if-forecast-head)')].map(row=>[row.firstElementChild.textContent,...[...row.querySelectorAll('.stage2-comparison-value')].map(n=>n.textContent)]);return {expected,actual,overflow:[...document.querySelectorAll('.what-if-forecast,.what-if-forecast-row')].some(n=>n.scrollWidth>n.clientWidth+1),page:document.documentElement.scrollWidth>innerWidth}})()`);
+        assert.equal(parity.actual.length,3);assert.deepEqual(parity.actual,parity.expected);assert.equal(parity.page,false);assert.equal(parity.overflow,false);records.push({width,basis,preset,rows:parity.actual});
+      }
+    }
+    await evaluate("document.querySelector('[data-what-if-custom-toggle]').click();document.querySelector('[data-what-if-custom-kind]').value='invest';document.querySelector('[data-what-if-custom-kind]').dispatchEvent(new Event('change',{bubbles:true}));document.querySelector('[data-what-if-custom-amount]').value='1000';document.querySelector('[data-what-if-custom-amount]').dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('[data-what-if-custom-apply]').click()");
+    assert.ok(await evaluate("document.querySelector('.what-if-metrics').textContent.includes('−')"),'custom investing gives negative available-cash impact');
+    const parity=await evaluate("(()=>{const t=document.createElement('template');t.innerHTML=__stage2Test.originalWhatIfHtml();return [...t.content.querySelectorAll('.what-if-forecast-row:not(.what-if-forecast-head)')].map(r=>[...r.children].slice(1).map(n=>n.textContent)).flat().join('|')===[...document.querySelectorAll('.stage2-comparison-value')].map(n=>n.textContent).join('|')})()");assert.equal(parity,true);
+    assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),plan);
+  }
+  const dir=path.join(root,'docs/mobile-usability-stage2');await mkdir(dir,{recursive:true});await writeFile(path.join(dir,'comparison-parity.json'),JSON.stringify(records,null,2)+'\n');
+});
+
+test('U03 setup progress is step-based for blank and partial plans and navigation retains inputs',async()=>{
+  await navigate();await evaluate("FFSStage1BrowserTestHooks.setPlan(FFSCalculator.emptyPlan(),'setup');FFSStage1BrowserTestHooks.closeDurabilityDialog()");
+  for(const step of [0,1,6,7,8,1,0]){await evaluate(`FFSStage1BrowserTestHooks.setWizardStep(${step})`);assert.doesNotMatch(await evaluate("document.querySelector('.wizard-progress').textContent"),/% Complete|Setup complete/);if(step<7)assert.equal(await evaluate("document.getElementById('wizardStepLabel').textContent"),`Step ${step+1} of 7`);}
+  await evaluate("(()=>{const n=document.querySelector('[data-path=\"personal.person1Name\"]');n.value='Stage Two Household';n.dispatchEvent(new Event('input',{bubbles:true}))})()");
+  await evaluate("document.getElementById('wizardNextButton').click();document.getElementById('wizardPrevButton').click()");
+  assert.equal(await evaluate('FFSStage1BrowserTestHooks.getPlan().personal.person1Name'),'Stage Two Household');
+  await evaluate("FFSStage1BrowserTestHooks.showWorkspace('dashboard');FFSStage1BrowserTestHooks.showWorkspace('setup')");assert.equal(await evaluate("document.querySelector('[data-path=\"personal.person1Name\"]').value"),'Stage Two Household');
+});
+
+test('U04 calculated and manual retirement spending values remain exact and invalid edits never coerce draft values',async()=>{
+  await navigate();await fixture();await evaluate("FFSStage1BrowserTestHooks.showWorkspace('semiretirement');document.querySelector('[data-semi-action=calculate]').click()");
+  const selector='#semi-adjust-household-fullRetirementLifestyleSpending',plan=await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())');
+  assert.equal(await evaluate(`document.querySelector('${selector}').checkValidity()`),true);
+  const initial=await evaluate('__stage2Test.retirementDraft().household.fullRetirementLifestyleSpending');
+  for(const value of [75490,75000,75500,0,75490.37]){
+    await evaluate(`(()=>{const n=document.querySelector('${selector}');n.value=${value};n.dispatchEvent(new Event('input',{bubbles:true}))})()`);
+    await waitFor(()=>evaluate(`document.querySelector('${selector}')?.checkValidity()&&Math.abs(__stage2Test.retirementDraft().household.fullRetirementLifestyleSpending-${value})<0.000001`));
+    await new Promise(r=>setTimeout(r,450));
+    assert.equal(await evaluate('__stage2Test.retirementDraft().household.fullRetirementLifestyleSpending'),value);
+    const parity=await evaluate("(()=>{const d=__stage2Test.retirementDraft(),r=FFSSemiRetirementUi.runSemiRetirementProjection(FFSSemiRetirementProjection,d);return JSON.stringify(r.result)===JSON.stringify(__dollarTest.retirement().result)})()");assert.equal(parity,true);
+  }
+  for(const invalid of ['-1','']){await evaluate(`(()=>{const n=document.querySelector('${selector}');n.value=${JSON.stringify(invalid)};n.dispatchEvent(new Event('input',{bubbles:true}))})()`);assert.equal(await evaluate(`document.querySelector('${selector}').checkValidity()`),false);assert.equal(await evaluate('__stage2Test.retirementDraft().household.fullRetirementLifestyleSpending'),75490.37);}
+  await evaluate(`document.querySelector('${selector}').value='75490';document.querySelector('${selector}').dispatchEvent(new Event('input',{bubbles:true}))`);await new Promise(r=>setTimeout(r,450));
+  await evaluate("document.querySelector('[data-semi-action=reset-adjustments]').click()");assert.equal(await evaluate('__stage2Test.retirementDraft().household.fullRetirementLifestyleSpending'),initial);
+  assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),plan);
+});
+
+test('U05 snapshots are read-only, metadata is not a financial change, and current-plan comparison preserves history',async()=>{
+  await navigate();await fixture();await evaluate("FFSStage1BrowserTestHooks.showWorkspace('scenarios');document.getElementById('scenarioName').value='A very long historical snapshot name — family review and notes';document.getElementById('scenarioNotes').value='Historical context only';document.getElementById('saveScenarioPanelButton').click()");
+  const id=await evaluate("__dollarTest.savedScenarios().find(s=>s.name.startsWith('A very long')).id"),history=await evaluate('JSON.stringify(__dollarTest.savedScenarios())'),plan=await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())');
+  assert.doesNotMatch(await evaluate(`document.querySelector('[data-open-scenario="${id}"]').closest('article').querySelector('.scenario-card-grid').textContent`),/Saved plan snapshot|Current working plan/);
+  assert.equal(await evaluate(`document.querySelector('[data-open-scenario="${id}"]').textContent`),'View saved snapshot');
+  await evaluate(`document.querySelector('[data-open-scenario="${id}"]').click()`);assert.match(await evaluate("document.querySelector('#stage2SnapshotViewer').textContent"),/Read-only view/);
+  await evaluate(`document.querySelector('[data-stage2-current="${id}"]').click()`);assert.match(await evaluate("document.querySelector('#stage2SnapshotViewer details').textContent"),/No recorded plan-input differences/);
+  assert.equal(await evaluate('JSON.stringify(__dollarTest.savedScenarios())'),history);assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),plan);
+  await evaluate("[...document.querySelectorAll('#stage2SnapshotViewer button')].find(n=>n.textContent==='Return to current plan').click()");assert.equal(await evaluate('document.body.dataset.activeView'),'dashboard');
+  assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),plan);
+  assert.deepEqual(browserMessages,[]);
+});
+
+test('U02 saved Try a Change settings reopen correct figures and large negative comparisons never clip',async()=>{
+  await navigate();await fixture();await evaluate("(()=>{const p=FFSStage1BrowserTestHooks.getPlan();p.assetItems.find(a=>a.category==='cash').value=100000;FFSStage1BrowserTestHooks.setPlan(p,'decision');document.querySelector('[data-what-if=car-50000]').click()})()");
+  const shown=await evaluate("[...document.querySelectorAll('.stage2-comparison-value')].map(n=>n.textContent)");assert.ok(shown.some(s=>s.includes('−')),'car purchase has a negative forecast difference');
+  const plan=await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())');
+  await evaluate("document.querySelector('[data-save-stage-g-scenario=decision-what-if]').click();document.getElementById('stageGScenarioName').value='Stage Two Car Comparison';document.querySelector('[data-scenario-save-action=save]').click()");
+  const id=await evaluate("__dollarTest.savedScenarios().find(s=>s.name==='Stage Two Car Comparison').id"),history=await evaluate('JSON.stringify(__dollarTest.savedScenarios())');
+  await evaluate("FFSStage1BrowserTestHooks.showWorkspace('decision');document.querySelector('[data-what-if=invest-250]').click();FFSStage1BrowserTestHooks.showWorkspace('scenarios')");
+  await evaluate(`document.querySelector('[data-open-scenario="${id}"]').click()`);
+  assert.deepEqual(await evaluate("[...document.querySelectorAll('.stage2-comparison-value')].map(n=>n.textContent)"),shown);
+  assert.ok(await evaluate("document.querySelector('.stage2-comparison-label').textContent.includes('Saved base plan')"));
+  assert.equal(await evaluate('JSON.stringify(__dollarTest.savedScenarios())'),history);assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),plan);
+  for(const width of [375,390,768,1366]){
+    await cdp.send('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:width<600});
+    await evaluate("(()=>{const p=FFSStage1BrowserTestHooks.getPlan();p.assetItems.find(a=>a.category==='shares').value=9876543210;FFSStage1BrowserTestHooks.setPlan(p,'decision');document.querySelector('[data-what-if=car-50000]').click();document.querySelector('.what-if-forecast-row:not(.what-if-forecast-head) strong').textContent='Long household comparison description — projected net worth including every recorded financial asset and debt';})()");
+    assert.ok(await evaluate("[...document.querySelectorAll('.what-if-forecast,.what-if-forecast-row,.stage2-comparison-value')].every(n=>n.scrollWidth<=n.clientWidth+1||getComputedStyle(n).display==='inline')"));
+    assert.ok(await evaluate('document.documentElement.scrollWidth<=innerWidth'));
+    assert.ok(await evaluate("document.querySelector('.stage2-comparison-value').textContent.length>10"));
+    await stage2Shot('u02-negative-large',width,'#whatIfResult');
+  }
+});
+
+test('U04 spending comparison, calculate, saved inputs and retirement editing retain exact currency and saved history',async()=>{
+  await navigate();await fixture();await evaluate("FFSStage1BrowserTestHooks.showWorkspace('semiretirement');document.querySelector('[data-semi-action=calculate]').click();__dollarTest.configureRetirement({'household.fullRetirementLifestyleSpending':75490.37})");
+  const plan=await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())');
+  await evaluate("document.querySelector('[data-semi-action=compare]').click()");
+  const validity=await evaluate("[...document.querySelectorAll('[data-semi-comparison-input=\"household.fullRetirementLifestyleSpending\"]')].map(n=>({value:n.value,step:n.step,valid:n.checkValidity()}))");assert.ok(validity.length>0);assert.ok(validity.every(n=>n.step==='any'&&n.valid));
+  await evaluate("document.querySelector('[data-save-stage-g-scenario=retirement]').click();document.getElementById('stageGScenarioName').value='Exact Retirement Spending';document.querySelector('[data-scenario-save-action=save]').click()");
+  const id=await evaluate("__dollarTest.savedScenarios().find(s=>s.name==='Exact Retirement Spending').id"),history=await evaluate('JSON.stringify(__dollarTest.savedScenarios())');
+  assert.equal(await evaluate("__dollarTest.savedScenarios().find(s=>s.name==='Exact Retirement Spending').scenarioInputSnapshot.household.fullRetirementLifestyleSpending"),75490.37);
+  assert.equal(await evaluate(`document.querySelector('[data-open-scenario="${id}"]').textContent`),'Open retirement scenario');
+  assert.ok(await evaluate(`document.querySelector('[data-open-scenario="${id}"]').closest('article').textContent.includes('Changes from the current plan')`),'retirement differences keep their live current-plan scope');
+  await evaluate(`document.querySelector('[data-stage2-view="${id}"]').click()`);assert.match(await evaluate("document.querySelector('#stage2SnapshotViewer').textContent"),/Read-only view/);
+  await evaluate(`document.querySelector('[data-open-scenario="${id}"]').click()`);assert.equal(await evaluate('document.body.dataset.activeView'),'semiretirement');assert.equal(await evaluate('__stage2Test.retirementDraft().household.fullRetirementLifestyleSpending'),75490.37);
+  assert.equal(await evaluate('JSON.stringify(__dollarTest.savedScenarios())'),history);assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),plan);
+});
+
+test('U05 current input differences and displayed snapshot values follow existing basis formatting without changing stored results',async()=>{
+  await navigate();await fixture();await select('future');await evaluate("FFSStage1BrowserTestHooks.showWorkspace('scenarios');document.getElementById('scenarioName').value='Input Difference Check';document.getElementById('saveScenarioPanelButton').click()");
+  const id=await evaluate("__dollarTest.savedScenarios().find(s=>s.name==='Input Difference Check').id"),history=await evaluate('JSON.stringify(__dollarTest.savedScenarios())');
+  await evaluate("(()=>{const p=FFSStage1BrowserTestHooks.getPlan();p.personal.targetAnnualSpending=0;FFSStage1BrowserTestHooks.setPlan(p,'scenarios')})()");
+  await evaluate(`document.querySelector('[data-stage2-current="${id}"]').click()`);assert.match(await evaluate("document.querySelector('#stage2SnapshotViewer details').textContent"),/Annual spending target.*Current: 0/);
+  const future=await evaluate("document.querySelector('.stage2-snapshot-results').textContent");await select('today');const today=await evaluate("document.querySelector('.stage2-snapshot-results').textContent");assert.notEqual(today,future);
+  await select('future');assert.equal(await evaluate("document.querySelector('.stage2-snapshot-results').textContent"),future);assert.equal(await evaluate('JSON.stringify(__dollarTest.savedScenarios())'),history);
+});
+
+test('U05 historical viewer remains readable and keyboard accessible at all required widths',async()=>{
+  for(const width of [375,390,768,1366]){
+    await cdp.send('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:width<600});await navigate();await fixture();await select('future');
+    const name='HistoricalHouseholdSnapshotWithAnIntentionallyLongUnbrokenNameForMobileReview';
+    await evaluate(`FFSStage1BrowserTestHooks.showWorkspace('scenarios');document.getElementById('scenarioName').value=${JSON.stringify(name)};document.getElementById('saveScenarioPanelButton').click();FFSStage1BrowserTestHooks.closeDurabilityDialog()`);
+    const id=await evaluate(`__dollarTest.savedScenarios().find(s=>s.name===${JSON.stringify(name)}).id`),history=await evaluate('JSON.stringify(__dollarTest.savedScenarios())'),plan=await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())');
+    await evaluate(`document.querySelector('[data-stage2-current="${id}"]').click()`);
+    assert.ok(await evaluate("[...document.querySelectorAll('#stage2SnapshotViewer,#stage2SnapshotViewer h3,#stage2SnapshotViewer dl div')].every(n=>n.scrollWidth<=n.clientWidth+1)"));
+    assert.ok(await evaluate('document.documentElement.scrollWidth<=innerWidth'));
+    for(const basis of ['today','future']){await select(basis);assert.equal(await evaluate('JSON.stringify(__dollarTest.savedScenarios())'),history);assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),plan);}
+    await stage2Shot('u05-viewer',width,'#stage2SnapshotViewer');
+    await evaluate("FFSStage1BrowserTestHooks.closeDurabilityDialog();[...document.querySelectorAll('#stage2SnapshotViewer button')].find(n=>n.textContent==='Back to saved scenarios').focus()");
+    assert.equal(await evaluate('document.activeElement.textContent'),'Back to saved scenarios','close control accepts focus');
+    await key('Enter');
+    assert.equal(await evaluate('document.activeElement.dataset.openScenario'),id,JSON.stringify(await evaluate(`({active:document.activeElement.outerHTML.slice(0,300),viewerHidden:document.getElementById('stage2SnapshotViewer').hidden,open:document.querySelector('[data-open-scenario="${id}"]')?.outerHTML,visible:document.querySelector('[data-open-scenario="${id}"]')?.getClientRects().length})`)));
+  }
+  assert.deepEqual(browserMessages,[]);
 });

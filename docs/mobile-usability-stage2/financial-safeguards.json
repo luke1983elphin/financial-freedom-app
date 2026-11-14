@@ -1,0 +1,48 @@
+{
+  "baseline": "cfe63844eb762dc4e89cda16cb73334428bc0683",
+  "protected_financial_and_stage1_sources": {
+    "calculator.js": {
+      "unchanged": true,
+      "sha256": "77c04fef8a213cd06cd774d9e5eda333cda07cc4ba901b77a8e25245b313c65c"
+    },
+    "semiRetirementProjection.js": {
+      "unchanged": true,
+      "sha256": "42cecba918b1d7d1b65376f5490d607219f7a953e71f5ab90bba24f2ff292594"
+    },
+    "semiRetirementUi.js": {
+      "unchanged": true,
+      "sha256": "4e87341a23a3e38592f1d32619efaf35859d14cf83ac5949fb21dfdf1be524dd"
+    },
+    "agePensionEstimate.js": {
+      "unchanged": true,
+      "sha256": "9f5d57f2c527b41e758dfb0592bceaeb364f1d197737611fcdf5759c25284003"
+    },
+    "retirement-results.js": {
+      "unchanged": true,
+      "sha256": "8a5317d34efefb4cd40b849d97c573eafedb16c87c278881c939e5038662ab89"
+    },
+    "forecast-assumptions.js": {
+      "unchanged": true,
+      "sha256": "da72c9c897edfa9c612e7326dc709eca17ae312156f33a5d5e8e916ac8149716"
+    },
+    "dollar-basis.js": {
+      "unchanged": true,
+      "sha256": "f30f11ae0850db908ed8a91b1e804cc0c67a526cb1aa281484f792715d6fb4a5"
+    },
+    "plan-schema.js": {
+      "unchanged": true,
+      "sha256": "7c531d4d9b15330f77fdebf9597a73630583edbc452f8e1b9d247b25a17d86a7"
+    },
+    "storage.js": {
+      "unchanged": true,
+      "sha256": "c85374d3b59ad306de5d3657d8ff44c12eb69c1f4d4e1b71228656228a4ff58d"
+    },
+    "v2-data.js": {
+      "unchanged": true,
+      "sha256": "935fb66f828874f0ccc267d99d611a47113a85315cb983e45ff49390a84d8baa"
+    }
+  },
+  "fixture_files_checked": 11,
+  "all_fixtures_byte_identical": true,
+  "no_hash_or_golden_updates": true
+}

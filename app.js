@@ -18548,6 +18548,110 @@
     };
   }
 
+  function installMobileUsabilityStage2() {
+    const ui = window.FFSMobileUsabilityStage2;
+    const originalWizard = renderWizardStep;
+    renderWizardStep = (...args) => {
+      const result = originalWizard(...args);
+      const step = activeWizardStep < 7 ? `Step ${activeWizardStep + 1} of 7` : "Review your plan";
+      document.getElementById("wizardStepLabel").textContent = step;
+      document.getElementById("wizardPercent").textContent = "Navigation progress";
+      let note = document.getElementById("stage2WizardScope");
+      if (!note) { note = document.createElement("p"); note.id = "stage2WizardScope"; note.className = "field-help"; document.getElementById("wizardProgressBar").parentElement.after(note); }
+      note.textContent = "Steps show your location, not completed or validated financial information.";
+      document.querySelectorAll("[data-wizard-step]").forEach(node => {
+        if (Number(node.dataset.wizardStep) === activeWizardStep) node.setAttribute("aria-current", "step");
+        else node.removeAttribute("aria-current");
+      });
+      return result;
+    };
+    const originalWhatIf = renderWhatIf;
+    renderWhatIf = (...args) => { const result = originalWhatIf(...args); ui.decorateComparison(document.getElementById("whatIfResult"), whatIfBaseSnapshot ? "Saved base plan" : "Current Plan"); return result; };
+    const originalAdjustment = renderSemiRetirementAdjustmentControl;
+    renderSemiRetirementAdjustmentControl = (...args) => ui.currencyHtml(originalAdjustment(...args));
+    const originalInput = semiRetirementInput;
+    semiRetirementInput = config => config.path === "household.fullRetirementLifestyleSpending" ? ui.currencyHtml(originalInput(config)) : originalInput(config);
+    const originalComparisonInput = semiRetirementComparisonInput;
+    semiRetirementComparisonInput = config => config.path === "household.fullRetirementLifestyleSpending" ? ui.currencyHtml(originalComparisonInput(config)) : originalComparisonInput(config);
+    // Preserve invalid text locally rather than coercing a blank or negative
+    // amount into the scenario. Valid values still use the original handlers.
+    const spendingSelector = '[data-semi-adjustment="fullRetirementLifestyleSpending"], [data-semi-input="household.fullRetirementLifestyleSpending"], [data-semi-comparison-input="household.fullRetirementLifestyleSpending"]';
+    for (const type of ["input", "change"]) document.addEventListener(type, event => {
+      const input = event.target;
+      if (!input.matches?.(spendingSelector)) return;
+      const error = ui.spendingError(input.value);
+      input.setCustomValidity(error); input.setAttribute("aria-invalid", String(Boolean(error)));
+      if (error) { if (input.dataset.semiAdjustment) { clearSemiRetirementAdjustmentDebounce(); semiRetirementAdjustmentPending = false; } event.stopImmediatePropagation(); }
+    }, true);
+    // Guard calculate/save against an invalid currency editor without touching
+    // projection validation or the last valid draft value.
+    document.addEventListener("click", event => {
+      if (!event.target.closest('[data-semi-action="calculate"], [data-semi-action="compare"], [data-save-stage-g-scenario="retirement"], [data-semi-comparison-action="calculate"]')) return;
+      const invalid = [...document.querySelectorAll(spendingSelector)].find(node => node.getClientRects().length && !node.disabled && !node.checkValidity());
+      if (invalid) { event.preventDefault(); event.stopImmediatePropagation(); invalid.focus(); invalid.reportValidity(); }
+    }, true);
+
+    const originalCard = scenarioCardHtml;
+    scenarioCardHtml = scenario => {
+      const type = normaliseSavedScenarioType(scenario.scenarioType);
+      const copy = { ...scenario, changedInputs: ui.financialChanges(scenario.changedInputs) };
+      const scope = type === "retirement" ? "Opens a temporary retirement draft and recalculates it. Your current plan and stored history stay unchanged; saving a new scenario is a separate action."
+        : type === "decision" ? "Opens saved settings in a temporary Try a Change draft. Your current financial plan and stored snapshot stay unchanged."
+        : "View historical results without replacing your current plan. Compare with current plan shows today's plan beside the stored results.";
+      const label = type === "retirement" ? "Open retirement scenario" : type === "decision" ? "Open temporary change" : "View saved snapshot";
+      const compare = type === "retirement" ? "Compare with current plan" : "Compare saved snapshots";
+      return originalCard(copy)
+        .replace('>Open</button>', `>${label}</button>`)
+        .replace(/>Compare<\/button>/, `>${compare}</button>`)
+        .replace('Changes from the current plan', type === "retirement" ? 'Changes from the current plan' : 'Financial changes recorded when saved')
+        .replace('Opening this scenario will apply its saved settings to your current plan.', 'Saved settings open in a temporary draft. Your current financial plan is unchanged.')
+        .replace('<div class="scenario-actions">', `<p class="stage2-scenario-scope">${escapeHtml(scope)}</p><div class="scenario-actions">${type === "retirement" || type === "decision" ? `<button class="btn" type="button" data-stage2-view="${escapeHtml(scenario.id)}">View saved snapshot</button>` : ""}${type !== "retirement" ? `<button class="btn" type="button" data-stage2-current="${escapeHtml(scenario.id)}">Compare with current plan</button>` : ""}`);
+    };
+    let selection = null;
+    const viewer = document.createElement("section"); viewer.id = "stage2SnapshotViewer"; viewer.className = "stage2-snapshot-viewer"; viewer.hidden = true;
+    document.getElementById("scenarioList").before(viewer);
+    const node = (tag, text, cls) => { const n = document.createElement(tag); n.textContent = text; if (cls) n.className = cls; return n; };
+    const valueText = value => value === undefined ? "Not recorded" : value === null ? "Not set" : typeof value === "object" ? JSON.stringify(value) : String(value);
+    function showSnapshot(id, compare = false, focus = true) {
+      const scenario = findSavedScenario(id); if (!scenario) { viewer.hidden = true; selection = null; return; }
+      selection = { id, compare }; viewer.replaceChildren(); viewer.hidden = false;
+      const heading = node("h3", `${compare ? "Compare with current plan" : "Saved snapshot"}: ${scenario.name || "Unnamed snapshot"}`); heading.tabIndex = -1;
+      viewer.append(heading, node("p", "Read-only view. Your current plan and saved history are unchanged. Saved results retain their original calculation version and date; display values follow the page’s dollar-basis toggle."), node("p", `Saved ${scenarioDisplayDate(scenario)} · ${scenario.notes || "No notes"}`));
+      const displayedSnapshot = scenario.keyResultSnapshot ? scenarioForDollarDisplay(scenario).keyResultSnapshot : { rows: [] };
+      const outcome = document.createElement("div");
+      outcome.innerHTML = normaliseSavedScenarioType(scenario.scenarioType) === "retirement" ? savedRetirementOutcomeHtml(scenario.keyResultSnapshot, scenario) : keyResultsListHtml(displayedSnapshot, 100);
+      viewer.append(outcome);
+      if (compare) {
+        const savedValue = row => row?.scenarioValue != null && typeof row.scenarioValue === "number"
+          ? (/progress/i.test(row.label) ? plainPercent(row.scenarioValue) : money(row.scenarioValue)) : scenarioRowDisplayValue(row);
+        const current = keyResultRows(scenarioForDollarDisplay({plan, keyResultSnapshot: financialPlanKeyResultSnapshot(calculatePlan(plan))}).keyResultSnapshot);
+        const saved = new Map(keyResultRows(displayedSnapshot).map(row => [row.label, row]));
+        const list = document.createElement("dl"); list.className = "stage2-snapshot-results";
+        for (const row of current) {
+          const item = document.createElement("div"); item.append(node("dt", row.label), node("dd", `Current plan: ${scenarioRowDisplayValue(row)}`), node("dd", `Saved snapshot: ${saved.has(row.label) ? savedValue(saved.get(row.label)) : "Not recorded"}`)); list.append(item);
+        }
+        viewer.append(list, node("p", "Current figures use your current plan and model. Saved figures are historical; they are not recalculated here."));
+        const inputs = document.createElement("details"); inputs.append(node("summary", "Recorded plan-input differences"));
+        const differences = scenario.plan ? ui.inputDifferences(PLAN_SCHEMA.migrate(CALC.clonePlan(plan)).plan, PLAN_SCHEMA.migrate(CALC.clonePlan(scenario.plan)).plan) : [];
+        const ul = document.createElement("ul");
+        for (const diff of differences) ul.append(node("li", `${ui.inputLabel(diff.path, plan, scenario.plan)} — Current: ${valueText(diff.current)}; Saved: ${valueText(diff.saved)}`));
+        inputs.append(differences.length ? ul : node("p", "No recorded plan-input differences. Snapshot names, notes and app metadata are not financial changes.")); viewer.append(inputs);
+      }
+      const close = node("button", "Back to saved scenarios", "btn"); close.type = "button"; close.addEventListener("click", () => { viewer.hidden = true; selection = null; document.querySelector(`[data-open-scenario="${CSS.escape(id)}"]`)?.focus(); });
+      const home = node("button", "Return to current plan", "btn"); home.type = "button"; home.addEventListener("click", () => showWorkspace("dashboard")); viewer.append(close, home);
+      if (focus) { heading.focus({preventScroll:true}); viewer.scrollIntoView({block:"start",behavior:"smooth"}); updateSaveStatus(compare ? "Comparing stored results with your current plan. Neither plan is changed." : "Viewing historical saved results only. Current plan unchanged."); }
+    }
+    const originalScenarios = renderScenarios;
+    renderScenarios = (...args) => { const result = originalScenarios(...args); if (selection) showSnapshot(selection.id, selection.compare, false); return result; };
+    document.addEventListener("click", event => {
+      const action = event.target.closest('[data-stage2-view], [data-stage2-current], [data-open-scenario]'); if (!action) return;
+      const id = action.dataset.stage2View || action.dataset.stage2Current || action.dataset.openScenario;
+      const scenario = findSavedScenario(id); if (!scenario) return;
+      if (action.dataset.openScenario && ["retirement", "decision"].includes(normaliseSavedScenarioType(scenario.scenarioType))) return;
+      event.preventDefault(); event.stopImmediatePropagation(); showSnapshot(id, action.dataset.stage2Current !== undefined);
+    }, true);
+  }
+
   function installForecastAssumptionsWorkspace() {
     const api = window.FFSForecastAssumptions;
     let editor, growthComparison;
@@ -19943,6 +20047,7 @@
   installAdditionalDollarDisplays();
   installRetirementResultsPresentation();
   installForecastAssumptionsWorkspace();
+  installMobileUsabilityStage2();
   bindEvents();
   renderAll();
   // Keep entry actions below the header and the optional sample-plan banner.
