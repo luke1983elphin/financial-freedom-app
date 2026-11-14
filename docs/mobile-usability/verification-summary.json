@@ -1,0 +1,63 @@
+{
+  "baseline": "913700cda5599d459c26cf821d2fa1da4124e3fa",
+  "unitVerification": {
+    "command": "pnpm verify",
+    "suites": 65,
+    "passed": 1289,
+    "failed": 0,
+    "skipped": 0
+  },
+  "browserVerification": {
+    "command": "pnpm test:browser",
+    "passed": 60,
+    "failed": 0,
+    "skipped": 0,
+    "durationMs": 272087.901585
+  },
+  "focusedFinal": {
+    "command": "FFS_CAPTURE_MOBILE_EVIDENCE=1 pnpm test:browser-mobile",
+    "passed": 6,
+    "failed": 0,
+    "durationMs": 108551.00697
+  },
+  "protectedFilesByteIdenticalToBaseline": [
+    "calculator.js",
+    "semiRetirementProjection.js",
+    "semiRetirementUi.js",
+    "v2-data.js",
+    "storage.js",
+    "security.js",
+    "consumer-setup.js",
+    "plan-schema.js",
+    "plan-selectors.js",
+    "plan-mutations.js",
+    "legacy-plan-adapter.js",
+    "scenario-overlay.js",
+    "linked-setup.js",
+    "weekly-plan.js",
+    "trust-readiness.js",
+    "api/ai-insights.js",
+    "agePensionEstimate.js"
+  ],
+  "fixtureFilesByteIdenticalToBaseline": 11,
+  "financialCalculationsModified": false,
+  "savedSchemasModified": false,
+  "recordedScreenStates": 84,
+  "widths": [
+    375,
+    390,
+    768,
+    1366
+  ],
+  "physicalSafariTested": false,
+  "unchangedPresentationFunctions": [
+    "presentation",
+    "adjustmentPresentation",
+    "drawChart"
+  ],
+  "baselineCapture": {
+    "passed": 4,
+    "failed": 0
+  },
+  "publishedPngCount": 57
+}

@@ -60,6 +60,7 @@
     "test:browser-f04": "node --test tests/property-debt-f04-browser.mjs",
     "test:f04": "node scripts/run-tests.mjs --group f04",
     "test:f08": "node scripts/run-tests.mjs --group f08",
-    "test:browser-f08": "node --test tests/retirement-tax-funding-f08-browser.mjs"
+    "test:browser-f08": "node --test tests/retirement-tax-funding-f08-browser.mjs",
+    "test:browser-mobile": "node --test --test-name-pattern=\"mobile annual forecast|first-time household journey\" tests/dollar-basis-browser.mjs"
   }
 }

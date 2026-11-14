@@ -1,0 +1,46 @@
+[
+  {
+    "width": 375,
+    "phase": "before",
+    "documentWidth": 375,
+    "tableVisible": true,
+    "tableOverflow": true,
+    "cardsVisible": true,
+    "mobileYearCount": 0,
+    "clipped": [],
+    "people": []
+  },
+  {
+    "width": 390,
+    "phase": "before",
+    "documentWidth": 390,
+    "tableVisible": true,
+    "tableOverflow": true,
+    "cardsVisible": true,
+    "mobileYearCount": 0,
+    "clipped": [],
+    "people": []
+  },
+  {
+    "width": 768,
+    "phase": "before",
+    "documentWidth": 768,
+    "tableVisible": true,
+    "tableOverflow": true,
+    "cardsVisible": false,
+    "mobileYearCount": 0,
+    "clipped": [],
+    "people": []
+  },
+  {
+    "width": 1366,
+    "phase": "before",
+    "documentWidth": 1366,
+    "tableVisible": true,
+    "tableOverflow": true,
+    "cardsVisible": false,
+    "mobileYearCount": 0,
+    "clipped": [],
+    "people": []
+  }
+]
