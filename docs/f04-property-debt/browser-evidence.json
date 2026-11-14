@@ -1,0 +1,35 @@
+{
+  "cases": [
+    {
+      "route": "legacy",
+      "current": 250000,
+      "yearOneNetWorth": 268000,
+      "yearOneDebt": 350000,
+      "todayNetWorth": 261463.41463414638,
+      "todayDebt": 341463.4146341464,
+      "pdfPath": "/tmp/ffa-f04-legacy.pdf",
+      "pdfBytes": 311955
+    },
+    {
+      "route": "linked-control",
+      "current": 250000,
+      "yearOneNetWorth": 268000,
+      "yearOneDebt": 350000,
+      "todayNetWorth": 261463.41463414638,
+      "todayDebt": 341463.4146341464,
+      "pdfPath": "/tmp/ffa-f04-linked-control.pdf",
+      "pdfBytes": 312075
+    },
+    {
+      "route": "linked-F11",
+      "current": 250000,
+      "yearOneNetWorth": 868000,
+      "yearOneDebt": 350000,
+      "todayNetWorth": 846829.268292683,
+      "todayDebt": 341463.4146341464,
+      "pdfPath": "/tmp/ffa-f04-linked-F11.pdf",
+      "pdfBytes": 312033
+    }
+  ],
+  "runtimeErrors": []
+}

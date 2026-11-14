@@ -1,7 +1,7 @@
 {
   "baseline": "bd23b2a",
   "files": {
-    "calculator.js": "b9cd8c47af46d838ff5d223bcec160c35957066451d363086a32b9850b606daa",
+    "calculator.js": "77c04fef8a213cd06cd774d9e5eda333cda07cc4ba901b77a8e25245b313c65c",
     "semiRetirementProjection.js": "42cecba918b1d7d1b65376f5490d607219f7a953e71f5ab90bba24f2ff292594",
     "semiRetirementUi.js": "4e87341a23a3e38592f1d32619efaf35859d14cf83ac5949fb21dfdf1be524dd",
     "v2-data.js": "935fb66f828874f0ccc267d99d611a47113a85315cb983e45ff49390a84d8baa",
@@ -98,7 +98,7 @@
     "targetAgeOutcome": "f258aff75da27e7b208d4b2cddf76856f4f6cf1c5a8f91189c0db47b69f97a57",
     "progressAtYear": "ec211761f6c9f5c9e80b0691eaeeb552f78d3e8b0953bf13634ccb8616b9a0d6",
     "projectedFiAssetsAtYear": "80a04cceb0b866803860cceba53d972b66bca7b4e2ccf2daee479f1f5152a5a7",
-    "projectedDebtAtYear": "f971f1422756e27e241a6a3ea1893c58052acef0f889a54fc801b89c4226ed59",
+    "projectedDebtAtYear": "d9b9103c28e4cb1bb96c6f30ba25855a02129d9be82a84eae6621f7cec0de2f0",
     "formatLoanTiming": "1ce660a7c0609dfbbf07f40007ba8b7dbda5be5c4789aefa6be891838c70f6bd",
     "estimateDateFromYear": "0eec5f8bd87dcb8fd052333beab01623473fdab567609d214060ebcdffab84b1",
     "investmentTargetMilestone": "0a0c5483a4395d9b6c81b9ae0b3ce55adbdb3e59917a122071e1b867e99f17e0",
@@ -708,12 +708,12 @@
     "reportLoanAssumptions": "0366713e81660b91b83c6a96eb2192dd2761739204a7a94e4244716037522a5c",
     "reportRentalSection": "884db8dd29b911fb1f26b096875dfb73f6e9e583932ec96b377f89784b6b7dcd",
     "reportReviewActions": "10dcae633a0babd65721c179a12a8d46e961c29769ff851c2eaf214807499bc4",
-    "reportPresentationHtml": "e49d686a2a9bb363a64397b2ed06db4500be0c4fb4a5c7f421a5162763ac0b1e",
+    "reportPresentationHtml": "6f033fc65c576dfdca84f9a83e4555061666150cac0f405f2b94021acccdbe19",
     "renderReports": "646e95e2552bfb9292b627a97ba1de61520615e3fea0d0de2ea7bf0b6c73b1d2",
-    "renderReportCharts": "9835b18eced460feed2da9162328502cac42e8679529916365988b0ff9b3d536",
+    "renderReportCharts": "2571820170ea0e4965308707d1eeddc340e8c609b35bdb29ed4e86b9b00bb3e0",
     "renderSetupSummary": "58d53a4cbfaa9af7da3b2d9cfe2ad6d806838c5a7a1d4b33f7b696034cca6c0f",
     "jumpToSummaryTarget": "eb19510a4d76cf7f191a2b623855b96ccafd33d335f57ed78d04ecae656db7ac",
-    "comparisonSurplusImpactTiles": "2004c3675747f7aa0bf8d45d3b07c3d10f60e58b4a93c14c2c1ac0c3c6fca721",
+    "comparisonSurplusImpactTiles": "b8a2c15111347f200d3342d6a15ad6e4646ec0f7448799f8c1c50483ab7bef76",
     "renderComparison": "f27b88d41207abf0089727f0282e0a5dc16d1c08d237b7da4254e707180935ef",
     "renderWhatIf": "5a4b0e5334ffc7d248e9e211c5a3ca82ca1f793922b8e9718661bb5b8e084dba",
     "normaliseSavedScenarioType": "fecc528f01a8a41e34711e2c39b0c831943b9434bc641213f0614a89f1c54069",
@@ -726,7 +726,7 @@
     "keyResultRows": "f3efad6e1398805133e62e2a89211f4d534a0eed5450e94e11d90621c3235c86",
     "keyResultsListHtml": "93c78d15995f618168d95e23de3ab850855544fab4b8697b0f28fd0b63100a88",
     "decisionChangeRowsFromAdjustments": "b0d5f99bad89e657731b8537f2fec962d72a194f59fa34b143b7eb5804e4be14",
-    "decisionKeyResultSnapshot": "8f3b1774e343afd8f6dfaa4983a794048694e87e1f9671a0fffc225fdd87770b",
+    "decisionKeyResultSnapshot": "8da955ebf26240f86caab768fb3d183314cc287d16f3be6ea3c343c54a68738a",
     "suggestedDecisionScenarioName": "93b54d8e104e7e0b4114b2f920b96cc3a1bd30b11e647542ac023787b143a5c9",
     "buildDecisionScenarioSaveContext": "387a672652358c293098d8d27e6935b38cb5e74b53a8a2c8a27d27f056a6cbba",
     "scenarioPathValue": "d6cf4a7d7633bd5204ce944c2d2c63e5124cd1ccb60afbe46318aa6cd945ca0b",
@@ -747,7 +747,7 @@
     "comparisonDiff": "43668eb995e8a56da4ee99bb914fdb6af9a658010558e791fe4a7946deae44c4",
     "comparisonTableRow": "32d5fad3403f5aa487fa500124da851f6a6c1bb99296bb577c2942aa439399dd",
     "scenarioDisplayDate": "691dc7308f3c22fe691db1ef841f35aa569fd0252651cc4f6700b1ff30f78fcb",
-    "financialPlanKeyResultSnapshot": "99340754998f4ade5c285857391a24615945fc6a0cd19845f6bafbe15e587b71",
+    "financialPlanKeyResultSnapshot": "4d6da58f63ea7b487a03a561db340d1bc1442923e0f48ddf2e196ca49694658c",
     "scenarioSnapshotRows": "53f96353ce948c7bae62d3851782cd1f6b6b3d74fc0dab94b693347a5be6a415",
     "scenarioRowDisplayValue": "8d140f0b0fae98519c497fba3a036183426eceb5c0555538f68607beb69aee56",
     "scenarioComparisonRows": "a78de1646fcacc8e2fcceaf88c7d613d5500c60730ead98170f92721bbb78aed",
@@ -793,7 +793,10 @@
     "duplicateScenario": "48c0fe6ff2b927882b965d823c24bd47a1f8915ca102dfe06a6c0dc6f26bf633",
     "renameScenario": "ac744ddc6ea6e10eee3ee45302abd2ff9905a37eafb6b13b0618bdfd72e79460",
     "seedSampleScenarios": "1bad72ef2dd36ae2ee73f4221c3adbc11e2e8251b8469ea3ca4c2d9884d4a02e",
-    "renderSemiRetirementLongevityHtmlDollarBasis": "a6b7d33424d3faeb65058632184e1026306b1414de778669e7b49d3512bce8e4"
+    "renderSemiRetirementLongevityHtmlDollarBasis": "a6b7d33424d3faeb65058632184e1026306b1414de778669e7b49d3512bce8e4",
+    "reportPresentationHtmlDollarBasis": "003450b0398929e9a4d8b9d10800697ab498cfa08a185b0c827ed5c409b8c0f6",
+    "comparisonSurplusImpactTilesDollarBasis": "4f3817b695328bf27d1a6d68bd47ae3ab48fa161ebd23d4c3fc0d9d7745d4a1a",
+    "projectedDebtMoney": "4fcfa11007349f1add7015483b78ac7013e473afe97a522fbb8b301ca9f3ebca"
   },
   "presentationSectionsExcluded": [
     "updateSetupNavigationLabel",
@@ -1143,5 +1146,92 @@
       }
     ],
     "goldenFixture": "Only the single and couple-property-offset retirement outputs change; original full fixture is retained as ux-stage1-before.pre-f08.json.gz. See docs/f08-tax-funding/golden-deltas.json."
+  },
+  "f04PropertyDebtCorrection": {
+    "baseline": "0e9a6a4c007e47dc83f2ece7832b986755cb597d",
+    "debtProjectionVersion": "2026.27.1-f04",
+    "authorization": "User instructed: Please commence F04 correction. Necessary protected/golden changes are independently checked against scheduled property debt. F07 and F11 are not implemented.",
+    "hashConvention": "LF-normalized full files or function boundaries and trim matching tests/ux-stage1.test.mjs. Baseline source hashes are distinct from historical recorded expectations.",
+    "changes": [
+      {
+        "group": "files",
+        "key": "calculator.js",
+        "baselineHash": "b9cd8c47af46d838ff5d223bcec160c35957066451d363086a32b9850b606daa",
+        "correctedHash": "77c04fef8a213cd06cd774d9e5eda333cda07cc4ba901b77a8e25245b313c65c"
+      },
+      {
+        "group": "appFunctions",
+        "key": "projectedDebtAtYear",
+        "baselineHash": "f971f1422756e27e241a6a3ea1893c58052acef0f889a54fc801b89c4226ed59",
+        "previousRecordedGuardHash": "f971f1422756e27e241a6a3ea1893c58052acef0f889a54fc801b89c4226ed59",
+        "correctedHash": "d9b9103c28e4cb1bb96c6f30ba25855a02129d9be82a84eae6621f7cec0de2f0",
+        "newlyGuarded": false
+      },
+      {
+        "group": "appFunctions",
+        "key": "reportPresentationHtml",
+        "baselineHash": "e49d686a2a9bb363a64397b2ed06db4500be0c4fb4a5c7f421a5162763ac0b1e",
+        "previousRecordedGuardHash": "e49d686a2a9bb363a64397b2ed06db4500be0c4fb4a5c7f421a5162763ac0b1e",
+        "correctedHash": "6f033fc65c576dfdca84f9a83e4555061666150cac0f405f2b94021acccdbe19",
+        "newlyGuarded": false
+      },
+      {
+        "group": "appFunctions",
+        "key": "renderReportCharts",
+        "baselineHash": "9835b18eced460feed2da9162328502cac42e8679529916365988b0ff9b3d536",
+        "previousRecordedGuardHash": "9835b18eced460feed2da9162328502cac42e8679529916365988b0ff9b3d536",
+        "correctedHash": "2571820170ea0e4965308707d1eeddc340e8c609b35bdb29ed4e86b9b00bb3e0",
+        "newlyGuarded": false
+      },
+      {
+        "group": "appFunctions",
+        "key": "comparisonSurplusImpactTiles",
+        "baselineHash": "2004c3675747f7aa0bf8d45d3b07c3d10f60e58b4a93c14c2c1ac0c3c6fca721",
+        "previousRecordedGuardHash": "2004c3675747f7aa0bf8d45d3b07c3d10f60e58b4a93c14c2c1ac0c3c6fca721",
+        "correctedHash": "b8a2c15111347f200d3342d6a15ad6e4646ec0f7448799f8c1c50483ab7bef76",
+        "newlyGuarded": false
+      },
+      {
+        "group": "appFunctions",
+        "key": "decisionKeyResultSnapshot",
+        "baselineHash": "8f3b1774e343afd8f6dfaa4983a794048694e87e1f9671a0fffc225fdd87770b",
+        "previousRecordedGuardHash": "8f3b1774e343afd8f6dfaa4983a794048694e87e1f9671a0fffc225fdd87770b",
+        "correctedHash": "8da955ebf26240f86caab768fb3d183314cc287d16f3be6ea3c343c54a68738a",
+        "newlyGuarded": false
+      },
+      {
+        "group": "appFunctions",
+        "key": "financialPlanKeyResultSnapshot",
+        "baselineHash": "99340754998f4ade5c285857391a24615945fc6a0cd19845f6bafbe15e587b71",
+        "previousRecordedGuardHash": "99340754998f4ade5c285857391a24615945fc6a0cd19845f6bafbe15e587b71",
+        "correctedHash": "4d6da58f63ea7b487a03a561db340d1bc1442923e0f48ddf2e196ca49694658c",
+        "newlyGuarded": false
+      },
+      {
+        "group": "appFunctions",
+        "key": "reportPresentationHtmlDollarBasis",
+        "baselineHash": "214473db2366c138387f2ddd5e6c2f3d55a6a62203848c85359f62b309ceb2a9",
+        "previousRecordedGuardHash": null,
+        "correctedHash": "003450b0398929e9a4d8b9d10800697ab498cfa08a185b0c827ed5c409b8c0f6",
+        "newlyGuarded": true
+      },
+      {
+        "group": "appFunctions",
+        "key": "comparisonSurplusImpactTilesDollarBasis",
+        "baselineHash": "b26f97f353a37092c4f7714f327b20edd21eb5ee58fb752a4b08ccaa7b4befe6",
+        "previousRecordedGuardHash": null,
+        "correctedHash": "4f3817b695328bf27d1a6d68bd47ae3ab48fa161ebd23d4c3fc0d9d7745d4a1a",
+        "newlyGuarded": true
+      },
+      {
+        "group": "appFunctions",
+        "key": "projectedDebtMoney",
+        "baselineHash": null,
+        "previousRecordedGuardHash": null,
+        "correctedHash": "4fcfa11007349f1add7015483b78ac7013e473afe97a522fbb8b301ca9f3ebca",
+        "newlyGuarded": true
+      }
+    ],
+    "fixtures": "Pre-F04 full outputs and investment SHA fixtures retained as *.pre-f04.*; independent deltas in docs/f04-property-debt/deltas.json."
   }
 }

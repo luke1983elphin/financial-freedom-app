@@ -1,0 +1,1492 @@
+{
+  "baseline": "0e9a6a4c007e47dc83f2ece7832b986755cb597d",
+  "debtProjectionVersion": "2026.27.1-f04",
+  "preservedGoldenSha256": "cf489dd2e88c3e97917afdc626e22d36bee457fe8ec144960cc6e6336185ad97",
+  "golden": [
+    {
+      "name": "young-professional",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "name": "young-couple",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "name": "growing-family",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "name": "established-family-wealth-building",
+      "changedFields": 21,
+      "differences": [
+        {
+          "path": "/records/calculation/netWorthProjection/0/closingBalance",
+          "before": 2688433.11,
+          "after": 2287466.96
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/1/closingBalance",
+          "before": 2911002.71,
+          "after": 2519646.69
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/2/closingBalance",
+          "before": 3146469.78,
+          "after": 2765336.95
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/3/closingBalance",
+          "before": 3395645.11,
+          "after": 3025387.64
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/4/closingBalance",
+          "before": 3659392.89,
+          "after": 3300704.54
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/5/closingBalance",
+          "before": 3938634.16,
+          "after": 3592252.96
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/6/closingBalance",
+          "before": 4234350.75,
+          "after": 3901061.78
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/7/closingBalance",
+          "before": 4547589.28,
+          "after": 4228227.75
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/8/closingBalance",
+          "before": 4879465.52,
+          "after": 4574919.91
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/9/closingBalance",
+          "before": 5231169.16,
+          "after": 4942384.58
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/10/closingBalance",
+          "before": 5603773.5,
+          "after": 5331755.4
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/11/closingBalance",
+          "before": 5996322.54,
+          "after": 5742140.51
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/12/closingBalance",
+          "before": 6409781.26,
+          "after": 6174573.11
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/13/closingBalance",
+          "before": 6805397.6,
+          "after": 6590373.7
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/14/closingBalance",
+          "before": 7225226.93,
+          "after": 7031674.89
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/15/closingBalance",
+          "before": 7670854.75,
+          "after": 7500144.31
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/16/closingBalance",
+          "before": 8143973.85,
+          "after": 7997562.13
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/17/closingBalance",
+          "before": 8646391.96,
+          "after": 8525829.05
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/18/closingBalance",
+          "before": 9180039.51,
+          "after": 9086974.38
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/19/closingBalance",
+          "before": 9746978.12,
+          "after": 9683164.91
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/20/closingBalance",
+          "before": 10349409.71,
+          "after": 10316714.46
+        }
+      ]
+    },
+    {
+      "name": "pre-retirement",
+      "changedFields": 15,
+      "differences": [
+        {
+          "path": "/records/calculation/netWorthProjection/0/closingBalance",
+          "before": 4229855.65,
+          "after": 3980432.85
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/1/closingBalance",
+          "before": 4513408.73,
+          "after": 4275237.89
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/2/closingBalance",
+          "before": 4812258.26,
+          "after": 4586057.14
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/3/closingBalance",
+          "before": 5127096.62,
+          "after": 4913628.81
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/4/closingBalance",
+          "before": 5458954.71,
+          "after": 5259032.51
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/5/closingBalance",
+          "before": 5809129.11,
+          "after": 5623616.65
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/6/closingBalance",
+          "before": 6158464.52,
+          "after": 5988281.02
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/7/closingBalance",
+          "before": 6529160.66,
+          "after": 6375284
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/8/closingBalance",
+          "before": 6922613.58,
+          "after": 6786084
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/9/closingBalance",
+          "before": 7340313.7,
+          "after": 7222237.83
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/10/closingBalance",
+          "before": 7783852.28,
+          "after": 7685407.31
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/11/closingBalance",
+          "before": 8254928.42,
+          "after": 8177366.68
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/12/closingBalance",
+          "before": 8755356.42,
+          "after": 8700010.1
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/13/closingBalance",
+          "before": 9287073.7,
+          "after": 9255359.96
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/14/closingBalance",
+          "before": 9852149.34,
+          "after": 9845575.78
+        }
+      ]
+    },
+    {
+      "name": "semi-retirement",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "name": "retirement-ready",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "name": "single",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "name": "couple-property-offset",
+      "changedFields": 30,
+      "differences": [
+        {
+          "path": "/records/calculation/netWorthProjection/0/closingBalance",
+          "before": 1375853.33,
+          "after": 1128425.6
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/1/closingBalance",
+          "before": 1476495.87,
+          "after": 1231804.5
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/2/closingBalance",
+          "before": 1576145.7,
+          "after": 1334365.23
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/3/closingBalance",
+          "before": 1682285.2,
+          "after": 1443601.36
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/4/closingBalance",
+          "before": 1795368.46,
+          "after": 1559978.79
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/5/closingBalance",
+          "before": 1915882.53,
+          "after": 1683997.17
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/6/closingBalance",
+          "before": 2044349.99,
+          "after": 1816192.5
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/7/closingBalance",
+          "before": 2181331.34,
+          "after": 1957139.51
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/8/closingBalance",
+          "before": 2327428.19,
+          "after": 2107455.03
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/9/closingBalance",
+          "before": 2483285.96,
+          "after": 2267800.56
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/10/closingBalance",
+          "before": 2649597.45,
+          "after": 2438886.09
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/11/closingBalance",
+          "before": 2827106.19,
+          "after": 2621473.42
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/12/closingBalance",
+          "before": 3016610.35,
+          "after": 2816380.15
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/13/closingBalance",
+          "before": 3218966.74,
+          "after": 3024483.76
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/14/closingBalance",
+          "before": 3435095.43,
+          "after": 3246726.3
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/15/closingBalance",
+          "before": 3665984.21,
+          "after": 3484118.96
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/16/closingBalance",
+          "before": 3912693.91,
+          "after": 3737747.43
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/17/closingBalance",
+          "before": 4176363.84,
+          "after": 4008777.51
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/18/closingBalance",
+          "before": 4458217.85,
+          "after": 4298461.17
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/19/closingBalance",
+          "before": 4759570.5,
+          "after": 4608142.96
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/20/closingBalance",
+          "before": 5081834.01,
+          "after": 4939266.94
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/21/closingBalance",
+          "before": 5426525.71,
+          "after": 5293384.33
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/22/closingBalance",
+          "before": 5795276.17,
+          "after": 5672161.79
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/23/closingBalance",
+          "before": 6189837.45,
+          "after": 6077389.71
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/24/closingBalance",
+          "before": 6612092.59,
+          "after": 6510991.94
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/25/closingBalance",
+          "before": 7064065.55,
+          "after": 6975035.86
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/26/closingBalance",
+          "before": 7547931.97,
+          "after": 7471743.27
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/27/closingBalance",
+          "before": 8066030.62,
+          "after": 8003502.07
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/28/closingBalance",
+          "before": 8620876.13,
+          "after": 8572879.16
+        },
+        {
+          "path": "/records/calculation/netWorthProjection/29/closingBalance",
+          "before": 9215172.08,
+          "after": 9182633.67
+        }
+      ]
+    }
+  ],
+  "investmentDeltas": [
+    {
+      "fixtureFile": "investment-ux-parity",
+      "name": "populated",
+      "previousSha256": "07fa50716c4aace5ad9b15d16e62a8e11afc3d440ca8b4ff6fefbc54472bd2cc",
+      "correctedSha256": "a831dba04585993cd25a8cdc7f153e43b2cdc209401414f61caa9fa5fbb25e48",
+      "differences": [
+        {
+          "path": "/calc/netWorthProjection/0/closingBalance",
+          "before": 1375853.33,
+          "after": 1128425.6
+        },
+        {
+          "path": "/calc/netWorthProjection/1/closingBalance",
+          "before": 1476495.87,
+          "after": 1231804.5
+        },
+        {
+          "path": "/calc/netWorthProjection/2/closingBalance",
+          "before": 1576145.7,
+          "after": 1334365.23
+        },
+        {
+          "path": "/calc/netWorthProjection/3/closingBalance",
+          "before": 1682285.2,
+          "after": 1443601.36
+        },
+        {
+          "path": "/calc/netWorthProjection/4/closingBalance",
+          "before": 1795368.46,
+          "after": 1559978.79
+        },
+        {
+          "path": "/calc/netWorthProjection/5/closingBalance",
+          "before": 1915882.53,
+          "after": 1683997.17
+        },
+        {
+          "path": "/calc/netWorthProjection/6/closingBalance",
+          "before": 2044349.99,
+          "after": 1816192.5
+        },
+        {
+          "path": "/calc/netWorthProjection/7/closingBalance",
+          "before": 2181331.34,
+          "after": 1957139.51
+        },
+        {
+          "path": "/calc/netWorthProjection/8/closingBalance",
+          "before": 2327428.19,
+          "after": 2107455.03
+        },
+        {
+          "path": "/calc/netWorthProjection/9/closingBalance",
+          "before": 2483285.96,
+          "after": 2267800.56
+        },
+        {
+          "path": "/calc/netWorthProjection/10/closingBalance",
+          "before": 2649597.45,
+          "after": 2438886.09
+        },
+        {
+          "path": "/calc/netWorthProjection/11/closingBalance",
+          "before": 2827106.19,
+          "after": 2621473.42
+        },
+        {
+          "path": "/calc/netWorthProjection/12/closingBalance",
+          "before": 3016610.35,
+          "after": 2816380.15
+        },
+        {
+          "path": "/calc/netWorthProjection/13/closingBalance",
+          "before": 3218966.74,
+          "after": 3024483.76
+        },
+        {
+          "path": "/calc/netWorthProjection/14/closingBalance",
+          "before": 3435095.43,
+          "after": 3246726.3
+        },
+        {
+          "path": "/calc/netWorthProjection/15/closingBalance",
+          "before": 3665984.21,
+          "after": 3484118.96
+        },
+        {
+          "path": "/calc/netWorthProjection/16/closingBalance",
+          "before": 3912693.91,
+          "after": 3737747.43
+        },
+        {
+          "path": "/calc/netWorthProjection/17/closingBalance",
+          "before": 4176363.84,
+          "after": 4008777.51
+        },
+        {
+          "path": "/calc/netWorthProjection/18/closingBalance",
+          "before": 4458217.85,
+          "after": 4298461.17
+        },
+        {
+          "path": "/calc/netWorthProjection/19/closingBalance",
+          "before": 4759570.5,
+          "after": 4608142.96
+        },
+        {
+          "path": "/calc/netWorthProjection/20/closingBalance",
+          "before": 5081834.01,
+          "after": 4939266.94
+        },
+        {
+          "path": "/calc/netWorthProjection/21/closingBalance",
+          "before": 5426525.71,
+          "after": 5293384.33
+        },
+        {
+          "path": "/calc/netWorthProjection/22/closingBalance",
+          "before": 5795276.17,
+          "after": 5672161.79
+        },
+        {
+          "path": "/calc/netWorthProjection/23/closingBalance",
+          "before": 6189837.45,
+          "after": 6077389.71
+        },
+        {
+          "path": "/calc/netWorthProjection/24/closingBalance",
+          "before": 6612092.59,
+          "after": 6510991.94
+        },
+        {
+          "path": "/calc/netWorthProjection/25/closingBalance",
+          "before": 7064065.55,
+          "after": 6975035.86
+        },
+        {
+          "path": "/calc/netWorthProjection/26/closingBalance",
+          "before": 7547931.97,
+          "after": 7471743.27
+        },
+        {
+          "path": "/calc/netWorthProjection/27/closingBalance",
+          "before": 8066030.62,
+          "after": 8003502.07
+        },
+        {
+          "path": "/calc/netWorthProjection/28/closingBalance",
+          "before": 8620876.13,
+          "after": 8572879.16
+        },
+        {
+          "path": "/calc/netWorthProjection/29/closingBalance",
+          "before": 9215172.08,
+          "after": 9182633.67
+        }
+      ]
+    },
+    {
+      "fixtureFile": "investment-ux-parity",
+      "name": "simple",
+      "previousSha256": "e9e50041460dd9b7e4856af71f382c971ef8f710cb5fde07ef559a23e7ba722e",
+      "correctedSha256": "e9e50041460dd9b7e4856af71f382c971ef8f710cb5fde07ef559a23e7ba722e",
+      "differences": []
+    },
+    {
+      "fixtureFile": "investment-return-legacy",
+      "name": "populated",
+      "previousSha256": "1e66b8f5b68f9497b8a977ed8944ca54f14f9f88bcc8d41bbb609088c49e0eb9",
+      "correctedSha256": "81ebe474690db2ea1faba158354ba3ba70074e6c2641d3f654d846f4e19d6381",
+      "differences": [
+        {
+          "path": "/calc/netWorthProjection/0/closingBalance",
+          "before": 1006866.49,
+          "after": 759438.76
+        },
+        {
+          "path": "/calc/netWorthProjection/1/closingBalance",
+          "before": 1089995.76,
+          "after": 845304.39
+        },
+        {
+          "path": "/calc/netWorthProjection/2/closingBalance",
+          "before": 1170104.85,
+          "after": 928324.38
+        },
+        {
+          "path": "/calc/netWorthProjection/3/closingBalance",
+          "before": 1255759.6,
+          "after": 1017075.76
+        },
+        {
+          "path": "/calc/netWorthProjection/4/closingBalance",
+          "before": 1347344.53,
+          "after": 1111954.86
+        },
+        {
+          "path": "/calc/netWorthProjection/5/closingBalance",
+          "before": 1445270.74,
+          "after": 1213385.38
+        },
+        {
+          "path": "/calc/netWorthProjection/6/closingBalance",
+          "before": 1549977.99,
+          "after": 1321820.5
+        },
+        {
+          "path": "/calc/netWorthProjection/7/closingBalance",
+          "before": 1661936.49,
+          "after": 1437744.66
+        },
+        {
+          "path": "/calc/netWorthProjection/8/closingBalance",
+          "before": 1781649.14,
+          "after": 1561675.98
+        },
+        {
+          "path": "/calc/netWorthProjection/9/closingBalance",
+          "before": 1909653.74,
+          "after": 1694168.34
+        },
+        {
+          "path": "/calc/netWorthProjection/10/closingBalance",
+          "before": 2046525.49,
+          "after": 1835814.13
+        },
+        {
+          "path": "/calc/netWorthProjection/11/closingBalance",
+          "before": 2192879.52,
+          "after": 1987246.75
+        },
+        {
+          "path": "/calc/netWorthProjection/12/closingBalance",
+          "before": 2349373.7,
+          "after": 2149143.5
+        },
+        {
+          "path": "/calc/netWorthProjection/13/closingBalance",
+          "before": 2516711.62,
+          "after": 2322228.64
+        },
+        {
+          "path": "/calc/netWorthProjection/14/closingBalance",
+          "before": 2695645.73,
+          "after": 2507276.6
+        },
+        {
+          "path": "/calc/netWorthProjection/15/closingBalance",
+          "before": 2886980.85,
+          "after": 2705115.6
+        },
+        {
+          "path": "/calc/netWorthProjection/16/closingBalance",
+          "before": 3091577.57,
+          "after": 2916631.09
+        },
+        {
+          "path": "/calc/netWorthProjection/17/closingBalance",
+          "before": 3310356.47,
+          "after": 3142770.14
+        },
+        {
+          "path": "/calc/netWorthProjection/18/closingBalance",
+          "before": 3544302.03,
+          "after": 3384545.35
+        },
+        {
+          "path": "/calc/netWorthProjection/19/closingBalance",
+          "before": 3794467.17,
+          "after": 3643039.63
+        },
+        {
+          "path": "/calc/netWorthProjection/20/closingBalance",
+          "before": 4061978.09,
+          "after": 3919411.02
+        },
+        {
+          "path": "/calc/netWorthProjection/21/closingBalance",
+          "before": 4348039.2,
+          "after": 4214897.82
+        },
+        {
+          "path": "/calc/netWorthProjection/22/closingBalance",
+          "before": 4653938.73,
+          "after": 4530824.35
+        },
+        {
+          "path": "/calc/netWorthProjection/23/closingBalance",
+          "before": 4981054.48,
+          "after": 4868606.74
+        },
+        {
+          "path": "/calc/netWorthProjection/24/closingBalance",
+          "before": 5330860.06,
+          "after": 5229759.41
+        },
+        {
+          "path": "/calc/netWorthProjection/25/closingBalance",
+          "before": 5704931.64,
+          "after": 5615901.95
+        },
+        {
+          "path": "/calc/netWorthProjection/26/closingBalance",
+          "before": 6104954.96,
+          "after": 6028766.26
+        },
+        {
+          "path": "/calc/netWorthProjection/27/closingBalance",
+          "before": 6532733.1,
+          "after": 6470204.55
+        },
+        {
+          "path": "/calc/netWorthProjection/28/closingBalance",
+          "before": 6990194.56,
+          "after": 6942197.59
+        },
+        {
+          "path": "/calc/netWorthProjection/29/closingBalance",
+          "before": 7479402.11,
+          "after": 7446863.7
+        }
+      ]
+    },
+    {
+      "fixtureFile": "investment-return-legacy",
+      "name": "simple",
+      "previousSha256": "d04ea542499ddf5b672436e80035e59e12f8141197467f9a82bc8758adc2672b",
+      "correctedSha256": "d04ea542499ddf5b672436e80035e59e12f8141197467f9a82bc8758adc2672b",
+      "differences": []
+    }
+  ],
+  "auditHouseholds": [
+    {
+      "id": "H01",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H02",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H03",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H04",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H05",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H06",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H07",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H08",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H09",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H10",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H11",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H12",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H13",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H14",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H15",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H16",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H17",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H18",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H19",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H20",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H21",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H22",
+      "changedFields": 30,
+      "differences": [
+        {
+          "path": "/netWorthProjection/0/closingBalance",
+          "before": 618000,
+          "after": 268000
+        },
+        {
+          "path": "/netWorthProjection/1/closingBalance",
+          "before": 636540,
+          "after": 286540
+        },
+        {
+          "path": "/netWorthProjection/2/closingBalance",
+          "before": 655636.2,
+          "after": 305636.2
+        },
+        {
+          "path": "/netWorthProjection/3/closingBalance",
+          "before": 675305.29,
+          "after": 325305.29
+        },
+        {
+          "path": "/netWorthProjection/4/closingBalance",
+          "before": 695564.44,
+          "after": 345564.44
+        },
+        {
+          "path": "/netWorthProjection/5/closingBalance",
+          "before": 716431.38,
+          "after": 366431.38
+        },
+        {
+          "path": "/netWorthProjection/6/closingBalance",
+          "before": 737924.32,
+          "after": 387924.32
+        },
+        {
+          "path": "/netWorthProjection/7/closingBalance",
+          "before": 760062.05,
+          "after": 410062.05
+        },
+        {
+          "path": "/netWorthProjection/8/closingBalance",
+          "before": 782863.91,
+          "after": 432863.91
+        },
+        {
+          "path": "/netWorthProjection/9/closingBalance",
+          "before": 806349.83,
+          "after": 456349.83
+        },
+        {
+          "path": "/netWorthProjection/10/closingBalance",
+          "before": 830540.32,
+          "after": 480540.32
+        },
+        {
+          "path": "/netWorthProjection/11/closingBalance",
+          "before": 855456.53,
+          "after": 505456.53
+        },
+        {
+          "path": "/netWorthProjection/12/closingBalance",
+          "before": 881120.23,
+          "after": 531120.23
+        },
+        {
+          "path": "/netWorthProjection/13/closingBalance",
+          "before": 907553.83,
+          "after": 557553.83
+        },
+        {
+          "path": "/netWorthProjection/14/closingBalance",
+          "before": 934780.45,
+          "after": 584780.45
+        },
+        {
+          "path": "/netWorthProjection/15/closingBalance",
+          "before": 962823.86,
+          "after": 612823.86
+        },
+        {
+          "path": "/netWorthProjection/16/closingBalance",
+          "before": 991708.58,
+          "after": 641708.58
+        },
+        {
+          "path": "/netWorthProjection/17/closingBalance",
+          "before": 1021459.84,
+          "after": 671459.84
+        },
+        {
+          "path": "/netWorthProjection/18/closingBalance",
+          "before": 1052103.63,
+          "after": 702103.63
+        },
+        {
+          "path": "/netWorthProjection/19/closingBalance",
+          "before": 1083666.74,
+          "after": 733666.74
+        },
+        {
+          "path": "/netWorthProjection/20/closingBalance",
+          "before": 1116176.74,
+          "after": 766176.74
+        },
+        {
+          "path": "/netWorthProjection/21/closingBalance",
+          "before": 1149662.05,
+          "after": 799662.05
+        },
+        {
+          "path": "/netWorthProjection/22/closingBalance",
+          "before": 1184151.91,
+          "after": 834151.91
+        },
+        {
+          "path": "/netWorthProjection/23/closingBalance",
+          "before": 1219676.46,
+          "after": 869676.46
+        },
+        {
+          "path": "/netWorthProjection/24/closingBalance",
+          "before": 1256266.76,
+          "after": 906266.76
+        },
+        {
+          "path": "/netWorthProjection/25/closingBalance",
+          "before": 1293954.76,
+          "after": 943954.76
+        },
+        {
+          "path": "/netWorthProjection/26/closingBalance",
+          "before": 1332773.4,
+          "after": 982773.4
+        },
+        {
+          "path": "/netWorthProjection/27/closingBalance",
+          "before": 1372756.61,
+          "after": 1022756.61
+        },
+        {
+          "path": "/netWorthProjection/28/closingBalance",
+          "before": 1413939.3,
+          "after": 1063939.3
+        },
+        {
+          "path": "/netWorthProjection/29/closingBalance",
+          "before": 1456357.48,
+          "after": 1106357.48
+        }
+      ]
+    },
+    {
+      "id": "H23",
+      "changedFields": 30,
+      "differences": [
+        {
+          "path": "/netWorthProjection/0/closingBalance",
+          "before": 0,
+          "after": -294000
+        },
+        {
+          "path": "/netWorthProjection/1/closingBalance",
+          "before": 0,
+          "after": -288000
+        },
+        {
+          "path": "/netWorthProjection/2/closingBalance",
+          "before": 0,
+          "after": -282000
+        },
+        {
+          "path": "/netWorthProjection/3/closingBalance",
+          "before": 0,
+          "after": -276000
+        },
+        {
+          "path": "/netWorthProjection/4/closingBalance",
+          "before": 0,
+          "after": -270000
+        },
+        {
+          "path": "/netWorthProjection/5/closingBalance",
+          "before": 0,
+          "after": -264000
+        },
+        {
+          "path": "/netWorthProjection/6/closingBalance",
+          "before": 0,
+          "after": -258000
+        },
+        {
+          "path": "/netWorthProjection/7/closingBalance",
+          "before": 0,
+          "after": -252000
+        },
+        {
+          "path": "/netWorthProjection/8/closingBalance",
+          "before": 0,
+          "after": -246000
+        },
+        {
+          "path": "/netWorthProjection/9/closingBalance",
+          "before": 0,
+          "after": -240000
+        },
+        {
+          "path": "/netWorthProjection/10/closingBalance",
+          "before": 0,
+          "after": -234000
+        },
+        {
+          "path": "/netWorthProjection/11/closingBalance",
+          "before": 0,
+          "after": -228000
+        },
+        {
+          "path": "/netWorthProjection/12/closingBalance",
+          "before": 0,
+          "after": -222000
+        },
+        {
+          "path": "/netWorthProjection/13/closingBalance",
+          "before": 0,
+          "after": -216000
+        },
+        {
+          "path": "/netWorthProjection/14/closingBalance",
+          "before": 0,
+          "after": -210000
+        },
+        {
+          "path": "/netWorthProjection/15/closingBalance",
+          "before": 0,
+          "after": -204000
+        },
+        {
+          "path": "/netWorthProjection/16/closingBalance",
+          "before": 0,
+          "after": -198000
+        },
+        {
+          "path": "/netWorthProjection/17/closingBalance",
+          "before": 0,
+          "after": -192000
+        },
+        {
+          "path": "/netWorthProjection/18/closingBalance",
+          "before": 0,
+          "after": -186000
+        },
+        {
+          "path": "/netWorthProjection/19/closingBalance",
+          "before": 0,
+          "after": -180000
+        },
+        {
+          "path": "/netWorthProjection/20/closingBalance",
+          "before": 0,
+          "after": -174000
+        },
+        {
+          "path": "/netWorthProjection/21/closingBalance",
+          "before": 0,
+          "after": -168000
+        },
+        {
+          "path": "/netWorthProjection/22/closingBalance",
+          "before": 0,
+          "after": -162000
+        },
+        {
+          "path": "/netWorthProjection/23/closingBalance",
+          "before": 0,
+          "after": -156000
+        },
+        {
+          "path": "/netWorthProjection/24/closingBalance",
+          "before": 0,
+          "after": -150000
+        },
+        {
+          "path": "/netWorthProjection/25/closingBalance",
+          "before": 0,
+          "after": -144000
+        },
+        {
+          "path": "/netWorthProjection/26/closingBalance",
+          "before": 0,
+          "after": -138000
+        },
+        {
+          "path": "/netWorthProjection/27/closingBalance",
+          "before": 0,
+          "after": -132000
+        },
+        {
+          "path": "/netWorthProjection/28/closingBalance",
+          "before": 0,
+          "after": -126000
+        },
+        {
+          "path": "/netWorthProjection/29/closingBalance",
+          "before": 0,
+          "after": -120000
+        }
+      ]
+    },
+    {
+      "id": "H24",
+      "changedFields": 30,
+      "differences": [
+        {
+          "path": "/netWorthProjection/0/closingBalance",
+          "before": 0,
+          "after": -294000
+        },
+        {
+          "path": "/netWorthProjection/1/closingBalance",
+          "before": 0,
+          "after": -288000
+        },
+        {
+          "path": "/netWorthProjection/2/closingBalance",
+          "before": 0,
+          "after": -282000
+        },
+        {
+          "path": "/netWorthProjection/3/closingBalance",
+          "before": 0,
+          "after": -276000
+        },
+        {
+          "path": "/netWorthProjection/4/closingBalance",
+          "before": 0,
+          "after": -270000
+        },
+        {
+          "path": "/netWorthProjection/5/closingBalance",
+          "before": 0,
+          "after": -264000
+        },
+        {
+          "path": "/netWorthProjection/6/closingBalance",
+          "before": 0,
+          "after": -258000
+        },
+        {
+          "path": "/netWorthProjection/7/closingBalance",
+          "before": 0,
+          "after": -252000
+        },
+        {
+          "path": "/netWorthProjection/8/closingBalance",
+          "before": 0,
+          "after": -246000
+        },
+        {
+          "path": "/netWorthProjection/9/closingBalance",
+          "before": 0,
+          "after": -240000
+        },
+        {
+          "path": "/netWorthProjection/10/closingBalance",
+          "before": 0,
+          "after": -234000
+        },
+        {
+          "path": "/netWorthProjection/11/closingBalance",
+          "before": 0,
+          "after": -228000
+        },
+        {
+          "path": "/netWorthProjection/12/closingBalance",
+          "before": 0,
+          "after": -222000
+        },
+        {
+          "path": "/netWorthProjection/13/closingBalance",
+          "before": 0,
+          "after": -216000
+        },
+        {
+          "path": "/netWorthProjection/14/closingBalance",
+          "before": 0,
+          "after": -210000
+        },
+        {
+          "path": "/netWorthProjection/15/closingBalance",
+          "before": 0,
+          "after": -204000
+        },
+        {
+          "path": "/netWorthProjection/16/closingBalance",
+          "before": 0,
+          "after": -198000
+        },
+        {
+          "path": "/netWorthProjection/17/closingBalance",
+          "before": 0,
+          "after": -192000
+        },
+        {
+          "path": "/netWorthProjection/18/closingBalance",
+          "before": 0,
+          "after": -186000
+        },
+        {
+          "path": "/netWorthProjection/19/closingBalance",
+          "before": 0,
+          "after": -180000
+        },
+        {
+          "path": "/netWorthProjection/20/closingBalance",
+          "before": 0,
+          "after": -174000
+        },
+        {
+          "path": "/netWorthProjection/21/closingBalance",
+          "before": 0,
+          "after": -168000
+        },
+        {
+          "path": "/netWorthProjection/22/closingBalance",
+          "before": 0,
+          "after": -162000
+        },
+        {
+          "path": "/netWorthProjection/23/closingBalance",
+          "before": 0,
+          "after": -156000
+        },
+        {
+          "path": "/netWorthProjection/24/closingBalance",
+          "before": 0,
+          "after": -150000
+        },
+        {
+          "path": "/netWorthProjection/25/closingBalance",
+          "before": 0,
+          "after": -144000
+        },
+        {
+          "path": "/netWorthProjection/26/closingBalance",
+          "before": 0,
+          "after": -138000
+        },
+        {
+          "path": "/netWorthProjection/27/closingBalance",
+          "before": 0,
+          "after": -132000
+        },
+        {
+          "path": "/netWorthProjection/28/closingBalance",
+          "before": 0,
+          "after": -126000
+        },
+        {
+          "path": "/netWorthProjection/29/closingBalance",
+          "before": 0,
+          "after": -120000
+        }
+      ]
+    },
+    {
+      "id": "H25",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H26",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H27",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H28",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H29",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H30",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H31",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H32",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H33",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H34",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H35",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H36",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H37",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H38",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H39",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H40",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H41",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H42",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H43",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H44",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H45",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H46",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H47",
+      "changedFields": 0,
+      "differences": []
+    },
+    {
+      "id": "H48",
+      "changedFields": 0,
+      "differences": []
+    }
+  ],
+  "guardChanges": [
+    {
+      "group": "files",
+      "key": "calculator.js",
+      "baselineHash": "b9cd8c47af46d838ff5d223bcec160c35957066451d363086a32b9850b606daa",
+      "correctedHash": "77c04fef8a213cd06cd774d9e5eda333cda07cc4ba901b77a8e25245b313c65c"
+    },
+    {
+      "group": "appFunctions",
+      "key": "projectedDebtAtYear",
+      "baselineHash": "f971f1422756e27e241a6a3ea1893c58052acef0f889a54fc801b89c4226ed59",
+      "previousRecordedGuardHash": "f971f1422756e27e241a6a3ea1893c58052acef0f889a54fc801b89c4226ed59",
+      "correctedHash": "d9b9103c28e4cb1bb96c6f30ba25855a02129d9be82a84eae6621f7cec0de2f0",
+      "newlyGuarded": false
+    },
+    {
+      "group": "appFunctions",
+      "key": "reportPresentationHtml",
+      "baselineHash": "e49d686a2a9bb363a64397b2ed06db4500be0c4fb4a5c7f421a5162763ac0b1e",
+      "previousRecordedGuardHash": "e49d686a2a9bb363a64397b2ed06db4500be0c4fb4a5c7f421a5162763ac0b1e",
+      "correctedHash": "6f033fc65c576dfdca84f9a83e4555061666150cac0f405f2b94021acccdbe19",
+      "newlyGuarded": false
+    },
+    {
+      "group": "appFunctions",
+      "key": "renderReportCharts",
+      "baselineHash": "9835b18eced460feed2da9162328502cac42e8679529916365988b0ff9b3d536",
+      "previousRecordedGuardHash": "9835b18eced460feed2da9162328502cac42e8679529916365988b0ff9b3d536",
+      "correctedHash": "2571820170ea0e4965308707d1eeddc340e8c609b35bdb29ed4e86b9b00bb3e0",
+      "newlyGuarded": false
+    },
+    {
+      "group": "appFunctions",
+      "key": "comparisonSurplusImpactTiles",
+      "baselineHash": "2004c3675747f7aa0bf8d45d3b07c3d10f60e58b4a93c14c2c1ac0c3c6fca721",
+      "previousRecordedGuardHash": "2004c3675747f7aa0bf8d45d3b07c3d10f60e58b4a93c14c2c1ac0c3c6fca721",
+      "correctedHash": "b8a2c15111347f200d3342d6a15ad6e4646ec0f7448799f8c1c50483ab7bef76",
+      "newlyGuarded": false
+    },
+    {
+      "group": "appFunctions",
+      "key": "decisionKeyResultSnapshot",
+      "baselineHash": "8f3b1774e343afd8f6dfaa4983a794048694e87e1f9671a0fffc225fdd87770b",
+      "previousRecordedGuardHash": "8f3b1774e343afd8f6dfaa4983a794048694e87e1f9671a0fffc225fdd87770b",
+      "correctedHash": "8da955ebf26240f86caab768fb3d183314cc287d16f3be6ea3c343c54a68738a",
+      "newlyGuarded": false
+    },
+    {
+      "group": "appFunctions",
+      "key": "financialPlanKeyResultSnapshot",
+      "baselineHash": "99340754998f4ade5c285857391a24615945fc6a0cd19845f6bafbe15e587b71",
+      "previousRecordedGuardHash": "99340754998f4ade5c285857391a24615945fc6a0cd19845f6bafbe15e587b71",
+      "correctedHash": "4d6da58f63ea7b487a03a561db340d1bc1442923e0f48ddf2e196ca49694658c",
+      "newlyGuarded": false
+    },
+    {
+      "group": "appFunctions",
+      "key": "reportPresentationHtmlDollarBasis",
+      "baselineHash": "214473db2366c138387f2ddd5e6c2f3d55a6a62203848c85359f62b309ceb2a9",
+      "previousRecordedGuardHash": null,
+      "correctedHash": "003450b0398929e9a4d8b9d10800697ab498cfa08a185b0c827ed5c409b8c0f6",
+      "newlyGuarded": true
+    },
+    {
+      "group": "appFunctions",
+      "key": "comparisonSurplusImpactTilesDollarBasis",
+      "baselineHash": "b26f97f353a37092c4f7714f327b20edd21eb5ee58fb752a4b08ccaa7b4befe6",
+      "previousRecordedGuardHash": null,
+      "correctedHash": "4f3817b695328bf27d1a6d68bd47ae3ab48fa161ebd23d4c3fc0d9d7745d4a1a",
+      "newlyGuarded": true
+    },
+    {
+      "group": "appFunctions",
+      "key": "projectedDebtMoney",
+      "baselineHash": null,
+      "previousRecordedGuardHash": null,
+      "correctedHash": "4fcfa11007349f1add7015483b78ac7013e473afe97a522fbb8b301ca9f3ebca",
+      "newlyGuarded": true
+    }
+  ]
+}

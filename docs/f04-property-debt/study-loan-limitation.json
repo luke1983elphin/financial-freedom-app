@@ -1,0 +1,20 @@
+[
+  {
+    "source": "baseline",
+    "currentNetWorth": 240000,
+    "yearOneNetWorth": 268000,
+    "scheduledNonStudyDebt": 350000,
+    "remainingStudyDebt": 10000,
+    "reportedDebt": null,
+    "independentNetWorthIncludingStudyDebt": 258000
+  },
+  {
+    "source": "F04",
+    "currentNetWorth": 240000,
+    "yearOneNetWorth": 268000,
+    "scheduledNonStudyDebt": 350000,
+    "remainingStudyDebt": 10000,
+    "reportedDebt": 360000,
+    "independentNetWorthIncludingStudyDebt": 258000
+  }
+]

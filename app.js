@@ -1691,13 +1691,12 @@
   }
 
   function projectedDebtAtYear(result, year) {
-    const helpBalance = Math.max(0, result.helpRepaymentEstimate.balance - result.helpRepaymentEstimate.annualRepayment * year);
-    return roundForDisplay(
-      loanBalanceAtYear(result, year)
-      + helpBalance
-      + (Number(result.plan.liabilities.otherDebts) || 0)
-      + (Number(result.plan.liabilities.creditCardBalance) || 0)
-    );
+    return CALC.projectedDebtAtYear(result, year);
+  }
+
+  function projectedDebtMoney(result, year, format = money) {
+    const debt = projectedDebtAtYear(result, year);
+    return Number.isFinite(debt) ? format(debt) : "Outside projection";
   }
 
   function formatLoanTiming(loan) {
@@ -15295,11 +15294,11 @@
         ${CALC.investmentIncomeReviewItems(p).length ? `<p class="report-note"><strong>Investment income review.</strong> Dividend or distribution income has been entered separately from investment assets. Confirm that it is not already included in the investment return assumption; the combined figure can overlap with passive income.</p>` : ""}
       `, "report-page-break")}
       ${reportSection("Future Outlook", "Estimates under the current plan, shown in future nominal dollars.", `
-        ${result.investmentPropertyDebt > 0 ? '<p class="report-warning"><strong>Projection limit:</strong> The existing future net-worth and debt forecasts omit investment-property loan balances. They can overstate net worth and understate debt. Current liabilities and investment-property equity do include this debt.</p>' : ""}
+        ${result.investmentPropertyDebt > 0 ? '<p class="report-warning"><strong>Property debt:</strong> Projected debt includes remaining rental-property loan balances. Property equity is not automatically available to fund retirement spending.</p>' : ""}
         ${reportGroup("Near term", m("1-year projected net worth", money(netWorthAtYear(result,1))) + m("2-year projected net worth", money(netWorthAtYear(result,2))))}
-        ${reportGroup("10-year outlook", m("Projected net worth", money(netWorthAtYear(result,10)), "Projected household assets less modelled liabilities.", true) + m("Projected FI assets", money(projectedFiAssetsAtYear(result,10)), "Includes super only when each person reaches the modelled access age.") + m("Projected investment portfolio", money(investmentAtYear(result,10)), "Non-super portfolio after modelled growth and affordable contributions.") + m("Projected debt", money(projectedDebtAtYear(result,10)), "Existing report estimate from the loan schedule, STSL and other entered debts."))}
+        ${reportGroup("10-year outlook", m("Projected net worth", money(netWorthAtYear(result,10)), "Projected household assets less modelled liabilities.", true) + m("Projected FI assets", money(projectedFiAssetsAtYear(result,10)), "Includes super only when each person reaches the modelled access age.") + m("Projected investment portfolio", money(investmentAtYear(result,10)), "Non-super portfolio after modelled growth and affordable contributions.") + m("Projected debt", projectedDebtMoney(result,10), "Remaining modelled liabilities, including rental-property loans and STSL, under the selected forecast."))}
         ${reportGroup("Long term", m("30-year projected net worth", money(netWorthAtYear(result,30))) + m("Modelled Financial Freedom age", targetAgeOutcome(result), "First forecast year reaching the full spending-based target."))}
-        <p class="report-narrative">Over 10 years, the model estimates net worth of ${money(netWorthAtYear(result,10))}, an investment portfolio of ${money(investmentAtYear(result,10))} and debt of ${money(projectedDebtAtYear(result,10))}. Actual returns, tax, income, spending and inflation will vary.</p>
+        <p class="report-narrative">Over 10 years, the model estimates net worth of ${money(netWorthAtYear(result,10))}, an investment portfolio of ${money(investmentAtYear(result,10))} and debt of ${projectedDebtMoney(result,10)}. Actual returns, tax, income, spending and inflation will vary.</p>
       `, "report-page-break")}
       ${reportSection("Progress and Wealth Over Time", "Future progress uses each year's inflation-adjusted spending target and includes super as it becomes accessible.", `
         ${reportChart("reportProgressChart", "Financial Freedom progress", "The line is capped at 100% for readability; calculated progress can be higher.")}
@@ -15389,7 +15388,10 @@
     lineChart("reportDebtChart", [{
       label: "Debt",
       color: "#dc4c3e",
-      points: projectionYears.map((year) => ({ x: year, y: year === 0 ? result.totalLiabilities : projectedDebtAtYear(result, year) })),
+      points: projectionYears.flatMap((year) => {
+        const debt = projectedDebtAtYear(result, year);
+        return Number.isFinite(debt) ? [{ x: year, y: debt }] : [];
+      }),
     }], { width, height: 280, xMarks: [0, 10, 20, 30], xLabel: (mark) => `${mark}y` });
   }
 
@@ -15495,7 +15497,7 @@
       ? revisedResult.finalProjectedCashSurplus + revisedResult.annualDebtRepayments
       : revisedResult.finalProjectedCashSurplus;
     tiles.push(
-      summaryTile("Remaining debt estimate in 10 years", `${money(currentDebt10)} -> ${money(revisedDebt10)}`),
+      summaryTile("Remaining debt estimate in 10 years", `${projectedDebtMoney(result,10)} -> ${projectedDebtMoney(revisedResult,10)}`),
       summaryTile("Estimated debt repayment timing", `${formatLoanTiming(result.loan)} -> ${formatLoanTiming(revisedResult.loan)}`),
       summaryTile("Estimated interest saved", interestSaved === null ? "Add loan balance, rate and repayment to estimate" : money(interestSaved)),
       summaryTile("Future annual cashflow after debt is repaid", money(futureAnnualCashflow)),
@@ -15799,6 +15801,7 @@
     const baseMonthly = estimatedCashflow(baseResult) / 12;
     const scenarioMonthly = estimatedCashflow(scenarioResult) / 12;
     return {
+      debtProjectionVersion: CALC.DEBT_PROJECTION_VERSION,
       rows: [
         { label: "Monthly cash surplus", value: `${money(baseMonthly)} -> ${money(scenarioMonthly)}`, currentValue: baseMonthly, scenarioValue: scenarioMonthly },
         { label: "1-year net worth", value: `${money(netWorthAtYear(baseResult, 1))} -> ${money(netWorthAtYear(scenarioResult, 1))}`, currentValue: netWorthAtYear(baseResult, 1), scenarioValue: netWorthAtYear(scenarioResult, 1) },
@@ -16228,6 +16231,7 @@
 
   function financialPlanKeyResultSnapshot(result) {
     return {
+      debtProjectionVersion: CALC.DEBT_PROJECTION_VERSION,
       rows: [
         { label: "Monthly cash surplus", value: money(estimatedCashflow(result) / 12), rawValue: estimatedCashflow(result) / 12 },
         { label: "1-year net worth", value: money(netWorthAtYear(result, 1)), rawValue: netWorthAtYear(result, 1) },
@@ -18106,11 +18110,11 @@
         ${CALC.investmentIncomeReviewItems(p).length ? `<p class="report-note"><strong>Investment income review.</strong> Dividend or distribution income has been entered separately from investment assets. Confirm that it is not already included in the investment return assumption; the combined figure can overlap with passive income.</p>` : ""}
       `, "report-page-break")}
       ${reportSection("Future Outlook", reportBasis === "today" ? "Estimates under the current plan, shown in today\'s purchasing-power dollars." : "Estimates under the current plan, shown in future nominal dollars.", `
-        ${result.investmentPropertyDebt > 0 ? '<p class="report-warning"><strong>Projection limit:</strong> The existing future net-worth and debt forecasts omit investment-property loan balances. They can overstate net worth and understate debt. Current liabilities and investment-property equity do include this debt.</p>' : ""}
+        ${result.investmentPropertyDebt > 0 ? '<p class="report-warning"><strong>Property debt:</strong> Projected debt includes remaining rental-property loan balances. Property equity is not automatically available to fund retirement spending.</p>' : ""}
         ${reportGroup("Near term", m("1-year projected net worth", reportForecastMoney(netWorthAtYear(result,1), 1)) + m("2-year projected net worth", reportForecastMoney(netWorthAtYear(result,2), 2)))}
-        ${reportGroup("10-year outlook", m("Projected net worth", reportForecastMoney(netWorthAtYear(result,10), 10), "Projected household assets less modelled liabilities.", true) + m("Projected FI assets", reportForecastMoney(projectedFiAssetsAtYear(result,10), 10), "Includes super only when each person reaches the modelled access age.") + m("Projected investment portfolio", reportForecastMoney(investmentAtYear(result,10), 10), "Non-super portfolio after modelled growth and affordable contributions.") + m("Projected debt", reportForecastMoney(projectedDebtAtYear(result,10), 10), "Existing report estimate from the loan schedule, STSL and other entered debts."))}
+        ${reportGroup("10-year outlook", m("Projected net worth", reportForecastMoney(netWorthAtYear(result,10), 10), "Projected household assets less modelled liabilities.", true) + m("Projected FI assets", reportForecastMoney(projectedFiAssetsAtYear(result,10), 10), "Includes super only when each person reaches the modelled access age.") + m("Projected investment portfolio", reportForecastMoney(investmentAtYear(result,10), 10), "Non-super portfolio after modelled growth and affordable contributions.") + m("Projected debt", projectedDebtMoney(result,10, value => reportForecastMoney(value,10)), "Remaining modelled liabilities, including rental-property loans and STSL, under the selected forecast."))}
         ${reportGroup("Long term", m("30-year projected net worth", reportForecastMoney(netWorthAtYear(result,30), 30)) + m("Modelled Financial Freedom age", targetAgeOutcome(result), "First forecast year reaching the full spending-based target."))}
-        <p class="report-narrative">Over 10 years, the model estimates net worth of ${reportForecastMoney(netWorthAtYear(result,10), 10)}, an investment portfolio of ${reportForecastMoney(investmentAtYear(result,10), 10)} and debt of ${reportForecastMoney(projectedDebtAtYear(result,10), 10)}. Actual returns, tax, income, spending and inflation will vary.</p>
+        <p class="report-narrative">Over 10 years, the model estimates net worth of ${reportForecastMoney(netWorthAtYear(result,10), 10)}, an investment portfolio of ${reportForecastMoney(investmentAtYear(result,10), 10)} and debt of ${projectedDebtMoney(result,10, value => reportForecastMoney(value,10))}. Actual returns, tax, income, spending and inflation will vary.</p>
       `, "report-page-break")}
       ${reportSection("Progress and Wealth Over Time", "Future progress uses each year's inflation-adjusted spending target and includes super as it becomes accessible.", `
         ${reportChart("reportProgressChart", "Financial Freedom progress", "The line is capped at 100% for readability; calculated progress can be higher.")}
@@ -18238,7 +18242,7 @@
       ? revisedResult.finalProjectedCashSurplus + revisedResult.annualDebtRepayments
       : revisedResult.finalProjectedCashSurplus;
     tiles.push(
-      summaryTile("Remaining debt estimate in 10 years", `${forecastMoney(currentDebt10, 10, result.plan?.investing?.inflationPct)} -> ${forecastMoney(revisedDebt10, 10, revisedResult.plan?.investing?.inflationPct)}`),
+      summaryTile("Remaining debt estimate in 10 years", `${projectedDebtMoney(result,10, value => forecastMoney(value,10,result.plan?.investing?.inflationPct))} -> ${projectedDebtMoney(revisedResult,10, value => forecastMoney(value,10,revisedResult.plan?.investing?.inflationPct))}`),
       summaryTile("Estimated debt repayment timing", `${formatLoanTiming(result.loan)} -> ${formatLoanTiming(revisedResult.loan)}`),
       summaryTile("Estimated interest saved (sum of discounted payments)", interestSaved === null ? "Add loan balance, rate and repayment to estimate" : money(interestSaved)),
       summaryTile("Future annual cashflow after debt is repaid", revisedResult.loan.payoffMonth == null ? "Payoff not reached in forecast" : forecastMoney(futureAnnualCashflow, revisedResult.loan.payoffMonth / 12, revisedResult.plan?.investing?.inflationPct)),
