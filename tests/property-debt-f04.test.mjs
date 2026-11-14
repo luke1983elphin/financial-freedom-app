@@ -100,6 +100,16 @@ test('F04 an absent detailed year is unavailable rather than a legacy fallback o
  const code=names.map(n=>{const a=source.indexOf('  function '+n+'(');return source.slice(a,source.indexOf('\n  function ',a+5));}).join('\n');
  const ctx={CALC:C,money:x=>'$'+x};vm.runInNewContext(code,ctx);assert.equal(ctx.projectedDebtMoney(r,100),'Outside projection');assert.equal(ctx.projectedDebtMoney(r,1),'$350000');
 });
+test('F04 saved-scenario comparison does not turn unavailable debt into zero or a debt saving',()=>{
+ const source=readFileSync(new URL('../app.js',import.meta.url),'utf8'),start=source.indexOf('  function reportScenarioComparisonHtml('),code=source.slice(start,source.indexOf('\n  function ',start+5));
+ for(const debts of [[null,350000],[350000,null],[null,null]]){
+  let i=0;const ctx={CALC:C,plan:fixture(),money:n=>{assert.notEqual(n,null);return '$'+n;},escapeHtml:String,
+   reportScenarioMetrics:()=>({name:'Example',debt10:debts[i++],monthlyCashflow:0,financialFreedomAge:'Age 65',netWorth10:250000,investments10:0,super10:0,netWorthLongTerm:400000}),
+   reportMoneyDifference:()=>({diff:'$0'}),reportAgeDifference:()=>({diff:'Same',better:'Similar'}),reportComparisonRow:(label,a,b,d)=>`${label}|${a}|${b}|${d.diff}`};
+  vm.runInNewContext(code,ctx);const html=ctx.reportScenarioComparisonHtml({},[{name:'Saved',plan:{}}]);
+  assert.ok(html.includes('Outside projection'));assert.ok(html.includes('no comparable 10-year debt estimate'));assert.ok(!html.includes('$350000 less estimated debt'));
+ }
+});
 test('F04 repeated calculations remain deterministic and do not mutate inputs',()=>{
  const p=fixture();assert.deepEqual(calculate(p),calculate(p));
 });

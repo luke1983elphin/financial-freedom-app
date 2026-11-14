@@ -1426,6 +1426,14 @@
     },
     {
       "group": "appFunctions",
+      "key": "reportScenarioComparisonHtml",
+      "baselineHash": "de6a4267fc67f49ca38d85378ccdfcfe182af92f975048e7358a16bc4de18a08",
+      "previousRecordedGuardHash": "de6a4267fc67f49ca38d85378ccdfcfe182af92f975048e7358a16bc4de18a08",
+      "correctedHash": "1929298843865433477252ac394fc02e780ed3913f752bf2f853f70f4d8567aa",
+      "newlyGuarded": false
+    },
+    {
+      "group": "appFunctions",
       "key": "reportPresentationHtml",
       "baselineHash": "e49d686a2a9bb363a64397b2ed06db4500be0c4fb4a5c7f421a5162763ac0b1e",
       "previousRecordedGuardHash": "e49d686a2a9bb363a64397b2ed06db4500be0c4fb4a5c7f421a5162763ac0b1e",

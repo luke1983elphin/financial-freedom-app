@@ -16,7 +16,7 @@ The correction introduces a common result-level debt selector, `FFSCalculator.pr
 | `calculator.js`, current rental debt / net-worth rows | Include canonical property debt in current liabilities and subtract remaining property debt once from future gross wealth | Home-loan schedule, held other-debt/card balances, legacy HELP estimate, investment/super returns, tax and contribution rules |
 | `calculator.js`, `projectedDebtAtYear` | Legacy results use their home/HELP/other balances plus scheduled property debt; linked results use the detailed year's actual non-study liabilities plus each owner's closing study debt | No second subtraction from detailed net worth; no new borrowing, repayment or tax rules |
 | `app.js`, `projectedDebtAtYear` | Dashboard/report/Decision debt consumers delegate to the same selector | Dollar conversion still happens only at presentation |
-| `app.js`, debt labels/chart | Outside a detailed horizon, text says “Outside projection” and the debt chart omits unavailable points | No zero or legacy-engine fallback presented as detailed debt |
+| `app.js`, debt labels/chart | Outside a detailed horizon, text and saved-scenario comparisons say “Outside projection” and the debt chart omits unavailable points | No zero or legacy-engine fallback presented as detailed debt |
 | `app.js`, report copy | Remove the now-incorrect property-debt-omission disclosure; explain included remaining loans and retained-property liquidity | Does not claim that property equity automatically funds retirement |
 | New Financial Plan / Decision result snapshots | Add `debtProjectionVersion` metadata | No overwrite/migration of old saved inputs or historical results; existing explicit save/open behaviour remains |
 
@@ -47,7 +47,7 @@ The acceptance tests specify expected balance sheets independently of the produc
 | No-property control | Existing home/HELP/card/other-debt conventions remain; no invented property debt |
 | Detailed year beyond the model horizon | `null` from the selector, “Outside projection” in text; no zero debt chart point |
 
-There are **25 focused unit tests** covering these cases, repeatability and input nonmutation. The same code also exercises report delegation, actual detailed row alignment, supported loan-category variants and the explicit F11 non-correction control.
+There are **26 focused unit tests** covering these cases, repeatability and input nonmutation. The same code also exercises report delegation, actual detailed row alignment, supported loan-category variants and the explicit F11 non-correction control.
 
 ## Financial impact and fixture review
 
@@ -61,7 +61,7 @@ There are **25 focused unit tests** covering these cases, repeatability and inpu
 
 The oracle is separate arithmetic, not `expected = correctedEngine(...)`. It constructs the expected result by adjusting only each original net-worth row by its independent loan balance, and then compares the **entire** result. Unexpected field changes fail. `--apply` is explicit and updates only these verified expectations and raw-source-checked guards.
 
-`tests/fixtures/ux-stage1-protected.json` records the whole calculator file and nine changed/new app function hashes, comparing baseline source with any previous recorded expectation. No guard exemption or tolerance is added. The active dollar-basis report/comparison renderers and new unknown-debt formatter are guarded too. A temporary deliberate change to `projectedDebtAtYear` was rejected by the normal protected-function test; `app.js` was restored byte-for-byte, and the altered source is not committed.
+`tests/fixtures/ux-stage1-protected.json` records the whole calculator file and ten changed/new app function hashes, comparing baseline source with any previous recorded expectation. No guard exemption or tolerance is added. The active dollar-basis report/comparison renderers and new unknown-debt formatter are guarded too. A temporary deliberate change to `projectedDebtAtYear` was rejected by the normal protected-function test; `app.js` was restored byte-for-byte, and the altered source is not committed.
 
 ## Browser, saved-data and PDF evidence
 

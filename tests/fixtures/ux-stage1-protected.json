@@ -698,7 +698,7 @@
     "reportMoneyDifference": "5231b537031afa4e6ab761cd5141b022b4d8e3ce7f75c8f673ebc44cc5b7c001",
     "reportAgeDifference": "7beaff0b9aac554a64b3c315e1e8c6951427dbe98b4016022afa5b095169d8b2",
     "reportComparisonRow": "48bd3208398fe36601381ecc749ac64b92306c4e75399f6c37d401712b77e137",
-    "reportScenarioComparisonHtml": "de6a4267fc67f49ca38d85378ccdfcfe182af92f975048e7358a16bc4de18a08",
+    "reportScenarioComparisonHtml": "1929298843865433477252ac394fc02e780ed3913f752bf2f853f70f4d8567aa",
     "reportScenarioCardsHtml": "24c684568481a520d9c2e46cdfbf0c95fa286720c4a7df73beb2f306cb5db5a0",
     "reportActionPlan": "3141d175fefb8b8c1e0af66fcce7f753cb52e96201b54c4715005404bdb7acdd",
     "financialProgressReportSectionHtml": "18aac9ddb748d639704b7fb98fa45e064df6a8e8bc272377c6346df1b17cdc21",
@@ -1165,6 +1165,14 @@
         "baselineHash": "f971f1422756e27e241a6a3ea1893c58052acef0f889a54fc801b89c4226ed59",
         "previousRecordedGuardHash": "f971f1422756e27e241a6a3ea1893c58052acef0f889a54fc801b89c4226ed59",
         "correctedHash": "d9b9103c28e4cb1bb96c6f30ba25855a02129d9be82a84eae6621f7cec0de2f0",
+        "newlyGuarded": false
+      },
+      {
+        "group": "appFunctions",
+        "key": "reportScenarioComparisonHtml",
+        "baselineHash": "de6a4267fc67f49ca38d85378ccdfcfe182af92f975048e7358a16bc4de18a08",
+        "previousRecordedGuardHash": "de6a4267fc67f49ca38d85378ccdfcfe182af92f975048e7358a16bc4de18a08",
+        "correctedHash": "1929298843865433477252ac394fc02e780ed3913f752bf2f853f70f4d8567aa",
         "newlyGuarded": false
       },
       {

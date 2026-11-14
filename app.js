@@ -15012,11 +15012,15 @@
     const netWorthDiff = reportMoneyDifference(currentMetrics.netWorth10, compared.netWorth10);
     const investmentDiff = reportMoneyDifference(currentMetrics.investments10, compared.investments10);
     const superDiff = reportMoneyDifference(currentMetrics.super10, compared.super10);
-    const debtDiff = reportMoneyDifference(currentMetrics.debt10, compared.debt10, true);
+    const debtComparable = Number.isFinite(currentMetrics.debt10) && Number.isFinite(compared.debt10);
+    const debtDiff = debtComparable ? reportMoneyDifference(currentMetrics.debt10, compared.debt10, true)
+      : { diff: "Outside projection", better: "Not comparable" };
     const longTermDiff = reportMoneyDifference(currentMetrics.netWorthLongTerm, compared.netWorthLongTerm);
-    const comparedDebtChange = compared.debt10 - currentMetrics.debt10;
+    const comparedDebtChange = debtComparable ? compared.debt10 - currentMetrics.debt10 : null;
     const comparedWealthChange = compared.netWorthLongTerm - currentMetrics.netWorthLongTerm;
-    const tradeoff = `${compared.name} is compared with the current plan below. It ${ageDiff.better === "Compared scenario" ? "reaches the modelled Financial Freedom age earlier" : "does not reach the modelled Financial Freedom age earlier"} and shows ${money(Math.abs(comparedDebtChange))} ${comparedDebtChange > 0 ? "more" : "less"} estimated debt in 10 years, with ${money(Math.abs(comparedWealthChange))} ${comparedWealthChange > 0 ? "higher" : "lower"} long-term net worth. These are modelled differences, not an endorsement of either scenario.`;
+    const debtTradeoff = debtComparable ? `${money(Math.abs(comparedDebtChange))} ${comparedDebtChange > 0 ? "more" : "less"} estimated debt in 10 years`
+      : "no comparable 10-year debt estimate within both projection horizons";
+    const tradeoff = `${compared.name} is compared with the current plan below. It ${ageDiff.better === "Compared scenario" ? "reaches the modelled Financial Freedom age earlier" : "does not reach the modelled Financial Freedom age earlier"} and shows ${debtTradeoff}, with ${money(Math.abs(comparedWealthChange))} ${comparedWealthChange > 0 ? "higher" : "lower"} long-term net worth. These are modelled differences, not an endorsement of either scenario.`;
     const warning = compared.warning
       ? `<p class="report-warning"><strong>Cashflow warning:</strong> The compared scenario has a negative final projected surplus, so it may not be affordable without other changes.</p>`
       : "";
@@ -15042,7 +15046,7 @@
             ${reportComparisonRow("10-year net worth", money(currentMetrics.netWorth10), money(compared.netWorth10), netWorthDiff)}
             ${reportComparisonRow("10-year investments", money(currentMetrics.investments10), money(compared.investments10), investmentDiff)}
             ${reportComparisonRow("10-year super", money(currentMetrics.super10), money(compared.super10), superDiff)}
-            ${reportComparisonRow("10-year debt", money(currentMetrics.debt10), money(compared.debt10), debtDiff)}
+            ${reportComparisonRow("10-year debt", Number.isFinite(currentMetrics.debt10) ? money(currentMetrics.debt10) : "Outside projection", Number.isFinite(compared.debt10) ? money(compared.debt10) : "Outside projection", debtDiff)}
             ${reportComparisonRow("Long-term net worth", money(currentMetrics.netWorthLongTerm), money(compared.netWorthLongTerm), longTermDiff)}
           </tbody>
         </table>
