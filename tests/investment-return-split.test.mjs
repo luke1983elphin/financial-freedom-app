@@ -32,7 +32,7 @@ test('retirement cash income is paid once, taxes reinvested yield, and earnings 
 test('scenario return adjustment revalidates yield',()=>{const p=splitPlan();const {draft}=UI.buildSemiRetirementScenarioDefaults(p,CALC.calculatePlan(p));draft.accessibleInvestments.annualReturnRatePct=2;const r=UI.runSemiRetirementProjection(ENGINE,draft);assert.equal(r.result.validation.isValid,false);});
 
 for(const fixture of JSON.parse(readFileSync(new URL('./fixtures/investment-return-legacy.json',import.meta.url),'utf8'))) {
- test(`legacy ${fixture.name}: all results and saved scenario match pre-change main`,()=>{
+ test(`legacy ${fixture.name}: all results match independently reconciled F04 baseline; saved scenario unchanged`,()=>{
   const c={console,Date:class extends Date{constructor(...args){super(...(args.length?args:['2026-09-29T00:00:00Z']));}static now(){return Date.parse('2026-09-29T00:00:00Z');}}};c.globalThis=c;
   for(const file of ['calculator.js','semiRetirementProjection.js','semiRetirementUi.js'])vm.runInNewContext(readFileSync(new URL('../'+file,import.meta.url),'utf8'),c);
   const calc=c.FFSCalculator.calculatePlan(fixture.plan),{draft}=c.FFSSemiRetirementUi.buildSemiRetirementScenarioDefaults(fixture.plan,calc);

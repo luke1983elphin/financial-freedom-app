@@ -1,5 +1,6 @@
 (function attachCalculator(global) {
   const CALCULATION_VERSION = "2026.27.3";
+  const DEBT_PROJECTION_VERSION = "2026.27.1-f04";
   const FINANCIAL_YEAR = "2026-27";
   const MONTHS_PER_YEAR = 12;
   const CHECKPOINT_YEARS = [5, 10, 20, 30];
@@ -2275,6 +2276,32 @@
     return balances[years];
   }
 
+  function projectedRentalPropertyDebt(plan, years) {
+    // Use the same active, unique liability records and scheduled balances as
+    // the FI equity calculation. Never add the legacy aggregate mirror again.
+    const propertyIds = new Set(canonicalAssetRecords(plan, INVESTMENT_PROPERTY_ASSET_CATEGORIES).map(asset => asset.id));
+    return roundCurrency(canonicalLiabilityItems(plan)
+      .filter(loan => loan.type === "rentalPropertyLoan" || (propertyIds.has(loan.linkedAssetId || loan.investmentLink?.linkedAssetId)
+        && ["investmentLoan", "shareInvestmentLoan", "managedFundLoan"].includes(loan.type)))
+      .reduce((total, loan) => total + projectedLinkedDebtBalance(loan, years), 0));
+  }
+
+  function projectedDebtAtYear(result, year) {
+    if (!Number.isInteger(year) || year < 0) throw new RangeError("Projected debt requires a nonnegative whole elapsed year.");
+    if (year === 0) return result.totalLiabilities;
+    if (result.retirementProjection) {
+      const currentAge = number(result.plan.personal.person1Age);
+      const row = result.retirementProjection.years.find(row => number(row.person1Age) - currentAge + 1 === year);
+      if (!row || !Number.isFinite(row.household?.totalDebt)) return null;
+      // Detailed household debt excludes study loans, which are tracked by owner.
+      return roundCurrency(row.household.totalDebt + row.people.reduce((total, person) => total + number(person.stslClosingBalance), 0));
+    }
+    const homeDebt = balanceAtMonth(result.loan.schedule, result.loan.finalBalance, year * MONTHS_PER_YEAR);
+    const studyDebt = Math.max(0, result.helpRepaymentEstimate.balance - result.helpRepaymentEstimate.annualRepayment * year);
+    return roundCurrency(homeDebt + studyDebt + nonNegative(result.plan.liabilities.otherDebts)
+      + nonNegative(result.plan.liabilities.creditCardBalance) + projectedRentalPropertyDebt(result.plan, year));
+  }
+
   function calculateNetFiAssetSummary({
     plan = {},
     currentAge = 0,
@@ -2419,9 +2446,7 @@
     const ownedStudyLoanBalance = roundCurrency(person1StslBalance + person2StslBalance + unassignedStslBalance);
     const legacyStudyLoanBalance = nonNegative(plan.liabilities.hecsHelpDebt);
     const totalStudyLoanBalance = roundCurrency(Math.max(legacyStudyLoanBalance, ownedStudyLoanBalance));
-    const rentalPropertyLoanBalance = roundCurrency((Array.isArray(plan.liabilityItems) ? plan.liabilityItems : [])
-      .filter((item) => item.type === "rentalPropertyLoan")
-      .reduce((total, item) => total + nonNegative(item.balance), 0));
+    const rentalPropertyLoanBalance = projectedRentalPropertyDebt(plan, 0);
     const rentalPropertyCashflow = calculateRentalCashflowSummary(plan);
     const passiveIncomeSummary = passiveIncomeBreakdown(plan, rentalPropertyCashflow);
     const annualPassiveIncome = roundCurrency(passiveIncomeSummary.total);
@@ -2870,9 +2895,8 @@
         : nonNegative(plan.assets.homeValue);
       const homeValue = residenceValue * Math.pow(1 + principalResidenceGrowthRateForAsset(plan, { category: "home" }), year);
       const investmentPropertyValue = projectedInvestmentPropertyGrossValue(plan, year);
-      const loanBalance = balanceAtMonth(loan.schedule, loan.finalBalance, year * MONTHS_PER_YEAR);
-      const projectedStudyLoanBalance = Math.max(0, totalStudyLoanBalance - helpRepaymentEstimate.annualRepayment * year);
-      const closingBalance = roundCurrency(homeValue + investmentPropertyValue + nonNegative(plan.assets.vehiclesPersonalAssets) + nonNegative(plan.assets.offsetBalance) + row.closingBalance + superProjection[index].closingBalance - loanBalance - projectedStudyLoanBalance - nonNegative(plan.liabilities.otherDebts) - creditCardBalance);
+      const projectedDebt = projectedDebtAtYear({ plan, loan, helpRepaymentEstimate }, year);
+      const closingBalance = roundCurrency(homeValue + investmentPropertyValue + nonNegative(plan.assets.vehiclesPersonalAssets) + nonNegative(plan.assets.offsetBalance) + row.closingBalance + superProjection[index].closingBalance - projectedDebt);
       return { year, age: currentAge + year, closingBalance };
     });
     const financialFreedomProgressProjection = investmentProjection.map((row, index) => {
@@ -3122,6 +3146,8 @@
 
   global.FFSCalculator = {
     CALCULATION_VERSION,
+    DEBT_PROJECTION_VERSION,
+    projectedDebtAtYear,
     FINANCIAL_YEAR,
     DEFAULT_INVESTMENT_PROPERTY_GROWTH_RATE,
     DEFAULT_PRINCIPAL_RESIDENCE_GROWTH_RATE,

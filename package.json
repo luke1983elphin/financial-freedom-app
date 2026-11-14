@@ -56,7 +56,9 @@
     "test:browser-age-pension": "node --test tests/age-pension-browser.mjs",
     "test:browser-release": "node --test tests/release-browser.mjs",
     "test:browser-dollar-basis": "node --test tests/dollar-basis-browser.mjs",
-    "test:browser": "node --test --test-concurrency=1 tests/dollar-basis-browser.mjs tests/stage1-browser-workflows.mjs tests/age-pension-browser.mjs tests/release-browser.mjs tests/retirement-tax-funding-f08-browser.mjs",
+    "test:browser": "node --test --test-concurrency=1 tests/dollar-basis-browser.mjs tests/stage1-browser-workflows.mjs tests/age-pension-browser.mjs tests/release-browser.mjs tests/retirement-tax-funding-f08-browser.mjs tests/property-debt-f04-browser.mjs",
+    "test:browser-f04": "node --test tests/property-debt-f04-browser.mjs",
+    "test:f04": "node scripts/run-tests.mjs --group f04",
     "test:f08": "node scripts/run-tests.mjs --group f08",
     "test:browser-f08": "node --test tests/retirement-tax-funding-f08-browser.mjs"
   }

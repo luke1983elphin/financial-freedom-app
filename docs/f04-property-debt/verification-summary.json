@@ -1,0 +1,67 @@
+{
+  "baseline": "0e9a6a4c007e47dc83f2ece7832b986755cb597d",
+  "debtProjectionVersion": "2026.27.1-f04",
+  "regression": {
+    "suites": 65,
+    "passed": 1289,
+    "failed": 0,
+    "skipped": 0,
+    "todo": 0,
+    "cancelled": 0,
+    "total": 1289
+  },
+  "browser": {
+    "tests": 54,
+    "passed": 54,
+    "failed": 0,
+    "skipped": 0
+  },
+  "focusedFinancialTests": 26,
+  "protectedGuardTests": 8,
+  "guardMutation": {
+    "expectedExit": 1,
+    "failureNames": "projectedDebtAtYear",
+    "temporaryAlterationRestored": true
+  },
+  "auditCases": {
+    "total": 48,
+    "unchanged": 45,
+    "changed": [
+      "H22",
+      "H23",
+      "H24"
+    ],
+    "changedFields": 90
+  },
+  "fullGolden": {
+    "fixtures": 9,
+    "unchanged": 6,
+    "changedFields": 66,
+    "detailedRetirementDraftsAndScenariosIdentical": true
+  },
+  "F08FinancialEvidenceUnchanged": true,
+  "unmodifiedProtectedFinancialSources": [
+    "semiRetirementProjection.js",
+    "semiRetirementUi.js",
+    "agePensionEstimate.js",
+    "weekly-plan.js"
+  ],
+  "runtime": {
+    "node": "v24.22.1",
+    "pnpm": "11.25.0",
+    "declaredPnpm": "11.19.0"
+  },
+  "hashes": {
+    "calculator.js": "77c04fef8a213cd06cd774d9e5eda333cda07cc4ba901b77a8e25245b313c65c",
+    "app.js": "d889e5d3f832e69880bb877eb795a5808b6dfb10fcab784f3fa9ab6e5dac8cd7",
+    "tests/fixtures/ux-stage1-before.json.gz": "7d0ad7a31a71bb8e1446ecf1907ccefd98af86f7ac47060a7a47e3d3b83192fe",
+    "tests/fixtures/ux-stage1-before.pre-f04.json.gz": "cf489dd2e88c3e97917afdc626e22d36bee457fe8ec144960cc6e6336185ad97"
+  },
+  "mergeOrDeploymentPerformed": false,
+  "knownMaterialLimits": [
+    "F11 duplicated property assets",
+    "detailed net worth omits separately tracked remaining HELP balances",
+    "F07 and other audit findings remain unresolved"
+  ],
+  "outsideHorizonSavedComparisonTest": "Current missing, saved missing, and both missing remain unavailable; no zero or debt-saving claim"
+}
