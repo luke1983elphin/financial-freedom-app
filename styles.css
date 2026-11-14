@@ -10318,3 +10318,57 @@ body.scenario-save-modal-open {
 @media(max-width:600px) { .fa-scope { padding: 12px; } .fa-scope ul { font-size: .8125rem; } }
 /* Reveal the Assumptions header below the app's sticky page header on entry. */
 body[data-active-view="assumptions"] #appWorkspace { scroll-margin-top: calc(var(--app-header-height, 96px) + 12px); }
+
+/* Annual forecast: mobile presentation only; the original desktop/print table
+   and financial renderer remain unchanged. */
+.retirement-redesign .maf-guide { display: none; }
+.retirement-redesign .maf-years, .retirement-redesign .maf-jump { display: none; }
+@media screen and (max-width: 900px) {
+  .retirement-redesign .rr-explore .maf-responsive-annual { margin-inline: -8px; }
+  .retirement-redesign .maf-responsive-annual .semi-retirement-projection-scroll,
+  .retirement-redesign .maf-responsive-annual .maf-desktop-guide { display: none; }
+  .retirement-redesign .maf-guide { display: block; font-size: .875rem; line-height: 1.5; color: #526579; }
+  .retirement-redesign .maf-years { display: grid; gap: 10px; max-width: calc(100% - 16px); margin: 8px !important; }
+  .retirement-redesign .maf-responsive-annual,
+  .retirement-redesign .maf-year,
+  .retirement-redesign .maf-responsive-annual > summary,
+  .retirement-redesign .maf-year > summary { scroll-margin-top: calc(var(--app-header-height, 64px) + 16px); }
+  .retirement-redesign .maf-year { border: 1px solid #cbd8e5; border-radius: 12px; min-width: 0; max-width: 100%; background: #fff; }
+  .retirement-redesign .maf-year.has-warning { border-color: #c38a27; }
+  .retirement-redesign .maf-year-summary { display: grid; gap: 5px; min-height: 44px; padding: 12px; cursor: pointer; list-style: none; }
+  .maf-year-summary::-webkit-details-marker { display: none; }
+  .maf-year-summary::marker { content: ""; }
+  .maf-year-summary:focus-visible { outline: 3px solid #286da8; outline-offset: 2px; border-radius: 10px; }
+  .maf-year-title, .maf-year-balance, .maf-year-control { display: flex; align-items: baseline; flex-wrap: wrap; justify-content: space-between; gap: 4px 10px; min-width: 0; }
+  .maf-year-alert { color: #80500b; background: #fff3d8; border-radius: 5px; padding: 3px 6px; font-size: .875rem; font-weight: 700; }
+  .maf-year-title > strong { font-size: 1.125rem; color: #153653; }
+  .maf-year-ages, .maf-year-phase { color: #526579; font-size: .875rem; }
+  .maf-year-balance { font-size: .875rem; border-top: 1px solid #e7edf3; padding-top: 7px; margin-top: 3px; }
+  .maf-year-balance strong { font-size: 1rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .maf-year-control { color: #185d91; font-size: .875rem; font-weight: 700; padding-top: 3px; }
+  .maf-year-summary .maf-hide, .maf-year[open] > summary .maf-view { display: none; }
+  .maf-year[open] > summary .maf-hide { display: inline; }
+  .maf-year[open] > summary .maf-chevron { transform: rotate(180deg); }
+  .maf-year[open] > summary { background: #f0f6fc; border-radius: 12px 12px 0 0; }
+  .maf-year-content { padding: 8px; min-width: 0; }
+  .maf-year-context { font-size: .875rem; line-height: 1.5; color: #526579; overflow-wrap: anywhere; margin-bottom: 10px; }
+  .maf-year-context > span { display: block; }
+  .retirement-redesign .maf-year section { min-width: 0; max-width: 100%; padding: 8px; gap: 0; margin: 0; }
+  .maf-glance { border: 1px solid #dbe5ef; border-radius: 10px; }
+  .maf-year h5 { font-size: 1rem; line-height: 1.4; margin: 0 0 8px; overflow-wrap: anywhere; }
+  .maf-year h6 { font-size: .875rem; line-height: 1.5; color: #185d91; margin: 8px 0 2px; }
+  .retirement-redesign .maf-year .maf-person-group { display: block; min-width: 0; }
+  .retirement-redesign .maf-year .maf-data-row,
+  .retirement-redesign .maf-glance > div { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 3px 10px; padding: 7px 0; border-bottom: 1px solid #edf1f5; min-width: 0; }
+  .maf-year .maf-data-row > span, .maf-glance > div > span { flex: 1 1 8rem; min-width: 0; font-size: .875rem; line-height: 1.45; color: #526579; overflow-wrap: anywhere; }
+  .retirement-redesign .maf-year .maf-data-row > strong,
+  .retirement-redesign .maf-glance > div > strong { min-width: 0; max-width: 100%; margin-left: auto; text-align: right; font-size: .9375rem; line-height: 1.45; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+  .maf-year .semi-retirement-annual-detail { gap: 10px; }
+  .maf-year .semi-retirement-annual-subgroup { padding-block: 7px; }
+  .retirement-redesign .maf-jump { display: grid; gap: 6px; margin: 12px; color: #173451; font-size: .875rem; font-weight: 700; }
+  .maf-jump select { width: 100%; min-width: 0; min-height: 44px; border: 1px solid #b9cbdc; border-radius: 8px; background: white; color: #173451; padding: 8px; font: inherit; font-size: 1rem; }
+  .maf-jump select:focus-visible { outline: 3px solid #286da8; outline-offset: 2px; }
+}
+@media print {
+  .retirement-redesign .maf-years, .retirement-redesign .maf-guide { display: none !important; }
+}

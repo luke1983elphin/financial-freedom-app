@@ -297,6 +297,7 @@
       annual.querySelector("summary strong").textContent = "Detailed Annual Forecast";
       annual.dataset.semiDetailState = "rr-annual"; annual.open = Boolean(state["rr-annual"]);
       annual.classList.add("rr-panel"); explore.append(annual);
+      mobileAnnualCards(annual, state, make);
     }
     if (assumptions) {
       assumptions.querySelector("summary strong").textContent = "Assumptions Used";
@@ -321,6 +322,78 @@
       }
     });
     return template.innerHTML;
+  }
+
+  // Presentation only: move the renderer's existing label/value nodes. No model
+  // inputs, calculations, money formatting or desktop table cells are changed.
+  function mobileAnnualCards(annual, state, make) {
+    const list = annual.querySelector(".semi-retirement-annual-cards");
+    if (!list) return;
+    list.classList.add("maf-years"); annual.classList.add("maf-responsive-annual");
+    const guide = make("p", "maf-guide", "Choose a year to see each person's income and tax, household cashflow and closing balances.");
+    list.before(guide);
+    const jump = make("label", "maf-jump"), select = make("select", "");
+    select.dataset.mafJump = "";
+    const placeholder = make("option", "", "Choose a year…"); placeholder.value = ""; select.append(placeholder);
+    jump.append(make("span", "", "Jump to year"), select); list.before(jump);
+    const originalGuide = annual.querySelector(".semi-retirement-projection-scroll")?.previousElementSibling;
+    if (originalGuide?.textContent.includes("scroll this table")) originalGuide.classList.add("maf-desktop-guide");
+    for (const [index, card] of [...list.children].entries()) {
+      const heading = card.firstElementChild, originalDetails = card.querySelector(":scope > details");
+      const detail = originalDetails?.querySelector(".semi-retirement-annual-detail");
+      if (!heading || !detail) continue;
+      const title = heading.querySelector("strong")?.textContent || `Year ${index + 1}`;
+      const year = /^\d{4}/.exec(title)?.[0] || String(index + 1);
+      const ages = [...title.matchAll(/\bage (\d+)/gi)].map(match => match[1]);
+      const option = make("option", "", `${year}${ages.length ? ` · ages ${ages.join(" / ")}` : ""}`);
+      option.value = year; select.append(option);
+      const node = make("details", `maf-year${card.classList.contains("has-warning") ? " has-warning" : ""}`);
+      node.dataset.semiDetailState = `maf-year-${year}`; node.open = Boolean(state[node.dataset.semiDetailState]);
+      const summary = make("summary", "maf-year-summary"), line = make("span", "maf-year-title");
+      line.append(make("strong", "", year), make("span", "maf-year-ages", ages.length ? `Ages ${ages.join(" / ")}` : "Annual forecast"));
+      summary.append(line, make("span", "maf-year-phase", heading.querySelector("span")?.textContent || ""));
+      if (card.classList.contains("has-warning")) summary.append(make("span", "maf-year-alert", "Funding shortfall"));
+      const overview = [...card.children].filter(child => child !== heading && child !== originalDetails);
+      const balance = overview.find(row => row.querySelector("span")?.textContent === "Accessible investments");
+      if (balance) {
+        const cue = make("span", "maf-year-balance");
+        cue.append(make("span", "", "Non-super at year end"), make("strong", "", balance.querySelector("strong")?.textContent));
+        summary.append(cue);
+      }
+      const control = make("span", "maf-year-control");
+      control.append(make("span", "maf-view", "View year details"), make("span", "maf-hide", "Hide year details"));
+      const arrow = make("span", "maf-chevron", "⌄"); arrow.setAttribute("aria-hidden", "true"); control.append(arrow); summary.append(control);
+      const content = make("div", "maf-year-content"); heading.classList.add("maf-year-context");
+      content.append(heading);
+      const glance = make("section", "maf-glance"); glance.append(make("h5", "", "Year at a glance"), ...overview); content.append(glance);
+      // Mark the original rows before nesting them so every source row can be
+      // checked for exact preservation, including notes and optional rows.
+      for (const row of detail.querySelectorAll("section > div")) {
+        row.classList.add("maf-value-row");
+        if (row.querySelector(":scope > span")) row.classList.add("maf-data-row");
+      }
+      for (const section of detail.querySelectorAll(":scope > section")) {
+        const rows = [...section.children].filter(child => child.matches(".maf-data-row"));
+        const person = rows.some(row => row.querySelector("span")?.textContent === "Gross employment income");
+        if (!person) continue;
+        section.classList.add("maf-person");
+        const groups = new Map();
+        for (const row of rows) {
+          const label = row.querySelector("span").textContent;
+          const group = /super|contribution|earnings|withdrawal/i.test(label) && !/taxable|reduction/i.test(label) ? "Superannuation"
+            : /interest income|dividend income|rental taxable income|distribution income/i.test(label) ? "Investment income"
+              : /tax|medicare|STSL|SAPTO/i.test(label) ? "Tax and study loans"
+                : "Employment and cash income";
+          if (!groups.has(group)) groups.set(group, make("div", "maf-person-group"));
+          groups.get(group).append(row);
+        }
+        for (const name of ["Employment and cash income", "Investment income", "Tax and study loans", "Superannuation"]) {
+          const group = groups.get(name); if (!group) continue;
+          group.prepend(make("h6", "", name)); section.append(group);
+        }
+      }
+      content.append(detail); node.append(summary, content); card.replaceWith(node);
+    }
   }
 
   function chart(data, make, money, state) {
@@ -385,6 +458,29 @@
   }
 
   function installInteractions() {
+    let printState = [];
+    document.addEventListener("change", event => {
+      if (!event.target.matches?.("[data-maf-jump]") || !event.target.value) return;
+      const year = [...event.target.closest(".maf-responsive-annual").querySelectorAll(".maf-year")]
+        .find(node => node.dataset.semiDetailState === `maf-year-${event.target.value}`);
+      if (year) {
+        year.open = true;
+        const summary = year.querySelector(":scope > summary"); summary.focus({preventScroll:true});
+        summary.scrollIntoView({block:"start",behavior:"instant"});
+      }
+    });
+    document.addEventListener("toggle", event => {
+      const details = event.target;
+      if (!details?.matches?.(".maf-year, .maf-responsive-annual") || !details.open
+        || printState.length || !global.matchMedia("(max-width: 900px)").matches) return;
+      global.requestAnimationFrame(() => {
+        const summary = details.querySelector(":scope > summary"), box = summary?.getBoundingClientRect();
+        const headerBottom = document.querySelector("header")?.getBoundingClientRect().bottom || 0;
+        // Only reveal an obscured control; do not jump when reading further down
+        // an expanded year or when results are re-rendered in another dollar basis.
+        if (box && box.bottom > 0 && box.top < headerBottom + 8) summary.scrollIntoView({block:"start",behavior:"instant"});
+      });
+    }, true);
     global.addEventListener("resize", () => document.querySelectorAll("svg[data-rr-points]").forEach(drawChart));
     document.addEventListener("click", event => {
       const action = event.target.closest("[data-semi-action]")?.dataset.semiAction;
@@ -402,7 +498,6 @@
         if (details) { details.open = true; details.querySelector("summary").focus(); details.scrollIntoView({ block: "center", behavior: "smooth" }); }
       }
     });
-    let printState = [];
     global.addEventListener("beforeprint", () => {
       printState = [...document.querySelectorAll(".retirement-redesign details")].map(node => [node, node.open]);
       printState.forEach(([node]) => { node.open = true; });

@@ -7,7 +7,7 @@ import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawn } from "node:child_process";
+import { spawn, execFileSync } from "node:child_process";
 
 const root = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const mime = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json" };
@@ -21,6 +21,24 @@ let browserMessages = [];
 const csp = JSON.parse(await readFile(path.join(root,"vercel.json"),"utf8")).headers[0].headers.find(h=>h.key==="Content-Security-Policy").value;
 import aiHandler from "../api/ai-insights.js";
 import payslipHandler from "../api/payslip-extract.js";
+
+const publishMobileEvidence=process.env.FFS_CAPTURE_MOBILE_EVIDENCE==='1';
+const mobileReviewDirectory=path.join(root,publishMobileEvidence?'docs/mobile-usability':'test-results/mobile-usability');
+const publishedJourneyScreenshot=(width,slug)=>width===375 || (width===390&&['first-visit','my-plan-empty','semiretirement','weekly-created','assumptions-error','scenario-compare','reports','backup-notice','navigation'].includes(slug)) || (width>=768&&['dashboard','setup','reports','navigation'].includes(slug));
+const mobileBefore = process.env.FFS_MOBILE_BEFORE === '1';
+const annualMobileEvidence = [];
+async function mobileScreenshot(file) {
+  await evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+  // Allow Chromium's compositor to paint the new route/scroll position before
+  // collecting pixels; DOM geometry can settle before the screenshot surface.
+  await new Promise(resolve=>setTimeout(resolve,150));
+  const match=/^journey\/(\d+)-(.*)\.png$/.exec(file);
+  const folder=publishMobileEvidence&&match&&!publishedJourneyScreenshot(Number(match[1]),match[2])?path.join(root,'test-results/mobile-usability'):mobileReviewDirectory;
+  const output=path.join(folder,file);await mkdir(path.dirname(output),{recursive:true});
+  const clip=await evaluate('({x:scrollX,y:scrollY,width:innerWidth,height:innerHeight,scale:1})');
+  const image=await cdp.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip});
+  await writeFile(output,Buffer.from(image.data,'base64'));
+}
 
 function chromePath() {
   if (process.env.FFS_BROWSER_EXECUTABLE && existsSync(process.env.FFS_BROWSER_EXECUTABLE)) return process.env.FFS_BROWSER_EXECUTABLE;
@@ -116,6 +134,9 @@ before(async () => {
       const resolved = path.resolve(root, relative);
       if (!resolved.startsWith(root)) throw new Error("Invalid path");
       let body = await readFile(resolved);
+      if (mobileBefore && ['styles.css','retirement-results.js'].includes(relative)) {
+        body = execFileSync('git',['show',`913700cda5599d459c26cf821d2fa1da4124e3fa:${relative}`],{cwd:root});
+      }
       // Test-only alternate-year fixture; production files and calculation logic remain unchanged.
       if (relative === "calculator.js" && evidenceFinancialYear) body = Buffer.from(body.toString().replace('const FINANCIAL_YEAR = "2026-27";', `const FINANCIAL_YEAR = "${evidenceFinancialYear}";`));
       if (relative === "semiRetirementUi.js") body = Buffer.from(body.toString().replace('  function runSemiRetirementProjection(engine, draft) {', '  function runSemiRetirementProjection(engine, draft) { window.__retirementRuns = (window.__retirementRuns || 0) + 1;'));
@@ -494,7 +515,8 @@ for (const width of [1366, 375, 430]) test(`retirement redesign structure, contr
     const fits=r.top>=l.bottom-1&&value.scrollWidth<=value.clientWidth+1&&document.documentElement.scrollWidth<=innerWidth+1;
     value.textContent=original;return fits;})()`),'long payoff descriptions wrap without clipping or overlapping labels');
   assert.ok(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'), 'expanded content stays within viewport');
-  assert.ok(await evaluate("document.querySelector('.semi-retirement-projection-scroll').getBoundingClientRect().width>0"), 'full annual table remains scrollable on phones');
+  assert.equal(await evaluate("getComputedStyle(document.querySelector('.semi-retirement-projection-scroll')).display!=='none'"),width>900,'Desktop keeps the table; mobile uses the stacked year cards');
+  assert.equal(await evaluate("getComputedStyle(document.querySelector('.maf-years')).display!=='none'"),width<=900);
 });
 
 test('retirement redesign keeps zero-inflation values and pension inclusion accurate', async () => {
@@ -884,4 +906,141 @@ test('Assumptions round trips retain unsaved edits, comparison isolation, save/u
   await assumptionButton('Restore app defaults…');await assumptionButton('Use these defaults');assert.equal(await evaluate('FFSStage1BrowserTestHooks.getPlan().investing.inflationPct'),0);
   await assumptionButton('Undo unsaved edits');assert.equal(await evaluate("document.querySelector('[data-assumption=inflationPct]').value"),'0');
   assert.deepEqual(browserMessages,[]);
+});
+
+for (const width of [375,390,768,1366]) test(`mobile annual forecast readable expanded details at ${width}px`, async()=>{
+  await cdp.send('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:width<600});
+  await navigate();await fixture();await select('future');
+  await evaluate("FFSStage1BrowserTestHooks.showWorkspace('semiretirement');document.querySelector('[data-semi-action=calculate]').click()");
+  await evaluate(`__dollarTest.configureRetirement({'people.0.name':'Alexandria-Marie Long Household Name','people.1.name':'Christopher Long Household Name','accessibleInvestments.openingBalance':9876543210})`);
+  const model=await evaluate('JSON.stringify(__dollarTest.retirement().result)'),plan=await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),saved=await evaluate('JSON.stringify(__dollarTest.savedScenarios())');
+  await evaluate("document.querySelector('[data-semi-detail-state=rr-annual]').open=true;window.scrollTo({top:scrollY+document.querySelector('[data-semi-detail-state=rr-annual]').getBoundingClientRect().top-80,behavior:'instant'})");
+  const phase=mobileBefore?'before':'after';await mobileScreenshot(`${phase}/annual-collapsed-${width}.png`);
+  await evaluate(`(()=>{const annual=document.querySelector('[data-semi-detail-state=rr-annual]');const year=annual.querySelector('.maf-year')||annual.querySelector('.semi-retirement-annual-card details');year.open=true;window.scrollTo({top:scrollY+year.getBoundingClientRect().top-80,behavior:'instant'});})()`);
+  if(width>900)await evaluate("document.querySelector('.semi-retirement-annual-table tbody details').open=true");
+  await mobileScreenshot(`${phase}/annual-expanded-${width}.png`);
+  const measure=await evaluate(`(()=>{const root=document.querySelector('[data-semi-detail-state=rr-annual]'),cards=root.querySelector('.semi-retirement-annual-cards'),scroll=root.querySelector('.semi-retirement-projection-scroll'),year=root.querySelector('.maf-year');
+    return {width:innerWidth,documentWidth:document.documentElement.scrollWidth,tableVisible:getComputedStyle(scroll).display!=='none',tableOverflow:scroll.scrollWidth>scroll.clientWidth+1,
+      cardsVisible:getComputedStyle(cards).display!=='none',mobileYearCount:root.querySelectorAll('.maf-year').length,
+      clipped:year?[...year.querySelectorAll('summary,section,section > div,span,strong')].filter(n=>n.getClientRects().length).filter(n=>{const b=n.getBoundingClientRect();return b.left<-.5||b.right>innerWidth+.5||n.scrollWidth>n.clientWidth+1;}).map(n=>({tag:n.tagName,text:n.textContent.slice(0,80)})):[],
+      summaryHeight:year?.querySelector('summary')?.getBoundingClientRect().height,
+      people:year?[...year.querySelectorAll('.maf-person > h5')].map(n=>n.textContent):[]};})()`);
+  annualMobileEvidence.push({width,phase,...measure});
+  if(!mobileBefore){
+    if(width<=900){assert.equal(measure.tableVisible,false);assert.equal(measure.cardsVisible,true);assert.ok(measure.documentWidth<=width);assert.deepEqual(measure.clipped,[]);assert.ok(measure.summaryHeight>=44);assert.equal(measure.people.length,2);assert.ok(measure.people[0].includes('Alexandria'));assert.ok(measure.people[1].includes('Christopher'));
+      const parity=await evaluate(`(()=>{const t=document.createElement('template');t.innerHTML=__dollarTest.originalRetirementHtml();const original=[...t.content.querySelectorAll('.semi-retirement-annual-cards .semi-retirement-annual-detail section > div')].map(n=>n.textContent.trim()).sort();const actual=[...document.querySelectorAll('.maf-year .semi-retirement-annual-detail .maf-value-row')].map(n=>n.textContent.trim()).sort();return JSON.stringify(original)===JSON.stringify(actual);})()`);assert.equal(parity,true,'Every original label/value row is retained exactly');
+      const ownerParity=await evaluate(`(()=>{const t=document.createElement('template');t.innerHTML=__dollarTest.originalRetirementHtml();const originals=[...t.content.querySelectorAll('.semi-retirement-annual-card')].map(card=>[...card.querySelectorAll('.semi-retirement-annual-detail > section')].filter(s=>[...s.querySelectorAll(':scope > div > span')].some(n=>n.textContent==='Gross employment income')).map(s=>({person:s.querySelector('h5').textContent,rows:[...s.querySelectorAll(':scope > div')].map(n=>n.textContent.trim()).sort()})));const shown=[...document.querySelectorAll('.maf-year')].map(y=>[...y.querySelectorAll('.maf-person')].map(s=>({person:s.querySelector('h5').textContent,rows:[...s.querySelectorAll('.maf-value-row')].map(n=>n.textContent.trim()).sort()})));return JSON.stringify(originals)===JSON.stringify(shown);})()`);assert.equal(ownerParity,true,'Rows remain associated with the correct person in every year');
+      const beforeRuns=await evaluate('window.__retirementRuns');await evaluate("document.querySelector('.maf-year > summary').focus()");await key('Enter');assert.equal(await evaluate("document.querySelector('.maf-year').open"),false);await key('Enter');assert.equal(await evaluate("document.querySelector('.maf-year').open"),true);assert.equal(await evaluate('window.__retirementRuns'),beforeRuns);
+      const taps=[];await journeyTap('.maf-year > summary',taps);assert.equal(await evaluate("document.querySelector('.maf-year').open"),false);await journeyTap('.maf-year > summary',taps);assert.equal(await evaluate("document.querySelector('.maf-year').open"),true);assert.ok(taps.every(t=>t.status==='pointer-click'));
+      const jump=await evaluate(`(()=>{const n=document.querySelector('[data-maf-jump]');n.value=n.options[3].value;n.dispatchEvent(new Event('change',{bubbles:true}));return {year:n.value,focused:document.activeElement.closest('.maf-year')?.dataset.semiDetailState,top:document.activeElement.getBoundingClientRect().top,header:document.querySelector('header').getBoundingClientRect().bottom};})()`);
+      assert.equal(jump.focused,'maf-year-'+jump.year);assert.ok(jump.top>=jump.header,'Jump target stays below sticky header');assert.equal(await evaluate('window.__retirementRuns'),beforeRuns);
+      await select('today');assert.equal(await evaluate("document.querySelector('.maf-year').open"),true,'Year stays expanded when dollar basis changes');
+      const values=await evaluate(`(()=>{const t=document.createElement('template');t.innerHTML=__dollarTest.originalRetirementHtml();return {before:[...t.content.querySelectorAll('.semi-retirement-annual-cards .semi-retirement-annual-detail section > div')].map(n=>n.textContent.trim()).sort(),after:[...document.querySelectorAll('.maf-year .semi-retirement-annual-detail .maf-value-row')].map(n=>n.textContent.trim()).sort()};})()`);assert.deepEqual(values.after,values.before,'Today-dollar values are copied, not recalculated');
+    }else{assert.equal(measure.tableVisible,true);assert.equal(measure.cardsVisible,false);}
+    const desktopParity=await evaluate(`(()=>{const t=document.createElement('template');t.innerHTML=__dollarTest.originalRetirementHtml();return t.content.querySelector('.semi-retirement-annual-table').textContent===document.querySelector('.semi-retirement-annual-table').textContent;})()`);assert.equal(desktopParity,true,'Desktop table and all its data are unchanged');
+    assert.equal(await evaluate('JSON.stringify(__dollarTest.retirement().result)'),model);assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),plan);assert.equal(await evaluate('JSON.stringify(__dollarTest.savedScenarios())'),saved);
+  }
+  await mkdir(mobileReviewDirectory,{recursive:true});await writeFile(path.join(mobileReviewDirectory,`${phase}-annual-metrics.json`),JSON.stringify(annualMobileEvidence,null,2)+'\n');
+});
+
+async function journeyTap(selector, operations) {
+  const exists=await evaluate(`(()=>{const node=[...document.querySelectorAll(${JSON.stringify(selector)})].find(n=>n.getClientRects().length);if(!node)return null;node.scrollIntoView({block:'center',behavior:'instant'});return true;})()`);
+  await evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+  const target=exists?await evaluate(`(()=>{const node=[...document.querySelectorAll(${JSON.stringify(selector)})].find(n=>n.getClientRects().length);const b=node.getBoundingClientRect(),x=b.left+b.width/2,y=b.top+b.height/2;return {x,y,label:node.textContent.trim().slice(0,90),hit:node.contains(document.elementFromPoint(x,y))};})()`):null;
+  if(target&&!target.hit&&selector!=='[data-durability-action=dismiss-prompt]'&&await evaluate("[...document.querySelectorAll('[data-durability-action=dismiss-prompt]')].some(n=>n.getClientRects().length)")){await mobileScreenshot(`journey/${await evaluate('innerWidth')}-backup-notice.png`);operations.push({event:'Backup prompt interrupted tap',selector});await journeyTap('[data-durability-action=dismiss-prompt]',operations);return journeyTap(selector,operations);}
+  if(!target){operations.push({selector,status:'not-visible'});return false;}
+  if(!target.hit){operations.push({selector,label:target.label,status:'blocked-tap; DOM fallback for continued audit'});await evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);}
+  else{await cdp.send('Input.dispatchMouseEvent',{type:'mousePressed',x:target.x,y:target.y,button:'left',clickCount:1});await cdp.send('Input.dispatchMouseEvent',{type:'mouseReleased',x:target.x,y:target.y,button:'left',clickCount:1});operations.push({selector,label:target.label,status:'pointer-click'});}
+  await evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');return true;
+}
+async function journeyNavigate(view, operations){
+  if(await evaluate(`(()=>{const n=document.querySelector('.nav-more-items [data-view="${view}"]');return Boolean(n&&!n.getClientRects().length);})()`))await journeyTap('#moreNavigation > summary',operations);
+  assert.ok(await journeyTap(`.workspace-nav [data-view="${view}"]`,operations),'Navigation exists: '+view);
+  assert.equal(await evaluate('document.body.dataset.activeView'),view);
+}
+
+test('first-time household journey audit at phone tablet and desktop widths',async()=>{
+  const evidence=[];
+  for(const width of [375,390,768,1366]){
+    await cdp.send('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:width<600});
+    await evaluate('localStorage.clear()');await navigate();const operations=[];
+    const record=async(slug,view=null)=>{
+      await evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+      if(await evaluate("[...document.querySelectorAll('[data-durability-action=dismiss-prompt]')].some(n=>n.getClientRects().length)")){await mobileScreenshot(`journey/${width}-backup-notice.png`);operations.push({event:'backup notice interrupted current task',screen:slug});await journeyTap('[data-durability-action=dismiss-prompt]',operations);}
+      if(view)await evaluate(`(()=>{const root=document.querySelector('[data-view-panel="${view}"]');const focus=${slug.endsWith('-error')}?root.querySelector('input:invalid,select:invalid,textarea:invalid,[aria-invalid=true]'):null;window.scrollTo({top:scrollY+(focus||root).getBoundingClientRect().top-100,behavior:'instant'});})()`);
+      else await evaluate("window.scrollTo({top:0,behavior:'instant'})");
+      await mobileScreenshot(`journey/${width}-${slug}.png`);
+      const facts=await evaluate(`(()=>{const root=${view?`document.querySelector('[data-view-panel="${view}"]')`:'document.querySelector("#intro")||document.body'},visible=n=>{if(!n.getClientRects().length)return false;for(let p=n.parentElement;p&&p!==root;p=p.parentElement)if(p.matches('details:not([open])')&&!p.querySelector(':scope > summary')?.contains(n))return false;return true;};
+        const controls=[...root.querySelectorAll('button,summary,input,select,textarea')].filter(visible);
+        return {activeView:document.body.dataset.activeView,documentWidth:document.documentElement.scrollWidth,viewport:innerWidth,
+          headings:[...root.querySelectorAll('h2,h3,h4')].filter(visible).slice(0,12).map(n=>n.textContent.trim()),
+          controls:controls.length,viewportControls:controls.filter(n=>{const b=n.getBoundingClientRect();return b.bottom>64&&b.top<innerHeight;}).length,smallTargets:controls.filter(n=>n.getBoundingClientRect().height<44).map(n=>({text:(n.getAttribute('aria-label')||n.textContent||n.name||n.id).trim().slice(0,70),height:Math.round(n.getBoundingClientRect().height)})).slice(0,18),
+          actions:[...root.querySelectorAll('button,summary')].filter(visible).slice(0,16).map(n=>n.textContent.trim().slice(0,90)),
+          inputs:[...root.querySelectorAll('input,select,textarea')].filter(visible).slice(0,12).map(n=>({label:n.closest('label')?.textContent.trim().slice(0,110)||n.getAttribute('aria-label')||n.id,type:n.type,value:n.type==='password'?'':n.value})),
+          invalidInputs:[...root.querySelectorAll('input,select,textarea')].filter(n=>visible(n)&&!n.validity.valid).map(n=>({label:n.closest('label')?.textContent.trim().slice(0,100)||n.id,message:n.validationMessage})),
+          errors:[...root.querySelectorAll('[role=alert],.field-error,.fa-errors')].filter(visible).map(n=>n.textContent.trim()).filter(Boolean).slice(0,5),
+          horizontalRegions:[...root.querySelectorAll('*')].filter(n=>visible(n)&&n.clientWidth>0&&n.scrollWidth>n.clientWidth+1&&['auto','scroll'].includes(getComputedStyle(n).overflowX)).map(n=>({element:n.id||n.className,viewport:n.clientWidth,content:n.scrollWidth,label:n.getAttribute('aria-label')})).slice(0,12),
+          openSections:[...root.querySelectorAll('details[open]')].filter(visible).length,
+          text:root.innerText.slice(0,5000)};})()`);
+      evidence.push({width,screen:slug,screenshot:publishedJourneyScreenshot(width,slug)?`journey/${width}-${slug}.png`:null,reproductionCapture:`test-results/mobile-usability/journey/${width}-${slug}.png`,...facts});
+      await writeFile(path.join(mobileReviewDirectory,'journey-evidence.json'),JSON.stringify(evidence,null,2)+'\n');
+    };
+    await record('first-visit');
+    await journeyTap('#heroStartButton',operations);await evaluate('FFSStage1BrowserTestHooks.closeDurabilityDialog()');
+    await record('my-plan-empty','setup');
+    await evaluate(`(()=>{for(const [path,value] of [['personal.person1Name','Jamie Example'],['personal.person1Age','32']]){const n=document.querySelector('[data-path="'+path+'"]');if(!n)throw Error('Missing first-time field '+path);n.value=value;n.dispatchEvent(new Event('input',{bubbles:true}));n.dispatchEvent(new Event('change',{bubbles:true}));}})()`);
+    await journeyNavigate('dashboard',operations);await journeyNavigate('setup',operations);assert.equal(await evaluate('FFSStage1BrowserTestHooks.getPlan().personal.person1Name'),'Jamie Example');
+    await journeyTap('#wizardNextButton',operations);await record('my-plan-next','setup');
+    await navigate();evidence.push({width,check:'partial-setup-after-reload',retained:await evaluate("FFSStage1BrowserTestHooks.getPlan().personal.person1Name==='Jamie Example'")});
+    // Existing public sample used as a synthetic personal-plan test fixture for
+    // populated screens; this is not a claim that a novice completed all inputs.
+    await fixture();await evaluate("document.querySelector('.workspace-nav').scrollIntoView({block:'start',behavior:'instant'})");await mobileScreenshot(`journey/${width}-navigation.png`);
+    for(const view of ['dashboard','setup','goals','semiretirement','weeklyplan','assumptions','investments','super','decision','scenarios','reports']){
+      await journeyNavigate(view,operations);await record(view,view);
+      if(view==='semiretirement'){
+        await evaluate(`(()=>{const n=document.querySelector('[data-semi-input="people.0.hasSemiRetirement"]');n.value='true';n.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+        await journeyTap('[data-semi-action=calculate]',operations);await record('semi-retirement','semiretirement');
+        const draftBefore=await evaluate('JSON.stringify(__dollarTest.retirement().inputs)');
+        await journeyNavigate('goals',operations);await journeyNavigate('semiretirement',operations);
+        const retained=await evaluate('JSON.stringify(__dollarTest.retirement().inputs)')===draftBefore;evidence.push({width,check:'retirement-draft-navigation',retained});
+      }
+      if(view==='weeklyplan'){
+        if(await evaluate("Boolean(document.querySelector('[data-weekly-action=create-plan]'))")){await journeyTap('[data-weekly-action=create-plan]',operations);await record('weekly-created','weeklyplan');}
+      }
+      if(view==='assumptions'){
+        const before=await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())');await assumptionEdit('inflationPct',4);
+        await journeyNavigate('investments',operations);await journeyNavigate('assumptions',operations);
+        assert.equal(await evaluate("document.querySelector('[data-assumption=inflationPct]').value"),'4');assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),before);
+        await assumptionEdit('inflationPct',-100);await evaluate("document.querySelector('#forecastAssumptionsWorkspace form').requestSubmit()");await record('assumptions-error','assumptions');
+        await assumptionButton('Undo unsaved edits');await assumptionButton('Restore app defaults…');await record('defaults-preview','assumptions');
+        await evaluate("[...document.querySelectorAll('[data-defaults-preview] button')].find(n=>n.textContent==='Cancel').click()");await assumptionButton('Undo unsaved edits');assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),before);
+      }
+      if(view==='decision'){
+        if(await evaluate("Boolean(document.querySelector('[data-what-if]'))")){await journeyTap('[data-what-if]',operations);await record('change-preview','decision');}
+      }
+      if(view==='scenarios'){
+        const savedPlanBefore=await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())');
+        await evaluate(`(()=>{const n=document.getElementById('scenarioName');n.value='Usability review example';n.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+        await journeyTap('#saveScenarioPanelButton',operations);const id=await evaluate("__dollarTest.savedScenarios().find(s=>s.name==='Usability review example')?.id");assert.ok(id);
+        await record('scenario-saved','scenarios');await journeyTap(`[data-compare-scenario="${id}"]`,operations);await record('scenario-compare','scenarios');
+        await journeyTap(`[data-open-scenario="${id}"]`,operations);assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),savedPlanBefore);evidence.push({width,check:'open-saved-scenario',activeView:await evaluate('document.body.dataset.activeView'),planUnchanged:true});
+      }
+    }
+    assert.deepEqual(operations.filter(operation=>operation.status&&operation.status!=='pointer-click'),[],'All journey actions are reachable with real pointer input');
+    evidence.push({width,operations});
+  }
+  await writeFile(path.join(mobileReviewDirectory,'journey-evidence.json'),JSON.stringify(evidence,null,2)+'\n');
+});
+
+test('mobile annual forecast single-person shortfall notes remain readable',async()=>{
+  await cdp.send('Emulation.setDeviceMetricsOverride',{width:375,height:1000,deviceScaleFactor:1,mobile:true});await navigate();
+  await evaluate("FFSStage1BrowserTestHooks.setPlan(FFS_DATA.samplePlans[0].plan,'semiretirement');FFSStage1BrowserTestHooks.closeDurabilityDialog();document.querySelector('[data-semi-action=calculate]').click();__dollarTest.configureRetirement({'household.fullRetirementLifestyleSpending':500000})");
+  const model=await evaluate('JSON.stringify(__dollarTest.retirement().result)');
+  for(const width of [375,390,768]){
+    await cdp.send('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:width<600});
+    const check=await evaluate(`(()=>{document.querySelector('[data-semi-detail-state=rr-annual]').open=true;const y=document.querySelector('.maf-year.has-warning');if(!y)return {found:false};y.open=true;y.querySelector('summary').scrollIntoView({block:'start',behavior:'instant'});return {found:true,people:y.querySelectorAll('.maf-person').length,warning:y.querySelector('.semi-retirement-row-warning')?.textContent,summary:y.querySelector('summary').textContent,clipped:[...y.querySelectorAll('section,span,strong,li')].filter(n=>n.getClientRects().length).filter(n=>n.getBoundingClientRect().right>innerWidth+1||n.scrollWidth>n.clientWidth+1).map(n=>n.textContent.slice(0,50))};})()`);
+    assert.equal(check.found,true);assert.equal(check.people,1);assert.ok(check.warning);assert.ok(check.summary.includes('Funding shortfall'));assert.deepEqual(check.clipped,[]);
+    assert.equal(await evaluate('JSON.stringify(__dollarTest.retirement().result)'),model);
+    if(width===375)await mobileScreenshot('after/annual-shortfall-375.png');
+  }
 });

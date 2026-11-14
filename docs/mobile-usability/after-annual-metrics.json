@@ -1,0 +1,62 @@
+[
+  {
+    "width": 375,
+    "phase": "after",
+    "documentWidth": 375,
+    "tableVisible": false,
+    "tableOverflow": false,
+    "cardsVisible": true,
+    "mobileYearCount": 60,
+    "clipped": [],
+    "summaryHeight": 171,
+    "people": [
+      "Alexandria-Marie Long Household Name",
+      "Christopher Long Household Name"
+    ]
+  },
+  {
+    "width": 390,
+    "phase": "after",
+    "documentWidth": 390,
+    "tableVisible": false,
+    "tableOverflow": false,
+    "cardsVisible": true,
+    "mobileYearCount": 60,
+    "clipped": [],
+    "summaryHeight": 171,
+    "people": [
+      "Alexandria-Marie Long Household Name",
+      "Christopher Long Household Name"
+    ]
+  },
+  {
+    "width": 768,
+    "phase": "after",
+    "documentWidth": 768,
+    "tableVisible": false,
+    "tableOverflow": false,
+    "cardsVisible": true,
+    "mobileYearCount": 60,
+    "clipped": [],
+    "summaryHeight": 146,
+    "people": [
+      "Alexandria-Marie Long Household Name",
+      "Christopher Long Household Name"
+    ]
+  },
+  {
+    "width": 1366,
+    "phase": "after",
+    "documentWidth": 1366,
+    "tableVisible": true,
+    "tableOverflow": true,
+    "cardsVisible": false,
+    "mobileYearCount": 60,
+    "clipped": [],
+    "summaryHeight": 0,
+    "people": [
+      "Alexandria-Marie Long Household Name",
+      "Christopher Long Household Name"
+    ]
+  }
+]

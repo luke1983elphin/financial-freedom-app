@@ -1,0 +1,86 @@
+# Mobile usability and household journey review
+
+Baseline: `913700cda5599d459c26cf821d2fa1da4124e3fa` (main). Scope: presentation and usability, not a new financial accuracy assessment. Only the annual forecast is redesigned in this PR. Other recommendations below require review before implementation.
+
+## Method and limits
+
+Real Chromium browser interactions at CSS widths 375, 390, 768 and 1366px, height 1000px. The walkthrough starts with empty browser storage, enters a fictional name/age, navigates and reloads, then uses the existing public sample couple for populated screens. This deliberately separates a blank first visit from a seeded populated journey; it does not claim a novice manually completed every financial field. Annual-detail stress tests use long household names and an opening investment balance of $9,876,543,210. A separate single-person case exercises a funding shortfall. All evidence uses synthetic households.
+
+Pointer interactions cover navigation, disclosure controls, calculation, weekly-plan creation, saved-plan saving, comparing and opening. Keyboard Enter covers year disclosures. Tests also exercise assumption validation, unsaved edits, undo and defaults preview/cancel. Evidence records visible headings, controls, invalid fields, whole-page width and nested horizontal scroll regions. See [journey-evidence.json](journey-evidence.json) for per-screen observations and operation records.
+
+This is a technical expert walkthrough, not observed research with real households. Chromium viewport emulation does not establish physical iPhone Safari, VoiceOver, browser chrome or software-keyboard behaviour. These need a device pass before release. The audit does not certify every input combination, tax rule or financial assumption.
+
+## Stage 1: implemented annual forecast correction
+
+**Critical usability defect confirmed and corrected.** Existing retirement redesign CSS forced the desktop scroll container to display on mobile, exposing a table with a 1420px minimum width above the existing cards. Financial details required sideways scrolling despite the document itself fitting the viewport. Checking only page overflow would have missed this.
+
+`retirement-results.js` now adapts existing rendered annual-card nodes into native expandable year cards. Each compact summary gives the year, ages, phase, non-super year-end balance, a textual shortfall warning where applicable, and explicit View/Hide state. A year picker avoids scrolling through decades. Expanded content retains year-at-a-glance totals, separate named people, grouped employment/cash income, investment income, tax/study loans and super information, plus existing household cashflow, balances, property, debt and event detail where present. Labels stay with amounts; large values can wrap. Controls support keyboard focus and at least 44px touch height. Header-aware scrolling reveals obscured summaries without pulling readers back when they scroll down an expanded year.
+
+Scoped CSS uses cards through 900px and retains the original detailed desktop table above that breakpoint. Desktop horizontal scrolling remains intentional for the wide comparison table. Print keeps the original table rather than printing duplicate mobile cards. All money strings and detail rows come from the existing renderer: this adapter does not calculate financial values or rewrite financial labels. Group classification relies on existing renderer labels, so future label changes should rerun owner/row parity tests and inspect grouping.
+
+At 375, 390 and 768px the annual desktop table is hidden, cards are visible and tested expanded rows have no horizontal clipping. At 1366px the original desktop table remains visible and its complete text is identical to the original renderer. See [before/after gallery](README.md) and the annual metrics files.
+
+## Source references and change boundaries
+
+- [Presentation adapter](../../retirement-results.js#L327): `mobileAnnualCards` moves existing detail nodes; `redesignResults` calls it after attaching the annual section. [Interactions](../../retirement-results.js#L461) handle year selection and header-aware disclosure scrolling.
+- [Responsive overrides](../../styles.css#L10322): scoped screen styles replace the original mobile-visible scroll container; original retirement table styling near line 10129 is retained for desktop.
+- [Browser verification](../../tests/dollar-basis-browser.mjs#L900): new mobile annual cases, owner/row parity, complete-system state preservation and first-time journey observations.
+- `app.js`, `calculator.js`, `semiRetirementProjection.js`, `semiRetirementUi.js`, schemas, all protected hash manifests and all numerical fixture files have no changes. In `retirement-results.js`, `presentation`, `adjustmentPresentation` and `drawChart` remain byte-identical to main.
+
+## Prioritised follow-up recommendations
+
+Priority reflects user impact, not a financial defect rating. Effort S = bounded copy/component adjustment; M = several states or responsive restructuring; L = broad workflow change. Estimates are relative and require design/implementation review.
+
+| ID / priority | Observed issue and evidence | Recommended change | Benefit / effort |
+|---|---|---|---|
+| U01 / Critical — fixed here | Annual financial detail exposes a wide desktop table on iPhone; labels and values require horizontal scrolling. | Stacked expandable cards, named people, readable rows and year navigation. | Very high / M |
+| U02 / High | Try a Change's `what-if-forecast` is 480px wide within a 279px area at 375px, and 294px at 390px, in both initial and changed previews. Whole page width alone passes. | Next responsive-results PR: stack comparison rows or use a labelled small-screen comparison with every value retained. Test nested scrolling explicitly. | High / M |
+| U03 / High | Blank My Plan displays “14% Complete” at step 1 and 29% at step 2 before equivalent data completeness exists. This represents section progress. | Say “Step 1 of 7”; distinguish navigation progress from data completeness. | High / S |
+| U04 / High | Retirement spending input `semi-adjust-household-fullRetirementLifestyleSpending` contains the sample-derived $75,490 but native validity reports nearest permitted steps $75,000/$76,000. | Align currency input constraints with legitimate computed values. Do not silently round or change calculations. Add a derived-value validity test in a separate reviewed PR. Calculation blocking was not observed in this walkthrough. | High / S |
+| U05 / Medium | Saved financial snapshot “Open” stays in Saved Scenarios; saving alone produces a “Changes from current plan” metadata difference for the snapshot name. Retirement scenario opening has different editing semantics. | Distinguish “View snapshot”, “Compare” and “Open retirement scenario”; separate metadata/provenance from financial input changes. State whether opening edits a draft or replaces anything. | High / M |
+| U06 / Medium | My Plan mobile Previous/Continue/save-status footer occupies substantial vertical space (roughly 180–190px in captured state). Lower fields can sit behind it until scrolled. | Compact the footer, preserve safe content padding, then test keyboard-open/focus on physical iPhone. No inability to edit was established here. | High / M |
+| U07 / Medium | First visit repeats sample/start/setup actions; green Load Sample Plan is more visually prominent than Start My Plan. Sample selection can resemble existing personal data. | One clear personal-plan start, secondary explicitly fictional sample path, clear next step. | High / S |
+| U08 / Medium | Phone navigation's expanded More tools plus dollar-basis controls fills much of the first viewport. All tools are discoverable but results start much lower. | Consider initially compact secondary navigation, persistent current-screen cue and a concise dollar-basis control; validate discoverability before hiding tools. | Medium / M |
+| U09 / Medium | Investments repeats four full-width “Edit in Assumptions” actions before the forecast. | Keep one authoritative assumptions source, show a compact assumptions summary and one contextual edit action. | Medium / S |
+| U10 / Medium | Goals, Super and Retirement repeat totals and expose many controls before the main outcome. Scope differs between plan-linked inputs and scenario-only adjustments. | Prioritise current position, expected outcome and next action; move advanced overrides behind clear disclosure. Label edit scope and saved/draft status. | High / M–L |
+| U11 / Medium | Weekly plan's step navigation needs horizontal scrolling on phones (722px within 305/320px). Created plan starts with detailed timing/provision work and “Not started”. | Make current step/next action obvious, explain provisions as money set aside for irregular bills, and offer a clear navigation scroll cue or compact step picker. | Medium / M |
+| U12 / Medium | A backup modal interrupts the first meaningful editing task. It accurately explains local storage, but requires dismissal before continuing. | Retain the storage warning; consider a nonblocking notice or prompt after first task completion. Do not imply cloud saving. | Medium / M |
+| U13 / Medium | Dashboard “Financial Freedom %”, “Accessible FI assets”, “concessional super” and “provisions” require prior knowledge. Several info controls measure only 22px high; some main controls are 42px. | Add plain-language definitions at first use; expand info-button touch areas without crowding. A 22px target is a greater concern than a 42px control. | Medium / S–M |
+| U14 / Low–Medium | Try a Change places eight presets/custom controls before the result; Reports repeats headings and a long notice before Executive Summary. | One change at a time with a nearby impact preview; concise report introduction and early summary, retaining full disclosures and current-plan scope. | Medium / M |
+
+## Screen-by-screen journey assessment
+
+| Screen | Purpose, next action and interpretation | Input, density, mobile and state observations |
+|---|---|---|
+| Home / first visit | Promise is understandable; competing sample and personal-start calls to action obscure which path to take. Populated dashboard has four useful headline metrics. | Financial Freedom % can resemble setup completion; explain its modelled target. Navigation and secondary controls push the dashboard down. Tooltips exist, but small targets need attention. |
+| My Plan | Sequential household setup and Continue/Previous are understandable. “% Complete” overstates data completeness. | Labels for name/age are clear. Partial fictional setup survives leaving, returning and reload at all four widths. Footer needs compaction/device keyboard review. No whole-page horizontal overflow observed. |
+| Goals | Age goal versus planned retirement is useful, and “Your aspiration, rather than a prediction” is good explanatory copy. | Many available controls and repeated summaries create a long page. Make aspiration, current plan and forecast distinctions consistently explicit. Advanced controls need progressive disclosure. |
+| Retirement | Clear retirement workspace, outcome and calculation action; advanced adjustments increase cognitive load. | Annual overflow fixed here. Plan-linked versus scenario-only input scope needs clearer cues. Native spending-step mismatch U04 is confirmed; no silent numerical change proposed. |
+| Semi-Retirement | Reduced work is a switch within Retirement, not a separate navigation destination. Separate people are visible. | Reduced-work change and Calculate tested; draft inputs survive navigating to Goals and back. Expanded annual detail retains each person's rows and all household values. |
+| Weekly Plan | Initial create action is clear; created plan makes timing setup and progress harder to scan. | Horizontal step-navigation strip remains, but no page overflow. Explain irregular-bill provisions and prioritise bank/date/next action. Creation tested. |
+| Assumptions | Strong model: single source, source badges, explicit Save and clear “Unsaved edits—forecasts still use saved values”. | Unsaved CPI edits survive navigation; -100% is rejected with plain-language guidance and invalid-field focus. Undo and defaults preview/cancel preserve plan. Long explanations place Save far down; concise help/dirty-state save access could help. |
+| Investments | Investment purpose and central assumptions authority are clear. Results take too long to reach. | Four repeated Edit in Assumptions actions dominate early content. Consolidate presentation without creating a second assumptions authority. |
+| Super | Contribution information by person and household is useful. Opening/balance outcome should be easier to reach. | Person totals recur with overrides; put advanced overrides behind disclosure while preserving ownership and scope. |
+| Try a Change | Helpful everyday examples support exploration; controls and frequency terminology precede impact. | Preset selection tested. Result comparison still has nested mobile horizontal scrolling (U02); not fixed in this scoped PR. Explain weekly/monthly/annual units beside amounts. |
+| Saved Scenarios | Name/notes and inline Save Plan action are usable; comparison is available. Open semantics and metadata differences need clarification. | Save, Compare and Open tested with pointer. Current financial plan stays byte-identical. Opening a snapshot stays on this screen; distinguish that from editing a retirement scenario. All/Retirement Planning/Future filter wording deserves novice testing; filter behaviour was not comprehensively exercised. |
+| Reports | Print/export and executive summary are available; current-plan rather than saved-scenario scope is disclosed. | Repeated title/notice pushes summary down. Existing report/PDF browser tests pass. No report content or financial figures changed. Do not silently switch report source when viewing a snapshot. |
+
+Across 84 recorded screen states, no unintended **whole-document** horizontal overflow was observed. Nested scroll regions remain in Try a Change and Weekly navigation on phones; they are explicitly reported rather than hidden by that page-width result. No draft/input data loss was observed in the tested paths. Backup interruption was dismissed through a real pointer interaction, and final journey operation records contain no blocked-tap DOM fallbacks.
+
+## Recommended rollout and user validation
+
+1. Review this Draft PR's annual cards, exact-data preservation tests and before/after evidence. Perform physical iPhone Safari and VoiceOver checks, especially long currency values, year navigation, fixed header and print.
+2. Approve separate bounded follow-ups for U02–U05. Keep responsive/copy/validity work separate from protected financial corrections; do not change figures to make input constraints pass.
+3. Test 10–12 Australian household participants: single/couple, working/near-retirement/retired, low and high digital confidence, at least two with accessibility needs. Use fictional data. Ask each to start a plan, find next year's tax for both people, explain a funding shortfall, change reduced work, compare a saved scenario, find its report source and recover an unsaved edit. Record completion without help, errors, time, confidence and misunderstood terms. Include iPhone Safari at 375/390px, tablet and desktop; rotate task order to limit learning effects.
+4. Prioritise changes by observed task failures before a broad redesign. This usability work neither authorises Monte Carlo nor resolves remaining financial audit findings.
+
+## Verification and safeguards
+
+- Complete `pnpm verify`: **65 suites, 1,289 tests passed**, no failures/skips; includes inventory, syntax, security, runner, numerical parity and protected-function guards.
+- Complete `pnpm test:browser`: **60 tests passed**, no failures/skips, including financial reconciliation, saved-scenario/report/PDF, F08 and F04 browser coverage.
+- Six focused mobile/journey tests cover 375/390/768/1366px, both people, long names, large values, single-person shortfall, disclosure keyboard/pointer operation, header/year navigation, Today/Future display and state preservation. See verification summary for final rerun status.
+- Tests compare every original annual label/value row and each person's rows per year; desktop text stays identical. Expanding, jumping and changing dollar basis do not mutate projection results, plan inputs or saved scenarios.
+- Baseline capture mode serves only baseline CSS/presentation adapter from the pinned main commit; financial source is unchanged. Normal browser verification writes new mobile evidence under ignored `test-results/`, avoiding screenshot churn in the repository.
+- Protected files, financial functions, saved-data schemas, protected hash manifests and numerical fixtures are unchanged. Unrelated browser-generated historical evidence is excluded from this PR.
+- The old browser assertion that deliberately required a scrollable desktop annual table on phones was updated to require the requested mobile cards; financial/table parity assertions remain active.
+- No merge or deployment is authorised by this PR. The new branch is disabled in Vercel's existing branch deployment configuration.
