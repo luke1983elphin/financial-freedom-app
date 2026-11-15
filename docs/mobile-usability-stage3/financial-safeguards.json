@@ -1,0 +1,131 @@
+{
+  "baseline": "bfb708361120a227db4e871cebfe22a9ed8c2809",
+  "changedNumericalFixtures": [],
+  "exactParity": {
+    "fixtures": 9,
+    "numericalDifferences": 0,
+    "sha256": "d92aa16abec0034c976fab0552b3423f7ac63fa3cc039cb2e00965c42783833b"
+  },
+  "files": [
+    {
+      "file": "calculator.js",
+      "baselineSha256": "77c04fef8a213cd06cd774d9e5eda333cda07cc4ba901b77a8e25245b313c65c",
+      "currentSha256": "77c04fef8a213cd06cd774d9e5eda333cda07cc4ba901b77a8e25245b313c65c",
+      "unchanged": true
+    },
+    {
+      "file": "semiRetirementProjection.js",
+      "baselineSha256": "42cecba918b1d7d1b65376f5490d607219f7a953e71f5ab90bba24f2ff292594",
+      "currentSha256": "42cecba918b1d7d1b65376f5490d607219f7a953e71f5ab90bba24f2ff292594",
+      "unchanged": true
+    },
+    {
+      "file": "semiRetirementUi.js",
+      "baselineSha256": "4e87341a23a3e38592f1d32619efaf35859d14cf83ac5949fb21dfdf1be524dd",
+      "currentSha256": "4e87341a23a3e38592f1d32619efaf35859d14cf83ac5949fb21dfdf1be524dd",
+      "unchanged": true
+    },
+    {
+      "file": "v2-data.js",
+      "baselineSha256": "935fb66f828874f0ccc267d99d611a47113a85315cb983e45ff49390a84d8baa",
+      "currentSha256": "935fb66f828874f0ccc267d99d611a47113a85315cb983e45ff49390a84d8baa",
+      "unchanged": true
+    },
+    {
+      "file": "storage.js",
+      "baselineSha256": "c85374d3b59ad306de5d3657d8ff44c12eb69c1f4d4e1b71228656228a4ff58d",
+      "currentSha256": "c85374d3b59ad306de5d3657d8ff44c12eb69c1f4d4e1b71228656228a4ff58d",
+      "unchanged": true
+    },
+    {
+      "file": "security.js",
+      "baselineSha256": "19caa32b797a87c7ddbbe4c7352717ce1f7df52e7292a0de529449c24f7baa4b",
+      "currentSha256": "19caa32b797a87c7ddbbe4c7352717ce1f7df52e7292a0de529449c24f7baa4b",
+      "unchanged": true
+    },
+    {
+      "file": "consumer-setup.js",
+      "baselineSha256": "37f31ea6e9420c30a9d2f1a4ebc7687d4d4fabd1f650bdcb0e83ec06e101aed4",
+      "currentSha256": "37f31ea6e9420c30a9d2f1a4ebc7687d4d4fabd1f650bdcb0e83ec06e101aed4",
+      "unchanged": true
+    },
+    {
+      "file": "plan-schema.js",
+      "baselineSha256": "7c531d4d9b15330f77fdebf9597a73630583edbc452f8e1b9d247b25a17d86a7",
+      "currentSha256": "7c531d4d9b15330f77fdebf9597a73630583edbc452f8e1b9d247b25a17d86a7",
+      "unchanged": true
+    },
+    {
+      "file": "plan-selectors.js",
+      "baselineSha256": "93929379dafbc43b77ad302208ffd35d348defd9d38ca81276811d9f9d3add35",
+      "currentSha256": "93929379dafbc43b77ad302208ffd35d348defd9d38ca81276811d9f9d3add35",
+      "unchanged": true
+    },
+    {
+      "file": "plan-mutations.js",
+      "baselineSha256": "23eb4a3a3dc72ef9512b6341888f31f9b40f39ea3682f6150a391082f7d984e4",
+      "currentSha256": "23eb4a3a3dc72ef9512b6341888f31f9b40f39ea3682f6150a391082f7d984e4",
+      "unchanged": true
+    },
+    {
+      "file": "legacy-plan-adapter.js",
+      "baselineSha256": "d85cfc66e9711b0947665de9e4ba247558e7e0078ad607ff0067c0b27bdaf092",
+      "currentSha256": "d85cfc66e9711b0947665de9e4ba247558e7e0078ad607ff0067c0b27bdaf092",
+      "unchanged": true
+    },
+    {
+      "file": "scenario-overlay.js",
+      "baselineSha256": "56b93a25b31f4bc81da1a075c8e3bcd02256f4c010a78bc3c6fbd1d0fc2c50b5",
+      "currentSha256": "56b93a25b31f4bc81da1a075c8e3bcd02256f4c010a78bc3c6fbd1d0fc2c50b5",
+      "unchanged": true
+    },
+    {
+      "file": "linked-setup.js",
+      "baselineSha256": "9fb6ee7af76fd14d61c49130981064ec5f5c9e6c286a8ae9df16726a59d1caed",
+      "currentSha256": "9fb6ee7af76fd14d61c49130981064ec5f5c9e6c286a8ae9df16726a59d1caed",
+      "unchanged": true
+    },
+    {
+      "file": "weekly-plan.js",
+      "baselineSha256": "0aaf2710b38adbacba8b9abf12fa6e9e2e42f42138c017de053237cde481bcb5",
+      "currentSha256": "0aaf2710b38adbacba8b9abf12fa6e9e2e42f42138c017de053237cde481bcb5",
+      "unchanged": true
+    },
+    {
+      "file": "trust-readiness.js",
+      "baselineSha256": "cef502262c2e3281dc17711f9b4b8aeebf78081b744080a4c808c263fbf938a4",
+      "currentSha256": "cef502262c2e3281dc17711f9b4b8aeebf78081b744080a4c808c263fbf938a4",
+      "unchanged": true
+    },
+    {
+      "file": "api/ai-insights.js",
+      "baselineSha256": "1cc7ec292a8698ea5d8e8580707debc09c002afe3b68aee8e09982c5e1860cf4",
+      "currentSha256": "1cc7ec292a8698ea5d8e8580707debc09c002afe3b68aee8e09982c5e1860cf4",
+      "unchanged": true
+    },
+    {
+      "file": "agePensionEstimate.js",
+      "baselineSha256": "9f5d57f2c527b41e758dfb0592bceaeb364f1d197737611fcdf5759c25284003",
+      "currentSha256": "9f5d57f2c527b41e758dfb0592bceaeb364f1d197737611fcdf5759c25284003",
+      "unchanged": true
+    },
+    {
+      "file": "plan-mutations.js",
+      "baselineSha256": "23eb4a3a3dc72ef9512b6341888f31f9b40f39ea3682f6150a391082f7d984e4",
+      "currentSha256": "23eb4a3a3dc72ef9512b6341888f31f9b40f39ea3682f6150a391082f7d984e4",
+      "unchanged": true
+    },
+    {
+      "file": "scenario-overlay.js",
+      "baselineSha256": "56b93a25b31f4bc81da1a075c8e3bcd02256f4c010a78bc3c6fbd1d0fc2c50b5",
+      "currentSha256": "56b93a25b31f4bc81da1a075c8e3bcd02256f4c010a78bc3c6fbd1d0fc2c50b5",
+      "unchanged": true
+    },
+    {
+      "file": "agePensionEstimate.js",
+      "baselineSha256": "9f5d57f2c527b41e758dfb0592bceaeb364f1d197737611fcdf5759c25284003",
+      "currentSha256": "9f5d57f2c527b41e758dfb0592bceaeb364f1d197737611fcdf5759c25284003",
+      "unchanged": true
+    }
+  ]
+}

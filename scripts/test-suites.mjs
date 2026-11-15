@@ -1,6 +1,7 @@
 export const DEFAULT_SUITE_TIMEOUT_MS = 120_000;
 
 export const ACTIVE_TEST_SUITES = [
+  { id: "mobile-usability-stage3", file: "tests/mobile-usability-stage3.test.mjs", groups: ["all", "mjs", "presentation"] },
   { id: "mobile-usability-stage2", file: "tests/mobile-usability-stage2.test.mjs", groups: ["all", "mjs", "presentation"] },
   { id: "property-debt-f04", file: "tests/property-debt-f04.test.mjs", groups: ["all", "mjs", "audit", "f04"] },
   { id: "retirement-tax-funding-f08", file: "tests/retirement-tax-funding-f08.test.mjs", groups: ["all", "mjs", "semi-retirement", "audit", "f08"] },
@@ -70,6 +71,8 @@ export const ACTIVE_TEST_SUITES = [
 ];
 
 export const SYNTAX_CHECK_FILES = [
+  "mobile-usability-stage3.js",
+  "tests/mobile-usability-stage3.test.mjs",
   "tests/property-debt-f04.test.mjs",
   "tests/property-debt-f04-browser.mjs",
   "scripts/f04-review.mjs",

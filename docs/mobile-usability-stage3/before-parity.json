@@ -1,0 +1,152 @@
+[
+  {
+    "width": 375,
+    "view": "setup",
+    "engineParity": true
+  },
+  {
+    "width": 375,
+    "view": "dashboard",
+    "engineParity": true
+  },
+  {
+    "width": 375,
+    "view": "investments",
+    "engineParity": true
+  },
+  {
+    "width": 375,
+    "view": "goals",
+    "engineParity": true
+  },
+  {
+    "width": 375,
+    "view": "super",
+    "engineParity": true
+  },
+  {
+    "width": 375,
+    "view": "semiretirement",
+    "engineParity": true
+  },
+  {
+    "width": 390,
+    "view": "setup",
+    "engineParity": true
+  },
+  {
+    "width": 390,
+    "view": "dashboard",
+    "engineParity": true
+  },
+  {
+    "width": 390,
+    "view": "investments",
+    "engineParity": true
+  },
+  {
+    "width": 390,
+    "view": "goals",
+    "engineParity": true
+  },
+  {
+    "width": 390,
+    "view": "super",
+    "engineParity": true
+  },
+  {
+    "width": 390,
+    "view": "semiretirement",
+    "engineParity": true
+  },
+  {
+    "width": 430,
+    "view": "setup",
+    "engineParity": true
+  },
+  {
+    "width": 430,
+    "view": "dashboard",
+    "engineParity": true
+  },
+  {
+    "width": 430,
+    "view": "investments",
+    "engineParity": true
+  },
+  {
+    "width": 430,
+    "view": "goals",
+    "engineParity": true
+  },
+  {
+    "width": 430,
+    "view": "super",
+    "engineParity": true
+  },
+  {
+    "width": 430,
+    "view": "semiretirement",
+    "engineParity": true
+  },
+  {
+    "width": 768,
+    "view": "setup",
+    "engineParity": true
+  },
+  {
+    "width": 768,
+    "view": "dashboard",
+    "engineParity": true
+  },
+  {
+    "width": 768,
+    "view": "investments",
+    "engineParity": true
+  },
+  {
+    "width": 768,
+    "view": "goals",
+    "engineParity": true
+  },
+  {
+    "width": 768,
+    "view": "super",
+    "engineParity": true
+  },
+  {
+    "width": 768,
+    "view": "semiretirement",
+    "engineParity": true
+  },
+  {
+    "width": 1366,
+    "view": "setup",
+    "engineParity": true
+  },
+  {
+    "width": 1366,
+    "view": "dashboard",
+    "engineParity": true
+  },
+  {
+    "width": 1366,
+    "view": "investments",
+    "engineParity": true
+  },
+  {
+    "width": 1366,
+    "view": "goals",
+    "engineParity": true
+  },
+  {
+    "width": 1366,
+    "view": "super",
+    "engineParity": true
+  },
+  {
+    "width": 1366,
+    "view": "semiretirement",
+    "engineParity": true
+  }
+]
