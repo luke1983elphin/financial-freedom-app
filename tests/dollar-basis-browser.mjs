@@ -149,6 +149,9 @@ before(async () => {
       if (process.env.FFS_RETURNING_HEADER_PHASE === 'before' && ['index.html','app.js'].includes(relative)) {
         body = execFileSync('git',['show',`b98955029638f675541e0b5bd34f3c6c77aaeeab:${relative}`],{cwd:root,maxBuffer:4*1024*1024});
       }
+      if (process.env.FFS_WELCOME_CARDS_PHASE === 'before' && ['index.html','styles.css'].includes(relative)) {
+        body = execFileSync('git',['show',`244adcf695d6a44b000f2f63ba389d9051d3043e:${relative}`],{cwd:root,maxBuffer:4*1024*1024});
+      }
       // Test-only alternate-year fixture; production files and calculation logic remain unchanged.
       if (relative === "calculator.js" && evidenceFinancialYear) body = Buffer.from(body.toString().replace('const FINANCIAL_YEAR = "2026-27";', `const FINANCIAL_YEAR = "${evidenceFinancialYear}";`));
       if (relative === "semiRetirementUi.js") body = Buffer.from(body.toString().replace('  function runSemiRetirementProjection(engine, draft) {', '  function runSemiRetirementProjection(engine, draft) { window.__retirementRuns = (window.__retirementRuns || 0) + 1;'));
@@ -1711,5 +1714,76 @@ test('opening first paint: welcome stays hidden until startup classifies first-t
     await waitFor(()=>evaluate('document.readyState==="complete" && Boolean(window.FFSStage1BrowserTestHooks)'));
     assert.equal(await evaluate('document.body.dataset.freedomStage'), returning ? 'workspace' : 'welcome');
     if (returning) assert.equal(await evaluate('document.body.dataset.activeView'), 'dashboard');
+  }
+});
+
+const welcomeCardsBefore = process.env.FFS_WELCOME_CARDS_PHASE === 'before';
+async function welcomeCardsShot(width, state) {
+  const dir = path.join(root, 'docs/welcome-sample-feature-cards', welcomeCardsBefore ? 'before' : 'after');
+  await mkdir(dir, {recursive:true});
+  await evaluate('scrollTo({top:0,behavior:"instant"});new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+  await new Promise(resolve=>setTimeout(resolve,150));
+  const clip=await evaluate('({x:0,y:0,width:innerWidth,height:document.documentElement.scrollHeight,scale:1})');
+  const shot=await cdp.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip});
+  await writeFile(path.join(dir,`${state}-${width}.png`),Buffer.from(shot.data,'base64'));
+}
+
+test('welcome sample button and four feature cards stay readable, accessible and isolated from personal data', async () => {
+  const evidence=[];
+  for (const width of [320,375,390,430,600,768,1024,1366]) {
+    await cleanOpening(width);
+    assert.equal(await evaluate('document.body.dataset.freedomStage'),'welcome');
+    const summary=width<=760?'#introSampleActions [data-s3-key=sample] > summary':'#heroSamplePlanMenu > summary';
+    const details=width<=760?'#introSampleActions [data-s3-key=sample]':'#heroSamplePlanMenu';
+    const before=await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())');
+    const trigger=await evaluate(`(()=>{const n=document.querySelector(${JSON.stringify(summary)}),s=getComputedStyle(n),b=n.getBoundingClientRect();return {label:n.textContent.trim(),background:s.backgroundColor,color:s.color,align:s.textAlign,width:b.width,height:b.height,arrow:getComputedStyle(n,'::after').borderBottomWidth};})()`);
+    assert.equal(trigger.label,'Explore a Sample Plan');
+    assert.ok(trigger.height>=44);
+    if(!welcomeCardsBefore){
+      assert.equal(trigger.align,'center');assert.equal(trigger.background,'rgb(232, 245, 238)');assert.equal(trigger.arrow,'2px');
+      const features=await evaluate(`(()=>{const cards=[...document.querySelectorAll('.welcome-feature-card')];return {labels:cards.map(n=>n.querySelector('h4').textContent),columns:getComputedStyle(document.querySelector('.welcome-feature-grid')).gridTemplateColumns.split(' ').length,below:document.querySelector('.welcome-features').getBoundingClientRect().top>=document.querySelector(${JSON.stringify(summary)}).getBoundingClientRect().bottom,readable:cards.every(n=>n.scrollWidth<=n.clientWidth+1&&n.querySelector('p').getClientRects().length>0)};})()`);
+      assert.deepEqual(features.labels,['My Freedom Progress','Explore My Future','Try a Change','My Weekly Mission']);
+      assert.equal(features.columns,width<=600?1:2);assert.equal(features.below,true);assert.equal(features.readable,true);
+    }
+    assert.equal(await evaluate('document.documentElement.scrollWidth>innerWidth+1'),false);
+    if([375,390,430,768,1366].includes(width))await welcomeCardsShot(width,'welcome');
+
+    // A native summary opens with Enter and closes with Space without loading a plan.
+    await evaluate(`document.querySelector(${JSON.stringify(summary)}).focus()`);
+    await key('Enter');
+    await waitFor(()=>evaluate(`document.querySelector(${JSON.stringify(details)}).open`));
+    assert.equal(await evaluate('document.activeElement.tagName'),'SUMMARY');
+    assert.equal(await evaluate('document.body.dataset.freedomSample'),'false');
+    assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),before);
+    assert.equal(await evaluate('Object.keys(localStorage).some(k=>k.startsWith("ffs-personal-plan-v1:"))'),false);
+    if([375,1366].includes(width))await welcomeCardsShot(width,'sample-open');
+    await key(' ');
+    await waitFor(()=>evaluate(`!document.querySelector(${JSON.stringify(details)}).open`));
+
+    // Pointer interaction retains the existing sample picker and load handlers.
+    const operations=[];await journeyTap(summary,operations);
+    if(width<=760&&!welcomeCardsBefore){
+      assert.ok(await evaluate('document.getElementById("heroSamplePlanSelect").getClientRects().length>0'));
+      assert.ok(await evaluate('document.getElementById("heroDemoButton").getClientRects().length>0'));
+      await journeyTap('#heroDemoButton',operations);
+    }else if(width<=520){await journeyTap('#heroDemoButton',operations);}
+    else {
+      if(width<=760)await journeyTap('#heroSamplePlanMenu > summary',operations);
+      await journeyTap('#heroSamplePlanMenu [data-sample-plan-choice]',operations);
+    }
+    assert.ok(operations.every(op=>op.status==='pointer-click'),JSON.stringify({width,operations}));
+    assert.equal(await evaluate('document.body.dataset.freedomSample'),'true');
+    assert.equal(await evaluate('Object.keys(localStorage).some(k=>k.startsWith("ffs-personal-plan-v1:"))'),false);
+    if(!welcomeCardsBefore)assert.equal(await evaluate('document.querySelectorAll(".welcome-feature-card").length'),4);
+    evidence.push({width,centeredLightGreenButton:!welcomeCardsBefore,fourFeatures:!welcomeCardsBefore,noOverflow:true,nativeKeyboardToggle:true,sampleLoadsOnlyOnSelection:true});
+  }
+  if(!welcomeCardsBefore){
+    await cleanOpening(375);await journeyTap('#heroStartButton',[]);
+    assert.equal(await evaluate('document.body.dataset.activeView'),'setup');
+    await fourNavSavedFixture('Welcome returning fixture');await navigate();
+    assert.equal(await evaluate('document.body.dataset.activeView'),'dashboard');
+    assert.equal(await evaluate('getComputedStyle(document.getElementById("homeView")).display'),'none');
+    assert.equal(await evaluate('document.querySelectorAll(".welcome-feature-card").length'),4,'static cards never duplicate on rerender or navigation');
+    await writeFile(path.join(root,'docs/welcome-sample-feature-cards/responsive-verification.json'),JSON.stringify(evidence,null,2)+'\n');
   }
 });
