@@ -1274,7 +1274,7 @@ test("Stage F1 semi-retirement user-facing workspace copy removes internal stage
 
 test("Stage F2 scenario workspace renders one main page title", () => {
   const snippet = sourceBetween(appSource, "function renderSemiRetirementScenario(result)", "function renderDecision(result)");
-  assert.match(indexSource, /<h2>Retirement Plan<\/h2>/);
+  assert.match(indexSource, /<h2>Explore My Future<\/h2>/);
   assert.doesNotMatch(snippet, /Semi-Retirement & Retirement Scenario/);
   assert.match(snippet, /Retirement timing is saved to your plan and used in Future/);
 });
@@ -1533,9 +1533,9 @@ test("Stage G2 AI Coach is removed from Plan Workspace navigation but AI feature
   assert.match(appSource, /data-ai-insights-card/);
 });
 
-test("Stage G3 Retirement Planning nav label keeps the existing page heading", () => {
-  assert.ok(workspaceNavigation(indexSource).primary.includes("semiretirement:Retirement"));
-  assert.match(indexSource, /<h2>Retirement Plan<\/h2>/);
+test("Stage G3 Explore My Future reuses the retirement workspace", () => {
+  assert.ok(workspaceNavigation(indexSource).primary.includes("semiretirement:Explore My Future"));
+  assert.match(indexSource, /<h2>Explore My Future<\/h2>/);
   assert.doesNotMatch(appSource.slice(appSource.indexOf("function updateSemiRetirementNavigation()"), appSource.indexOf("function optionsHtml(")), /textContent\s*=/);
 });
 

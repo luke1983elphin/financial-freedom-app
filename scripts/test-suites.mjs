@@ -71,6 +71,7 @@ export const ACTIVE_TEST_SUITES = [
 ];
 
 export const SYNTAX_CHECK_FILES = [
+  "freedom-navigation.js",
   "mobile-usability-stage3.js",
   "tests/mobile-usability-stage3.test.mjs",
   "tests/property-debt-f04.test.mjs",

@@ -140,6 +140,9 @@ before(async () => {
       if (process.env.FFS_STAGE3_PHASE === 'before' && ['index.html','app.js','styles.css'].includes(relative)) {
         body = execFileSync('git',['show',`bfb708361120a227db4e871cebfe22a9ed8c2809:${relative}`],{cwd:root,maxBuffer:4*1024*1024});
       }
+      if (process.env.FFS_FOUR_NAV_PHASE === 'before' && ['index.html','app.js','styles.css'].includes(relative)) {
+        body = execFileSync('git',['show',`02054bfcf9a687efae6074560104042c0c3a64db:${relative}`],{cwd:root,maxBuffer:4*1024*1024});
+      }
       // Test-only alternate-year fixture; production files and calculation logic remain unchanged.
       if (relative === "calculator.js" && evidenceFinancialYear) body = Buffer.from(body.toString().replace('const FINANCIAL_YEAR = "2026-27";', `const FINANCIAL_YEAR = "${evidenceFinancialYear}";`));
       if (relative === "semiRetirementUi.js") body = Buffer.from(body.toString().replace('  function runSemiRetirementProjection(engine, draft) {', '  function runSemiRetirementProjection(engine, draft) { window.__retirementRuns = (window.__retirementRuns || 0) + 1;'));
@@ -840,15 +843,15 @@ test('assumptions presentation at requested desktop and phone widths',async()=>{
   assert.deepEqual(browserMessages,[]);
 });
 
-test('dedicated Assumptions uses More tools and preserves all five core tabs at every requested width',async()=>{
-  const core=['dashboard','setup','goals','semiretirement','weeklyplan'];
+test('dedicated Assumptions uses More tools and preserves the four main sections at every requested width',async()=>{
+  const core=['dashboard','semiretirement','decision','weeklyplan'];
   const evidence=path.join(root,'docs/assumptions-navigation');await mkdir(evidence,{recursive:true});
   for(const width of [375,390,430,768,1366]){
     await cdp.send('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:width<600});await navigate();await assumptionsFixture();
     const before=await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),forecast=await evaluate('JSON.stringify(__dollarTest.result())');
     const history=await evaluate('JSON.stringify({length:history.length,state:history.state,url:location.href})');
-    assert.deepEqual(await evaluate("[...document.querySelectorAll('.nav-primary-row button')].map(n=>n.textContent.trim())"),['Home','My Plan','Goals','Retirement','Weekly']);
-    assert.deepEqual(await evaluate("[...document.querySelectorAll('.nav-more-items button')].map(n=>n.dataset.view)"),['assumptions','decision','investments','super','reports','scenarios']);
+    assert.deepEqual(await evaluate("[...document.querySelectorAll('.nav-primary-row button')].map(n=>n.textContent.trim())"),['My Freedom Progress','Explore My Future','Try a Change','My Weekly Mission']);
+    assert.deepEqual(await evaluate("[...document.querySelectorAll('.nav-more-items button[data-view]')].map(n=>n.dataset.view)"),['setup','assumptions','investments','super','goals','scenarios','reports']);
     assert.equal(await evaluate("document.querySelectorAll('.dollar-basis-control [data-assumptions-open],.dollar-basis-control [data-view]').length"),0);
     for(const view of core){
       await evaluate(`document.querySelector('.nav-primary-row [data-view="${view}"]').click()`);
@@ -867,9 +870,10 @@ test('dedicated Assumptions uses More tools and preserves all five core tabs at 
     assert.ok(await evaluate('document.documentElement.scrollWidth<=innerWidth'));
     assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),before);
     assert.equal(await evaluate('JSON.stringify(__dollarTest.result())'),forecast);
-    assert.equal(await evaluate('JSON.stringify({length:history.length,state:history.state,url:location.href})'),history,'workspace navigation preserves existing browser history');
+    assert.equal(await evaluate('history.state.ffsWorkspace'),'assumptions');
+    assert.equal(await evaluate('location.hash'),'#assumptions');
     await evaluate("document.getElementById('appWorkspace').scrollIntoView({behavior:'instant',block:'start'})");
-    assert.ok(await evaluate("document.querySelector('.nav-primary-row').getBoundingClientRect().top>=document.querySelector('body > div > header').getBoundingClientRect().bottom"),'all five tabs remain below the sticky header');
+    assert.ok(await evaluate("document.querySelector('.nav-primary-row').getBoundingClientRect().top>=document.querySelector('body > div > header').getBoundingClientRect().bottom"),'all four sections remain below the sticky header');
     if(width>=1024)assert.ok(await evaluate("document.querySelector('.forecast-assumptions-workspace h2').getBoundingClientRect().top>=document.querySelector('body > div > header').getBoundingClientRect().bottom"),'workspace heading is not obscured by sticky header');
     // Chromium's beyond-viewport captures can paint a sticky site header over
     // the crop. Visibility assertions above use its real position; only the
@@ -892,7 +896,7 @@ test('Assumptions round trips retain unsaved edits, comparison isolation, save/u
   const plan=await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),result=await evaluate('JSON.stringify(__dollarTest.result())'),stored=await evaluate('JSON.stringify({...localStorage})');
   await assumptionEdit('inflationPct',4);await evaluate("document.querySelector('[data-growth-open]').click()");await growthEdit('Base','expectedSuperReturnPct',9);
   for(const view of ['decision','investments','super','reports','scenarios']){
-    await evaluate(`document.querySelector('.nav-more-items [data-view="${view}"]').click()`);assert.equal(await evaluate('document.body.dataset.activeView'),view);
+    await evaluate(`document.querySelector('.workspace-nav [data-view="${view}"]').click()`);assert.equal(await evaluate('document.body.dataset.activeView'),view);
     await evaluate("document.querySelector('.fa-nav').click()");
     assert.equal(await evaluate("document.querySelector('[data-assumption=inflationPct]').value"),'4');
     assert.equal(await evaluate("document.querySelector('[data-growth-scenario=Base][data-growth-field=expectedSuperReturnPct]').value"),'9');
@@ -1310,4 +1314,120 @@ test('U06 lower setup fields remain clear of the compact footer and simulated ke
   await evaluate('delete visualViewport.height;visualViewport.dispatchEvent(new Event("resize"))');
   assert.equal(await evaluate('getComputedStyle(document.querySelector(".wizard-actions")).position'),'sticky');
   assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),plan);
+});
+
+const fourNavBefore=process.env.FFS_FOUR_NAV_PHASE==='before';
+async function fourNavShot(screen,width,selector='.workspace-nav'){
+  const dir=path.join(root,'docs/four-section-navigation',fourNavBefore?'before':'after');await mkdir(dir,{recursive:true});
+  await evaluate(`(()=>{const n=document.querySelector(${JSON.stringify(selector)});scrollTo({top:n.getBoundingClientRect().top+scrollY-document.querySelector('body > div > header').getBoundingClientRect().height-16,behavior:'instant'});return new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));})()`);
+  await new Promise(r=>setTimeout(r,150));
+  const shot=await cdp.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});await writeFile(path.join(dir,`${screen}-${width}.png`),Buffer.from(shot.data,'base64'));
+}
+test('four-section navigation before and after responsive screen evidence',async()=>{
+  for(const width of [375,390,430,768,1024,1366]){
+    await cdp.send('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:width<600});await navigate();await evaluate('localStorage.clear()');await navigate();await fourNavShot('welcome',width,'#homeView');await fixture();
+    const plan=await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),engine=await evaluate('JSON.stringify(__dollarTest.result())');
+    for(const [view,screen] of [['dashboard','progress'],['semiretirement','future'],['decision','change'],['weeklyplan','weekly']]){
+      await evaluate(`FFSStage1BrowserTestHooks.showWorkspace('${view}');FFSStage1BrowserTestHooks.closeDurabilityDialog()`);if(view==='semiretirement')await evaluate("document.querySelector('[data-semi-action=calculate]').click()");await fourNavShot(screen,width);
+      assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),plan);assert.equal(await evaluate('JSON.stringify(__dollarTest.result())'),engine);
+      if(!fourNavBefore){assert.equal(await evaluate('document.documentElement.scrollWidth>innerWidth+1'),false,`${view} page overflow ${width}`);assert.equal(await evaluate("document.querySelectorAll('.nav-primary-row [data-view]').length"),4);}
+    }
+  }
+});
+
+async function fourNavSavedFixture(name='Four section saved fixture'){
+  await evaluate(`(()=>{const p=structuredClone(FFS_DATA.samplePlans[1].plan);p.personal.person1Name=${JSON.stringify(name)};FFSStage1BrowserTestHooks.setPlan(p,'investments');const n=document.querySelector('#investingForm [data-path="investing.annualInvestingTarget"]');n.value='18765';n.dispatchEvent(new Event('input',{bubbles:true}));FFSStage1BrowserTestHooks.closeDurabilityDialog();})()`);
+  return evaluate("(()=>{const key=Object.keys(localStorage).find(k=>k.startsWith('ffs-personal-plan-v1:'));return {key,raw:localStorage.getItem(key)}})()");
+}
+test('four sections retain every tool, one workspace and financial parity at all six widths',async()=>{
+  const rows=[];
+  for(const width of [375,390,430,768,1024,1366]){
+    await cdp.send('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:width<600});await navigate();await evaluate('localStorage.clear()');await navigate();await fixture();
+    const plan=await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),engine=await evaluate('JSON.stringify(__dollarTest.result())'),saved=await evaluate('JSON.stringify(__dollarTest.savedScenarios())'),runs=await evaluate('window.__retirementRuns');
+    const operations=[];
+    for(const view of ['dashboard','semiretirement','decision','weeklyplan','setup','assumptions','investments','super','goals','scenarios','reports']){
+      await journeyNavigate(view,operations);
+      assert.equal(await evaluate('document.querySelectorAll(".view-section:not(.hidden)").length'),1);
+      assert.equal(await evaluate('document.body.dataset.freedomStage'),'workspace');assert.equal(await evaluate('getComputedStyle(document.getElementById("homeView")).display'),'none');
+      assert.equal(await evaluate('history.state.ffsWorkspace'),view);
+      assert.equal(await evaluate('document.documentElement.scrollWidth>innerWidth+1'),false,`${view} ${width}`);
+      const primary=await evaluate('FFSFreedomNavigation.sections.find(s=>s.view===document.body.dataset.activeView)');
+      if(primary){assert.equal(await evaluate(`document.querySelector('[data-view-panel="${view}"] > .section-heading h2').textContent`),primary.label);assert.equal(await evaluate(`document.querySelector('[data-view-panel="${view}"] > .section-heading p').textContent`),primary.subtitle);}
+    }
+    assert.ok(operations.every(op=>!op.status||op.status==='pointer-click'),JSON.stringify(operations));
+    assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),plan);assert.equal(await evaluate('JSON.stringify(__dollarTest.result())'),engine);assert.equal(await evaluate('JSON.stringify(__dollarTest.savedScenarios())'),saved);
+    assert.equal(await evaluate('window.__retirementRuns'),runs,'navigation adds no retirement projection runs');
+    assert.ok(await evaluate("[...document.querySelectorAll('.nav-primary-row button')].every(n=>n.getBoundingClientRect().height>=44)"));
+    assert.equal(await evaluate("document.querySelectorAll('#semiRetirementScenarioRoot,#weeklyPlanRoot,#forecastAssumptionsWorkspace,.forecast-assumptions-form,[data-growth-open]').length"),5);
+    assert.equal(await evaluate("/AI Coach|AI Coaching/i.test(document.querySelector('.workspace-nav').innerText+document.querySelector('[data-view-panel=dashboard]').innerText)"),false);
+    rows.push({width,allDestinationsReachable:true,oneWorkspaceEach:true,engineParity:true,noExtraRetirementRuns:true,noOverflow:true});
+  }
+  await writeFile(path.join(root,'docs/four-section-navigation/access-verification.json'),JSON.stringify(rows,null,2)+'\n');
+});
+
+test('four-section welcome, fictional samples, saved-plan startup, refresh and browser history',async()=>{
+  for(const width of [375,1366]){
+    await cdp.send('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:width<600});await navigate();await evaluate('localStorage.clear()');await navigate();
+    assert.equal(await evaluate('document.body.dataset.freedomStage'),'welcome');assert.equal(await evaluate('getComputedStyle(document.getElementById("appWorkspace")).display'),'none');
+    await evaluate("localStorage.setItem('ffs-user-state-v3-mobile-dashboard-ux-test',JSON.stringify({hasCreatedPersonalPlan:true}))");await navigate();assert.equal(await evaluate('document.getElementById("introSampleActions").classList.contains("hidden")'),false,'an old UI flag cannot hide Start My Plan when no valid saved plan exists');
+    assert.ok(await evaluate("[...document.querySelectorAll('#homeView .home-snapshot-grid,#engagementHome')].every(n=>getComputedStyle(n).display==='none')"));
+    await journeyTap('#heroStartButton',[]);assert.equal(await evaluate('document.body.dataset.activeView'),'setup');
+    const stored=await fourNavSavedFixture();await navigate();await evaluate('FFSStage1BrowserTestHooks.closeDurabilityDialog()');
+    assert.equal(await evaluate('document.body.dataset.activeView'),'dashboard');assert.equal(await evaluate('location.hash'),'#progress');assert.equal(await evaluate(`localStorage.getItem(${JSON.stringify(stored.key)})`),stored.raw);
+    const operations=[];await journeyNavigate('semiretirement',operations);await journeyNavigate('decision',operations);const length=await evaluate('history.length');
+    await evaluate('history.back()');await waitFor(()=>evaluate("document.body.dataset.activeView==='semiretirement'"));await evaluate('history.back()');await waitFor(()=>evaluate("document.body.dataset.activeView==='dashboard'"));await evaluate('history.forward()');await waitFor(()=>evaluate("document.body.dataset.activeView==='semiretirement'"));assert.equal(await evaluate('history.length'),length);
+    await journeyNavigate('decision',operations);await cdp.send('Page.reload');await waitFor(()=>evaluate("Boolean(window.FFSStage1BrowserTestHooks)&&document.body.dataset.activeView==='decision'"));assert.equal(await evaluate('FFSStage1BrowserTestHooks.getPlan().personal.person1Name'),'Four section saved fixture');assert.equal(await evaluate(`localStorage.getItem(${JSON.stringify(stored.key)})`),stored.raw);
+    await navigate();await evaluate('localStorage.clear()');await navigate();
+    const sampleTarget=width<600?'[data-s3-key=sample] > summary':'#heroSamplePlanMenu > summary';await journeyTap(sampleTarget,[]);
+    if(width<600)await journeyTap('#heroDemoButton',[]);else await journeyTap('#heroSamplePlanMenu [data-sample-plan-choice]',[]);
+    assert.equal(await evaluate('document.body.dataset.freedomSample'),'true');assert.match(await evaluate('document.getElementById("s3CurrentScreen").textContent'),/Fictional sample/);assert.equal(await evaluate("Object.keys(localStorage).some(k=>k.startsWith('ffs-personal-plan-v1:'))"),false);
+  }
+});
+
+test('Explore My Future reuses growth and retirement sessions and preserves unsaved assumptions across all four sections',async()=>{
+  for(const width of [375,1366]){
+    await cdp.send('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:width<600});await navigate();await fixture();
+    const plan=await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),model=await evaluate('JSON.stringify(__dollarTest.result())');
+    await journeyNavigate('semiretirement',[]);await journeyTap('[data-freedom-future=growth]',[]);
+    assert.equal(await evaluate('location.hash'),'#future-growth');assert.equal(await evaluate('document.querySelectorAll("#freedomGrowthHost [data-growth-open]").length'),1);
+    await evaluate('window.__fourGrowthNode=document.querySelector(".growth-workspace")');
+    const expected=await evaluate('__dollarTest.result().netWorthProjection.find(r=>r.year===10).closingBalance');close(amount(await evaluate('document.querySelector("[data-growth-result=Base] strong").textContent')),expected);
+    await growthEdit('Base','expectedSuperReturnPct',9);const comparison=await evaluate('document.querySelector("[data-growth-result=Base] strong").textContent');
+    await journeyNavigate('assumptions',[]);await assumptionEdit('inflationPct',4);
+    for(const view of ['dashboard','semiretirement','decision','weeklyplan'])await journeyNavigate(view,[]);
+    await journeyNavigate('semiretirement',[]);await journeyTap('[data-freedom-future=growth]',[]);
+    assert.equal(await evaluate('document.querySelector("[data-growth-scenario=Base][data-growth-field=expectedSuperReturnPct]").value'),'9');assert.equal(await evaluate('document.querySelector("[data-growth-result=Base] strong").textContent'),comparison);
+    assert.equal(await evaluate('window.__fourGrowthNode===document.querySelector(".growth-workspace")'),true);
+    await journeyNavigate('assumptions',[]);assert.equal(await evaluate('document.querySelector("[data-assumption=inflationPct]").value'),'4');
+    await assumptionButton('Undo unsaved edits');assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),plan);assert.equal(await evaluate('JSON.stringify(__dollarTest.result())'),model);
+    await journeyNavigate('semiretirement',[]);await journeyTap('[data-freedom-future=growth]',[]);await fourNavShot('future-growth',width,'[data-view-panel=semiretirement]');await evaluate("[...document.querySelectorAll('.growth-panel button')].find(n=>n.textContent==='Open Retirement Planning').click()");
+    assert.equal(await evaluate('document.body.dataset.freedomFuture'),'retirement');assert.notEqual(await evaluate('getComputedStyle(document.getElementById("semiRetirementScenarioRoot")).display'),'none');
+  }
+});
+
+test('four-section retirement edits, saved scenarios, weekly edits and report source remain functional',async()=>{
+  for(const width of [375,1366]){
+    await cdp.send('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:width<600});await navigate();await evaluate('localStorage.clear()');await navigate();await fourNavSavedFixture('Navigation financial workflow');
+    await journeyNavigate('semiretirement',[]);
+    await journeyTap('[data-semi-input="people.0.fullRetirementAge"]',[]);
+    await evaluate(`(()=>{const n=document.querySelector('[data-semi-input="people.0.fullRetirementAge"]');n.value='63';n.dispatchEvent(new Event('input',{bubbles:true}));n.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+    assert.equal(await evaluate('FFSStage1BrowserTestHooks.getPlan().personal.retirementTiming.people[0].fullRetirementAge'),63);
+    const plan=await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())');
+    await journeyTap('[data-semi-input="household.fullRetirementLifestyleSpending"]',[]);await evaluate(`(()=>{const n=document.querySelector('[data-semi-input="household.fullRetirementLifestyleSpending"]');n.value='75490';n.dispatchEvent(new Event('input',{bubbles:true}));n.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+    await journeyTap('[data-semi-action=calculate]',[]);assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),plan,'scenario-only lifestyle edits do not replace plan inputs');
+    assert.equal(await evaluate('JSON.stringify(FFSSemiRetirementUi.runSemiRetirementProjection(FFSSemiRetirementProjection,__stage2Test.retirementDraft()).result)===JSON.stringify(__dollarTest.retirement().result)'),true);
+    await evaluate("document.querySelector('[data-semi-action=compare]').click();document.querySelector('[data-save-stage-g-scenario=retirement]').click();document.getElementById('stageGScenarioName').value='Navigation saved retirement';document.querySelector('[data-scenario-save-action=save]').click();FFSStage1BrowserTestHooks.closeDurabilityDialog()");
+    const id=await evaluate("__dollarTest.savedScenarios().find(s=>s.name==='Navigation saved retirement').id"),saved=await evaluate('JSON.stringify(__dollarTest.savedScenarios())');
+    await journeyNavigate('scenarios',[]);await journeyTap(`[data-stage2-view="${id}"]`,[]);assert.match(await evaluate('document.querySelector("#stage2SnapshotViewer").textContent'),/Read-only view/);
+    await evaluate("[...document.querySelectorAll('#stage2SnapshotViewer button')].find(n=>n.textContent==='Back to saved scenarios').click()");await journeyTap(`[data-open-scenario="${id}"]`,[]);assert.equal(await evaluate('document.body.dataset.activeView'),'semiretirement');assert.equal(await evaluate('document.body.dataset.freedomFuture'),'retirement');assert.equal(await evaluate('__stage2Test.retirementDraft().household.fullRetirementLifestyleSpending'),75490);assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),plan);
+    await journeyNavigate('weeklyplan',[]);await journeyTap('[data-weekly-action=create-plan]',[]);await evaluate('FFSStage1BrowserTestHooks.closeDurabilityDialog()');
+    await journeyTap('[data-weekly-step-button=income]',[]);await journeyTap('[data-weekly-actual=income]',[]);
+    await evaluate(`(()=>{const n=document.querySelector('[data-weekly-actual=income]');n.value='4321';n.dispatchEvent(new Event('input',{bubbles:true}));n.dispatchEvent(new Event('change',{bubbles:true}));document.querySelector('[data-weekly-step-button=complete]').click();document.querySelector('[data-weekly-action=save-week]').click();FFSStage1BrowserTestHooks.closeDurabilityDialog();})()`);
+    const weekly=await evaluate('JSON.stringify(__dollarTest.backup().weeklyPlan)');assert.match(weekly,/4321/);
+    for(const view of ['dashboard','semiretirement','decision','weeklyplan'])await journeyNavigate(view,[]);assert.equal(await evaluate('JSON.stringify(__dollarTest.backup().weeklyPlan)'),weekly);
+    await journeyNavigate('reports',[]);assert.match(await evaluate('document.querySelector(".report-toolbar").textContent'),/Generated from the current plan/);close(amount(await evaluate('document.querySelector("#financialReportBody .report-narrative-box p strong").textContent')),await evaluate('__dollarTest.result().currentNetWorth'));close(amount(await evaluate('document.querySelector("#financialReportBody .report-narrative-box p:nth-child(2) strong").textContent')),await evaluate('__dollarTest.result().targetAnnualLifestyleSpendingToday'));assert.equal(await evaluate('document.getElementById("reportPrintButton").disabled'),false);await journeyTap('#reportPrintButton',[]);assert.ok(await evaluate('window.__printCalls>0'));
+    await journeyTap('[data-view=progress]',[]);assert.equal(await evaluate('location.hash'),'#financial-history');assert.equal(await evaluate('document.body.dataset.activeView'),'progress');
+    await journeyNavigate('assumptions',[]);await assumptionEdit('inflationPct',3);await assumptionButton('Save assumptions');assert.equal(await evaluate('FFSStage1BrowserTestHooks.getPlan().investing.inflationPct'),3);
+    await journeyNavigate('weeklyplan',[]);const url=await evaluate('location.href');await cdp.send('Page.reload');await waitFor(()=>evaluate('Boolean(window.FFSStage1BrowserTestHooks)&&document.body.dataset.activeView==="weeklyplan"'));assert.equal(await evaluate('location.href'),url);const restoredWeekly=await evaluate('__dollarTest.backup().weeklyPlan'),expectedWeekly=JSON.parse(weekly);delete restoredWeekly.updatedAt;delete expectedWeekly.updatedAt;assert.deepEqual(restoredWeekly,expectedWeekly,'all weekly allocations, actuals and history survive refresh; existing updatedAt metadata may advance');assert.equal(await evaluate('JSON.stringify(__dollarTest.savedScenarios())'),saved);assert.equal(await evaluate('FFSStage1BrowserTestHooks.getPlan().investing.inflationPct'),3);
+  }
 });
