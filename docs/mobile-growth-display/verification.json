@@ -1,0 +1,38 @@
+{
+  "baseline": "25d49e4a033d5af88684842dd6cd9bcdb794207b",
+  "verify": {
+    "command": "pnpm verify",
+    "tests": 1305,
+    "suites": 68,
+    "failed": 0
+  },
+  "browser": {
+    "command": "pnpm test:browser",
+    "tests": 82,
+    "passed": 82,
+    "failed": 0,
+    "skipped": 0,
+    "durationMs": 392016.903573
+  },
+  "widths": [
+    375,
+    390,
+    430,
+    768,
+    1024,
+    1366
+  ],
+  "additionalWidth": 320,
+  "screenshots": {
+    "before": 12,
+    "after": 12
+  },
+  "numericalParity": {
+    "fixtures": 9,
+    "differences": 0
+  },
+  "browserEngine": "Chromium",
+  "physicalIPhoneSafari": "Not run",
+  "merged": false,
+  "deployed": false
+}

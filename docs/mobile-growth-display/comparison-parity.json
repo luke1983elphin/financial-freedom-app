@@ -1,0 +1,218 @@
+[
+  {
+    "width": 375,
+    "variant": "standard",
+    "basis": "future",
+    "allFiveValuesMatchTable": true,
+    "chartMatches": true,
+    "engineUnchanged": true,
+    "noPageOverflow": true
+  },
+  {
+    "width": 375,
+    "variant": "standard",
+    "basis": "today",
+    "allFiveValuesMatchTable": true,
+    "chartMatches": true,
+    "engineUnchanged": true,
+    "noPageOverflow": true
+  },
+  {
+    "width": 375,
+    "variant": "large-negative",
+    "basis": "future",
+    "allFiveValuesMatchTable": true,
+    "chartMatches": true,
+    "engineUnchanged": true,
+    "noPageOverflow": true
+  },
+  {
+    "width": 375,
+    "variant": "large-negative",
+    "basis": "today",
+    "allFiveValuesMatchTable": true,
+    "chartMatches": true,
+    "engineUnchanged": true,
+    "noPageOverflow": true
+  },
+  {
+    "width": 390,
+    "variant": "standard",
+    "basis": "future",
+    "allFiveValuesMatchTable": true,
+    "chartMatches": true,
+    "engineUnchanged": true,
+    "noPageOverflow": true
+  },
+  {
+    "width": 390,
+    "variant": "standard",
+    "basis": "today",
+    "allFiveValuesMatchTable": true,
+    "chartMatches": true,
+    "engineUnchanged": true,
+    "noPageOverflow": true
+  },
+  {
+    "width": 390,
+    "variant": "large-negative",
+    "basis": "future",
+    "allFiveValuesMatchTable": true,
+    "chartMatches": true,
+    "engineUnchanged": true,
+    "noPageOverflow": true
+  },
+  {
+    "width": 390,
+    "variant": "large-negative",
+    "basis": "today",
+    "allFiveValuesMatchTable": true,
+    "chartMatches": true,
+    "engineUnchanged": true,
+    "noPageOverflow": true
+  },
+  {
+    "width": 430,
+    "variant": "standard",
+    "basis": "future",
+    "allFiveValuesMatchTable": true,
+    "chartMatches": true,
+    "engineUnchanged": true,
+    "noPageOverflow": true
+  },
+  {
+    "width": 430,
+    "variant": "standard",
+    "basis": "today",
+    "allFiveValuesMatchTable": true,
+    "chartMatches": true,
+    "engineUnchanged": true,
+    "noPageOverflow": true
+  },
+  {
+    "width": 430,
+    "variant": "large-negative",
+    "basis": "future",
+    "allFiveValuesMatchTable": true,
+    "chartMatches": true,
+    "engineUnchanged": true,
+    "noPageOverflow": true
+  },
+  {
+    "width": 430,
+    "variant": "large-negative",
+    "basis": "today",
+    "allFiveValuesMatchTable": true,
+    "chartMatches": true,
+    "engineUnchanged": true,
+    "noPageOverflow": true
+  },
+  {
+    "width": 768,
+    "variant": "standard",
+    "basis": "future",
+    "allFiveValuesMatchTable": true,
+    "chartMatches": true,
+    "engineUnchanged": true,
+    "noPageOverflow": true
+  },
+  {
+    "width": 768,
+    "variant": "standard",
+    "basis": "today",
+    "allFiveValuesMatchTable": true,
+    "chartMatches": true,
+    "engineUnchanged": true,
+    "noPageOverflow": true
+  },
+  {
+    "width": 768,
+    "variant": "large-negative",
+    "basis": "future",
+    "allFiveValuesMatchTable": true,
+    "chartMatches": true,
+    "engineUnchanged": true,
+    "noPageOverflow": true
+  },
+  {
+    "width": 768,
+    "variant": "large-negative",
+    "basis": "today",
+    "allFiveValuesMatchTable": true,
+    "chartMatches": true,
+    "engineUnchanged": true,
+    "noPageOverflow": true
+  },
+  {
+    "width": 1024,
+    "variant": "standard",
+    "basis": "future",
+    "allFiveValuesMatchTable": true,
+    "chartMatches": true,
+    "engineUnchanged": true,
+    "noPageOverflow": true
+  },
+  {
+    "width": 1024,
+    "variant": "standard",
+    "basis": "today",
+    "allFiveValuesMatchTable": true,
+    "chartMatches": true,
+    "engineUnchanged": true,
+    "noPageOverflow": true
+  },
+  {
+    "width": 1024,
+    "variant": "large-negative",
+    "basis": "future",
+    "allFiveValuesMatchTable": true,
+    "chartMatches": true,
+    "engineUnchanged": true,
+    "noPageOverflow": true
+  },
+  {
+    "width": 1024,
+    "variant": "large-negative",
+    "basis": "today",
+    "allFiveValuesMatchTable": true,
+    "chartMatches": true,
+    "engineUnchanged": true,
+    "noPageOverflow": true
+  },
+  {
+    "width": 1366,
+    "variant": "standard",
+    "basis": "future",
+    "allFiveValuesMatchTable": true,
+    "chartMatches": true,
+    "engineUnchanged": true,
+    "noPageOverflow": true
+  },
+  {
+    "width": 1366,
+    "variant": "standard",
+    "basis": "today",
+    "allFiveValuesMatchTable": true,
+    "chartMatches": true,
+    "engineUnchanged": true,
+    "noPageOverflow": true
+  },
+  {
+    "width": 1366,
+    "variant": "large-negative",
+    "basis": "future",
+    "allFiveValuesMatchTable": true,
+    "chartMatches": true,
+    "engineUnchanged": true,
+    "noPageOverflow": true
+  },
+  {
+    "width": 1366,
+    "variant": "large-negative",
+    "basis": "today",
+    "allFiveValuesMatchTable": true,
+    "chartMatches": true,
+    "engineUnchanged": true,
+    "noPageOverflow": true
+  }
+]

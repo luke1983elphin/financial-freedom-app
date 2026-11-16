@@ -1,6 +1,7 @@
 export const DEFAULT_SUITE_TIMEOUT_MS = 120_000;
 
 export const ACTIVE_TEST_SUITES = [
+  { id: "forecast-display-preferences", file: "tests/forecast-display-preferences.test.mjs", groups: ["all", "mjs", "presentation"] },
   { id: "mobile-usability-stage3", file: "tests/mobile-usability-stage3.test.mjs", groups: ["all", "mjs", "presentation"] },
   { id: "mobile-usability-stage2", file: "tests/mobile-usability-stage2.test.mjs", groups: ["all", "mjs", "presentation"] },
   { id: "property-debt-f04", file: "tests/property-debt-f04.test.mjs", groups: ["all", "mjs", "audit", "f04"] },
@@ -71,6 +72,8 @@ export const ACTIVE_TEST_SUITES = [
 ];
 
 export const SYNTAX_CHECK_FILES = [
+  "forecast-display-preferences.js",
+  "tests/forecast-display-preferences.test.mjs",
   "freedom-navigation.js",
   "mobile-usability-stage3.js",
   "tests/mobile-usability-stage3.test.mjs",
