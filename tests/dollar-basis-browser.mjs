@@ -146,6 +146,9 @@ before(async () => {
       if (process.env.FFS_MOBILE_DISPLAY_PHASE === 'before' && ['index.html','app.js','styles.css','growth-scenarios-view.js'].includes(relative)) {
         body = execFileSync('git',['show',`25d49e4a033d5af88684842dd6cd9bcdb794207b:${relative}`],{cwd:root,maxBuffer:4*1024*1024});
       }
+      if (process.env.FFS_RETURNING_HEADER_PHASE === 'before' && ['index.html','app.js'].includes(relative)) {
+        body = execFileSync('git',['show',`b98955029638f675541e0b5bd34f3c6c77aaeeab:${relative}`],{cwd:root,maxBuffer:4*1024*1024});
+      }
       // Test-only alternate-year fixture; production files and calculation logic remain unchanged.
       if (relative === "calculator.js" && evidenceFinancialYear) body = Buffer.from(body.toString().replace('const FINANCIAL_YEAR = "2026-27";', `const FINANCIAL_YEAR = "${evidenceFinancialYear}";`));
       if (relative === "semiRetirementUi.js") body = Buffer.from(body.toString().replace('  function runSemiRetirementProjection(engine, draft) {', '  function runSemiRetirementProjection(engine, draft) { window.__retirementRuns = (window.__retirementRuns || 0) + 1;'));
@@ -1511,4 +1514,202 @@ test('Today default and explicit saved preferences survive new plans, sample vie
  await evaluate(`(()=>{const n=document.querySelector('#wizardAboutForm [data-path="personal.person1Name"]');n.value='New plan display fixture';n.dispatchEvent(new Event('input',{bubbles:true}));FFSStage1BrowserTestHooks.closeDurabilityDialog();})()`);await navigate();
  assert.equal(await evaluate('document.body.dataset.forecastDollarBasis'),'today','the new plan default survives a fresh session');assert.equal(await evaluate('FFSStage1BrowserTestHooks.getPlan().personal.person1Name'),'New plan display fixture');
  await select('future');await navigate();assert.equal(await evaluate('document.body.dataset.forecastDollarBasis'),'future');await select('today');await navigate();assert.equal(await evaluate('document.body.dataset.forecastDollarBasis'),'today');
+});
+
+const returningHeaderBefore = process.env.FFS_RETURNING_HEADER_PHASE === 'before';
+const returningHeaderDir = path.join(root, 'docs/returning-dashboard-header', returningHeaderBefore ? 'before' : 'after');
+const personalDraftKey = 'ffs-current-plan-v3-mobile-dashboard-ux-test';
+const savedTimeKey = 'ffs-current-plan-last-saved-v3-mobile-dashboard-ux-test';
+async function openingShot(name, width) {
+  await mkdir(returningHeaderDir, {recursive: true});
+  await evaluate('scrollTo({top:0,behavior:"instant"});new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+  await new Promise(resolve => setTimeout(resolve, 150));
+  const shot = await cdp.send('Page.captureScreenshot', {format: 'png', captureBeyondViewport: false});
+  await writeFile(path.join(returningHeaderDir, `${name}-${width}.png`), Buffer.from(shot.data, 'base64'));
+}
+async function cleanOpening(width) {
+  await cdp.send('Emulation.setDeviceMetricsOverride', {width, height:1000, deviceScaleFactor:1, mobile:width<600});
+  await navigate();
+  await evaluate('localStorage.clear()');
+  await navigate();
+}
+
+test('opening experience: first visitors keep welcome and saved households open the original dashboard at every width', async () => {
+  const evidence = [];
+  for (const width of [375,390,430,768,1024,1366]) {
+    await cleanOpening(width);
+    assert.equal(await evaluate('document.body.dataset.freedomStage'), 'welcome');
+    assert.equal(await evaluate('getComputedStyle(document.getElementById("appWorkspace")).display'), 'none');
+    assert.equal(await evaluate('document.body.dataset.freedomSample'), 'false');
+    assert.equal(await evaluate('document.getElementById("introSampleActions").classList.contains("hidden")'), false);
+    assert.equal(await evaluate('document.getElementById("continuePanel").classList.contains("hidden")'), true);
+    assert.ok(await evaluate('document.getElementById("heroStartButton").getClientRects().length>0'));
+    assert.ok(await evaluate('Boolean(document.querySelector("#homeView [data-s3-key=sample],#heroSamplePlanMenu"))'));
+    assert.equal(await evaluate('Object.keys(localStorage).some(k=>k.startsWith("ffs-personal-plan-v1:"))'), false);
+    assert.equal(await evaluate('document.documentElement.scrollWidth>innerWidth+1'), false);
+    await openingShot('first-visit', width);
+
+    const stored = await fourNavSavedFixture('Saved household browser fixture');
+    const before = await evaluate('JSON.stringify(__dollarTest.result())');
+    await journeyNavigate('dashboard', []);
+    const dashboard = await evaluate('document.querySelector("[data-view-panel=dashboard]").innerHTML');
+    // A bare app URL defaults to the dashboard even when the saved UI last used Investments.
+    await navigate();
+    await evaluate('FFSStage1BrowserTestHooks.closeDurabilityDialog()');
+    assert.equal(await evaluate('document.body.dataset.freedomStage'), 'workspace');
+    assert.equal(await evaluate('document.body.dataset.activeView'), 'dashboard');
+    assert.equal(await evaluate('location.hash'), '#progress');
+    assert.equal(await evaluate('getComputedStyle(document.getElementById("homeView")).display'), 'none');
+    assert.equal(await evaluate('document.querySelectorAll(".view-section:not(.hidden)").length'), 1);
+    assert.equal(await evaluate('document.querySelector("[data-view-panel=dashboard]").innerHTML'), dashboard, 'same existing dashboard markup, values and charts');
+    assert.equal(await evaluate('JSON.stringify(__dollarTest.result())'), before);
+    assert.equal(await evaluate(`localStorage.getItem(${JSON.stringify(stored.key)})`), stored.raw, 'opening never saves over the plan');
+    assert.equal(await evaluate('document.querySelectorAll(".nav-primary-row [data-view]").length'), 4);
+    assert.equal(await evaluate('document.documentElement.scrollWidth>innerWidth+1'), false);
+    assert.equal(await evaluate('document.querySelectorAll("#headerSaveStatus").length'), 1);
+    assert.equal(await evaluate('document.querySelectorAll("#lastSavedLabel").length'), returningHeaderBefore ? 1 : 0);
+    await openingShot('returning-dashboard', width);
+    evidence.push({width,firstVisitWelcome:true,noAutomaticSample:true,returningDashboard:true,noContinueClick:true,originalDashboardMarkup:true,financialParity:true,savedRecordUnchanged:true,noOverflow:true});
+  }
+  await writeFile(path.join(returningHeaderDir, 'opening-verification.json'), JSON.stringify(evidence,null,2)+'\n');
+});
+
+test('opening recovery: legacy and partial plans open directly, while invalid or unavailable data retain safe recovery', async () => {
+  for (const width of [375,1366]) {
+    await cleanOpening(width);
+    const stored = await fourNavSavedFixture('Recovery browser fixture');
+    // Legacy-only personal data still follow the existing migration and open directly.
+    await evaluate(`localStorage.removeItem(${JSON.stringify(stored.key)})`);
+    await navigate();
+    assert.equal(await evaluate('document.body.dataset.activeView'), 'dashboard');
+    assert.equal(await evaluate('document.body.dataset.freedomStage'), 'workspace');
+    assert.equal(await evaluate('FFSStage1BrowserTestHooks.getPlan().personal.person1Name'), 'Recovery browser fixture');
+    const legacyRaw = await evaluate(`localStorage.getItem('${personalDraftKey}')`);
+    assert.equal(legacyRaw, stored.raw);
+    // A preserved corrupt namespaced copy can recover from a valid legacy copy.
+    await evaluate(`localStorage.setItem(${JSON.stringify(stored.key)},'{broken saved plan')`);
+    await navigate();
+    assert.equal(await evaluate('document.body.dataset.activeView'), 'dashboard');
+    assert.equal(await evaluate('document.body.dataset.freedomStage'), 'workspace');
+    assert.equal(await evaluate(`localStorage.getItem(${JSON.stringify(stored.key)})`), '{broken saved plan');
+    assert.equal(await evaluate(`localStorage.getItem('${personalDraftKey}')`), legacyRaw);
+    assert.match(await evaluate('document.getElementById("durabilityNotice").innerText'), /preserved|not.*overwritten/i);
+
+    // No valid copy: retain corrupt bytes, welcome and the existing import/new-plan recovery actions.
+    await evaluate(`localStorage.setItem('${personalDraftKey}','{broken legacy plan')`);
+    await navigate();
+    assert.equal(await evaluate('document.body.dataset.freedomStage'), 'welcome');
+    assert.equal(await evaluate('document.body.dataset.freedomSample'), 'false');
+    assert.equal(await evaluate(`localStorage.getItem(${JSON.stringify(stored.key)})`), '{broken saved plan');
+    assert.equal(await evaluate(`localStorage.getItem('${personalDraftKey}')`), '{broken legacy plan');
+    assert.ok(await evaluate('document.querySelector("#durabilityNotice [data-durability-action=import]")'));
+    assert.ok(await evaluate('document.querySelector("#durabilityNotice [data-durability-action=new-plan]")'));
+    await openingShot('recovery', width);
+
+    // A partially entered personal plan is still the user's plan, without claiming complete results.
+    await cleanOpening(width);
+    await journeyTap('#heroStartButton', []);
+    await evaluate('(()=>{const n=document.querySelector("#wizardAboutForm [data-path=\\"personal.person1Name\\"]");n.value="Partial household";n.dispatchEvent(new Event("input",{bubbles:true}));FFSStage1BrowserTestHooks.closeDurabilityDialog();})()');
+    const partialRaw = await evaluate(`localStorage.getItem('${personalDraftKey}')`);
+    assert.ok(partialRaw);
+    await navigate();
+    assert.equal(await evaluate('document.body.dataset.freedomStage'), 'workspace');
+    assert.equal(await evaluate('document.body.dataset.activeView'), 'dashboard');
+    assert.equal(await evaluate('FFSStage1BrowserTestHooks.getReadiness().readyForPersonalisedResults'), false);
+    assert.equal(await evaluate(`localStorage.getItem('${personalDraftKey}')`), partialRaw);
+
+    // Storage unavailable from the first read: do not pretend the saved plan loaded or replace it.
+    const script = await cdp.send('Page.addScriptToEvaluateOnNewDocument', {source:`window.__openingStorageGet=Storage.prototype.getItem;Storage.prototype.getItem=function(){throw new DOMException('Browser storage unavailable','SecurityError');};Storage.prototype.setItem=function(){throw new DOMException('Browser storage unavailable','SecurityError');};`});
+    try {
+      await navigate();
+      assert.equal(await evaluate('document.body.dataset.freedomStage'), 'welcome');
+      assert.equal(await evaluate('document.body.dataset.freedomSample'), 'false');
+      assert.equal(await evaluate(`__openingStorageGet.call(localStorage,'${personalDraftKey}')`), partialRaw);
+      assert.ok(await evaluate('document.querySelector("#durabilityNotice [data-durability-action=import]")'));
+    } finally {
+      await cdp.send('Page.removeScriptToEvaluateOnNewDocument', {identifier:script.identifier});
+      await navigate();
+    }
+  }
+});
+
+test('opening resilience: a validated saved plan still opens when subsequent plan reads become unavailable', async () => {
+  for (const width of [375,1366]) {
+    await cleanOpening(width);
+    const stored = await fourNavSavedFixture('Already loaded household');
+    const script = await cdp.send('Page.addScriptToEvaluateOnNewDocument', {source:`
+      window.__openingStorageGet=Storage.prototype.getItem;
+      let personalReads=0;
+      Storage.prototype.getItem=function(key){
+        if(key.startsWith('ffs-personal-plan-v1:'))personalReads++;
+        if(personalReads>1&&(key.startsWith('ffs-personal-plan-v1:')||key==='${personalDraftKey}'))throw new DOMException('Plan storage became unavailable after load','SecurityError');
+        return __openingStorageGet.call(this,key);
+      };
+    `});
+    try {
+      await navigate();
+      assert.equal(await evaluate('FFSStage1BrowserTestHooks.getPlan().personal.person1Name'), 'Already loaded household');
+      assert.equal(await evaluate('document.body.dataset.freedomStage'), returningHeaderBefore ? 'welcome' : 'workspace');
+      if (!returningHeaderBefore) assert.equal(await evaluate('document.body.dataset.activeView'), 'dashboard');
+      assert.equal(await evaluate(`__openingStorageGet.call(localStorage,${JSON.stringify(stored.key)})`), stored.raw);
+      await evaluate('FFSStage1BrowserTestHooks.closeDurabilityDialog()');
+      await openingShot('interrupted-storage', width);
+    } finally {
+      await cdp.send('Page.removeScriptToEvaluateOnNewDocument', {identifier:script.identifier});
+      await navigate();
+    }
+  }
+});
+
+test('header cleanup: one desktop save indicator updates after edits and header actions remain usable', async () => {
+  for (const width of [375,768,1366]) {
+    await cleanOpening(width);
+    await fourNavSavedFixture('Save status fixture');
+    await evaluate(`localStorage.setItem('${savedTimeKey}','2025-01-01T00:00:00.000Z')`);
+    await navigate();
+    await evaluate('FFSStage1BrowserTestHooks.closeDurabilityDialog()');
+    const oldLabel = await evaluate('document.getElementById("headerSaveStatus").textContent');
+    assert.match(oldLabel, /Last saved:/i);
+    assert.equal(await evaluate('document.querySelectorAll(".app-header #headerSaveStatus").length'), 1);
+    if (!returningHeaderBefore) assert.equal(await evaluate('document.querySelector(".header-brand").innerText.includes("Saved")'), false);
+    if (width>=1024) assert.ok(await evaluate('document.getElementById("headerSaveStatus").getClientRects().length>0'));
+    await journeyNavigate('investments', []);
+    await evaluate('(()=>{const n=document.querySelector("#investingForm [data-path=\\"investing.annualInvestingTarget\\"]");n.value="19000";n.dispatchEvent(new Event("input",{bubbles:true}));})()');
+    await waitFor(()=>evaluate(`localStorage.getItem('${savedTimeKey}')!=='2025-01-01T00:00:00.000Z'`));
+    await waitFor(()=>evaluate('document.getElementById("headerSaveStatus").textContent.startsWith("Last saved:")'));
+    assert.notEqual(await evaluate('document.getElementById("headerSaveStatus").textContent'), oldLabel);
+    assert.equal(await evaluate(`JSON.parse(localStorage.getItem('${personalDraftKey}')).plan.investing.annualInvestingTarget`), 19000);
+    // Saving may show the existing backup reminder; close it before checking header hit targets.
+    await evaluate('FFSStage1BrowserTestHooks.closeDurabilityDialog()');
+    // The original desktop Plan and mobile Actions menus remain reachable by pointer.
+    const operations=[];
+    await journeyTap(width<=760?'#mobileActionMenu > summary':'#planMenu > summary', operations);
+    if (width<=760) await journeyTap('#mobilePlanGroup > summary', operations);
+    assert.ok(operations.every(op=>op.status==='pointer-click'), JSON.stringify({width,operations}));
+    assert.ok(await evaluate(`document.querySelector('${width<=760?'[data-mobile-action=export-plan-json]':'#planExportJsonButton'}').getClientRects().length>0`));
+    assert.equal(await evaluate('document.documentElement.scrollWidth>innerWidth+1'), false);
+  }
+});
+
+test('opening first paint: welcome stays hidden until startup classifies first-time and returning visitors', async () => {
+  let paused = null;
+  cdp.on('Fetch.requestPaused', event => { paused = event; });
+  for (const returning of [false,true]) {
+    await cleanOpening(375);
+    if (returning) await fourNavSavedFixture('First paint household');
+    paused = null;
+    await cdp.send('Fetch.enable', {patterns:[{urlPattern:new URL('app.js',baseUrl).href,requestStage:'Request'}]});
+    try {
+      await cdp.send('Page.navigate', {url:baseUrl});
+      await waitFor(async () => paused && await evaluate('Boolean(document.getElementById("homeView"))'));
+      assert.equal(await evaluate('Boolean(window.FFSStage1BrowserTestHooks)'), false, 'app startup is deliberately held before executing');
+      assert.equal(await evaluate('getComputedStyle(document.getElementById("homeView")).display==="none"'), !returningHeaderBefore, 'no welcome flash before saved-plan detection');
+    } finally {
+      if (paused) await cdp.send('Fetch.continueRequest', {requestId:paused.requestId});
+      await cdp.send('Fetch.disable');
+    }
+    await waitFor(()=>evaluate('document.readyState==="complete" && Boolean(window.FFSStage1BrowserTestHooks)'));
+    assert.equal(await evaluate('document.body.dataset.freedomStage'), returning ? 'workspace' : 'welcome');
+    if (returning) assert.equal(await evaluate('document.body.dataset.activeView'), 'dashboard');
+  }
 });

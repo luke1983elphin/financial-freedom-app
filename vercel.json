@@ -1,6 +1,6 @@
 {
   "git": {
-    "deploymentEnabled": { "main": false, "ui/mobile-growth-todays-dollars": false, "ui/four-section-navigation": false, "ui/mobile-usability-stage3": false, "ui/mobile-usability-stage2": false, "ui/forecast-assumptions-mobile": false, "ui/assumptions-dedicated-workspace": false, "fix/f08-retirement-tax-funding": false, "fix/f04-property-debt-net-worth": false, "ui/mobile-annual-forecast-journey-review": false }
+    "deploymentEnabled": { "main": false, "ui/returning-dashboard-header": false, "ui/mobile-growth-todays-dollars": false, "ui/four-section-navigation": false, "ui/mobile-usability-stage3": false, "ui/mobile-usability-stage2": false, "ui/forecast-assumptions-mobile": false, "ui/assumptions-dedicated-workspace": false, "fix/f08-retirement-tax-funding": false, "fix/f04-property-debt-net-worth": false, "ui/mobile-annual-forecast-journey-review": false }
   },
   "headers": [
     {

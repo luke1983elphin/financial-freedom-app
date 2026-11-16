@@ -616,7 +616,7 @@
   let plan = ensureCurrentPlanIdentity(migratePlanData(savedDraft || newUserPlan()));
   let activeView = restoredDraftUi.activeView || "dashboard";
   let activeWizardStep = normaliseWizardStep(restoredDraftUi.activeWizardStep);
-  let hasOpenedWorkspace = false; // Always show welcome on a fresh page load; retain saved plan and wizard progress.
+  let hasOpenedWorkspace = false; // Startup navigation opens valid saved plans; new visitors retain the welcome screen.
   let activeWhatIfId = "expenses-500";
   let customWhatIf = { kind: "expenses", amount: "300", frequency: "monthly" };
   let customWhatIfOpen = false;
@@ -18576,7 +18576,9 @@
   }
 
   function installFourSectionNavigation() {
-    const returning = Boolean(savedDraft && hasSavedDraft());
+    // loadDraft already validated and restored the personal plan. Do not gate its
+    // dashboard on another storage read, which may fail after a successful load.
+    const returning = Boolean(savedDraft);
     const ui = window.FFSFreedomNavigation.mount(document, {
       getContext: () => ({view: activeView, isDemo: isDemoActive(), returning}),
       navigate: view => showWorkspace(view),

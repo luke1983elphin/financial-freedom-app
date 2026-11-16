@@ -1,0 +1,40 @@
+{
+  "baseline": "b98955029638f675541e0b5bd34f3c6c77aaeeab",
+  "regression": {
+    "command": "pnpm verify",
+    "suites": 68,
+    "tests": 1305,
+    "failed": 0
+  },
+  "browser": {
+    "command": "pnpm test:browser",
+    "tests": 87,
+    "passed": 87,
+    "failed": 0,
+    "skipped": 0,
+    "newCases": 5,
+    "durationMs": 388590.643672
+  },
+  "widths": [
+    375,
+    390,
+    430,
+    768,
+    1024,
+    1366
+  ],
+  "screenshots": {
+    "before": 14,
+    "after": 16
+  },
+  "numericalParity": {
+    "fixtures": 9,
+    "differences": 0
+  },
+  "protectedFilesUnchanged": 17,
+  "protectedAppFunctionsUnchanged": 777,
+  "browserEngine": "Chromium",
+  "physicalIPhoneSafari": "Not run",
+  "merged": false,
+  "deployed": false
+}
