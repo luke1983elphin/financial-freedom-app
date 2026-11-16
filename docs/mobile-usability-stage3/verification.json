@@ -1,0 +1,33 @@
+{
+  "baseline": "bfb708361120a227db4e871cebfe22a9ed8c2809",
+  "viewports": [
+    375,
+    390,
+    430,
+    768,
+    1366
+  ],
+  "regression": {
+    "command": "pnpm verify",
+    "registeredSuites": 67,
+    "passed": 1298,
+    "failed": 0
+  },
+  "browser": {
+    "command": "pnpm test:browser",
+    "passed": 73,
+    "failed": 0,
+    "durationMs": 254040.35172
+  },
+  "additionalChecks": [
+    "mobile dollar controls >=44px; switching and persisted More tools preference pass",
+    "git diff --check",
+    "exact golden output parity: 9 fixtures, zero numerical differences"
+  ],
+  "limitations": [
+    "Chromium emulation, not physical iPhone Safari",
+    "Software keyboard test uses simulated VisualViewport shrinkage"
+  ],
+  "deployment": "Disabled for this branch; no deployment performed",
+  "pullRequest": "Draft; do not merge"
+}

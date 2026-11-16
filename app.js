@@ -18548,6 +18548,28 @@
     };
   }
 
+  function installMobileUsabilityStage3() {
+    let latestSuperResult;
+    const originalSuper = renderSuper;
+    renderSuper = (...args) => { latestSuperResult = args[0]; return originalSuper(...args); };
+    const ui = window.FFSMobileUsabilityStage3.mount(document, () => ({
+      identity: `${activePlanId}:${plan.meta?.source || ""}:${plan.meta?.samplePlanId || ""}`,
+      superPosition: latestSuperResult ? money(latestSuperResult.superannuationBalance) : "",
+      savedRetirement: String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:"),
+    }));
+    const wrap = original => (...args) => {
+      ui.remember();
+      const value = original(...args);
+      ui.sync();
+      return value;
+    };
+    renderForms = wrap(renderForms);
+    renderOutputs = wrap(renderOutputs);
+    renderSemiRetirementScenario = wrap(renderSemiRetirementScenario);
+    renderWizardStep = wrap(renderWizardStep);
+    setView = wrap(setView);
+  }
+
   function installMobileUsabilityStage2() {
     const ui = window.FFSMobileUsabilityStage2;
     const originalWizard = renderWizardStep;
@@ -20049,6 +20071,7 @@
   installForecastAssumptionsWorkspace();
   installMobileUsabilityStage2();
   bindEvents();
+  installMobileUsabilityStage3();
   renderAll();
   // Keep entry actions below the header and the optional sample-plan banner.
   const stickyHeader = document.querySelector("body > div > header");
