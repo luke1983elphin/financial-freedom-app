@@ -1,0 +1,68 @@
+[
+  {
+    "width": 375,
+    "firstVisitWelcome": true,
+    "noAutomaticSample": true,
+    "returningDashboard": true,
+    "noContinueClick": true,
+    "originalDashboardMarkup": true,
+    "financialParity": true,
+    "savedRecordUnchanged": true,
+    "noOverflow": true
+  },
+  {
+    "width": 390,
+    "firstVisitWelcome": true,
+    "noAutomaticSample": true,
+    "returningDashboard": true,
+    "noContinueClick": true,
+    "originalDashboardMarkup": true,
+    "financialParity": true,
+    "savedRecordUnchanged": true,
+    "noOverflow": true
+  },
+  {
+    "width": 430,
+    "firstVisitWelcome": true,
+    "noAutomaticSample": true,
+    "returningDashboard": true,
+    "noContinueClick": true,
+    "originalDashboardMarkup": true,
+    "financialParity": true,
+    "savedRecordUnchanged": true,
+    "noOverflow": true
+  },
+  {
+    "width": 768,
+    "firstVisitWelcome": true,
+    "noAutomaticSample": true,
+    "returningDashboard": true,
+    "noContinueClick": true,
+    "originalDashboardMarkup": true,
+    "financialParity": true,
+    "savedRecordUnchanged": true,
+    "noOverflow": true
+  },
+  {
+    "width": 1024,
+    "firstVisitWelcome": true,
+    "noAutomaticSample": true,
+    "returningDashboard": true,
+    "noContinueClick": true,
+    "originalDashboardMarkup": true,
+    "financialParity": true,
+    "savedRecordUnchanged": true,
+    "noOverflow": true
+  },
+  {
+    "width": 1366,
+    "firstVisitWelcome": true,
+    "noAutomaticSample": true,
+    "returningDashboard": true,
+    "noContinueClick": true,
+    "originalDashboardMarkup": true,
+    "financialParity": true,
+    "savedRecordUnchanged": true,
+    "noOverflow": true
+  }
+]
