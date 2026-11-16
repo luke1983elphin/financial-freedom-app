@@ -58,3 +58,7 @@ There are 20 before and 20 after captures: Investments, Property assumptions, pr
 ## Limitations and readiness
 
 Screenshots and automated interaction checks use Chromium with mobile viewport emulation, rather than physical iPhone/Safari testing. The small scoped layout change is ready for design and device review with local verification green, subject to the GitHub checks on the pushed branch. No unresolved financial dependencies are introduced. Keep the PR Draft; do not merge or deploy as part of this task.
+
+## Welcome-screen follow-up
+
+[Welcome-screen investigation and returning-user evidence](WELCOME-SCREEN-INVESTIGATION.md): no welcome regression reproduced. Original returning-panel screenshots are byte-identical to main at all five widths. The preview uses separate origin storage; first-time, returning, origin-isolation and recovery tests pass. The expanded browser suite now has **78 passing tests**. No application-code change or further deployment was needed.

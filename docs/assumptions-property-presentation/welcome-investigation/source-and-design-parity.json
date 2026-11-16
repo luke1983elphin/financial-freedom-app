@@ -1,0 +1,70 @@
+{
+  "main": "02054bfcf9a687efae6074560104042c0c3a64db",
+  "pr67InvestigatedCommit": "88e1cc9b7557bd90d637a43ad7f42782d42fc292",
+  "unchangedSourceFiles": [
+    {
+      "file": "app.js",
+      "unchangedFromMain": true,
+      "sha256": "cf9cc3c82f8f5595cd3bbd907e3b2779ef1b086184415ad5d6bd3a4caac5f096"
+    },
+    {
+      "file": "index.html",
+      "unchangedFromMain": true,
+      "sha256": "04fab13c2e991a666624364b51d3a5f673fffd5e01792531d9fe404636305de2"
+    },
+    {
+      "file": "storage.js",
+      "unchangedFromMain": true,
+      "sha256": "c85374d3b59ad306de5d3657d8ff44c12eb69c1f4d4e1b71228656228a4ff58d"
+    },
+    {
+      "file": "consumer-setup.js",
+      "unchangedFromMain": true,
+      "sha256": "37f31ea6e9420c30a9d2f1a4ebc7687d4d4fabd1f650bdcb0e83ec06e101aed4"
+    },
+    {
+      "file": "plan-schema.js",
+      "unchangedFromMain": true,
+      "sha256": "7c531d4d9b15330f77fdebf9597a73630583edbc452f8e1b9d247b25a17d86a7"
+    },
+    {
+      "file": "plan-mutations.js",
+      "unchangedFromMain": true,
+      "sha256": "23eb4a3a3dc72ef9512b6341888f31f9b40f39ea3682f6150a391082f7d984e4"
+    },
+    {
+      "file": "security.js",
+      "unchangedFromMain": true,
+      "sha256": "19caa32b797a87c7ddbbe4c7352717ce1f7df52e7292a0de529449c24f7baa4b"
+    }
+  ],
+  "stage3WelcomeBlockUnchanged": true,
+  "returningPanelHtmlAndComputedStylesIdentical": true,
+  "screenshots": [
+    {
+      "width": 375,
+      "identicalPng": true,
+      "sha256": "2fa5e02b74dc194c2243d788ce09414d523111f4ed3079758e9bbaa41217904a"
+    },
+    {
+      "width": 390,
+      "identicalPng": true,
+      "sha256": "520cdd8e1a9e6022309951e387547158f492891855694179cf893c9ef6dbe7f0"
+    },
+    {
+      "width": 768,
+      "identicalPng": true,
+      "sha256": "fe2ccb8d96871ad280b06f4112d5179496c216132f3b8e0f831292ead3a2d01d"
+    },
+    {
+      "width": 1024,
+      "identicalPng": true,
+      "sha256": "87d5a0a4f5f470ce676a2ac901d75b44feef5f6ffee07c511c5a4cc739b913bf"
+    },
+    {
+      "width": 1366,
+      "identicalPng": true,
+      "sha256": "a23fddb5157f91d4829650aae88d73d4e53fb07798ba174939836dbdb7becf66"
+    }
+  ]
+}

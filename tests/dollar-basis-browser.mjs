@@ -140,7 +140,7 @@ before(async () => {
       if (process.env.FFS_STAGE3_PHASE === 'before' && ['index.html','app.js','styles.css'].includes(relative)) {
         body = execFileSync('git',['show',`bfb708361120a227db4e871cebfe22a9ed8c2809:${relative}`],{cwd:root,maxBuffer:4*1024*1024});
       }
-      if (process.env.FFS_PRESENTATION_PHASE === 'before' && ['styles.css','mobile-usability-stage3.js','retirement-results.js'].includes(relative)) {
+      if ((process.env.FFS_PRESENTATION_PHASE === 'before' || process.env.FFS_WELCOME_MAIN === '1') && ['styles.css','mobile-usability-stage3.js','retirement-results.js'].includes(relative)) {
         body = execFileSync('git',['show',`02054bfcf9a687efae6074560104042c0c3a64db:${relative}`],{cwd:root,maxBuffer:4*1024*1024});
       }
       // Test-only alternate-year fixture; production files and calculation logic remain unchanged.
@@ -1369,4 +1369,74 @@ test('Investments has exactly one central assumptions action after navigation, r
     await journeyTap('#investingForm [data-s3-assumptions]',[]);assert.equal(await evaluate('document.body.dataset.activeView'),'assumptions');assert.equal(await evaluate('document.querySelectorAll("#forecastAssumptionsWorkspace").length'),1);
     assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),plan);assert.equal(await evaluate('JSON.stringify(__dollarTest.result())'),model);assert.equal(await evaluate('JSON.stringify(__dollarTest.savedScenarios())'),saved);
   }
+});
+
+const welcomePhase=process.env.FFS_WELCOME_MAIN==='1'?'main':'pr67';
+const welcomeDirectory=path.join(root,'docs/assumptions-property-presentation/welcome-investigation');
+const welcomeDraftKey='ffs-current-plan-v3-mobile-dashboard-ux-test';
+async function welcomeNavigate(url=baseUrl){
+  await cdp.send('Page.navigate',{url});await waitFor(()=>evaluate("document.readyState==='complete'&&Boolean(window.FFSStage1BrowserTestHooks)"));
+  await evaluate('FFSStage1BrowserTestHooks.closeDurabilityDialog()');
+}
+async function welcomeSave(name='Returning visitor fixture'){
+  await evaluate(`(()=>{const p=structuredClone(FFS_DATA.samplePlans[1].plan);p.personal.person1Name=${JSON.stringify(name)};FFSStage1BrowserTestHooks.setPlan(p,'investments');const input=document.querySelector('#investingForm [data-path="investing.annualInvestingTarget"]');input.value='18765';input.dispatchEvent(new Event('input',{bubbles:true}));FFSStage1BrowserTestHooks.closeDurabilityDialog();})()`);
+  await waitFor(()=>evaluate("Object.keys(localStorage).some(k=>k.startsWith('ffs-personal-plan-v1:'))"));
+  return evaluate(`(()=>{const key=Object.keys(localStorage).find(k=>k.startsWith('ffs-personal-plan-v1:'));return {key,raw:localStorage.getItem(key),legacy:localStorage.getItem('${welcomeDraftKey}')}})()`);
+}
+async function welcomeState(){
+  return evaluate(`(()=>{const panel=document.getElementById('continuePanel');const visible=n=>Boolean(n&&!n.closest('.hidden'));return {returning:visible(panel),intro:visible(document.getElementById('introSampleActions')),actions:[...panel.querySelectorAll('button')].map(n=>n.textContent.trim()),html:panel.innerHTML,design:[panel,...panel.querySelectorAll('*')].map(n=>{const s=getComputedStyle(n),r=n.getBoundingClientRect();return {tag:n.tagName,id:n.id,width:r.width,height:r.height,display:s.display,fontSize:s.fontSize,fontWeight:s.fontWeight,lineHeight:s.lineHeight,color:s.color,background:s.backgroundColor,padding:s.padding,margin:s.margin,border:s.border,borderRadius:s.borderRadius,gap:s.gap}})};})()`);
+}
+async function welcomeShot(width){
+  const dir=path.join(welcomeDirectory,welcomePhase);await mkdir(dir,{recursive:true});
+  await evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+  const clip=await evaluate("(()=>{const r=document.getElementById('continuePanel').getBoundingClientRect();return {x:r.left+scrollX,y:r.top+scrollY,width:r.width,height:r.height,scale:1}})()");
+  const shot=await cdp.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip});await writeFile(path.join(dir,`returning-${width}.png`),Buffer.from(shot.data,'base64'));
+}
+test('welcome first-time and returning users preserve the original Continue panel and saved plan',async()=>{
+  const records=[];
+  for(const width of [375,390,768,1024,1366]){
+    await cdp.send('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:width<600});
+    await welcomeNavigate();await evaluate('localStorage.clear()');await welcomeNavigate();
+    let state=await welcomeState();assert.equal(state.returning,false);assert.equal(state.intro,true);
+    assert.equal(await evaluate("document.getElementById('heroStartButton').textContent"),'Start My Plan');assert.match(await evaluate("document.querySelector('[data-s3-key=sample] > summary')?.textContent || document.querySelector('#heroSamplePlanMenu > summary').textContent"),/sample|example/i);
+    const stored=await welcomeSave();await welcomeNavigate();
+    state=await welcomeState();assert.equal(state.returning,true);assert.equal(state.intro,false);assert.deepEqual(state.actions,['Continue','Start New Plan','Load Sample Plan']);
+    assert.equal(await evaluate(`localStorage.getItem(${JSON.stringify(stored.key)})`),stored.raw,'opening the app never overwrites the saved financial record');
+    assert.equal(await evaluate(`localStorage.getItem('${welcomeDraftKey}')`),stored.legacy);
+    assert.equal(await evaluate('FFSStage1BrowserTestHooks.getPlan().personal.person1Name'),'Returning visitor fixture');
+    const baselineFile=path.join(welcomeDirectory,`main-${width}.json`);
+    if(welcomePhase==='main')await writeFile(baselineFile,JSON.stringify(state,null,2)+'\n');else assert.deepEqual(state,JSON.parse(await readFile(baselineFile,'utf8')),'returning panel HTML, geometry and computed design exactly match main');
+    await welcomeShot(width);
+    await journeyTap('#continuePlanButton',[]);assert.equal(await evaluate('document.body.dataset.activeView'),'dashboard');assert.equal(await evaluate(`localStorage.getItem(${JSON.stringify(stored.key)})`),stored.raw);
+    await evaluate('FFSStage1BrowserTestHooks.closeDurabilityDialog();document.getElementById("continueSampleButton").click()');
+    const samplePreserved=await evaluate(`JSON.parse(localStorage.getItem(${JSON.stringify(stored.key)})).plan`);
+    const originalPlan=JSON.parse(stored.raw).plan;
+    // The existing sample flow checkpoints the personal draft, updating save/UI
+    // and engagement metadata. Every financial input must remain the same.
+    for(const value of [samplePreserved,originalPlan]){delete value.meta;if(value.reportSettings)delete value.reportSettings.engagement;}
+    assert.deepEqual(samplePreserved,originalPlan,'viewing a sample preserves all financial plan inputs');
+    await evaluate("document.querySelector('[data-demo-return]').click()");assert.equal(await evaluate('FFSStage1BrowserTestHooks.getPlan().personal.person1Name'),'Returning visitor fixture');
+    records.push({width,firstVisit:true,returningPanel:true,originalDesignUnchanged:true,savedRecordUnchanged:true,sampleReturnPreserved:true});
+  }
+  await mkdir(welcomeDirectory,{recursive:true});await writeFile(path.join(welcomeDirectory,`${welcomePhase}-verification.json`),JSON.stringify(records,null,2)+'\n');
+});
+
+test('welcome different origins have isolated plans and returning to the original origin restores Continue',async()=>{
+  await welcomeNavigate();await evaluate('localStorage.clear()');await welcomeNavigate();const original=await welcomeSave('Original origin fixture');
+  const originA=await evaluate('location.origin');const other=baseUrl.replace('127.0.0.1','localhost');
+  await welcomeNavigate(other);await evaluate('localStorage.clear()');await welcomeNavigate(other);
+  assert.notEqual(await evaluate('location.origin'),originA);let state=await welcomeState();assert.equal(state.returning,false);assert.equal(state.intro,true);
+  assert.equal(await evaluate(`localStorage.getItem('${welcomeDraftKey}')`),null,'a new hostname cannot access the other origin saved plan');
+  const separate=await welcomeSave('Separate preview origin fixture');await welcomeNavigate(other);assert.equal((await welcomeState()).returning,true);
+  assert.equal(await evaluate('FFSStage1BrowserTestHooks.getPlan().personal.person1Name'),'Separate preview origin fixture');
+  await welcomeNavigate();assert.equal((await welcomeState()).returning,true);assert.equal(await evaluate(`localStorage.getItem(${JSON.stringify(original.key)})`),original.raw);assert.equal(await evaluate('FFSStage1BrowserTestHooks.getPlan().personal.person1Name'),'Original origin fixture');
+  await welcomeNavigate(other);assert.equal(await evaluate(`localStorage.getItem(${JSON.stringify(separate.key)})`),separate.raw);await welcomeNavigate();
+});
+
+test('welcome preserves legacy recovery and does not overwrite a corrupt saved copy',async()=>{
+  await welcomeNavigate();await evaluate('localStorage.clear()');await welcomeNavigate();const stored=await welcomeSave('Recovery fixture');
+  await evaluate(`localStorage.removeItem(${JSON.stringify(stored.key)});localStorage.removeItem('ffs-user-state-v3-mobile-dashboard-ux-test')`);await welcomeNavigate();
+  assert.equal((await welcomeState()).returning,true);assert.equal(await evaluate('FFSStage1BrowserTestHooks.getPlan().personal.person1Name'),'Recovery fixture');assert.equal(await evaluate(`localStorage.getItem('${welcomeDraftKey}')`),stored.legacy,'legacy recovery preserves the original record');
+  const corrupt='{corrupt saved-copy fixture';await evaluate(`localStorage.setItem(${JSON.stringify(stored.key)},${JSON.stringify(corrupt)})`);await welcomeNavigate();
+  assert.equal((await welcomeState()).returning,true,'valid legacy fallback still offers Continue');assert.equal(await evaluate('FFSStage1BrowserTestHooks.getPlan().personal.person1Name'),'Recovery fixture');assert.equal(await evaluate(`localStorage.getItem(${JSON.stringify(stored.key)})`),corrupt,'corrupt raw data is preserved for recovery');assert.equal(await evaluate(`localStorage.getItem('${welcomeDraftKey}')`),stored.legacy);
 });
