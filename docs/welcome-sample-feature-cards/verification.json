@@ -1,0 +1,65 @@
+{
+  "baseline": "244adcf695d6a44b000f2f63ba389d9051d3043e",
+  "productionChanges": "HTML and scoped CSS only; deployment disabled for review branch",
+  "regression": {
+    "command": "pnpm verify",
+    "tests": 1305,
+    "suites": 68,
+    "failed": 0
+  },
+  "browser": {
+    "command": "node --test --test-name-pattern='welcome sample button|opening experience:|four-section welcome,|opening first paint:' tests/dollar-basis-browser.mjs",
+    "tests": 4,
+    "passed": 4,
+    "failed": 0,
+    "durationMs": 35169.496101,
+    "fullBrowserSuiteRerun": false
+  },
+  "widths": [
+    320,
+    375,
+    390,
+    430,
+    600,
+    768,
+    1024,
+    1366
+  ],
+  "screenshots": {
+    "before": 7,
+    "after": 7
+  },
+  "unchangedSources": [
+    "calculator.js",
+    "semiRetirementProjection.js",
+    "semiRetirementUi.js",
+    "v2-data.js",
+    "storage.js",
+    "security.js",
+    "consumer-setup.js",
+    "plan-schema.js",
+    "plan-selectors.js",
+    "plan-mutations.js",
+    "legacy-plan-adapter.js",
+    "scenario-overlay.js",
+    "linked-setup.js",
+    "weekly-plan.js",
+    "trust-readiness.js",
+    "api/ai-insights.js",
+    "agePensionEstimate.js",
+    "app.js",
+    "freedom-navigation.js",
+    "mobile-usability-stage3.js",
+    "forecast-display-preferences.js"
+  ],
+  "numericalGoldenFixturesChanged": false,
+  "financialParity": {
+    "fixtures": 9,
+    "numericalDifferences": 0,
+    "verifiedBy": "existing exact complete-output regression test in pnpm verify"
+  },
+  "browserEngine": "Chromium",
+  "physicalIPhoneSafari": "Not run",
+  "merged": false,
+  "deployed": false
+}

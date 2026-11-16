@@ -1,0 +1,66 @@
+[
+  {
+    "width": 320,
+    "centeredLightGreenButton": true,
+    "fourFeatures": true,
+    "noOverflow": true,
+    "nativeKeyboardToggle": true,
+    "sampleLoadsOnlyOnSelection": true
+  },
+  {
+    "width": 375,
+    "centeredLightGreenButton": true,
+    "fourFeatures": true,
+    "noOverflow": true,
+    "nativeKeyboardToggle": true,
+    "sampleLoadsOnlyOnSelection": true
+  },
+  {
+    "width": 390,
+    "centeredLightGreenButton": true,
+    "fourFeatures": true,
+    "noOverflow": true,
+    "nativeKeyboardToggle": true,
+    "sampleLoadsOnlyOnSelection": true
+  },
+  {
+    "width": 430,
+    "centeredLightGreenButton": true,
+    "fourFeatures": true,
+    "noOverflow": true,
+    "nativeKeyboardToggle": true,
+    "sampleLoadsOnlyOnSelection": true
+  },
+  {
+    "width": 600,
+    "centeredLightGreenButton": true,
+    "fourFeatures": true,
+    "noOverflow": true,
+    "nativeKeyboardToggle": true,
+    "sampleLoadsOnlyOnSelection": true
+  },
+  {
+    "width": 768,
+    "centeredLightGreenButton": true,
+    "fourFeatures": true,
+    "noOverflow": true,
+    "nativeKeyboardToggle": true,
+    "sampleLoadsOnlyOnSelection": true
+  },
+  {
+    "width": 1024,
+    "centeredLightGreenButton": true,
+    "fourFeatures": true,
+    "noOverflow": true,
+    "nativeKeyboardToggle": true,
+    "sampleLoadsOnlyOnSelection": true
+  },
+  {
+    "width": 1366,
+    "centeredLightGreenButton": true,
+    "fourFeatures": true,
+    "noOverflow": true,
+    "nativeKeyboardToggle": true,
+    "sampleLoadsOnlyOnSelection": true
+  }
+]
