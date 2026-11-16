@@ -1,0 +1,42 @@
+{
+  "baseline": "02054bfcf9a687efae6074560104042c0c3a64db",
+  "viewports": [
+    375,
+    390,
+    768,
+    1024,
+    1366
+  ],
+  "regression": {
+    "command": "pnpm verify",
+    "registeredSuites": 67,
+    "passed": 1298,
+    "failed": 0
+  },
+  "browser": {
+    "command": "pnpm test:browser",
+    "passed": 75,
+    "failed": 0,
+    "durationMs": 272681.433026
+  },
+  "screenshots": {
+    "before": 20,
+    "after": 20,
+    "areas": [
+      "investments",
+      "property",
+      "explanations",
+      "rental-tax"
+    ]
+  },
+  "financialParity": {
+    "fixtures": 9,
+    "numericalDifferences": 0,
+    "goldenFixturesChanged": 0
+  },
+  "limitations": [
+    "Chromium viewport emulation; physical iPhone/Safari review recommended"
+  ],
+  "deployment": "Disabled for this branch; none performed",
+  "pullRequest": "Draft; do not merge"
+}

@@ -302,6 +302,16 @@
     if (assumptions) {
       assumptions.querySelector("summary strong").textContent = "Assumptions Used";
       assumptions.dataset.semiDetailState = "rr-assumptions"; assumptions.open = Boolean(state["rr-assumptions"]);
+      // Preserve every original row, value and disclosure. Only mark readable
+      // presentation groups; lengthy notes get the full width of their grid.
+      assumptions.querySelectorAll('.semi-retirement-assumption-groups > section').forEach(group => {
+        if (!['Property assumptions', 'Tax assumptions'].includes(group.querySelector('h5')?.textContent)) return;
+        group.classList.add('rr-readable-assumptions');
+        group.querySelectorAll('.semi-retirement-assumption-grid > div').forEach(card => {
+          card.classList.add('rr-assumption-card');
+          if ((card.querySelector('small')?.textContent.length || 0) > 160) card.classList.add('rr-assumption-wide');
+        });
+      });
       assumptions.classList.add("rr-panel"); explore.append(assumptions);
     }
     const remaining = originalChildren.filter(node => !consumed.has(node));
