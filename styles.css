@@ -10491,3 +10491,30 @@ body[data-active-view="assumptions"] #appWorkspace { scroll-margin-top: calc(var
 @media (max-width: 760px) {
   .workspace-nav .dollar-basis-segment { min-height: 44px; }
 }
+
+/* Four sections reuse the existing workspace sidebar; no additional nav panel. */
+#sideNav .nav-primary-row { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+#sideNav .nav-primary { flex-direction: row; justify-content: flex-start; gap: 12px; min-height: 60px; padding: 12px; text-align: left; white-space: normal; font-size: 14px; }
+#sideNav .nav-primary span { min-width: 0; line-height: 1.4; }
+#sideNav .nav-primary svg { flex-shrink: 0; width: 21px; height: 21px; }
+#sideNav .nav-more-items { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.freedom-insights { grid-column: 1 / -1; min-height: 44px; }
+.freedom-future-controls { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 12px; }
+.freedom-future-controls .btn { min-height: 44px; flex: 1 1 180px; }
+.freedom-future-controls [aria-pressed=true] { color: #0f6748; background: #e4f2ea; border-color: #a6d2ba; }
+.freedom-model-note { color: #526579; font-size: 13px; line-height: 1.6; margin: 0 0 18px; }
+.freedom-growth-host { min-width: 0; }
+.freedom-growth-host[hidden] { display: none; }
+.freedom-growth-host .growth-workspace { margin-top: 0; }
+body[data-freedom-stage=workspace] #homeView { display: none; }
+body[data-freedom-stage=welcome] :is(#appWorkspace,#engagementHome,.home-snapshot-heading,.home-snapshot-grid,.steps-grid,#headerSamplePlanMenu,#enterDataButton) { display: none; }
+body[data-freedom-future=growth][data-active-view=semiretirement] #semiRetirementScenarioRoot { display: none !important; }
+body[data-freedom-stage] #appWorkspace { scroll-margin-top: calc(var(--app-header-height, 64px) + 16px); }
+@media (max-width: 1023px) {
+  #sideNav .nav-primary-row { grid-template-columns: repeat(4,minmax(0,1fr)); gap: 3px; }
+  #sideNav .nav-primary { flex-direction: column; justify-content: center; gap: 5px; min-height: 76px; padding: 7px 2px; font-size: 12px; text-align: center; }
+  #sideNav .nav-primary svg { width: 19px; height: 19px; }
+  .workspace-nav { padding: 10px; }
+  .s3-current-screen { margin-bottom: 8px; }
+  .freedom-future-controls .btn { flex-basis: 130px; font-size: 13px; }
+}

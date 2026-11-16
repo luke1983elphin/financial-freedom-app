@@ -1,0 +1,54 @@
+{
+  "baseline": "02054bfcf9a687efae6074560104042c0c3a64db",
+  "viewports": [
+    375,
+    390,
+    430,
+    768,
+    1024,
+    1366
+  ],
+  "regression": {
+    "command": "pnpm verify",
+    "registeredSuites": 67,
+    "passed": 1298,
+    "failed": 0
+  },
+  "browser": {
+    "command": "pnpm test:browser",
+    "passed": 78,
+    "failed": 0,
+    "durationMs": 325119.87921
+  },
+  "screenshots": {
+    "before": 30,
+    "after": 32
+  },
+  "goldenOutputParity": {
+    "fixtures": 9,
+    "numericalDifferences": 0,
+    "sha256": "d92aa16abec0034c976fab0552b3423f7ac63fa3cc039cb2e00965c42783833b"
+  },
+  "primarySections": [
+    "My Freedom Progress",
+    "Explore My Future",
+    "Try a Change",
+    "My Weekly Mission"
+  ],
+  "secondaryTools": [
+    "My Plan",
+    "Assumptions",
+    "Investments",
+    "Super",
+    "Goals",
+    "Saved Scenarios",
+    "Reports"
+  ],
+  "limitations": [
+    "Chromium emulation; physical iPhone/Safari testing recommended",
+    "Unsaved drafts remain session-only across hard refresh, as before",
+    "PR #67 remains separate and unmerged"
+  ],
+  "recommendation": "Ready for user testing and design review; keep Draft",
+  "deployment": "Disabled for this branch; no deployment or merge performed"
+}

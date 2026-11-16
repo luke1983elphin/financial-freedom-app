@@ -14,7 +14,7 @@ function renderer(values={}) {
   vm.runInNewContext(['dashboardRetirementHtml','dashboardSimplifiedHtml','dashboardSnapshotHtml','dashboardMissionHtml','dashboardJourneyHtml'].map(extract).join('\n'),ctx);
   return ctx;
 }
-test('five primary choices preserve all ten existing destination IDs',()=>{
+test('four primary choices preserve all existing destination IDs',()=>{
   const {nav,primary,more}=workspaceNavigation(html);
   assert.deepEqual(primary,PRIMARY_NAVIGATION);
   assert.deepEqual(more,MORE_NAVIGATION);

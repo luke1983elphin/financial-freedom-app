@@ -18548,6 +18548,27 @@
     };
   }
 
+  function installFourSectionNavigation() {
+    const returning = Boolean(savedDraft && hasSavedDraft());
+    const ui = window.FFSFreedomNavigation.mount(document, {
+      getContext: () => ({view: activeView, isDemo: isDemoActive(), returning}),
+      navigate: view => showWorkspace(view),
+      hasSavedPlan: hasSavedDraft,
+    });
+    const originalSetView = setView;
+    setView = (...args) => { const result = originalSetView(...args); if (result) ui.onView(activeView); return result; };
+    const originalShowWorkspace = showWorkspace;
+    showWorkspace = (view, ...args) => {
+      if (view === "semiretirement" && !ui.restoring) ui.retirement();
+      return originalShowWorkspace(view, ...args);
+    };
+    const wrap = original => (...args) => { const result = original(...args); ui.sync(); return result; };
+    renderOutputs = wrap(renderOutputs);
+    renderForms = wrap(renderForms);
+    renderSemiRetirementScenario = wrap(renderSemiRetirementScenario);
+    return ui;
+  }
+
   function installMobileUsabilityStage3() {
     let latestSuperResult;
     const originalSuper = renderSuper;
@@ -20072,6 +20093,7 @@
   installMobileUsabilityStage2();
   bindEvents();
   installMobileUsabilityStage3();
+  const fourSectionNavigation = installFourSectionNavigation();
   renderAll();
   // Keep entry actions below the header and the optional sample-plan banner.
   const stickyHeader = document.querySelector("body > div > header");
@@ -20157,4 +20179,5 @@
   maybeShowBackupReminder();
   loadAiInsightsConfig();
   if (hasOpenedWorkspace) showWorkspace(activeView);
+  fourSectionNavigation.start();
 })();

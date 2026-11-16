@@ -84,7 +84,7 @@ test("Stage D exposes Semi-Retirement as a dedicated top-level workspace tab", (
 
   const order = navDataViewOrder();
   assert.deepEqual(order, [...PRIMARY_NAVIGATION, ...MORE_NAVIGATION].map(item => item.split(":")[0]));
-  assert.ok(workspaceNavigation(indexSource).primary.includes("semiretirement:Retirement"));
+  assert.ok(workspaceNavigation(indexSource).primary.includes("semiretirement:Explore My Future"));
 });
 
 test("Stage D keeps the Semi-Retirement UI out of the Decision Engine panel", () => {

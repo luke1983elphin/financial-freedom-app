@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 // Check destination IDs, labels, grouping and uniqueness independently of SVG
-// icon markup. The five primary tabs were introduced by commit 6724713.
+// icon markup. Four primary sections reuse the existing workspace IDs.
 export const PRIMARY_NAVIGATION = Object.freeze([
-  'dashboard:Home', 'setup:My Plan', 'goals:Goals', 'semiretirement:Retirement', 'weeklyplan:Weekly',
+  'dashboard:My Freedom Progress', 'semiretirement:Explore My Future', 'decision:Try a Change', 'weeklyplan:My Weekly Mission',
 ]);
 export const MORE_NAVIGATION = Object.freeze([
-  'assumptions:Assumptions', 'decision:Try a Change', 'investments:Investments', 'super:Super', 'reports:Reports', 'scenarios:Saved Scenarios',
+  'setup:My Plan', 'assumptions:Assumptions', 'investments:Investments', 'super:Super', 'goals:Goals', 'scenarios:Saved Scenarios', 'reports:Reports',
 ]);
 export function workspaceNavigation(html) {
   const start=html.indexOf('id="sideNav"');

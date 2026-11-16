@@ -1,0 +1,50 @@
+[
+  {
+    "width": 375,
+    "allDestinationsReachable": true,
+    "oneWorkspaceEach": true,
+    "engineParity": true,
+    "noExtraRetirementRuns": true,
+    "noOverflow": true
+  },
+  {
+    "width": 390,
+    "allDestinationsReachable": true,
+    "oneWorkspaceEach": true,
+    "engineParity": true,
+    "noExtraRetirementRuns": true,
+    "noOverflow": true
+  },
+  {
+    "width": 430,
+    "allDestinationsReachable": true,
+    "oneWorkspaceEach": true,
+    "engineParity": true,
+    "noExtraRetirementRuns": true,
+    "noOverflow": true
+  },
+  {
+    "width": 768,
+    "allDestinationsReachable": true,
+    "oneWorkspaceEach": true,
+    "engineParity": true,
+    "noExtraRetirementRuns": true,
+    "noOverflow": true
+  },
+  {
+    "width": 1024,
+    "allDestinationsReachable": true,
+    "oneWorkspaceEach": true,
+    "engineParity": true,
+    "noExtraRetirementRuns": true,
+    "noOverflow": true
+  },
+  {
+    "width": 1366,
+    "allDestinationsReachable": true,
+    "oneWorkspaceEach": true,
+    "engineParity": true,
+    "noExtraRetirementRuns": true,
+    "noOverflow": true
+  }
+]
