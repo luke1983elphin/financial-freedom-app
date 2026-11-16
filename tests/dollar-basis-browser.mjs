@@ -140,6 +140,9 @@ before(async () => {
       if (process.env.FFS_STAGE3_PHASE === 'before' && ['index.html','app.js','styles.css'].includes(relative)) {
         body = execFileSync('git',['show',`bfb708361120a227db4e871cebfe22a9ed8c2809:${relative}`],{cwd:root,maxBuffer:4*1024*1024});
       }
+      if ((process.env.FFS_PRESENTATION_PHASE === 'before' || process.env.FFS_WELCOME_MAIN === '1') && ['styles.css','mobile-usability-stage3.js','retirement-results.js'].includes(relative)) {
+        body = execFileSync('git',['show',`02054bfcf9a687efae6074560104042c0c3a64db:${relative}`],{cwd:root,maxBuffer:4*1024*1024});
+      }
       // Test-only alternate-year fixture; production files and calculation logic remain unchanged.
       if (relative === "calculator.js" && evidenceFinancialYear) body = Buffer.from(body.toString().replace('const FINANCIAL_YEAR = "2026-27";', `const FINANCIAL_YEAR = "${evidenceFinancialYear}";`));
       if (relative === "semiRetirementUi.js") body = Buffer.from(body.toString().replace('  function runSemiRetirementProjection(engine, draft) {', '  function runSemiRetirementProjection(engine, draft) { window.__retirementRuns = (window.__retirementRuns || 0) + 1;'));
@@ -1310,4 +1313,130 @@ test('U06 lower setup fields remain clear of the compact footer and simulated ke
   await evaluate('delete visualViewport.height;visualViewport.dispatchEvent(new Event("resize"))');
   assert.equal(await evaluate('getComputedStyle(document.querySelector(".wizard-actions")).position'),'sticky');
   assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),plan);
+});
+
+const presentationBefore=process.env.FFS_PRESENTATION_PHASE==='before';
+async function presentationShot(area,width,selector){
+  const dir=path.join(root,'docs/assumptions-property-presentation',presentationBefore?'before':'after');await mkdir(dir,{recursive:true});
+  await evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+  const clip=await evaluate(`(()=>{const nodes=[...document.querySelectorAll(${JSON.stringify(selector)})],rects=nodes.map(n=>n.getBoundingClientRect());const left=Math.min(...rects.map(r=>r.left)),top=Math.min(...rects.map(r=>r.top)),right=Math.max(...rects.map(r=>r.right)),bottom=Math.max(...rects.map(r=>r.bottom));return {x:left+scrollX,y:top+scrollY,width:right-left,height:bottom-top,scale:1}})()`);
+  const shot=await cdp.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip});await writeFile(path.join(dir,`${area}-${width}.png`),Buffer.from(shot.data,'base64'));
+}
+async function markPresentationAssumptions(){
+  await evaluate(`(()=>{document.querySelector('[data-semi-detail-state=rr-assumptions]').open=true;for(const group of document.querySelectorAll('.semi-retirement-assumption-groups > section')){const title=group.querySelector('h5').textContent;if(title==='Property assumptions')group.dataset.tidyArea='property';for(const row of group.querySelectorAll('.semi-retirement-assumption-grid > div')){const label=row.querySelector('span').textContent;if(title==='Property assumptions'&&['Property sale treatment','Rental tax model'].includes(label))row.dataset.tidyArea='explanations';if(title==='Tax assumptions'&&label==='Rental tax model')row.dataset.tidyArea='rental-tax';}}})()`);
+}
+test('presentation tidy-up responsive evidence preserves all assumptions and financial outputs',async()=>{
+  const evidence=[];
+  for(const width of [375,390,768,1024,1366]){
+    await cdp.send('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:width<600});await navigate();await evaluate('localStorage.clear()');await navigate();await fixture();
+    const model=await evaluate('JSON.stringify(__dollarTest.result())');const plan=await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())');const saved=await evaluate('JSON.stringify(__dollarTest.savedScenarios())');
+    await evaluate('FFSStage1BrowserTestHooks.showWorkspace("investments")');await presentationShot('investments',width,'#investingForm');
+    await evaluate('FFSStage1BrowserTestHooks.showWorkspace("semiretirement");document.querySelector("[data-semi-action=calculate]").click()');
+    const retirement=await evaluate('JSON.stringify(__dollarTest.retirement().result)');await markPresentationAssumptions();
+    const content=await evaluate(`(()=>{const t=document.createElement('template');t.innerHTML=__dollarTest.originalRetirementHtml();const collect=root=>[...root.querySelectorAll('.semi-retirement-assumption-groups > section')].map(group=>({title:group.querySelector('h5').textContent,rows:[...group.querySelectorAll('.semi-retirement-assumption-grid > div')].map(n=>[n.querySelector('span').textContent,n.querySelector('strong').textContent,n.querySelector('small')?.textContent||''])}));return {expected:collect(t.content),actual:collect(document)};})()`);assert.deepEqual(content.actual,content.expected,'every label, value and note remains identical');
+    for(const [area,selector] of [['property','[data-tidy-area=property]'],['explanations','[data-tidy-area=explanations]'],['rental-tax','[data-tidy-area=rental-tax]']])await presentationShot(area,width,selector);
+    if(!presentationBefore){
+      const layout=await evaluate(`(()=>{const grid=document.querySelector('[data-tidy-area=property] .semi-retirement-assumption-grid');return {columns:getComputedStyle(grid).gridTemplateColumns.split(' ').length,notes:[...document.querySelectorAll('[data-tidy-area=explanations] small,[data-tidy-area=rental-tax] small')].map(n=>({width:n.getBoundingClientRect().width,clipped:n.scrollWidth>n.clientWidth+1})),overflow:document.documentElement.scrollWidth>innerWidth+1};})()`);
+      assert.equal(layout.overflow,false);assert.equal(layout.columns,width>=1024?2:1,JSON.stringify(layout));assert.ok(layout.notes.every(n=>n.width>=200&&!n.clipped),JSON.stringify(layout));
+      const rows=await evaluate(`(()=>{const cards=[...document.querySelectorAll('.semi-retirement-assumption-grid > div')];return cards.every(n=>{const note=n.querySelector('small');return !note||note.getBoundingClientRect().top>=n.querySelector('strong').getBoundingClientRect().bottom-1});})()`);assert.equal(rows,true,'notes occupy their own row');
+    }
+    assert.equal(await evaluate('JSON.stringify(__dollarTest.result())'),model);assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),plan);assert.equal(await evaluate('JSON.stringify(__dollarTest.savedScenarios())'),saved);assert.equal(await evaluate('JSON.stringify(__dollarTest.retirement().result)'),retirement);
+    evidence.push({width,contentParity:true,engineParity:true,planUnchanged:true,savedHistoryUnchanged:true});
+  }
+  const dir=path.join(root,'docs/assumptions-property-presentation');await mkdir(dir,{recursive:true});await writeFile(path.join(dir,`${presentationBefore?'before':'after'}-verification.json`),JSON.stringify(evidence,null,2)+'\n');
+});
+
+test('Investments has exactly one central assumptions action after navigation, rerenders and late form updates',async()=>{
+  for(const width of [375,390,768,1024,1366]){
+    await cdp.send('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:width<600});await navigate();await fixture();await evaluate('FFSStage1BrowserTestHooks.showWorkspace("investments")');
+    const rates=await evaluate("[...document.querySelectorAll('#investingForm .fa-existing-setting')].map(n=>[n.querySelector('.field-label').textContent,n.querySelector('strong').textContent])");assert.equal(rates.length,4);
+    const plan=await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())');const model=await evaluate('JSON.stringify(__dollarTest.result())');const saved=await evaluate('JSON.stringify(__dollarTest.savedScenarios())');
+    const target=await evaluate('document.querySelector(\'#investingForm [data-path="investing.annualInvestingTarget"]\').value');
+    const forecast=await evaluate('document.querySelector("#investmentCards").textContent');
+    for(let cycle=0;cycle<3;cycle++){
+      await evaluate('FFSStage1BrowserTestHooks.showWorkspace("goals");FFSStage1BrowserTestHooks.renderAll();FFSStage1BrowserTestHooks.showWorkspace("investments")');
+      // Simulate an existing independent form renderer appending a legacy action
+      // after the full render has completed. The observer must be idempotent.
+      await evaluate(`(()=>{const form=document.getElementById('investingForm');form.querySelector('.fa-existing-setting').insertAdjacentHTML('beforeend','<button class="btn" data-assumptions-open="inflationPct">Edit in Assumptions</button>');form.append(form.querySelector('[data-s3-assumptions]').cloneNode(true));})()`);
+      await waitFor(()=>evaluate('document.querySelectorAll("#investingForm [data-assumptions-open]").length===1'));
+      assert.equal(await evaluate('document.querySelectorAll("#investingForm button[data-s3-assumptions]").length'),1);
+      assert.equal(await evaluate('document.querySelector("#investingForm").textContent.includes("Edit in Assumptions")'),false);
+      assert.deepEqual(await evaluate("[...document.querySelectorAll('#investingForm .fa-existing-setting')].map(n=>[n.querySelector('.field-label').textContent,n.querySelector('strong').textContent])"),rates);
+      assert.equal(await evaluate('document.querySelector(\'#investingForm [data-path="investing.annualInvestingTarget"]\').value'),target);assert.equal(await evaluate('document.querySelector("#investmentCards").textContent'),forecast);
+    }
+    const boxes=await evaluate("[...document.querySelectorAll('#investingForm .fa-existing-setting strong')].map(n=>n.getBoundingClientRect().bottom)");assert.ok(Math.abs(boxes[0]-boxes[1])<1);assert.ok(Math.abs(boxes[2]-boxes[3])<1);
+    assert.ok(await evaluate("[...document.querySelectorAll('#investingForm,#investingForm .fa-existing-setting')].every(n=>n.scrollWidth<=n.clientWidth+1)"));
+    await journeyTap('#investingForm [data-s3-assumptions]',[]);assert.equal(await evaluate('document.body.dataset.activeView'),'assumptions');assert.equal(await evaluate('document.querySelectorAll("#forecastAssumptionsWorkspace").length'),1);
+    assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),plan);assert.equal(await evaluate('JSON.stringify(__dollarTest.result())'),model);assert.equal(await evaluate('JSON.stringify(__dollarTest.savedScenarios())'),saved);
+  }
+});
+
+const welcomePhase=process.env.FFS_WELCOME_MAIN==='1'?'main':'pr67';
+const welcomeDirectory=path.join(root,'docs/assumptions-property-presentation/welcome-investigation');
+const welcomeDraftKey='ffs-current-plan-v3-mobile-dashboard-ux-test';
+async function welcomeNavigate(url=baseUrl){
+  await cdp.send('Page.navigate',{url});await waitFor(()=>evaluate("document.readyState==='complete'&&Boolean(window.FFSStage1BrowserTestHooks)"));
+  await evaluate('FFSStage1BrowserTestHooks.closeDurabilityDialog()');
+}
+async function welcomeSave(name='Returning visitor fixture'){
+  await evaluate(`(()=>{const p=structuredClone(FFS_DATA.samplePlans[1].plan);p.personal.person1Name=${JSON.stringify(name)};FFSStage1BrowserTestHooks.setPlan(p,'investments');const input=document.querySelector('#investingForm [data-path="investing.annualInvestingTarget"]');input.value='18765';input.dispatchEvent(new Event('input',{bubbles:true}));FFSStage1BrowserTestHooks.closeDurabilityDialog();})()`);
+  await waitFor(()=>evaluate("Object.keys(localStorage).some(k=>k.startsWith('ffs-personal-plan-v1:'))"));
+  return evaluate(`(()=>{const key=Object.keys(localStorage).find(k=>k.startsWith('ffs-personal-plan-v1:'));return {key,raw:localStorage.getItem(key),legacy:localStorage.getItem('${welcomeDraftKey}')}})()`);
+}
+async function welcomeState(){
+  return evaluate(`(()=>{const panel=document.getElementById('continuePanel');const visible=n=>Boolean(n&&!n.closest('.hidden'));return {returning:visible(panel),intro:visible(document.getElementById('introSampleActions')),actions:[...panel.querySelectorAll('button')].map(n=>n.textContent.trim()),html:panel.innerHTML,design:[panel,...panel.querySelectorAll('*')].map(n=>{const s=getComputedStyle(n),r=n.getBoundingClientRect();return {tag:n.tagName,id:n.id,width:r.width,height:r.height,display:s.display,fontSize:s.fontSize,fontWeight:s.fontWeight,lineHeight:s.lineHeight,color:s.color,background:s.backgroundColor,padding:s.padding,margin:s.margin,border:s.border,borderRadius:s.borderRadius,gap:s.gap}})};})()`);
+}
+async function welcomeShot(width){
+  const dir=path.join(welcomeDirectory,welcomePhase);await mkdir(dir,{recursive:true});
+  await evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+  const clip=await evaluate("(()=>{const r=document.getElementById('continuePanel').getBoundingClientRect();return {x:r.left+scrollX,y:r.top+scrollY,width:r.width,height:r.height,scale:1}})()");
+  const shot=await cdp.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip});await writeFile(path.join(dir,`returning-${width}.png`),Buffer.from(shot.data,'base64'));
+}
+test('welcome first-time and returning users preserve the original Continue panel and saved plan',async()=>{
+  const records=[];
+  for(const width of [375,390,768,1024,1366]){
+    await cdp.send('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:width<600});
+    await welcomeNavigate();await evaluate('localStorage.clear()');await welcomeNavigate();
+    let state=await welcomeState();assert.equal(state.returning,false);assert.equal(state.intro,true);
+    assert.equal(await evaluate("document.getElementById('heroStartButton').textContent"),'Start My Plan');assert.match(await evaluate("document.querySelector('[data-s3-key=sample] > summary')?.textContent || document.querySelector('#heroSamplePlanMenu > summary').textContent"),/sample|example/i);
+    const stored=await welcomeSave();await welcomeNavigate();
+    state=await welcomeState();assert.equal(state.returning,true);assert.equal(state.intro,false);assert.deepEqual(state.actions,['Continue','Start New Plan','Load Sample Plan']);
+    assert.equal(await evaluate(`localStorage.getItem(${JSON.stringify(stored.key)})`),stored.raw,'opening the app never overwrites the saved financial record');
+    assert.equal(await evaluate(`localStorage.getItem('${welcomeDraftKey}')`),stored.legacy);
+    assert.equal(await evaluate('FFSStage1BrowserTestHooks.getPlan().personal.person1Name'),'Returning visitor fixture');
+    const baselineFile=path.join(welcomeDirectory,`main-${width}.json`);
+    if(welcomePhase==='main')await writeFile(baselineFile,JSON.stringify(state,null,2)+'\n');else assert.deepEqual(state,JSON.parse(await readFile(baselineFile,'utf8')),'returning panel HTML, geometry and computed design exactly match main');
+    await welcomeShot(width);
+    await journeyTap('#continuePlanButton',[]);assert.equal(await evaluate('document.body.dataset.activeView'),'dashboard');assert.equal(await evaluate(`localStorage.getItem(${JSON.stringify(stored.key)})`),stored.raw);
+    await evaluate('FFSStage1BrowserTestHooks.closeDurabilityDialog();document.getElementById("continueSampleButton").click()');
+    const samplePreserved=await evaluate(`JSON.parse(localStorage.getItem(${JSON.stringify(stored.key)})).plan`);
+    const originalPlan=JSON.parse(stored.raw).plan;
+    // The existing sample flow checkpoints the personal draft, updating save/UI
+    // and engagement metadata. Every financial input must remain the same.
+    for(const value of [samplePreserved,originalPlan]){delete value.meta;if(value.reportSettings)delete value.reportSettings.engagement;}
+    assert.deepEqual(samplePreserved,originalPlan,'viewing a sample preserves all financial plan inputs');
+    await evaluate("document.querySelector('[data-demo-return]').click()");assert.equal(await evaluate('FFSStage1BrowserTestHooks.getPlan().personal.person1Name'),'Returning visitor fixture');
+    records.push({width,firstVisit:true,returningPanel:true,originalDesignUnchanged:true,savedRecordUnchanged:true,sampleReturnPreserved:true});
+  }
+  await mkdir(welcomeDirectory,{recursive:true});await writeFile(path.join(welcomeDirectory,`${welcomePhase}-verification.json`),JSON.stringify(records,null,2)+'\n');
+});
+
+test('welcome different origins have isolated plans and returning to the original origin restores Continue',async()=>{
+  await welcomeNavigate();await evaluate('localStorage.clear()');await welcomeNavigate();const original=await welcomeSave('Original origin fixture');
+  const originA=await evaluate('location.origin');const other=baseUrl.replace('127.0.0.1','localhost');
+  await welcomeNavigate(other);await evaluate('localStorage.clear()');await welcomeNavigate(other);
+  assert.notEqual(await evaluate('location.origin'),originA);let state=await welcomeState();assert.equal(state.returning,false);assert.equal(state.intro,true);
+  assert.equal(await evaluate(`localStorage.getItem('${welcomeDraftKey}')`),null,'a new hostname cannot access the other origin saved plan');
+  const separate=await welcomeSave('Separate preview origin fixture');await welcomeNavigate(other);assert.equal((await welcomeState()).returning,true);
+  assert.equal(await evaluate('FFSStage1BrowserTestHooks.getPlan().personal.person1Name'),'Separate preview origin fixture');
+  await welcomeNavigate();assert.equal((await welcomeState()).returning,true);assert.equal(await evaluate(`localStorage.getItem(${JSON.stringify(original.key)})`),original.raw);assert.equal(await evaluate('FFSStage1BrowserTestHooks.getPlan().personal.person1Name'),'Original origin fixture');
+  await welcomeNavigate(other);assert.equal(await evaluate(`localStorage.getItem(${JSON.stringify(separate.key)})`),separate.raw);await welcomeNavigate();
+});
+
+test('welcome preserves legacy recovery and does not overwrite a corrupt saved copy',async()=>{
+  await welcomeNavigate();await evaluate('localStorage.clear()');await welcomeNavigate();const stored=await welcomeSave('Recovery fixture');
+  await evaluate(`localStorage.removeItem(${JSON.stringify(stored.key)});localStorage.removeItem('ffs-user-state-v3-mobile-dashboard-ux-test')`);await welcomeNavigate();
+  assert.equal((await welcomeState()).returning,true);assert.equal(await evaluate('FFSStage1BrowserTestHooks.getPlan().personal.person1Name'),'Recovery fixture');assert.equal(await evaluate(`localStorage.getItem('${welcomeDraftKey}')`),stored.legacy,'legacy recovery preserves the original record');
+  const corrupt='{corrupt saved-copy fixture';await evaluate(`localStorage.setItem(${JSON.stringify(stored.key)},${JSON.stringify(corrupt)})`);await welcomeNavigate();
+  assert.equal((await welcomeState()).returning,true,'valid legacy fallback still offers Continue');assert.equal(await evaluate('FFSStage1BrowserTestHooks.getPlan().personal.person1Name'),'Recovery fixture');assert.equal(await evaluate(`localStorage.getItem(${JSON.stringify(stored.key)})`),corrupt,'corrupt raw data is preserved for recovery');assert.equal(await evaluate(`localStorage.getItem('${welcomeDraftKey}')`),stored.legacy);
 });

@@ -4,6 +4,26 @@
   function keyboardOpen(layoutHeight, visualHeight) {
     return Number.isFinite(visualHeight) && layoutHeight - visualHeight > 150;
   }
+  function tidyInvestmentAssumptions(investing) {
+    if (!investing) return;
+    let action = investing.querySelector('[data-s3-assumptions]');
+    // Remove legacy actions rather than merely hiding them. Keep the original
+    // effective values and the annual investing input in their existing nodes.
+    investing.querySelectorAll('[data-assumptions-open]').forEach(node => {
+      if (node !== action) node.remove();
+    });
+    if (!action) {
+      action = investing.ownerDocument.createElement('button');
+      action.type = 'button';
+      action.className = 'btn s3-assumptions-action';
+      action.dataset.assumptionsOpen = '';
+      action.dataset.s3Assumptions = '';
+      action.textContent = 'Review forecast assumptions';
+      investing.append(action);
+    }
+    action.hidden = false;
+    investing.classList.add('s3-assumptions-summary');
+  }
   function mount(document, context) {
     const mobile = root.matchMedia('(max-width: 760px)');
     const states = new Map();
@@ -64,12 +84,7 @@
       if(basis)basis.firstElementChild.textContent=`Forecast values: ${document.querySelector('[data-dollar-basis][aria-pressed="true"]')?.textContent.trim() || 'choose dollars'}`;
       const investing=document.getElementById('investingForm');
       if(investing){
-        const buttons=[...investing.querySelectorAll('[data-assumptions-open]')];
-        buttons.forEach(n=>n.hidden=true);
-        let action=investing.querySelector('[data-s3-assumptions]');
-        if(!action){action=document.createElement('button');action.type='button';action.className='btn s3-assumptions-action';action.dataset.assumptionsOpen='';action.dataset.s3Assumptions='';action.textContent='Review forecast assumptions';investing.append(action);}
-        action.hidden=false;
-        investing.classList.add('s3-assumptions-summary');
+        tidyInvestmentAssumptions(investing);
         investing.parentElement.classList.add('s3-investment-settings');
         document.getElementById('investmentCards')?.parentElement.classList.add('s3-investment-results');
       }
@@ -153,6 +168,9 @@
     root.visualViewport?.addEventListener('resize',updateViewport);
     root.addEventListener('resize',updateViewport);
     const footer=document.querySelector('.wizard-actions');if(footer)new ResizeObserver(updateViewport).observe(footer);
+    // Some existing event paths render a form independently of renderAll.
+    const investing=document.getElementById('investingForm');
+    if(investing)new MutationObserver(()=>tidyInvestmentAssumptions(investing)).observe(investing,{childList:true,subtree:true});
     return {sync,remember};
   }
   root.FFSMobileUsabilityStage3={keyboardOpen,mount};

@@ -1,0 +1,35 @@
+{
+  "main": "02054bfcf9a687efae6074560104042c0c3a64db",
+  "investigatedPr67": "88e1cc9b7557bd90d637a43ad7f42782d42fc292",
+  "applicationFilesChangedByInvestigation": [],
+  "viewports": [
+    375,
+    390,
+    768,
+    1024,
+    1366
+  ],
+  "returningPanel": "HTML, computed design, geometry and PNGs identical to main at all widths",
+  "mainWelcomeTests": {
+    "passed": 3,
+    "failed": 0
+  },
+  "prWelcomeTests": {
+    "passed": 3,
+    "failed": 0
+  },
+  "completeBrowserSuite": {
+    "passed": 78,
+    "failed": 0,
+    "durationMs": 286168.781892
+  },
+  "regression": {
+    "passed": 1298,
+    "failed": 0,
+    "registeredSuites": 67
+  },
+  "livePreviewPublicAssets": "app.js, storage.js and index.html byte-identical to PR source",
+  "actualUserLocalStorage": "Not accessed or changed",
+  "deployment": "No further deployment; existing preview left unchanged",
+  "prState": "Draft; no merge"
+}

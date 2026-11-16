@@ -10491,3 +10491,52 @@ body[data-active-view="assumptions"] #appWorkspace { scroll-margin-top: calc(var
 @media (max-width: 760px) {
   .workspace-nav .dollar-basis-segment { min-height: 44px; }
 }
+
+/* Focused assumptions presentation: one authoritative edit action, with the
+   existing effective rates aligned as read-only cards on every screen. */
+#investingForm.s3-assumptions-summary { align-items: stretch; gap: 12px; }
+#investingForm .fa-existing-setting {
+  grid-template-rows: 1fr auto;
+  align-content: stretch;
+  padding: 12px;
+  border: 1px solid #dbe4ee;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+#investingForm .fa-existing-setting .field-label { margin: 0; line-height: 1.5; overflow-wrap: normal; }
+#investingForm .fa-existing-setting strong { color: #173451; font-size: 17px; line-height: 1.4; }
+
+/* The old minmax(0,1fr) auto row squeezed notes beside long value strings.
+   Group each label, value and note vertically; let long notes span both cards. */
+.retirement-redesign .rr-readable-assumptions { min-width: 0; }
+.retirement-redesign .rr-readable-assumptions .semi-retirement-assumption-grid {
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+.retirement-redesign .rr-readable-assumptions .rr-assumption-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #e0e7ed;
+  border-radius: 10px;
+  background: #f8fafc;
+  align-content: start;
+}
+.retirement-redesign .rr-assumption-card > :is(span,strong,small) {
+  min-width: 0;
+  max-width: 100%;
+  width: auto;
+  white-space: normal;
+  text-align: left;
+  overflow-wrap: break-word;
+  word-break: normal;
+  line-height: 1.55;
+}
+.retirement-redesign .rr-assumption-card > small { font-size: .875rem; color: #334155; }
+@media (min-width: 1024px) {
+  .retirement-redesign .rr-readable-assumptions .semi-retirement-assumption-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .retirement-redesign .rr-readable-assumptions .rr-assumption-wide { grid-column: 1 / -1; }
+}

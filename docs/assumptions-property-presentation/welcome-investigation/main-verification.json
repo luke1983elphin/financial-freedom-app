@@ -1,0 +1,42 @@
+[
+  {
+    "width": 375,
+    "firstVisit": true,
+    "returningPanel": true,
+    "originalDesignUnchanged": true,
+    "savedRecordUnchanged": true,
+    "sampleReturnPreserved": true
+  },
+  {
+    "width": 390,
+    "firstVisit": true,
+    "returningPanel": true,
+    "originalDesignUnchanged": true,
+    "savedRecordUnchanged": true,
+    "sampleReturnPreserved": true
+  },
+  {
+    "width": 768,
+    "firstVisit": true,
+    "returningPanel": true,
+    "originalDesignUnchanged": true,
+    "savedRecordUnchanged": true,
+    "sampleReturnPreserved": true
+  },
+  {
+    "width": 1024,
+    "firstVisit": true,
+    "returningPanel": true,
+    "originalDesignUnchanged": true,
+    "savedRecordUnchanged": true,
+    "sampleReturnPreserved": true
+  },
+  {
+    "width": 1366,
+    "firstVisit": true,
+    "returningPanel": true,
+    "originalDesignUnchanged": true,
+    "savedRecordUnchanged": true,
+    "sampleReturnPreserved": true
+  }
+]
