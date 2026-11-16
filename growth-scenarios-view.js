@@ -319,7 +319,7 @@
         chart.setAttribute("role", "img");
         chart.setAttribute(
           "aria-label",
-          `Year ${year} total net worth comparison; exact values are in the table below.`,
+          `Year ${year} total net worth comparison; exact values are in the comparison results below.`,
         );
         const max = Math.max(
           1,
@@ -344,20 +344,13 @@
           chart.append(row);
         }
         output.append(chart);
-        output.append(
-          make(
-            "p",
-            "growth-scroll-hint",
-            "On small screens, scroll the table to see all three scenarios.",
-          ),
-        );
         const scroll = make("div", "growth-table-scroll"),
           table = make("table", "growth-table");
         scroll.tabIndex = 0;
         scroll.setAttribute("role", "region");
         scroll.setAttribute(
           "aria-label",
-          "Growth comparison table; scroll horizontally on small screens",
+          "Growth comparison table",
         );
         table.append(
           make(
@@ -394,6 +387,23 @@
         table.append(body);
         scroll.append(table);
         output.append(scroll);
+        const mobileResults = make("section", "growth-result-cards");
+        mobileResults.setAttribute("aria-label", `Year ${year} scenario comparison`);
+        mobileResults.append(make("p", "growth-results-basis", `Year ${year} · ${basis === "today" ? "today’s dollars" : "future dollars"} · property values are equity`));
+        for (const name of names) {
+          const card = make("article", `growth-result-card growth-result-${name.toLowerCase()}`);
+          card.dataset.growthMobileScenario = name;
+          card.append(make("h3", "", name));
+          const values = make("dl");
+          for (const [key, label] of metrics) {
+            const row = make("div"); row.dataset.growthMobileMetric = key;
+            row.append(make("dt", "", label), make("dd", "", displayed[name] ? money(displayed[name][key]) : "Unavailable"));
+            values.append(row);
+          }
+          card.append(values); mobileResults.append(card);
+        }
+        output.append(mobileResults);
+
       }
       draw();
       panel.append(

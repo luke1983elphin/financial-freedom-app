@@ -160,7 +160,8 @@ for (const width of [1366, 375]) test('Age Pension browser placement and interac
   await evaluate('localStorage.clear(); sessionStorage.clear()');
   await navigate();
   await cdp.send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<600});
-  await evaluate("FFSStage1BrowserTestHooks.setPlan(FFS_DATA.samplePlans[1].plan,'semiretirement')");
+  // This governance/placement case asserts nominal pension captions explicitly.
+  await evaluate("FFSStage1BrowserTestHooks.setPlan(FFS_DATA.samplePlans[1].plan,'semiretirement');document.querySelector('[data-dollar-basis=future]').click()");
   await waitFor(()=>evaluate(`Boolean(document.querySelector('[data-semi-input="scenario.agePension.enabled"]'))`));
   const state=await evaluate(`(()=>{const pension=document.querySelector('[data-semi-detail-state="agePension"]'); const down=document.querySelector('[data-semi-detail-state="downsizeHome"]');const setting=[...document.querySelectorAll('h4')].find(x=>x.textContent==='Projection settings'); return {collapsed:!pension.open, checked:pension.querySelector('input').checked, ordered:!!(pension.compareDocumentPosition(setting)&Node.DOCUMENT_POSITION_FOLLOWING), width:document.documentElement.scrollWidth,viewport:innerWidth};})()`);
   assert.equal(state.collapsed,true); assert.equal(state.checked,false); assert.equal(state.ordered,true);

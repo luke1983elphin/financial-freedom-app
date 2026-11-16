@@ -609,8 +609,8 @@
   // Viewing age is session-only UI state, never a saved financial assumption.
   let futureYouSelectedAge = null;
   const DOLLAR_BASIS_KEY = "ffs.ui.forecastDollarBasis";
-  let forecastDollarBasis = "future";
-  try { forecastDollarBasis = localStorage.getItem(DOLLAR_BASIS_KEY) === "today" ? "today" : "future"; }
+  let forecastDollarBasis = "today";
+  try { const storedBasis = localStorage.getItem(DOLLAR_BASIS_KEY); if (["today", "future"].includes(storedBasis)) forecastDollarBasis = storedBasis; }
   catch { /* Keep the default when browser storage is restricted. */ }
 
   let plan = ensureCurrentPlanIdentity(migratePlanData(savedDraft || newUserPlan()));
@@ -18548,6 +18548,33 @@
     };
   }
 
+  function installForecastDisplayDefaults() {
+    const api = window.FFSForecastDisplayPreferences;
+    const preferences = api.create({getItem: key => localStorage.getItem(key), setItem: (key, value) => localStorage.setItem(key, value)});
+    const key = target => api.identity(target || plan, activePlanId);
+    forecastDollarBasis = preferences.activate(key(), {newPlan: !savedDraft});
+    const originalBlank = blankUserPlan;
+    blankUserPlan = (...args) => {const fresh = originalBlank(...args);preferences.markNew(key(fresh));return fresh;};
+    let newPersonalReturn = false;
+    const originalReturn = returnToPersonalPlan;
+    returnToPersonalPlan = (...args) => {
+      const context = loadPlanContext();
+      newPersonalReturn = !personalSavedDraftExists(context.lastPersonalPlanId || userState.lastPersonalPlanId || DEFAULT_PERSONAL_PLAN_ID);
+      try {return originalReturn(...args);} finally {newPersonalReturn = false;}
+    };
+    const originalOutputs = renderOutputs;
+    renderOutputs = (...args) => {
+      if (!isDemoActive()) {
+        if (newPersonalReturn) {preferences.markNew(key());newPersonalReturn = false;}
+        forecastDollarBasis = preferences.activate(key());
+      }
+      return originalOutputs(...args);
+    };
+    // Keep samples and saved snapshots on the current display basis. A deliberate
+    // selection also updates the active personal UI preference, never plan data.
+    document.querySelectorAll('[data-dollar-basis]').forEach(control => control.addEventListener('click', () => preferences.choose(control.dataset.dollarBasis), true));
+  }
+
   function installFourSectionNavigation() {
     const returning = Boolean(savedDraft && hasSavedDraft());
     const ui = window.FFSFreedomNavigation.mount(document, {
@@ -20092,6 +20119,7 @@
   installForecastAssumptionsWorkspace();
   installMobileUsabilityStage2();
   bindEvents();
+  installForecastDisplayDefaults();
   installMobileUsabilityStage3();
   const fourSectionNavigation = installFourSectionNavigation();
   renderAll();
