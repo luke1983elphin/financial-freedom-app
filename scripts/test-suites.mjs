@@ -1,6 +1,7 @@
 export const DEFAULT_SUITE_TIMEOUT_MS = 120_000;
 
 export const ACTIVE_TEST_SUITES = [
+  { id: "reporting-scope", file: "tests/reporting-scope.test.mjs", groups: ["all", "mjs", "report"] },
   { id: "forecast-display-preferences", file: "tests/forecast-display-preferences.test.mjs", groups: ["all", "mjs", "presentation"] },
   { id: "mobile-usability-stage3", file: "tests/mobile-usability-stage3.test.mjs", groups: ["all", "mjs", "presentation"] },
   { id: "mobile-usability-stage2", file: "tests/mobile-usability-stage2.test.mjs", groups: ["all", "mjs", "presentation"] },

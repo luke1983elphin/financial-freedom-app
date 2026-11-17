@@ -8820,6 +8820,9 @@ body.scenario-save-modal-open {
   }
 
   body[data-print-mode="retirement-comparison"] :is(#appWorkspace, #appWorkspace > div, #appWorkspace > div > div, [data-view-panel="semiretirement"]) {
+    display: block !important;
+    grid-template-columns: none !important;
+    gap: 0 !important;
     padding: 0 !important;
     margin: 0 !important;
     border: 0 !important;
@@ -8849,6 +8852,7 @@ body.scenario-save-modal-open {
     border-bottom: 2px solid #0f2742;
     margin-bottom: 8mm;
     padding-bottom: 6mm;
+    break-inside: avoid;
   }
 
   body[data-print-mode="retirement-comparison"] .semi-retirement-print-cover > p:first-child {
@@ -10493,6 +10497,37 @@ body[data-active-view="assumptions"] #appWorkspace { scroll-margin-top: calc(var
 }
 
 /* Four sections reuse the existing workspace sidebar; no additional nav panel. */
+@media print {
+  @page retirement-comparison {
+    size: A4 portrait; margin: 14mm 12mm 18mm;
+    @bottom-left { content: "Retirement Scenario Comparison"; font-size: 8pt; }
+  }
+  @page retirement-wide {
+    @bottom-left { content: "Retirement Scenario Comparison"; font-size: 8pt; }
+  }
+  @page retirement-portrait {
+    @bottom-left { content: "Retirement Scenario Comparison"; font-size: 8pt; }
+  }
+  body[data-print-mode="retirement-comparison"] { page: retirement-comparison; }
+  body[data-print-mode="retirement-comparison"] :is(.freedom-model-note,.freedom-future-controls,#freedomGrowthHost,#disclaimer) { display: none !important; }
+  body[data-print-mode="retirement-comparison"] :is(.semi-retirement-results-dashboard,.rr-panel-body) { display: block !important; margin: 0 !important; padding: 0 !important; }
+  body[data-print-mode="retirement-comparison"] .semi-retirement-comparison-print-report { width: 100%; min-width: 0; }
+  body[data-print-mode="retirement-comparison"] :is(.retirement-redesign,[data-semi-retirement-scenario],.rr-explore,[data-semi-detail-state="rr-comparison"]) { max-width: none !important; width: 100%; margin: 0 !important; padding: 0 !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
+  body[data-print-mode="retirement-comparison"] .semi-retirement-main-differences { border: 0; padding: 0; }
+  body[data-print-mode="retirement-comparison"] .semi-retirement-main-differences > h5 { display: none; }
+  body[data-print-mode="retirement-comparison"] .semi-comparison-overview { break-before: page; }
+  body[data-print-mode="retirement-comparison"] .semi-retirement-print-closing { break-inside: auto; page-break-inside: auto; }
+  body[data-print-mode="retirement-comparison"] .semi-retirement-print-table { font-size: 9.5pt; }
+  body[data-print-mode="retirement-comparison"] .semi-retirement-print-assumptions { break-inside: avoid; }
+  body[data-print-mode="retirement-comparison"] .semi-portrait-scenario > .retirement-scenario-summary { break-after: avoid; }
+  body[data-print-mode="financial-report"] #financialReportBody .report-executive { break-inside: auto; page-break-inside: auto; }
+  body[data-print-mode="retirement-comparison"] .semi-retirement-print-table { table-layout: fixed; }
+  body[data-print-mode="retirement-comparison"] :is(th,td) { overflow-wrap: anywhere; }
+  body[data-print-mode="retirement-comparison"] :is(h1,h2,h3,h4) { break-after: avoid; }
+  body[data-print-mode="retirement-comparison"] :is(tr,.retirement-scenario-summary) { break-inside: avoid; }
+  body[data-print-mode="retirement-comparison"] .retirement-report-context { font-size: 9pt; line-height: 1.35; }
+  body[data-print-mode="retirement-comparison"] .retirement-report-context :is(p,ul) { margin: 2mm 0; }
+}
 #sideNav .nav-primary-row { grid-template-columns: minmax(0, 1fr); gap: 6px; }
 #sideNav .nav-primary { flex-direction: row; justify-content: flex-start; gap: 12px; min-height: 60px; padding: 12px; text-align: left; white-space: normal; font-size: 14px; }
 #sideNav .nav-primary span { min-width: 0; line-height: 1.4; }

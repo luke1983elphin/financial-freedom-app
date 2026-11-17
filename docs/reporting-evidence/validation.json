@@ -1,0 +1,106 @@
+{
+  "canonicalParity": [
+    {
+      "fixture": "two-future",
+      "scenarios": 2,
+      "inputsIdentical": true,
+      "completeCanonicalResultsIdentical": true
+    },
+    {
+      "fixture": "two-today",
+      "scenarios": 2,
+      "inputsIdentical": true,
+      "completeCanonicalResultsIdentical": true
+    },
+    {
+      "fixture": "wide-future",
+      "scenarios": 6,
+      "inputsIdentical": true,
+      "completeCanonicalResultsIdentical": true
+    },
+    {
+      "fixture": "wide-today",
+      "scenarios": 6,
+      "inputsIdentical": true,
+      "completeCanonicalResultsIdentical": true
+    },
+    {
+      "fixture": "wide-full",
+      "scenarios": 6,
+      "inputsIdentical": true,
+      "completeCanonicalResultsIdentical": true
+    }
+  ],
+  "printGeometry": {
+    "before": [
+      {
+        "name": "two-future",
+        "width": 250,
+        "workspaceWidth": 1440,
+        "grid": "270px 1146px"
+      },
+      {
+        "name": "two-today",
+        "width": 240,
+        "workspaceWidth": 1440,
+        "grid": "270px 1146px"
+      },
+      {
+        "name": "wide-future",
+        "width": 240,
+        "workspaceWidth": 1440,
+        "grid": "270px 1146px"
+      },
+      {
+        "name": "wide-today",
+        "width": 240,
+        "workspaceWidth": 1440,
+        "grid": "270px 1146px"
+      },
+      {
+        "name": "wide-full",
+        "width": 240,
+        "workspaceWidth": 1440,
+        "grid": "270px 1146px"
+      }
+    ],
+    "after": [
+      {
+        "name": "two-future",
+        "width": 1440,
+        "workspaceWidth": 1440,
+        "grid": "none"
+      },
+      {
+        "name": "two-today",
+        "width": 1440,
+        "workspaceWidth": 1440,
+        "grid": "none"
+      },
+      {
+        "name": "wide-future",
+        "width": 1440,
+        "workspaceWidth": 1440,
+        "grid": "none"
+      },
+      {
+        "name": "wide-today",
+        "width": 1440,
+        "workspaceWidth": 1440,
+        "grid": "none"
+      },
+      {
+        "name": "wide-full",
+        "width": 1440,
+        "workspaceWidth": 1440,
+        "grid": "none"
+      },
+      {
+        "name": "portrait-six",
+        "width": 1440,
+        "workspaceWidth": 1440,
+        "grid": "none"
+      }
+    ]
+  }
+}

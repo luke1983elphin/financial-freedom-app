@@ -9808,12 +9808,100 @@
     return window.FFSSemiRetirementUi.retirementTimingMode(semiRetirementScenarioDraft?.people || [], plan.personal?.retirementTiming?.mode);
   }
 
+  function installReportingPresentation() {
+    // Decorate the existing renderers after dollar-basis installation. Keep the
+    // audited calculations, snapshot writers and original renderers intact.
+    let openedSnapshotName = "";
+    const originalOpenSnapshot = loadRetirementScenarioSnapshot;
+    loadRetirementScenarioSnapshot = scenario => { openedSnapshotName = scenario?.name || "Saved retirement scenario"; return originalOpenSnapshot(scenario); };
+    const originalBaseline = currentRetirementComparisonScenario;
+    currentRetirementComparisonScenario = view => ({ ...originalBaseline(view), name: String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:") ? `${openedSnapshotName || "Saved retirement scenario"} (retirement baseline)` : "Retirement baseline" });
+    const originalSummary = semiRetirementComparisonSummary;
+    semiRetirementComparisonSummary = (view, inputs = semiRetirementScenarioInputs) => {
+      const summary = originalSummary(view, inputs), end = view.keyResults?.projectionEnd;
+      const value = amount => amount == null ? amount : window.FFSDollarBasis.displayedValue(amount,
+        window.FFSDollarBasis.calendarHorizon(end?.calendarYear, inputs, view.annualRows), window.FFSDollarBasis.inflationPercent(inputs), forecastDollarBasis);
+      return { ...summary,
+        accessibleLastLabel: summary.accessibleExhaustionYear ? summary.accessibleLastLabel : "No depletion within forecast",
+        retirementFundingStatus: summary.firstShortfallYear ? `First funding shortfall in ${summary.firstShortfallYear}` : `Funded through forecast end (${end?.calendarYear ?? "year unavailable"})`,
+        allFundsExhaustionYear: view.longevity?.allRetirementFundsExhausted?.calendarYear ?? null,
+        projectionEndYear: end?.calendarYear,
+        projectionEndAssets: value(end?.totalInvestableAssets),
+        projectionEndPropertyEquity: value(view.annualRows?.at(-1)?.household?.totalPropertyEquity),
+      };
+    };
+    const originalMetrics = semiRetirementComparisonMetricDefinitions;
+    semiRetirementComparisonMetricDefinitions = () => originalMetrics().map(metric => metric.key === "accessibleLast"
+      ? { ...metric, label: "First non-super investment depletion" } : metric).flatMap(metric => metric.key === "fundingStatus" ? [
+        { key: "allFundsExhaustion", label: "First total retirement funding-asset exhaustion", value: summary => summary.allFundsExhaustionYear ? String(summary.allFundsExhaustionYear) : "Not within forecast", delta: (base, item) => base.allFundsExhaustionYear === item.allFundsExhaustionYear ? "No change" : "Compare milestone" }, metric,
+      ] : metric.key === "projectionEndNetWorth" ? [
+        { ...metric, value: summary => `${metric.value(summary)} (${summary.projectionEndYear ?? "year unavailable"})`, delta: (base, item) => base.projectionEndYear === item.projectionEndYear ? metric.delta(base, item) : "Different forecast end years" },
+        ...[["projectionEndAssets", "Forecast-end retirement funding assets"], ["projectionEndPropertyEquity", "Forecast-end retained property equity"]].map(([key, label]) => ({ key, label, value: summary => semiRetirementMoney(summary[key]), delta: (base, item) => base.projectionEndYear === item.projectionEndYear ? semiRetirementComparisonDelta(base[key], item[key]) : "Different forecast end years" })),
+      ] : [metric]);
+    const milestoneCopy = html => html.replaceAll("Accessible investments last until", "First non-super investment depletion")
+      .replaceAll("Accessible investments exhausted", "First non-super investment depletion")
+      .replaceAll("Total retirement assets exhausted", "First total retirement funding-asset exhaustion")
+      .replaceAll("Depletion year", "First depletion year")
+      .replaceAll("Through projection", "Not within forecast")
+      .replaceAll("Super funding after that point", "Funding context")
+      .replaceAll("Available super continues funding spending where required.", "Super or continuing income may fund later spending. Later inflows may replenish investments.");
+    const originalBreakdown = semiRetirementComparisonBreakdownRows;
+    semiRetirementComparisonBreakdownRows = (key, scenario) => {
+      if (key === "allFundsExhaustion") return [semiRetirementBreakdownRow("First total retirement funding-asset exhaustion", scenario.viewModel?.longevity?.allRetirementFundsExhausted?.calendarYear || "Not within forecast", "Continuing income may still fund spending. See the separate first funding shortfall milestone.")];
+      if (["projectionEndAssets", "projectionEndPropertyEquity"].includes(key)) return [semiRetirementBreakdownRow(key === "projectionEndAssets" ? "Retirement funding assets" : "Retained property equity", semiRetirementMoney(scenario.summary?.[key]), `At forecast end (${scenario.summary?.projectionEndYear ?? "year unavailable"}). Property equity is not automatically available for spending.`)];
+      return originalBreakdown(key, scenario).map(milestoneCopy);
+    };
+    const originalDifferences = semiRetirementComparisonDifferences;
+    semiRetirementComparisonDifferences = scenarios => originalDifferences(scenarios).map((group, index) => ({ ...group, rows: group.rows
+      .filter(row => scenarios[0].summary?.projectionEndYear === scenarios[index + 1].summary?.projectionEndYear || !row.includes("projection-end net worth"))
+      .map(row => milestoneCopy(row).replaceAll("Current Plan", "the retirement baseline")) }));
+    const originalControls = renderSemiRetirementComparisonControls;
+    renderSemiRetirementComparisonControls = () => originalControls().replace(" planned extra concessional contribution events are included in this comparison.", " Eligibility and contribution limits still apply; inclusion does not confirm cap compliance.");
+    const originalPrint = renderSemiRetirementComparisonPrintReport;
+    renderSemiRetirementComparisonPrintReport = (scenarios, metrics) => {
+      let html = originalPrint(scenarios, metrics).replace('</header>', `${retirementComparisonContext(scenarios)}</header>`)
+        .replaceAll("vs Current Plan", "vs retirement baseline").replaceAll("compare with Current Plan", "compare with the retirement baseline").replaceAll("Current Plan is repeated", "The retirement baseline is repeated");
+      // Portrait and wide overview selections predate these distinct milestones.
+      const supplemental = metrics.filter(metric => ["allFundsExhaustion", "projectionEndAssets", "projectionEndPropertyEquity"].includes(metric.key));
+      if (usePortraitRetirementReport()) {
+        let index = 0;
+        html = html.replace(/(<section class="semi-portrait-scenario">[\s\S]*?)(<\/section>)/g, (_match, body, close) => {
+          const scenario = scenarios[index++];
+          return body + supplemental.map(metric => `<div class="semi-portrait-outcome"><h3>${escapeHtml(metric.label)}</h3><p>${escapeHtml(metric.value(scenario.summary || {}))}</p></div>`).join("") + close;
+        });
+      }
+      return html;
+    };
+    const originalComparisonHtml = renderSemiRetirementComparisonHtml;
+    renderSemiRetirementComparisonHtml = view => originalComparisonHtml(view).replaceAll("Compare Current Plan with", "Compare retirement baseline with").replaceAll("Current Plan +", "Retirement baseline +");
+    const originalReport = reportPresentationHtml;
+    reportPresentationHtml = (result, date) => originalReport(result, date).replace('<h1>Financial Freedom Report</h1>', `<h1>Financial Freedom Report</h1><h2>Current Financial Plan Report</h2><p>Forecast horizon: ${escapeHtml(String(result.investmentProjection?.at(-1)?.year ?? "Not available"))} years. Forecast balances: ${forecastDollarBasis === "today" ? "today's dollars" : "future dollars"}. Retirement Scenario Comparison is a separate output; export both for a complete review.</p>`);
+  }
+
   function retirementScenarioSummary(scenario) {
     const people = scenario.draft?.people || scenario.scenarioInputSnapshot?.people || [];
     if (!people.length) return "Retirement timing unavailable in this saved snapshot.";
-    return people.map(person =>
-      person.alreadyRetired ? `${person.name || person.id} is already retired` : `${person.name || person.id} retires at ${person.fullRetirementAge}`
-    ).join(" · ") + ".";
+    const age = value => value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value)) ? Number(value) : null;
+    return people.map((person, index) => {
+      const name = person.name || person.id || `Person ${index + 1}`;
+      if (person.alreadyRetired) return `${name} is already retired`;
+      const full = age(person.fullRetirementAge), semi = age(person.semiRetirementAge);
+      const rows = scenario.viewModel?.annualRows || [];
+      const yearAt = target => rows.find(row => row.people?.some(p => p.id === person.id && Number(p.age) === target))?.calendarYear;
+      const dated = target => `${target}${yearAt(target) ? ` (${yearAt(target)})` : ""}`;
+      const retirement = full === null ? "full-retirement timing unavailable" : `retires at ${dated(full)}`;
+      if (person.hasSemiRetirement === true && semi !== null && (full === null || semi < full)) return `${name} reduces work at ${dated(semi)} and ${retirement}`;
+      if (person.hasSemiRetirement === true && semi === null) return `${name}: work-reduction timing unavailable; ${retirement}`;
+      return `${name} ${retirement}`;
+    }).join(" · ") + ".";
+  }
+
+  function retirementComparisonContext(scenarioSet) {
+    const basis = forecastDollarBasis === "today" ? "today's dollars" : "future dollars";
+    return `<div class="retirement-report-context"><p><strong>Retirement Scenario Comparison.</strong> Baseline: ${escapeHtml(scenarioSet[0]?.name || "Not available")} is the retirement scenario currently being explored, including its adjustments. It is separate from the Current Financial Plan Report. Export both outputs for a complete review; they are not a combined report.</p>
+      <p>Forecast balances: ${basis}. Today's-dollar balances use each scenario's inflation assumption and projection year. Lifestyle inputs remain in today's dollars. Assumptions and calculation/rule disclosures follow.</p>
+      <p>First non-super depletion is not the end of all retirement funding: super or continuing income may fund later spending, and later inflows may replenish investments. Total funding-asset exhaustion and first unfunded required cashflow are separate milestones. Retained property equity does not resolve a cashflow shortfall.</p>
+      <ul>${scenarioSet.map(scenario => `<li><strong>${escapeHtml(scenario.name)}</strong>${scenario.isCurrent ? " (baseline)" : scenario.source === "saved" ? " (saved scenario inputs)" : " (temporary comparison)"}: forecast ${escapeHtml(String(scenario.viewModel?.annualRows?.[0]?.calendarYear ?? "not available"))} to ${escapeHtml(String(scenario.viewModel?.keyResults?.projectionEnd?.calendarYear ?? "not available"))}.</li>`).join("")}</ul></div>`;
   }
 
   function retirementScenarioSubtitle(scenario) {
@@ -10271,7 +10359,7 @@
       </header>
       <section class="semi-comparison-overview"><h2>Side-by-side overview</h2>
         <p>Future values include assumed inflation. Retirement balances refer to each scenario's own retirement year; forecast-end balances should be compared at matching years and ages.</p>
-        ${table(metrics.filter(metric => ["fullRetirement", "assetsAtRetirement", "accessibleLast", "firstShortfall", "projectionEndNetWorth"].includes(metric.key)).map(metric => metric.key === "fullRetirement" ? { ...metric, value: summary => `${summary.fullYear || "Not reached"} — ${semiRetirementAgeList(summary.fullAges || [])}` } : metric), extra.map(metric => ({ label: metric.label, value: (_summary, scenario) => metric.value(scenario) })))}
+        ${table(metrics.filter(metric => ["fullRetirement", "assetsAtRetirement", "accessibleLast", "allFundsExhaustion", "firstShortfall", "projectionEndNetWorth"].includes(metric.key)).map(metric => metric.key === "fullRetirement" ? { ...metric, value: summary => `${summary.fullYear || "Not reached"} — ${semiRetirementAgeList(summary.fullAges || [])}` } : metric), extra.map(metric => ({ label: metric.label, value: (_summary, scenario) => metric.value(scenario) })))}
       </section>
       <section class="semi-comparison-differences"><h2>What changes in each alternative?</h2>${renderSemiRetirementComparisonMainDifferences(scenarioSet)}</section>
       <section class="semi-comparison-assumption-summary"><h2>Shared assumptions</h2><div class="semi-comparison-common-assumptions">${shared.map(label => `<span><strong>${escapeHtml(label)}</strong> ${escapeHtml(String(values(label)[0]))}</span>`).join("")}</div>
@@ -10395,8 +10483,8 @@
       <section class="semi-retirement-results-section semi-retirement-comparison" id="retirementComparison" data-semi-comparison data-mobile-view="${scenarioSet.length > 1 ? semiComparisonMobileView : "manage"}" data-mobile-all="${semiComparisonMobileSelection === "all"}" data-mobile-all-outcomes="${semiComparisonShowAllOutcomes}">
         <div class="card-subheading">
           <div>
-            <h4>Scenario Comparison</h4>
-            <p>Compare Current Plan with up to ${MAX_SEMI_RETIREMENT_COMPARISONS} Retirement Planning scenarios. Temporary comparisons and saved Retirement Planning scenarios use the same projection engine, and your Financial Plan is unchanged.</p>
+            <h4>Retirement Scenario Comparison</h4>
+            <p>Compare the retirement baseline with up to ${MAX_SEMI_RETIREMENT_COMPARISONS} Retirement Planning scenarios. Temporary comparisons and saved Retirement Planning scenarios use the same projection engine, and your Financial Plan is unchanged.</p>
           </div>
         </div>
         ${scenarioSet.length > 1 ? `<div class="semi-comparison-mobile-tools"><label class="semi-comparison-mobile-picker">Compare Current Plan with
@@ -10407,6 +10495,7 @@
           </label>
           <div class="semi-comparison-mobile-tabs" aria-label="Comparison tools">${[["results", "Results"], ["edit", "Edit selected"], ["manage", "Scenarios & PDF"]].map(([view, label]) => `<button class="btn btn-small" type="button" data-semi-action="mobile-comparison-view" data-mobile-view="${view}" aria-pressed="${semiComparisonMobileView === view}">${label}</button>`).join("")}</div>
         </div>` : ""}
+        <div class="retirement-comparison-screen-context">${retirementComparisonContext(scenarioSet)}</div>
         ${renderSemiRetirementComparisonSelector()}
         ${semiRetirementComparisonErrors.length ? `<div class="tax-note mt-4" role="alert"><strong>Review comparison inputs</strong><ul>${semiRetirementComparisonErrors.map((error) => `<li>${escapeHtml(error.message)}</li>`).join("")}</ul></div>` : ""}
         ${scenarioSet.length > 1 ? `
@@ -20117,6 +20206,7 @@
 
   installDollarBasisPresentation();
   installAdditionalDollarDisplays();
+  installReportingPresentation();
   installRetirementResultsPresentation();
   installForecastAssumptionsWorkspace();
   installMobileUsabilityStage2();

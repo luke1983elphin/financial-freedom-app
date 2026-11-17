@@ -1,0 +1,178 @@
+[
+  {
+    "file": "current-plan-future.pdf",
+    "pages": 12,
+    "sizes": [
+      [
+        594.95996,
+        841.91998
+      ]
+    ],
+    "opening": "Current plan \u00b7 Educational modelling\nFinancial Freedom Report\nGenerated 17 Nov 2026, 11:12 am. Based on the information and assumptions entered; this is not a s",
+    "textOutsidePage": 0,
+    "pageTextLengths": [
+      2041,
+      1522,
+      1067,
+      1361,
+      1568,
+      1132,
+      498,
+      490,
+      1156,
+      1543,
+      1438,
+      2652
+    ]
+  },
+  {
+    "file": "current-plan-today.pdf",
+    "pages": 15,
+    "sizes": [
+      [
+        594.95996,
+        841.91998
+      ]
+    ],
+    "opening": "Current plan \u00b7 Educational modelling\nFinancial Freedom Report\nGenerated 17 Nov 2026, 11:12 am. Based on the information and assumptions entered; this is not a s",
+    "textOutsidePage": 0,
+    "pageTextLengths": [
+      2098,
+      509,
+      1522,
+      1067,
+      1361,
+      1568,
+      1142,
+      329,
+      207,
+      282,
+      249,
+      1157,
+      1543,
+      1438,
+      2652
+    ]
+  },
+  {
+    "file": "two-future.pdf",
+    "pages": 9,
+    "sizes": [
+      [
+        595.91998,
+        842.88
+      ]
+    ],
+    "opening": "Growth comparisons use the existing Financial Plan forecast and saved assumptions. Retirement uses the timing and\nadjustments shown in its dedicated projection.",
+    "textOutsidePage": 0,
+    "pageTextLengths": [
+      421,
+      1576,
+      1522,
+      1059,
+      1310,
+      1286,
+      281,
+      2350,
+      111
+    ]
+  },
+  {
+    "file": "two-today.pdf",
+    "pages": 9,
+    "sizes": [
+      [
+        594.95996,
+        841.91998
+      ]
+    ],
+    "opening": "Growth comparisons use the existing Financial Plan forecast and saved assumptions. Retirement uses the timing and\nadjustments shown in its dedicated projection.",
+    "textOutsidePage": 0,
+    "pageTextLengths": [
+      421,
+      1155,
+      1046,
+      1357,
+      933,
+      998,
+      959,
+      1893,
+      111
+    ]
+  },
+  {
+    "file": "wide-full.pdf",
+    "pages": 22,
+    "sizes": [
+      [
+        841.91998,
+        594.95996
+      ]
+    ],
+    "opening": "Growth comparisons use the existing Financial Plan forecast and saved assumptions. Retirement uses the timing and adjustments shown in its dedicated projection.",
+    "textOutsidePage": 0,
+    "pageTextLengths": [
+      421,
+      2279,
+      856,
+      1339,
+      1331,
+      1607,
+      1444,
+      1696,
+      1453,
+      394,
+      1360,
+      1636,
+      1471,
+      1741,
+      1485,
+      408,
+      937,
+      1125,
+      1004,
+      1184,
+      1012,
+      1070
+    ]
+  },
+  {
+    "file": "wide-future.pdf",
+    "pages": 5,
+    "sizes": [
+      [
+        841.91998,
+        594.95996
+      ]
+    ],
+    "opening": "Growth comparisons use the existing Financial Plan forecast and saved assumptions. Retirement uses the timing and adjustments shown in its dedicated projection.",
+    "textOutsidePage": 0,
+    "pageTextLengths": [
+      421,
+      2276,
+      856,
+      1339,
+      835
+    ]
+  },
+  {
+    "file": "wide-today.pdf",
+    "pages": 6,
+    "sizes": [
+      [
+        841.91998,
+        594.95996
+      ]
+    ],
+    "opening": "Growth comparisons use the existing Financial Plan forecast and saved assumptions. Retirement uses the timing and adjustments shown in its dedicated projection.",
+    "textOutsidePage": 0,
+    "pageTextLengths": [
+      421,
+      2103,
+      706,
+      852,
+      1339,
+      906
+    ]
+  }
+]
