@@ -1,0 +1,217 @@
+[
+  {
+    "file": "current-plan-future.pdf",
+    "pages": 13,
+    "sizes": [
+      [
+        594.95996,
+        841.91998
+      ]
+    ],
+    "opening": "Current plan \u00b7 Educational modelling\nFinancial Freedom Report\nCurrent Financial Plan Report\nForecast horizon: 30 years. Forecast balances: future dollars. Retir",
+    "textOutsidePage": 0,
+    "pageTextLengths": [
+      1908,
+      353,
+      1522,
+      1067,
+      1361,
+      1568,
+      1132,
+      498,
+      490,
+      1157,
+      1543,
+      1438,
+      2652
+    ]
+  },
+  {
+    "file": "current-plan-today.pdf",
+    "pages": 16,
+    "sizes": [
+      [
+        594.95996,
+        841.91998
+      ]
+    ],
+    "opening": "Current plan \u00b7 Educational modelling\nFinancial Freedom Report\nCurrent Financial Plan Report\nForecast horizon: 30 years. Forecast balances: today's dollars. Reti",
+    "textOutsidePage": 0,
+    "pageTextLengths": [
+      1966,
+      353,
+      509,
+      1522,
+      1067,
+      1361,
+      1568,
+      1142,
+      329,
+      208,
+      282,
+      249,
+      1157,
+      1543,
+      1438,
+      2652
+    ]
+  },
+  {
+    "file": "portrait-six.pdf",
+    "pages": 21,
+    "sizes": [
+      [
+        594.95996,
+        841.91998
+      ]
+    ],
+    "opening": "FINANCIAL FREEDOM\nRetirement Scenario Comparison\nForecast values: future dollars.\nPortrait report \u00b7 5 alternatives \u00b7 Generated 17/11/2026, 11:22:10 am\nCalculati",
+    "textOutsidePage": 0,
+    "pageTextLengths": [
+      2258,
+      953,
+      1028,
+      1230,
+      996,
+      1066,
+      1483,
+      873,
+      1022,
+      1363,
+      1044,
+      963,
+      1020,
+      1372,
+      995,
+      1067,
+      1484,
+      875,
+      1029,
+      1363,
+      1521
+    ]
+  },
+  {
+    "file": "two-future.pdf",
+    "pages": 9,
+    "sizes": [
+      [
+        594.95996,
+        841.91998
+      ]
+    ],
+    "opening": "FINANCIAL FREEDOM\nRetirement Scenario Comparison\nForecast values: future dollars.\nGenerated 17/11/2026, 11:21:46 am\nPlan: Alex and Jordan\nScenarios: Retirement ",
+    "textOutsidePage": 0,
+    "pageTextLengths": [
+      2327,
+      1097,
+      1638,
+      1375,
+      2042,
+      928,
+      1490,
+      1347,
+      2511
+    ]
+  },
+  {
+    "file": "two-today.pdf",
+    "pages": 8,
+    "sizes": [
+      [
+        594.95996,
+        841.91998
+      ]
+    ],
+    "opening": "FINANCIAL FREEDOM\nRetirement Scenario Comparison\nForecast values: today's dollars, using each scenario's inflation assumption and projection start\nyear.\nPortrai",
+    "textOutsidePage": 0,
+    "pageTextLengths": [
+      2027,
+      989,
+      1062,
+      1228,
+      1016,
+      1064,
+      1448,
+      1137
+    ]
+  },
+  {
+    "file": "wide-full.pdf",
+    "pages": 26,
+    "sizes": [
+      [
+        841.91998,
+        594.95996
+      ]
+    ],
+    "opening": "FINANCIAL FREEDOM\nRetirement Scenario Comparison\nForecast values: future dollars.\nGenerated 17/11/2026, 11:22:04 am \u00b7 5 alternatives \u00b7 Full report\nPlan: Alex an",
+    "textOutsidePage": 0,
+    "pageTextLengths": [
+      1777,
+      2528,
+      1232,
+      1796,
+      1584,
+      2071,
+      1887,
+      2104,
+      1357,
+      2200,
+      1983,
+      1613,
+      2100,
+      1914,
+      2133,
+      1388,
+      2232,
+      2025,
+      1116,
+      1441,
+      1307,
+      1457,
+      955,
+      1521,
+      1387,
+      791
+    ]
+  },
+  {
+    "file": "wide-future.pdf",
+    "pages": 5,
+    "sizes": [
+      [
+        841.91998,
+        594.95996
+      ]
+    ],
+    "opening": "FINANCIAL FREEDOM\nRetirement Scenario Comparison\nForecast values: future dollars.\nGenerated 17/11/2026, 11:21:54 am \u00b7 5 alternatives \u00b7 Overview\nPlan: Alex and J",
+    "textOutsidePage": 0,
+    "pageTextLengths": [
+      1774,
+      2528,
+      1232,
+      1796,
+      790
+    ]
+  },
+  {
+    "file": "wide-today.pdf",
+    "pages": 5,
+    "sizes": [
+      [
+        841.91998,
+        594.95996
+      ]
+    ],
+    "opening": "FINANCIAL FREEDOM\nRetirement Scenario Comparison\nForecast values: today's dollars, using each scenario's inflation assumption and projection start\nyear.\nGenerat",
+    "textOutsidePage": 0,
+    "pageTextLengths": [
+      1846,
+      2523,
+      1228,
+      1796,
+      861
+    ]
+  }
+]
