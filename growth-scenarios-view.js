@@ -32,7 +32,8 @@
       opened = false,
       year = 10,
       basis,
-      results;
+      results,
+      supportCapture;
     const trigger = make("button", "btn", "Compare growth scenarios");
     trigger.type = "button";
     trigger.dataset.growthOpen = "";
@@ -279,7 +280,7 @@
             );
           displayed[name] = api.display(row, inflation, basis);
           card.append(
-            make("p", "", `Year ${year} net worth`),
+            make("p", "", `GRO-05 · Year ${year} net worth`),
             make("strong", "growth-total", money(displayed[name].netWorth)),
           );
           const base = results.Base.ok
@@ -371,7 +372,7 @@
         const body = make("tbody");
         for (const [key, label] of metrics) {
           const tr = make("tr"),
-            th = make("th", "", label);
+            th = make("th", "", `GRO-0${metrics.findIndex(([field]) => field === key) + 1} · ${label}`);
           th.scope = "row";
           tr.append(th);
           for (const name of names)
@@ -397,13 +398,26 @@
           const values = make("dl");
           for (const [key, label] of metrics) {
             const row = make("div"); row.dataset.growthMobileMetric = key;
-            row.append(make("dt", "", label), make("dd", "", displayed[name] ? money(displayed[name][key]) : "Unavailable"));
+            row.append(make("dt", "", `GRO-0${metrics.findIndex(([field]) => field === key) + 1} · ${label}`), make("dd", "", displayed[name] ? money(displayed[name][key]) : "Unavailable"));
             values.append(row);
           }
           card.append(values); mobileResults.append(card);
         }
         output.append(mobileResults);
-
+        if (names.every(name => results[name].ok && displayed[name])) {
+          supportCapture = root.FFSCalculationSupport.capture(supportCapture, {
+            area: 'growth', settings: { year, basis, inflation },
+            scenarios: names.map(name => ({ name, requested: scenarios[name], plan: results[name].plan, rows: results[name].rows,
+              displayed: displayed[name], formatted: Object.fromEntries(metrics.map(([key]) => [key, money(displayed[name][key])])),
+              workings: { investments: results[name].result.investmentProjection, super: results[name].result.superProjection, netWorth: results[name].result.netWorthProjection, wealth: results[name].result.financialFreedomProgressProjection } })),
+          });
+          const id = make('p', 'field-help', `Calculation support ID: ${supportCapture.id}`); id.dataset.growthSupportId = supportCapture.id;
+          const download = button('Download calculation support (Excel)', () => {
+            const blob = new Blob([root.FFSCalculationSupport.bytes(supportCapture)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const url = URL.createObjectURL(blob), link = make('a'); link.href = url; link.download = `${supportCapture.id}.xlsx`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+          });
+          download.dataset.growthSupport = ''; output.prepend(id, download);
+        } else supportCapture = null;
       }
       draw();
       panel.append(
