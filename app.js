@@ -9815,7 +9815,7 @@
     const originalOpenSnapshot = loadRetirementScenarioSnapshot;
     loadRetirementScenarioSnapshot = scenario => { openedSnapshotName = scenario?.name || "Saved retirement scenario"; return originalOpenSnapshot(scenario); };
     const originalBaseline = currentRetirementComparisonScenario;
-    currentRetirementComparisonScenario = view => ({ ...originalBaseline(view), name: String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:") ? `${openedSnapshotName || "Saved retirement scenario"} (retirement baseline)` : "Retirement baseline" });
+    currentRetirementComparisonScenario = view => ({ ...originalBaseline(view), source: String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:") ? "Saved retirement scenario — recalculated with current engine" : "current", name: String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:") ? `${openedSnapshotName || "Saved retirement scenario"} (retirement baseline)` : "Retirement baseline" });
     const originalSummary = semiRetirementComparisonSummary;
     semiRetirementComparisonSummary = (view, inputs = semiRetirementScenarioInputs) => {
       const summary = originalSummary(view, inputs), end = view.keyResults?.projectionEnd;
@@ -9938,7 +9938,7 @@
     return {
       id: "current",
       name: "Current Plan",
-      source: String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:") ? "Saved retirement scenario — recalculated with current engine" : "current",
+      source: "current",
       draft: semiRetirementScenarioResultDraft || semiRetirementScenarioDraft,
       result: semiRetirementScenarioResult,
       inputs: semiRetirementScenarioInputs,
