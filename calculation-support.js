@@ -160,6 +160,43 @@
     for (const sheet of tables.slice(1)) overview.rows.push([cell(sheet.name), { formula: `HYPERLINK("#'${sheet.name}'!A1","Open worksheet")`, style: 7 }]);
     return tables;
   }
-  function bytes(captured) { return global.FFSWeeklyPlannerExport.createSupportBytes(captured.data.area === 'saved' ? savedTables(captured) : captured.data.area === 'growth' ? growthTables(captured) : retirementTables(captured)); }
-  global.FFSCalculationSupport = { capture, retirementTables, growthTables, savedTables, savedReference, bytes };
+  function changeTables(captured) {
+    const data = captured.data, { settings } = data;
+    const overview = table('Overview', ['Calculation support', 'Value'], [['Export ID', captured.id], ['Area', `Try a Change — ${data.mode}`], ['Current Plan source', settings.sourceLabel], ['Dollar basis', settings.basis], ['Difference direction', 'Adjusted Plan minus Current Plan. Positive, negative and zero values are retained.']]);
+    const results = table('Results and reconciliation', ['Reference', 'Figure', 'Period', 'Units', 'Source / rule', 'Engine Current Plan', 'Engine Adjusted Plan', 'Current Plan', 'Adjusted Plan', 'Difference', 'Captured difference', 'Arithmetic discrepancy', 'Displayed Current Plan', 'Displayed Adjusted Plan', 'Displayed Difference', 'Current rounding difference', 'Adjusted rounding difference']);
+    const conversion = table('Dollar conversion', ['Reference', 'Source', 'Nominal engine value', 'Inflation decimal', 'Years', 'Today’s Dollars', 'Selected basis', 'Captured value', 'Difference']);
+    const inputs = table('Inputs and changes', ['Source / stage', 'Path', 'Value']);
+    const workings = table('Engine workings', ['Source / stage', 'Path', 'Engine-supplied value']);
+    const cash = table('Cashflow bridge', ['Reference / stage', 'Period / units', 'Value', 'Rule / coverage', 'Exact displayed value', 'Display rounding difference']);
+    const display = table('Additional displayed details', ['Position', 'Exact displayed text']);
+    const notes = table('Review notes', ['Review level', 'Scope / status'], [['Arithmetic reconciles', 'Difference and dollar conversion formulas are independently recalculated in Excel. Display rounding is separate from underlying precision.'], ['Independently benchmarked', 'Not claimed. Engine financial rules have not been independently benchmarked by this workbook.'], ['Professionally reviewed', 'Not reviewed.'], ['Engine-supplied estimates', 'Projection balances, tax, Medicare, STSL, debt and super outputs are captured engine estimates. Their underlying algorithms are outside workbook formula coverage; retained engine schedules are included.'], ['Cashflow stages', 'The initial preset/custom effect precedes allocation. Income/expense savings use cash before investing; other changes use final cash. Final cash after allocation is a separate measure.'], ['Changes', 'Requested changes, resolved adjustments, both complete plans and the initial and final engine workings show how a preset or custom change flows through the reported result.'], ['Dollar basis', 'Nominal engine values are retained. Future balances are discounted by each plan’s inflation and projection year. Current cashflows are not discounted.']]);
+    for (const f of data.figures) {
+      const n = results.rows.length + 1;
+      results.rows.push([...row([f.ref, f.label, f.period, f.units, f.rule, f.engineCurrent, f.engineAdjusted, f.current, f.adjusted]), formula(`I${n}-H${n}`, f.difference), cell(f.difference), formula(`J${n}-K${n}`, 0), ...row([f.displayCurrent, f.displayAdjusted, f.displayDifference, Math.round(f.current) - f.current, Math.round(f.adjusted) - f.adjusted])]);
+      for (const [source, engine, value, inflation] of [['Current Plan', f.engineCurrent, f.current, settings.inflationCurrent], ['Adjusted Plan', f.engineAdjusted, f.adjusted, settings.inflationAdjusted]]) {
+        const n = conversion.rows.length + 1, rate = (Number(inflation) || 0) / 100, real = engine / (1 + rate) ** f.years;
+        conversion.rows.push([...row([f.ref, source, engine, rate, f.years]), formula(`C${n}/(1+D${n})^E${n}`, real), formula(settings.basis === 'today' ? `F${n}` : `C${n}`, value), cell(value), formula(`H${n}-G${n}`, 0)]);
+      }
+    }
+    for (const [source, values] of [['Requested and resolved changes', data.changes], ['Current Plan', data.currentPlan], ['Adjusted Plan', data.adjustedPlan]]) for (const [path, value] of flatten(values)) inputs.rows.push(row([source, path, value]));
+    for (const [source, values] of [['Current Plan', data.currentWorkings], ['Initial change before allocation', data.initialWorkings], ['Adjusted Plan', data.adjustedWorkings]]) if (values) for (const [path, value] of flatten(values)) workings.rows.push(row([source, path, value]));
+    if (data.cashflow) {
+      const c = data.cashflow;
+      cash.rows.push(row(['Current cashflow', 'AUD/year', c.current, c.isCashflowSaving ? 'Cash before investing' : 'Final cashflow']));
+      cash.rows.push(row(['Initial changed cashflow', 'AUD/year', c.initial, 'Before allocating the change']));
+      cash.rows.push([cell('CHG-C3 · Annual cashflow effect'), cell('AUD/year'), formula('C3-C2', c.annualCashflowImpact), cell('Initial minus current'), cell(c.displayed?.[2]), cell(Math.sign(c.annualCashflowImpact) * Math.round(Math.abs(c.annualCashflowImpact)) - c.annualCashflowImpact)]);
+      cash.rows.push([cell('CHG-C1 · Weekly cashflow effect'), cell('AUD/week'), formula('C4/52', c.annualCashflowImpact / 52), cell('Annual effect / 52'), cell(c.displayed?.[0]), cell(Math.sign(c.annualCashflowImpact) * Math.round(Math.abs(c.annualCashflowImpact / 52)) - c.annualCashflowImpact / 52)]);
+      cash.rows.push([cell('CHG-C2 · Monthly cashflow effect'), cell('AUD/month'), formula('C4/12', c.annualCashflowImpact / 12), cell('Annual effect / 12'), cell(c.displayed?.[1]), cell(Math.sign(c.annualCashflowImpact) * Math.round(Math.abs(c.annualCashflowImpact / 12)) - c.annualCashflowImpact / 12)]);
+      cash.rows.push(row(['Investment absorption', 'AUD/year', c.investmentAbsorption, 'Engine-resolved investment allocation']));
+      cash.rows.push(row(['Available to allocate', 'AUD/year', c.allocatable, 'Resolved engine value before final allocation']));
+      cash.rows.push(row(['Adjusted Plan final cash', 'AUD/year', c.finalCash, 'After all selected changes and allocations']));
+    }
+    (data.displayedDetails || []).forEach((text, index) => display.rows.push(row([index + 1, text])));
+    const tables = [overview, results, conversion, cash, inputs, workings, display, notes];
+    overview.widths = notes.widths = display.widths = [35, 110]; inputs.widths = workings.widths = [35, 80, 55]; cash.widths = [45, 25, 25, 90]; results.widths = [24, 35, 25, 20, 85, ...Array(12).fill(27)];
+    for (const sheet of tables.slice(1)) overview.rows.push([cell(sheet.name), { formula: `HYPERLINK("#'${sheet.name}'!A1","Open worksheet")`, style: 7 }]);
+    return tables;
+  }
+  function bytes(captured) { return global.FFSWeeklyPlannerExport.createSupportBytes(captured.data.area === 'change' ? changeTables(captured) : captured.data.area === 'saved' ? savedTables(captured) : captured.data.area === 'growth' ? growthTables(captured) : retirementTables(captured)); }
+  global.FFSCalculationSupport = { capture, retirementTables, growthTables, savedTables, changeTables, savedReference, bytes };
 })(globalThis);
