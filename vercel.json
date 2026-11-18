@@ -17,7 +17,8 @@
       "codex/calculation-support-retirement": false,
       "codex/calculation-support-growth": false,
       "codex/calculation-support-saved": false,
-      "codex/calculation-support-try-change": false
+      "codex/calculation-support-try-change": false,
+      "codex/calculation-support-workbook-layout": false
     }
   },
   "headers": [

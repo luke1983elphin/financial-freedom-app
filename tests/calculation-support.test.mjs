@@ -33,3 +33,26 @@ test('fictional funding gap retains nominal records and separately discounts eac
   assert.equal(workings[0][0].formula, undefined, 'User text never becomes a formula');
   assert.ok(tables.find(t => t.name === 'Review notes').rows.some(r => r[0].value === 'Professionally reviewed' && r[1].value.startsWith('Not reviewed')));
 });
+
+test('review view shows the captured comparison and preserves detailed formula addresses', () => {
+  const exported = (value) => ({ value, type: 'string' });
+  const overview = { name: 'Overview', rows: [
+    ['Calculation support', 'Value'].map(exported),
+    ['Export ID', 'CS-test'].map(exported),
+    ['Dollar basis', 'today'].map(exported),
+  ] };
+  const headers = ['Figure', 'Reference', 'Period', 'Units', 'Displayed Current Plan', 'Displayed Adjusted Plan', 'Displayed Difference', 'Difference'];
+  const difference = { formula: 'I2-H2', cachedValue: -50 };
+  const results = { name: 'Results and reconciliation', rows: [
+    headers.map(exported),
+    [...['Net worth', 'CHG-test', 'Year 5', 'AUD', '$200', '$150', '−$50'].map(exported), difference],
+  ] };
+  const [start, summary, original] = api.presentationTables([overview, results]);
+  assert.equal(start.rows[1][1].value, 'CS-test');
+  assert.equal(start.rows[2][1].value, 'Today’s Dollars');
+  assert.ok(start.rows.some((cells) => cells[0].formula?.includes('#\'Reported results\'!A1')));
+  assert.equal(summary.name, 'Reported results');
+  assert.deepEqual(Array.from(summary.rows[1], c => c.value), ['Net worth', 'Year 5', 'AUD', '$200', '$150', '−$50', 'CHG-test']);
+  assert.equal(original, results);
+  assert.equal(original.rows[1][7], difference);
+});

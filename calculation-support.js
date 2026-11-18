@@ -197,6 +197,70 @@
     for (const sheet of tables.slice(1)) overview.rows.push([cell(sheet.name), { formula: `HYPERLINK("#'${sheet.name}'!A1","Open worksheet")`, style: 7 }]);
     return tables;
   }
-  function bytes(captured) { return global.FFSWeeklyPlannerExport.createSupportBytes(captured.data.area === 'change' ? changeTables(captured) : captured.data.area === 'saved' ? savedTables(captured) : captured.data.area === 'growth' ? growthTables(captured) : retirementTables(captured)); }
-  global.FFSCalculationSupport = { capture, retirementTables, growthTables, savedTables, changeTables, savedReference, bytes };
+  const guide = {
+    'Reconciliation': 'Retirement figures and their captured sources',
+    'Annual funding': 'Follow the cashflow and funding gap year by year',
+    'Balance workings': 'Check opening-to-closing investment and super balances',
+    'Selected year': 'Trace the selected comparison year for Lower, Base and Higher',
+    'Annual balances': 'Follow each growth scenario through the full forecast',
+    'Results and reconciliation': 'Trace values, comparisons and rounding differences',
+    'Comparison': 'Compare the two saved or current sources in the stated order',
+    'Cashflow bridge': 'Follow the initial change through to final cashflow',
+    'Dollar conversion': 'See nominal values and the conversion to Today’s Dollars',
+    'Financial differences': 'Review the recorded differences between inputs',
+    'Review notes': 'Read coverage, limitations and review status',
+  };
+
+  function worksheetLink(name, label) {
+    return { formula: `HYPERLINK("#'${name}'!A1","${label}")`, cachedValue: label, style: 12 };
+  }
+
+  // Keep the original schedules at their existing cell addresses. The reading
+  // view selects the exact display values already captured for the report.
+  function presentationTables(tables) {
+    const [originalOverview, ...detail] = tables;
+    const overview = { ...originalOverview, widths: [32, 76], rows: originalOverview.rows
+      .filter(cells => !cells[1]?.formula?.startsWith('HYPERLINK('))
+      .map(cells => {
+        if (!/^(Dollar basis|Display basis)$/.test(cells[0]?.value)) return cells;
+        const label = { today: 'Today’s Dollars', future: 'Future Dollars' }[cells[1]?.value];
+        return label ? [cells[0], cell(label)] : cells;
+      }) };
+    const report = detail.find(sheet => ['Reconciliation', 'Selected year', 'Results and reconciliation'].includes(sheet.name));
+    const headers = report.rows[0].map(c => c.value);
+    const isChange = headers.includes('Displayed Adjusted Plan');
+    const isGrowth = report.name === 'Selected year';
+    const columns = isChange
+      ? ['Figure', 'Period', 'Units', 'Displayed Current Plan', 'Displayed Adjusted Plan', 'Displayed Difference', 'Reference']
+      : ['Figure', isGrowth ? 'Scenario' : report.name === 'Reconciliation' ? 'Scenario / source' : 'Source',
+        'Period', 'Units', isGrowth ? 'Table / chart display' : report.name === 'Reconciliation' ? 'Displayed value' : 'Exact displayed value', 'Reference'];
+    const displayHeaders = isChange
+      ? ['Figure', 'Period', 'Units', 'Current Plan', 'Adjusted Plan', 'Difference', 'Reference']
+      : ['Figure', 'Scenario / source', 'Period', 'Units', 'As shown in the app', 'Reference'];
+    const indexes = columns.map(label => headers.indexOf(label));
+    const results = table('Reported results', displayHeaders);
+    results.rows.push(...report.rows.slice(1).map(cells => indexes.map(index => cells[index])));
+    results.widths = isChange ? [34, 19, 16, 19, 19, 18, 19] : [34, 25, 23, 16, 21, 19];
+    const summaries = [
+      ['How to review', 'Start with Reported results. Match the export ID and use a figure’s reference to locate the detailed calculation or reconciliation.'],
+      ['Display and underlying values', 'Reported results uses the selected display basis. The Dollar conversion worksheet shows the underlying nominal values.'],
+      ['Reading the checks', 'A display rounding difference is distinct from a difference between a workbook formula and the engine value. Review notes records the scope of the checks.'],
+    ];
+    overview.rows.push(...summaries.map(row), row(['Worksheet guide', 'Select a link to open the worksheet']));
+    overview.rows.push([worksheetLink(results.name, results.name), cell('Start here for the figures as shown in the app')]);
+    for (const sheet of detail) {
+      const purpose = guide[sheet.name] || (sheet.name.startsWith('Inputs')
+        ? 'Review captured inputs and resolved assumptions'
+        : 'Inspect captured detail and source fields');
+      overview.rows.push([worksheetLink(sheet.name, sheet.name), cell(purpose)]);
+    }
+    return [overview, results, ...detail];
+  }
+
+  function bytes(captured) {
+    const builders = { change: changeTables, saved: savedTables, growth: growthTables };
+    const tables = (builders[captured.data.area] || retirementTables)(captured);
+    return global.FFSWeeklyPlannerExport.createSupportBytes(presentationTables(tables));
+  }
+  global.FFSCalculationSupport = { capture, retirementTables, growthTables, savedTables, changeTables, savedReference, presentationTables, bytes };
 })(globalThis);
