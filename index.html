@@ -326,6 +326,26 @@
 
                 <div id="dashboardSimplified" class="dashboard-simplified mt-6"></div>
 
+                <section class="premium-trajectory" aria-label="Net worth trajectory">
+                  <div class="premium-trajectory-heading">
+                    <div>
+                      <p class="premium-eyebrow">WEALTH TRAJECTORY</p>
+                      <h3>Your financial outlook</h3>
+                      <p>Based on your current Financial Plan and its forecast assumptions.</p>
+                    </div>
+                    <span class="premium-trajectory-note">Modelled projection</span>
+                  </div>
+                  <div class="premium-trajectory-chart">
+                  <article class="card">
+                    <div class="card-heading">
+                      <h3>Net worth over time</h3>
+                      <span id="netWorthNote"></span>
+                    </div>
+                    <svg id="netWorthChart" class="chart" viewBox="0 0 760 300" role="img" aria-label="Net worth over time"></svg>
+                  </article>
+                  </div>
+                </section>
+
                 <details id="dashboardDetails" class="dashboard-details card mt-6">
                   <summary>View Financial Details</summary>
                   <div class="dashboard-detail-content mt-4">
@@ -378,13 +398,6 @@
                 <div id="financialProgressDashboardCard" class="mt-4"></div>
 
                 <div class="dashboard-chart-grid mt-6 grid gap-4 xl:grid-cols-2">
-                  <article class="card">
-                    <div class="card-heading">
-                      <h3>Net worth over time</h3>
-                      <span id="netWorthNote"></span>
-                    </div>
-                    <svg id="netWorthChart" class="chart" viewBox="0 0 760 300" role="img" aria-label="Net worth over time"></svg>
-                  </article>
                   <article class="card">
                     <div class="card-heading">
                       <h3>Investment growth</h3>
