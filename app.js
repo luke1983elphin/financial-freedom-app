@@ -1,4 +1,5 @@
 (function bootFinancialFreedomApp() {
+  let retirementSupportCapture = null;
   const DATA = window.FFS_DATA;
   const CALC = window.FFSCalculator;
   const SECURITY = window.FFSSecurity;
@@ -10475,7 +10476,6 @@
     `;
   }
 
-  let retirementSupportCapture = null;
   function retirementSupportControl() {
     return retirementSupportCapture ? `<p class="field-help">Calculation support ID: <span data-calculation-support-id>${escapeHtml(retirementSupportCapture.id)}</span></p><button type="button" class="btn btn-secondary" data-semi-action="download-calculation-support">Download calculation support (Excel)</button>` : "";
   }
