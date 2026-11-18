@@ -1,87 +1,129 @@
-/* Stage 1: hybrid premium visual treatment. Presentation-only; no model or data changes.
-   Scope intentionally limited to the Progress dashboard; forms, other views and
-   reports retain their existing light styling. */
+/* Complete visual composition for the first premium Progress dashboard.
+   All numbers, charts and actions continue to come from existing application renderers. */
 @media screen {
   body[data-freedom-stage="workspace"] [data-view-panel="dashboard"] {
-    --premium-bg: #0c1b30;
-    --premium-panel: #152941;
-    --premium-line: #344b65;
-    --premium-text: #f3f7fc;
-    --premium-muted: #b7c9db;
-    background: linear-gradient(155deg,#0a182a 0%,#142b46 65%,#0c1b30 100%);
-    border: 1px solid #29435d;
-    border-radius: 24px;
-    padding: clamp(16px,2.5vw,30px);
-    color: var(--premium-text);
-    box-shadow: 0 24px 52px rgba(9,25,45,.16);
+    --premium-bg: #0c1d30;
+    --premium-panel: #182f49;
+    --premium-line: #38516c;
+    --premium-text: #f4f8ff;
+    --premium-muted: #c2d2e2;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    background: radial-gradient(ellipse at 90% 0%,rgba(31,102,110,.32),transparent 45%),linear-gradient(155deg,#0c1d30,#152e49 60%,#0b1a2d);
+    border: 1px solid #294760;
+    border-radius: 22px;
+    box-shadow: 0 20px 42px rgba(9,26,46,.12);
+    padding: clamp(16px,2.5vw,28px);
+    color: #f4f8ff;
+    min-width: 0;
+  }
+  [data-view-panel="dashboard"] .premium-dashboard-intro {
+    margin: 0;
+    padding: 0 0 15px;
+    border-bottom: 1px solid rgba(190,215,235,.22);
+  }
+  .premium-dashboard-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+  }
+  .premium-dashboard-kicker {
+    display: inline-block;
+    margin-bottom: 8px;
+    color: #65e0b6;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .13em;
+  }
+  .premium-dashboard-live-label {
+    flex: 0 0 auto;
+    padding: 8px 11px;
+    border: 1px solid #41627b;
+    border-radius: 999px;
+    color: #c7e4e0;
+    font-size: 11px;
   }
   body[data-freedom-stage="workspace"] [data-view-panel="dashboard"] > .section-heading h2 {
-    color: #f7fbff;
-    letter-spacing: -.025em;
+    margin: 0;
+    color: #fff;
+    font-size: clamp(28px,3vw,42px);
+    line-height: 1.12;
+    letter-spacing: -.035em;
   }
   body[data-freedom-stage="workspace"] [data-view-panel="dashboard"] > .section-heading p {
-    color: #c4d4e5;
+    margin: 9px 0 0;
+    color: #c4d6e5;
+    font-size: clamp(13px,1.4vw,16px);
+  }
+  body[data-freedom-stage="workspace"] #dashboardSimplified {
+    margin-top: 0;
+    min-width: 0;
+  }
+  body[data-freedom-stage="workspace"] #dashboardSimplified .dashboard-simplified-grid {
+    gap: 12px;
   }
   body[data-freedom-stage="workspace"] #dashboardSimplified .dashboard-compact-card {
-    background: linear-gradient(155deg,#1b3450,#12253d);
-    border: 1px solid #38516a;
-    box-shadow: 0 10px 24px rgba(0,0,0,.12);
-    color: #f3f7fc;
+    background: linear-gradient(160deg,#1a3752,#142a43);
+    border: 1px solid #3b5971;
+    border-radius: 16px;
+    box-shadow: 0 8px 22px rgba(0,0,0,.12);
+    color: #f6faff;
+    min-width: 0;
   }
-  body[data-freedom-stage="workspace"] #dashboardSimplified .dashboard-compact-card :is(h3,h4,strong) {
-    color: #f6fbff;
-  }
-  body[data-freedom-stage="workspace"] #dashboardSimplified .dashboard-compact-card :is(p,small,.field-help,.metric-label) {
-    color: #c5d4e3;
-  }
+  body[data-freedom-stage="workspace"] #dashboardSimplified .dashboard-compact-card :is(h3,h4,strong) { color: #fff; }
+  body[data-freedom-stage="workspace"] #dashboardSimplified .dashboard-compact-card :is(p,small,.metric-label,.field-help) { color: #c9d8e7; }
   body[data-freedom-stage="workspace"] #dashboardSimplified :is(.summary-tile,.metric-card,.mini-card) {
-    background: #213a55;
-    border-color: #405c77;
-    color: #f3f7fc;
-  }
-  body[data-freedom-stage="workspace"] #dashboardSimplified :is(.summary-tile,.metric-card,.mini-card) :is(strong,span,p,small) {
-    color: inherit;
-  }
-  body[data-freedom-stage="workspace"] #dashboardSimplified .btn {
-    min-height: 44px;
+    background: #203d58;
+    border: 1px solid #46637b;
     border-radius: 12px;
+    color: #f7faff;
+    min-width: 0;
   }
-  /* Details and financial charts stay light for readable forms, labels and exports. */
+  body[data-freedom-stage="workspace"] #dashboardSimplified :is(.summary-tile,.metric-card,.mini-card) :is(span,strong,small,p) { color: inherit; }
+  body[data-freedom-stage="workspace"] #dashboardSimplified :is(.summary-tile,.metric-card,.mini-card) strong {
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+  }
   body[data-freedom-stage="workspace"] [data-view-panel="dashboard"] > #dashboardDetails {
+    margin-top: 0;
     background: #fff;
-    color: #14263e;
-    border: 1px solid #d9e2ed;
-    border-radius: 18px;
+    color: #152b42;
+    border: 1px solid #d9e4ef;
+    border-radius: 15px;
     overflow: hidden;
   }
   body[data-freedom-stage="workspace"] [data-view-panel="dashboard"] > #dashboardDetails > summary {
-    color: #17324d;
-    background: #f7fafc;
+    padding: 16px;
+    color: #17334e;
+    background: #f5f9fc;
+    font-weight: 750;
   }
   body[data-freedom-stage="workspace"] [data-view-panel="dashboard"] > #dashboardDetails .dashboard-detail-content {
-    color: #172c42;
+    color: #152b42;
     background: #fff;
   }
+  body[data-freedom-stage="workspace"] .premium-trajectory { margin: 0 !important; }
+  body[data-freedom-stage="workspace"] .premium-trajectory-content { padding-top: 6px; }
 }
 @media screen and (max-width: 760px) {
   body[data-freedom-stage="workspace"] [data-view-panel="dashboard"] {
-    border-radius: 18px;
     padding: 14px;
-    overflow-wrap: anywhere;
+    gap: 10px;
+    border-radius: 16px;
   }
-  body[data-freedom-stage="workspace"] #dashboardSimplified .dashboard-compact-card {
-    padding: 16px;
-  }
-  body[data-freedom-stage="workspace"] [data-view-panel="dashboard"] > .section-heading h2 {
-    font-size: clamp(26px,7vw,38px);
-    line-height: 1.12;
-  }
+  .premium-dashboard-heading { display: block; }
+  .premium-dashboard-live-label { display: inline-block; margin-top: 12px; }
+  body[data-freedom-stage="workspace"] #dashboardSimplified .dashboard-compact-card { padding: 14px; }
+  body[data-freedom-stage="workspace"] #dashboardSimplified .dashboard-snapshot-grid { gap: 8px; }
 }
 @media print {
   body[data-freedom-stage="workspace"] [data-view-panel="dashboard"],
   body[data-freedom-stage="workspace"] #dashboardSimplified .dashboard-compact-card {
+    color: #152b42 !important;
     background: #fff !important;
-    color: #172c42 !important;
     box-shadow: none !important;
   }
+  .premium-dashboard-kicker,.premium-dashboard-live-label { color: #152b42 !important; }
 }
