@@ -1,0 +1,66 @@
+/* Stage 1c: visible wealth trajectory reuses the original netWorthChart node,
+   with its existing chart renderer and financial assumptions unchanged. */
+@media screen {
+  body[data-freedom-stage="workspace"] .premium-trajectory {
+    margin-top: 16px;
+    border: 1px solid #37516d;
+    border-radius: 18px;
+    padding: clamp(14px,2vw,22px);
+    background: linear-gradient(145deg,#172f49,#10243b);
+    color: #f5f9ff;
+    min-width: 0;
+  }
+  .premium-trajectory-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .premium-trajectory-heading h3 {
+    margin: 4px 0;
+    color: #fff;
+    font-size: clamp(19px,2.2vw,26px);
+    line-height: 1.2;
+  }
+  .premium-trajectory-heading p { margin: 0; color: #c1d2e3; font-size: 13px; }
+  .premium-trajectory-heading .premium-eyebrow {
+    color: #60ddb3;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .12em;
+  }
+  .premium-trajectory-note {
+    border: 1px solid #48647f;
+    border-radius: 999px;
+    padding: 6px 10px;
+    color: #d7e6f4;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  .premium-trajectory-chart {
+    padding: 10px;
+    border-radius: 14px;
+    background: #fff;
+    color: #162c43;
+    overflow: hidden;
+  }
+  .premium-trajectory-chart > .card {
+    padding: clamp(8px,1.5vw,16px);
+    border: 0;
+    border-radius: 10px;
+    box-shadow: none;
+    background: #fff;
+  }
+  .premium-trajectory-chart .chart { display: block; width: 100%; max-width: 100%; height: auto; }
+}
+@media screen and (max-width: 520px) {
+  .premium-trajectory-heading { display: block; }
+  .premium-trajectory-note { display: inline-block; margin-top: 9px; }
+  .premium-trajectory-chart { padding: 4px; }
+  .premium-trajectory-chart > .card { padding: 6px; }
+}
+@media print {
+  .premium-trajectory, .premium-trajectory-chart { background: #fff !important; color: #172c42 !important; box-shadow: none !important; }
+  .premium-trajectory-heading h3, .premium-trajectory-heading p { color: #172c42 !important; }
+}
