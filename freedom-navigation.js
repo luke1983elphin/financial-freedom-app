@@ -54,7 +54,7 @@
       const context=getContext();
       document.body.dataset.freedomStage=mode;document.body.dataset.freedomFuture=future;document.body.dataset.freedomSample=String(context.isDemo);
       home.classList.toggle('hidden',mode!=='welcome');workspace.classList.toggle('hidden',mode==='welcome');
-      if(mode==='welcome'){document.getElementById('introSampleActions').classList.toggle('hidden',welcomeSaved);document.getElementById('continuePanel').classList.toggle('hidden',!welcomeSaved);}
+      if(mode==='welcome'){document.getElementById('introSampleActions').classList.remove('hidden');document.getElementById('continuePanel').classList.toggle('hidden',!welcomeSaved);}
       sections.forEach(section=>{
         const heading=document.querySelector(`[data-view-panel="${section.view}"] > .section-heading`);
         if(heading){heading.querySelector('h2').textContent=section.label;heading.querySelector('p').textContent=section.subtitle;}
@@ -94,8 +94,10 @@
     function start(){
       started=true;
       const policy=['#privacy','#terms'].includes(root.location.hash);
-      if(getContext().returning){const route=routeFromHash(root.location.hash)||{view:'dashboard',future:'retirement'};follow(route);record(route.view,true,policy);}
-      else {mode='welcome';sync();record('welcome',true,policy);}
+      // Always open on the welcome page, even when a saved plan exists.
+      // The existing Continue, Start My Plan and sample actions remain available.
+      welcomeSaved=hasSavedPlan();
+      mode='welcome';sync();record('welcome',true,policy);
     }
     return {sync,onView,retirement,start,get restoring(){return restoring;}};
   }
