@@ -86,6 +86,38 @@
     for (const sheet of tables.slice(1)) overview.rows.push([cell(sheet.name), { formula: `HYPERLINK("#'${sheet.name}'!A1","Open worksheet")`, style: 7 }]);
     return tables;
   }
-  function bytes(captured) { return global.FFSWeeklyPlannerExport.createSupportBytes(retirementTables(captured)); }
-  global.FFSCalculationSupport = { capture, retirementTables, bytes };
+  function growthTables(captured) {
+    const { scenarios, settings } = captured.data;
+    const overview = table('Overview', ['Calculation support', 'Value'], [['Export ID', captured.id], ['Area', 'Growth Scenarios'], ['Selected year', settings.year], ['Dollar basis', settings.basis], ['Units', 'AUD balances at annual close; rates are percentages unless identified as decimal'], ['Coverage', 'Lower, Base and Higher from the exact displayed session. Annual engine balances are nominal; conversion is separate.']]);
+    const inputs = table('Inputs and overrides', ['Scenario', 'Source', 'Setting', 'Value']);
+    const annual = table('Annual balances', ['Scenario', 'Year', 'Age', 'Investments', 'Super', 'Home equity', 'Investment property equity', 'Other net assets or liabilities', 'Calculated net worth', 'Engine net worth', 'Difference']);
+    const conversion = table('Dollar conversion', ['Scenario', 'Year', 'Reference / figure', 'Nominal AUD', 'Inflation decimal', 'Today’s Dollars', 'Selected basis', 'Displayed AUD', 'Rounding difference']);
+    const reconcile = table('Selected year', ['Reference', 'Figure', 'Scenario', 'Period', 'Units', 'Source / rule', 'Engine nominal', 'Display basis value', 'Table / chart display', 'Difference']);
+    const detail = table('Engine detail', ['Scenario', 'Source path', 'Value']);
+    const notes = table('Review notes', ['Review level', 'Scope / status'], [['Arithmetic reconciles', 'Annual balances: sum the four reported asset categories plus other net assets/liabilities and compare with captured engine net worth. Residual assets/liabilities are engine supplied, not an independent benchmark.'], ['Independently benchmarked', 'Not claimed; no independent benchmark attached.'], ['Professionally reviewed', 'Not reviewed.'], ['Engine-supplied estimates', 'Investment/super compounding, contributions, property debt schedules, tax and plan-linked retirement calculations are engine supplied. Captured projection schedules identify their retained workings.'], ['Dollar conversion', 'Nominal / (1 + saved inflation decimal)^projection year. Selected-year rows reconcile the same value used for table, mobile cards and net-worth chart.'], ['Overrides', 'Each scenario records both requested rates/includeOverrides and the fully resolved cloned plan. Fixed asset overrides stay fixed unless explicitly included; zero overrides are preserved.']]);
+    const fields = [['investments', 'Investments'], ['super', 'Super'], ['home', 'Home equity'], ['property', 'Investment property equity'], ['netWorth', 'Total net worth']];
+    for (const scenario of scenarios) {
+      for (const [path, value] of flatten({ requested: scenario.requested, resolvedPlan: scenario.plan })) inputs.rows.push(row([scenario.name, 'Current plan with session-only growth assumptions', path, value]));
+      for (const [path, value] of flatten(scenario.workings)) detail.rows.push(row([scenario.name, path, value]));
+      for (const source of scenario.rows) {
+        const residual = source.netWorth - source.investments - source.super - source.home - source.property;
+        const n = annual.rows.length + 1;
+        annual.rows.push([...row([scenario.name, source.year, source.age, source.investments, source.super, source.home, source.property, residual]), formula(`SUM(D${n}:H${n})`, source.netWorth), cell(source.netWorth), formula(`J${n}-I${n}`, 0)]);
+        fields.forEach(([key, label], index) => {
+          const nominal = source[key], real = nominal / (1 + settings.inflation / 100) ** source.year;
+          const selected = settings.basis === 'today' ? real : nominal;
+          const r = conversion.rows.length + 1, ref = `GRO-0${index + 1}`;
+          conversion.rows.push([...row([scenario.name, source.year, `${ref} · ${label}`, nominal, settings.inflation / 100]), formula(`D${r}/(1+E${r})^B${r}`, real), formula(settings.basis === 'today' ? `F${r}` : `D${r}`, selected), cell(Math.round(selected)), formula(`H${r}-G${r}`, Math.round(selected) - selected)]);
+          if (source.year === settings.year) reconcile.rows.push(row([ref, label, scenario.name, `Projection year ${source.year} / age ${source.age}`, 'AUD', `rows[year=${source.year}].${key}; nominal or discounted; whole-dollar formatting`, nominal, scenario.displayed[key], scenario.formatted[key], Math.round(scenario.displayed[key]) - selected]));
+        });
+      }
+    }
+    const tables = [overview, reconcile, annual, conversion, inputs, detail, notes];
+    overview.widths = notes.widths = [32, 100]; inputs.widths = [20, 45, 75, 40]; detail.widths = [20, 85, 40];
+    reconcile.widths = [15, 35, 20, 30, 16, 70, 25, 25, 25, 25];
+    for (const sheet of tables.slice(1)) overview.rows.push([cell(sheet.name), { formula: `HYPERLINK("#'${sheet.name}'!A1","Open worksheet")`, style: 7 }]);
+    return tables;
+  }
+  function bytes(captured) { return global.FFSWeeklyPlannerExport.createSupportBytes(captured.data.area === 'growth' ? growthTables(captured) : retirementTables(captured)); }
+  global.FFSCalculationSupport = { capture, retirementTables, growthTables, bytes };
 })(globalThis);
