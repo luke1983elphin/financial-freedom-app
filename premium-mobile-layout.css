@@ -1,0 +1,124 @@
+/* Stage 1b: compact mobile navigation and premium information hierarchy.
+   Existing data-bound nodes, event listeners and forecast controls are untouched. */
+@media screen and (max-width: 1023px) {
+  #appWorkspace > .mx-auto {
+    gap: 12px;
+    padding-top: 12px;
+  }
+  #appWorkspace .workspace-nav {
+    position: relative;
+    padding: 9px 10px 10px;
+    border-radius: 16px;
+    box-shadow: 0 4px 18px rgba(15,39,66,.06);
+  }
+  #appWorkspace .workspace-nav .nav-title,
+  #appWorkspace .s3-current-screen { display: none !important; }
+  #appWorkspace .nav-primary-row {
+    display: grid;
+    grid-template-columns: repeat(4,minmax(0,1fr));
+    gap: 3px;
+    padding: 3px;
+    border-radius: 13px;
+  }
+  #appWorkspace .nav-primary-row .nav-button {
+    min-width: 0;
+    min-height: 60px;
+    padding: 7px 2px;
+    gap: 4px;
+    border-radius: 10px;
+    font-size: clamp(9px,2.5vw,12px);
+    line-height: 1.2;
+    white-space: normal;
+    text-align: center;
+  }
+  #appWorkspace .nav-primary-row .nav-button svg {
+    width: 19px;
+    height: 19px;
+    flex-shrink: 0;
+  }
+  #appWorkspace .nav-primary-row .nav-button span {
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: auto;
+  }
+  #appWorkspace #moreNavigation { margin-top: 4px; }
+  #appWorkspace #moreNavigation > summary {
+    min-height: 34px;
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+  #appWorkspace #moreNavigation:not([open]) { margin-bottom: 0; }
+  #appWorkspace .workspace-nav .dollar-basis-control {
+    margin-top: 5px;
+  }
+  #appWorkspace .workspace-nav .dollar-basis-control summary {
+    min-height: 35px;
+    font-size: 12px;
+  }
+  #appWorkspace .view-section > .section-heading {
+    margin-bottom: 12px;
+  }
+  #appWorkspace .view-section > .section-heading h2 {
+    font-size: clamp(25px,6vw,38px);
+    line-height: 1.15;
+  }
+  #appWorkspace .view-section > .section-heading p {
+    font-size: clamp(14px,3.5vw,17px);
+    line-height: 1.45;
+  }
+}
+@media screen and (max-width: 520px) {
+  #appWorkspace .nav-primary-row .nav-button {
+    min-height: 57px;
+  }
+  #appWorkspace .nav-management-grid,
+  #appWorkspace .nav-additional-tools {
+    grid-template-columns: repeat(3,minmax(0,1fr));
+    gap: 5px;
+  }
+  #appWorkspace .nav-management-grid .nav-button,
+  #appWorkspace .nav-additional-tools .nav-button {
+    min-width: 0;
+    min-height: 55px;
+    padding: 6px 3px;
+    font-size: 11px;
+    overflow-wrap: anywhere;
+  }
+  #appWorkspace .nav-management-grid .nav-button svg,
+  #appWorkspace .nav-additional-tools .nav-button svg { width: 19px; height: 19px; }
+}
+/* Dashboard: make first data cards and key figures prominent without creating
+   a second copy of financial results or introducing derived calculations. */
+@media screen {
+  body[data-freedom-stage="workspace"] [data-view-panel="dashboard"] > .section-heading {
+    padding-bottom: 13px;
+    border-bottom: 1px solid rgba(187,210,230,.18);
+  }
+  body[data-freedom-stage="workspace"] #dashboardSimplified .dashboard-simplified-grid {
+    gap: 10px;
+  }
+  body[data-freedom-stage="workspace"] #dashboardSimplified .dashboard-compact-card {
+    gap: 10px;
+    border-radius: 14px;
+  }
+  body[data-freedom-stage="workspace"] #dashboardSimplified .dashboard-compact-card h3 {
+    font-size: clamp(18px,2vw,23px);
+    line-height: 1.25;
+  }
+  body[data-freedom-stage="workspace"] #dashboardSimplified .dashboard-snapshot-grid {
+    gap: 8px;
+  }
+  body[data-freedom-stage="workspace"] #dashboardSimplified .summary-tile {
+    padding: 12px;
+    border-radius: 11px;
+  }
+  body[data-freedom-stage="workspace"] #dashboardSimplified .summary-tile strong {
+    font-size: clamp(17px,2.3vw,24px);
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+  }
+  body[data-freedom-stage="workspace"] #dashboardSimplified :is(button,a):focus-visible {
+    outline: 3px solid #5be2b6;
+    outline-offset: 2px;
+  }
+}
