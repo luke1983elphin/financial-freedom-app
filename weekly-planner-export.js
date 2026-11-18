@@ -631,7 +631,29 @@
     return new Blob([createWorkbookBytes(planner)], { type: MIME_XLSX });
   }
 
-  const api = { createWorkbookBytes, createWorkbookBlob, moneyValue };
+  // Shared browser-local XLSX packaging; callers own their report data and formulas.
+  function createSupportBytes(tables) {
+    const supportStyles = buildStylesXml().replace('<cellXfs count="10">', '<cellXfs count="11">').replace('</cellXfs>', '<xf numFmtId="0" fontId="3" fillId="3" borderId="1" xfId="0" applyFill="1" applyFont="1" applyBorder="1" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf></cellXfs>');
+    const sheets = tables.map(table => ({ name: table.name, xml: sheetXml(table.rows, {
+      cols: table.widths || Array.from({ length: Math.max(...table.rows.map(row => row.length)) }, () => 24),
+      freeze: { rows: 1, cols: 1, topLeftCell: "B2" },
+    }).replace(/<row r="(\d+)">/g, (match, index) => {
+      const cells = table.rows[Number(index) - 1];
+      const lines = Math.max(...cells.map((cell, column) => Math.ceil(String(cell?.value ?? '').length / Math.max(10, (table.widths?.[column] || 24) - 3))), 1);
+      return `<row r="${index}" ht="${Math.min(300, Math.max(Number(index) === 1 ? 48 : 24, lines * 16))}" customHeight="1">`;
+    }) }));
+    return zipFiles([
+      { name: "[Content_Types].xml", content: contentTypesXml(sheets) },
+      { name: "_rels/.rels", content: rootRelsXml() },
+      { name: "docProps/core.xml", content: corePropsXml({ generatedAtIso: new Date().toISOString() }).replace("Weekly Money Plan", "Calculation Support") },
+      { name: "docProps/app.xml", content: appPropsXml(sheets) },
+      { name: "xl/workbook.xml", content: workbookXml(sheets) },
+      { name: "xl/_rels/workbook.xml.rels", content: workbookRelsXml(sheets) },
+      { name: "xl/styles.xml", content: supportStyles },
+      ...sheets.map((sheet, i) => ({ name: `xl/worksheets/sheet${i + 1}.xml`, content: sheet.xml })),
+    ]);
+  }
+  const api = { createWorkbookBytes, createWorkbookBlob, moneyValue, createSupportBytes };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   global.FFSWeeklyPlannerExport = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);
