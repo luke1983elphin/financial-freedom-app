@@ -119,7 +119,7 @@
     const style = Number.isInteger(cell.style) ? ` s="${cell.style}"` : "";
     if (cell.formula !== undefined) {
       const cachedValue = cell.cachedValue !== undefined ? `<v>${escapeXml(cell.cachedValue)}</v>` : "";
-      return `<c r="${reference}"${style}><f>${escapeXml(cell.formula)}</f>${cachedValue}</c>`;
+      return `<c r="${reference}"${style}${typeof cell.cachedValue === "string" ? ' t="str"' : ""}><f>${escapeXml(cell.formula)}</f>${cachedValue}</c>`;
     }
     if (cell.type === "blank") return `<c r="${reference}"${style}/>`;
     if (cell.type === "number") return `<c r="${reference}"${style}><v>${asNumber(cell.value)}</v></c>`;
@@ -141,8 +141,9 @@
     const colsXml = cols.length
       ? `<cols>${cols.map((col, index) => `<col min="${index + 1}" max="${index + 1}" width="${col}" customWidth="1"/>`).join("")}</cols>`
       : "";
+    const view = options.reviewView ? ' showGridLines="0" zoomScale="90"' : "";
     const panes = options.freeze
-      ? `<sheetViews><sheetView workbookViewId="0"><pane xSplit="${options.freeze.cols || 0}" ySplit="${options.freeze.rows || 0}" topLeftCell="${options.freeze.topLeftCell || "A1"}" activePane="bottomRight" state="frozen"/><selection pane="bottomRight"/></sheetView></sheetViews>`
+      ? `<sheetViews><sheetView workbookViewId="0"${view}><pane xSplit="${options.freeze.cols || 0}" ySplit="${options.freeze.rows || 0}" topLeftCell="${options.freeze.topLeftCell || "A1"}" activePane="bottomRight" state="frozen"/><selection pane="bottomRight"/></sheetView></sheetViews>`
       : '<sheetViews><sheetView workbookViewId="0"/></sheetViews>';
     const conditional = options.conditionalFormatting || "";
     return `${XML_HEADER}
@@ -151,6 +152,7 @@
   ${panes}
   ${colsXml}
   <sheetData>${rowsXml(rows)}</sheetData>
+  ${options.filter && height > 1 ? `<autoFilter ref="${dimensions}"/>` : ""}
   ${conditional}
   <pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.2" footer="0.2"/>
   <pageSetup orientation="${options.orientation || "landscape"}" fitToWidth="1" fitToHeight="0"/>
@@ -633,15 +635,64 @@
 
   // Shared browser-local XLSX packaging; callers own their report data and formulas.
   function createSupportBytes(tables) {
-    const supportStyles = buildStylesXml().replace('<cellXfs count="10">', '<cellXfs count="11">').replace('</cellXfs>', '<xf numFmtId="0" fontId="3" fillId="3" borderId="1" xfId="0" applyFill="1" applyFont="1" applyBorder="1" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf></cellXfs>');
-    const sheets = tables.map(table => ({ name: table.name, xml: sheetXml(table.rows, {
-      cols: table.widths || Array.from({ length: Math.max(...table.rows.map(row => row.length)) }, () => 24),
-      freeze: { rows: 1, cols: 1, topLeftCell: "B2" },
-    }).replace(/<row r="(\d+)">/g, (match, index) => {
-      const cells = table.rows[Number(index) - 1];
-      const lines = Math.max(...cells.map((cell, column) => Math.ceil(String(cell?.value ?? '').length / Math.max(10, (table.widths?.[column] || 24) - 3))), 1);
-      return `<row r="${index}" ht="${Math.min(300, Math.max(Number(index) === 1 ? 48 : 24, lines * 16))}" customHeight="1">`;
-    }) }));
+    const supportFormats = [
+      // Heading, shaded text, link, decimal, AUD, rate, then shaded numbers and index heading.
+      [0, 2, 2], [0, 0, 3], [0, 4, 0], [167, 0, 0], [168, 0, 0], [169, 0, 0],
+      [167, 0, 3], [168, 0, 3], [169, 0, 3], [0, 3, 4], [1, 0, 0], [1, 0, 3],
+    ].map(([numFmtId, fontId, fillId]) =>
+      `<xf numFmtId="${numFmtId}" fontId="${fontId}" fillId="${fillId}" borderId="1" xfId="0" applyNumberFormat="1" applyFill="1" applyFont="1" applyBorder="1" applyAlignment="1"><alignment wrapText="1" vertical="center"/></xf>`).join("");
+    const supportStyles = buildStylesXml()
+      .replace('<numFmts count="3">', '<numFmts count="6">')
+      .replace('</numFmts>', () => '<numFmt numFmtId="167" formatCode="0.####;[Red]-0.####"/><numFmt numFmtId="168" formatCode="&quot;$&quot;#,##0.00;[Red]-&quot;$&quot;#,##0.00"/><numFmt numFmtId="169" formatCode="0.00%;[Red]-0.00%"/></numFmts>')
+      .replace('<fonts count="4">', '<fonts count="5">')
+      .replace('</fonts>', '<font><b/><u/><sz val="11"/><color rgb="FF165BAA"/><name val="Arial"/></font></fonts>')
+      .replace('<cellXfs count="10">', '<cellXfs count="22">')
+      .replace('</cellXfs>', supportFormats + '</cellXfs>');
+    const sheets = tables.map(table => {
+      const overview = table.name === "Overview";
+      const headers = table.rows[0].map(cell => String(cell?.value ?? ""));
+      const widths = headers.map((label, index) => Math.min(overview ? 76 : 52,
+        table.widths?.[index] || (label.length > 27 ? 27 : 21)));
+      const unitsColumn = headers.findIndex(label => /^(Units|Units \/ period|Period \/ units)$/i.test(label));
+      const rows = table.rows.map((cells, index) => cells.map((cell, column) => {
+        if (!cell) return cell;
+        const heading = headers[column] || "";
+        let style;
+        if (index === 0) style = 10;
+        else if (cell.formula?.startsWith("HYPERLINK(")) style = 12;
+        else if (overview && cells[0]?.value === "Worksheet guide") style = 19;
+        else if (cell.type === "number" || cell.formula) {
+          const rate = /inflation (decimal|rate)/i.test(heading);
+          const units = String(cells[unitsColumn]?.value ?? "");
+          const namedAmount = /AUD|balance|closing|net worth|withdrawal|surplus|income|spending|cashflow|earnings|contributions|tax|fees|medicare|stsl|pension|^opening$|^investments$|^super$|equity|net assets/i.test(heading);
+          const genericAmount = /^(Engine|Underlying|Display|Selected basis|Captured|Current Plan|Adjusted Plan|Source [12] numeric|Difference|Calculated)/i.test(heading);
+          const mixedUnits = unitsColumn >= 0;
+          const financialSchedule = ["Annual funding", "Annual balances", "Balance workings", "Dollar conversion"].includes(table.name);
+          const amount = !/reference|coverage|period|year|^age$/i.test(heading)
+            && (mixedUnits ? /^AUD\b/i.test(units) && (namedAmount || genericAmount || heading === "Value")
+              : financialSchedule && (namedAmount || genericAmount || /rounding difference/i.test(heading)));
+          const wholeNumber = /^(Calendar year|Year|Years|Projection years|Years from start|Age|Position|Selected year)$/i.test(heading);
+          const shaded = index % 2 === 0;
+          style = wholeNumber ? (shaded ? 21 : 20) : (rate ? 15 : amount ? 14 : 13) + (shaded ? 3 : 0);
+        } else style = index % 2 === 0 ? 11 : 7;
+        return { ...cell, style };
+      }));
+      const xml = sheetXml(rows, {
+        cols: widths,
+        freeze: { rows: 1, cols: 1, topLeftCell: "B2" },
+        reviewView: true,
+        filter: !overview && table.name !== "Review notes",
+      }).replace(/<row r="(\d+)">/g, (match, index) => {
+        const cells = rows[Number(index) - 1];
+        const lines = Math.max(...cells.map((cell, column) => {
+          const value = String(cell?.value ?? cell?.cachedValue ?? "");
+          return value.split("\n").reduce((sum, line) =>
+            sum + Math.max(1, Math.ceil(line.length / Math.max(8, (widths[column] || 21) - 3))), 0);
+        }), 1);
+        return `<row r="${index}" ht="${Math.min(300, Math.max(Number(index) === 1 ? 34 : 22, lines * 16 + 5))}" customHeight="1">`;
+      });
+      return { name: table.name, xml };
+    });
     return zipFiles([
       { name: "[Content_Types].xml", content: contentTypesXml(sheets) },
       { name: "_rels/.rels", content: rootRelsXml() },
