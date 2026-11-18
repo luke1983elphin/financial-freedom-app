@@ -10526,6 +10526,60 @@
   }
 
   const savedSupportCaptures = new Map();
+  const changeSupportCaptures = new Map();
+  function captureTryChange(container, currentResult, adjustedResult, changes, resolved = null) {
+    const mode = resolved ? "quick" : "detailed";
+    const sourceLabel = (resolved ? whatIfBaseSnapshot : decisionScenarioBasePlan) ? "Saved base plan" : "Current Plan";
+    const specs = resolved ? [1, 5, 10].map(year => [`Net worth after ${year} year${year === 1 ? '' : 's'}`, result => netWorthAtYear(result, year), year, "AUD"]) : [
+      ["Monthly cash surplus", result => estimatedCashflow(result) / 12, 0, "AUD/month"],
+      ["1-year net worth", result => netWorthAtYear(result, 1), 1, "AUD"],
+      ["2-year net worth", result => netWorthAtYear(result, 2), 2, "AUD"],
+      ["Long-term net worth", result => longTermNetWorth(result), currentResult.netWorthProjection.at(-1)?.year ?? 30, "AUD"],
+      ["Financial Freedom progress", result => freedomPercent(result), 0, "%"],
+      ["Taxable income estimate", result => result.taxEstimate.taxableIncomeAfterExtraSuper, 0, "AUD/year"],
+      ["Estimated income tax", result => result.taxEstimate.incomeTax, 0, "AUD/year"],
+      ["Estimated Medicare levy", result => result.taxEstimate.medicareLevy, 0, "AUD/year"],
+      ["Estimated Medicare levy surcharge", result => result.taxEstimate.medicareLevySurcharge, 0, "AUD/year"],
+      ["STSL compulsory repayment estimate", result => result.helpRepaymentEstimate.annualRepayment, 0, "AUD/year"],
+      ["Super balance in 2 years", result => superAtYear(result, 2), 2, "AUD"],
+      ["Investment balance in 2 years", result => investmentAtYear(result, 2), 2, "AUD"],
+      ["Debt balance now", result => result.totalLiabilities, 0, "AUD"],
+    ];
+    const figures = specs.map(([label, get, years, units]) => {
+      const engineCurrent = get(currentResult), engineAdjusted = get(adjustedResult);
+      const current = years ? displayedForecastAmount(engineCurrent, years, currentResult.plan?.investing?.inflationPct) : engineCurrent;
+      const adjusted = years ? displayedForecastAmount(engineAdjusted, years, adjustedResult.plan?.investing?.inflationPct) : engineAdjusted;
+      const format = value => units === '%' ? plainPercent(value) : money(value);
+      const difference = adjusted - current;
+      const ref = window.FFSCalculationSupport.savedReference(label).replace('SAV-', 'CHG-');
+      const displayDifference = units === '%' ? `${difference >= 0 ? '+' : ''}${difference.toFixed(2)} percentage points` : `${difference >= 0 ? '+' : '−'}${money(Math.abs(difference))}`;
+      return { ref, label, period: years ? `Projection year ${years}` : units.includes('/month') ? 'Monthly' : units.includes('/year') ? 'Annual' : 'Current position', years, units, engineCurrent, engineAdjusted, current, adjusted, difference, displayCurrent: format(current), displayAdjusted: format(adjusted), displayDifference, rule: years ? 'Captured engine projection balance; discount each plan using its inflation; adjusted minus current' : 'Captured engine result; adjusted minus current; monthly cash surplus divides annual cash by 12' };
+    });
+    for (const figure of figures) {
+      const labels = container.querySelectorAll('.what-if-forecast-row > strong, .summary-tile > span');
+      const labelNode = [...labels].find(node => node.firstChild?.textContent === figure.label);
+      if (labelNode) {
+        labelNode.firstChild.textContent = `${figure.ref} · ${figure.label}`;
+        if (!resolved) { const difference = document.createElement('small'); difference.textContent = `Difference: ${figure.displayDifference}`; labelNode.parentElement.append(difference); }
+      }
+    }
+    const workings = result => ({ scalarResults: Object.fromEntries(Object.entries(result).filter(([, value]) => typeof value !== 'object' && typeof value !== 'function')), tax: result.taxEstimate, stsl: result.helpRepaymentEstimate, investments: result.investmentProjection, super: result.superProjection, netWorth: result.netWorthProjection, debt: result.loan?.schedule, retirement: result.retirementProjection });
+    const cashflow = resolved ? { current: resolved.isCashflowSaving ? Number(currentResult.cashSurplusBeforeInvesting) || 0 : estimatedCashflow(currentResult), initial: resolved.isCashflowSaving ? Number(resolved.firstResult.cashSurplusBeforeInvesting) || 0 : estimatedCashflow(resolved.firstResult), annualCashflowImpact: resolved.annualCashflowImpact, investmentAbsorption: resolved.investmentAbsorption, allocatable: resolved.allocatable, finalCash: estimatedCashflow(adjustedResult), isCashflowSaving: resolved.isCashflowSaving } : null;
+    if (resolved) {
+      cashflow.displayed = [...container.querySelectorAll('.what-if-metrics > div strong')].map(node => node.textContent);
+      container.querySelectorAll('.what-if-metrics > div small').forEach((node, i) => { node.textContent = `CHG-C${i + 1} · ${node.textContent}`; });
+      container.querySelectorAll('.what-if-forecast-head > span').forEach((node, i) => { node.textContent = i ? 'Adjusted Plan' : 'Current Plan'; });
+    }
+    const captured = window.FFSCalculationSupport.capture(changeSupportCaptures.get(mode), { area: 'change', mode, figures, cashflow, changes,
+      settings: { basis: forecastDollarBasis, sourceLabel, inflationCurrent: currentResult.plan?.investing?.inflationPct, inflationAdjusted: adjustedResult.plan?.investing?.inflationPct },
+      currentPlan: currentResult.plan, adjustedPlan: adjustedResult.plan, currentWorkings: workings(currentResult), adjustedWorkings: workings(adjustedResult), initialWorkings: resolved ? workings(resolved.firstResult) : null,
+      displayedDetails: [...container.querySelectorAll('.summary-tile')].map(node => node.textContent) });
+    changeSupportCaptures.set(mode, captured);
+    const control = document.createElement('div'); control.className = 'calculation-support-controls';
+    control.innerHTML = `<p class="field-help">Current Plan${sourceLabel === 'Current Plan' ? '' : ` (${escapeHtml(sourceLabel)})`} → Adjusted Plan. Difference = Adjusted Plan minus Current Plan. Forecast basis: ${forecastDollarBasis === 'today' ? "Today’s Dollars" : "Future Dollars"}.</p><p class="field-help">Calculation support ID: <span data-change-support-id>${escapeHtml(captured.id)}</span></p><button class="btn" type="button" data-change-support="${mode}">Download calculation support (Excel)</button>`;
+    control.querySelector('button').addEventListener('click', () => downloadBlob(new Blob([window.FFSCalculationSupport.bytes(captured)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `${captured.id}.xlsx`));
+    container.append(control);
+  }
   function savedSupportSource(scenario, currentResult = null, comparison = false) {
     const type = normaliseSavedScenarioType(scenario.scenarioType);
     const sourceLabel = currentResult ? "Current plan" : type === "retirement" ? "Saved retirement scenario — historical snapshot" : "Historical snapshot";
@@ -15773,6 +15827,7 @@
         <div class="summary-grid mt-3">${technicalTiles.join("")}</div>
       </details>
     `;
+    if (window.FFSCalculationSupport) captureTryChange(summary, result, revisedResult, { requested: comparison, annualAllocation });
     } catch (error) { showScenarioInputError(summary, error, targetsHtml); }
   }
 
@@ -15881,7 +15936,8 @@
       </div>`;
     actions.innerHTML += (whatIfBaseSnapshot ? '<p class="field-help">Reviewing this scenario against its saved base plan. Your current plan is unchanged.</p>' : "") + scenarioTargetsHtml(whatIfBaseSnapshot || plan, "quick", whatIfTargets);
     try {
-    const { annualDifference, isCashflowSaving, annualCashflowImpact, investmentAbsorption, allocatable, choices, canAllocate, selection, adjustedResult } = resolveWhatIfScenario(result);
+    const resolvedSupport = resolveWhatIfScenario(result);
+    const { annualDifference, isCashflowSaving, annualCashflowImpact, investmentAbsorption, allocatable, choices, canAllocate, selection, adjustedResult } = resolvedSupport;
     const fmtDelta = amount => `${amount >= 0 ? "+" : "−"}${money(Math.abs(amount))}`;
     const forecastRow = (label, before, after) => `<div class="what-if-forecast-row"><strong>${label}</strong><span>${money(before)}</span><span>${money(after)}</span><b>${fmtDelta(after - before)}</b></div>`;
     output.innerHTML = `
@@ -15910,6 +15966,7 @@
           <p class="field-help">Remaining annual cash after your choice: ${money(estimatedCashflow(adjustedResult))}. A negative result means the revised plan may require additional funding. Unallocated cash is not automatically treated as an investment.</p>
         </div>
       </section>`;
+    if (window.FFSCalculationSupport) captureTryChange(output, result, adjustedResult, { preset: resolvedSupport.active.id, custom: resolvedSupport.active.id === 'custom' ? customWhatIf : null, baseAdjustments: resolvedSupport.baseAdjustments, finalAdjustments: resolvedSupport.allocationAdjustments, allocation: selection }, resolvedSupport);
     } catch (error) { showScenarioInputError(output, error); }
   }
 
@@ -18418,6 +18475,7 @@
         <div class="summary-grid mt-3">${technicalTiles.join("")}</div>
       </details>
     `;
+    if (window.FFSCalculationSupport) captureTryChange(summary, result, revisedResult, { requested: comparison, annualAllocation });
     } catch (error) { showScenarioInputError(summary, error, targetsHtml); }
   }
 
@@ -18507,7 +18565,8 @@
       </div>`;
     actions.innerHTML += (whatIfBaseSnapshot ? '<p class="field-help">Reviewing this scenario against its saved base plan. Your current plan is unchanged.</p>' : "") + scenarioTargetsHtml(whatIfBaseSnapshot || plan, "quick", whatIfTargets);
     try {
-    const { annualDifference, isCashflowSaving, annualCashflowImpact, investmentAbsorption, allocatable, choices, canAllocate, selection, adjustedResult } = resolveWhatIfScenario(result);
+    const resolvedSupport = resolveWhatIfScenario(result);
+    const { annualDifference, isCashflowSaving, annualCashflowImpact, investmentAbsorption, allocatable, choices, canAllocate, selection, adjustedResult } = resolvedSupport;
     const fmtDelta = amount => `${amount >= 0 ? "+" : "−"}${money(Math.abs(amount))}`;
     const forecastRow = (label, before, after, year) => {
       before = displayedForecastAmount(before, year, result.plan?.investing?.inflationPct);
@@ -18540,6 +18599,7 @@
           <p class="field-help">Remaining annual cash after your choice: ${money(estimatedCashflow(adjustedResult))}. A negative result means the revised plan may require additional funding. Unallocated cash is not automatically treated as an investment.</p>
         </div>
       </section>`;
+    if (window.FFSCalculationSupport) captureTryChange(output, result, adjustedResult, { preset: resolvedSupport.active.id, custom: resolvedSupport.active.id === 'custom' ? customWhatIf : null, baseAdjustments: resolvedSupport.baseAdjustments, finalAdjustments: resolvedSupport.allocationAdjustments, allocation: selection }, resolvedSupport);
     } catch (error) { showScenarioInputError(output, error); }
   }
 
