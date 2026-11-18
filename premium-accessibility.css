@@ -1,0 +1,61 @@
+/* Stage 1 accessibility and density pass: existing data and actions unchanged. */
+@media screen {
+  /* Observation tiles have light backgrounds, so explicitly restore dark ink.
+     Previous inherited premium white text made these unreadable. */
+  body[data-freedom-stage="workspace"] [data-view-panel="dashboard"] #dashboardSimplified .dashboard-current-action,
+  body[data-freedom-stage="workspace"] [data-view-panel="dashboard"] #dashboardSimplified .dashboard-current-action * {
+    color: #17324a;
+  }
+  body[data-freedom-stage="workspace"] [data-view-panel="dashboard"] #dashboardSimplified .dashboard-current-action {
+    background: #effaf5;
+    border-color: #8bd4b7;
+  }
+  body[data-freedom-stage="workspace"] [data-view-panel="dashboard"] #dashboardSimplified .dashboard-current-action :is(strong,.dashboard-task-button strong) {
+    color: #112b43;
+  }
+  body[data-freedom-stage="workspace"] [data-view-panel="dashboard"] #dashboardSimplified .dashboard-current-action .dashboard-task-button span {
+    color: #116847;
+  }
+  body[data-freedom-stage="workspace"] [data-view-panel="dashboard"] #dashboardSimplified .dashboard-compact-card {
+    gap: 10px;
+    padding: clamp(13px,1.5vw,19px);
+  }
+  body[data-freedom-stage="workspace"] [data-view-panel="dashboard"] #dashboardSimplified .dashboard-compact-card :is(p,small) {
+    line-height: 1.42;
+  }
+  body[data-freedom-stage="workspace"] [data-view-panel="dashboard"] #dashboardSimplified .dashboard-simplified-grid {
+    gap: 10px;
+  }
+  body[data-freedom-stage="workspace"] [data-view-panel="dashboard"] #dashboardSimplified .dashboard-snapshot-grid,
+  body[data-freedom-stage="workspace"] [data-view-panel="dashboard"] #dashboardSimplified .dashboard-future-results {
+    gap: 8px;
+  }
+  body[data-freedom-stage="workspace"] [data-view-panel="dashboard"] #dashboardSimplified .dashboard-snapshot-grid .summary-tile,
+  body[data-freedom-stage="workspace"] [data-view-panel="dashboard"] #dashboardSimplified .dashboard-future-results .summary-tile {
+    padding: 10px;
+  }
+  body[data-freedom-stage="workspace"] [data-view-panel="dashboard"] #dashboardSimplified .dashboard-task-list {
+    gap: 4px;
+  }
+  body[data-freedom-stage="workspace"] [data-view-panel="dashboard"] #dashboardSimplified .dashboard-task-list button {
+    min-height: 32px;
+    padding: 5px 7px;
+  }
+  /* Avoid horizontal clipping and mid-word wrapping in the four-section nav. */
+  #appWorkspace #sideNav .nav-primary-row .nav-primary span {
+    white-space: normal;
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: none;
+  }
+}
+@media screen and (max-width: 520px) {
+  #appWorkspace #sideNav .nav-primary-row .nav-primary {
+    font-size: clamp(10px,2.65vw,12px);
+    letter-spacing: -.02em;
+    padding: 7px 3px;
+  }
+  body[data-freedom-stage="workspace"] [data-view-panel="dashboard"] #dashboardSimplified .dashboard-compact-card h3 {
+    font-size: clamp(17px,4.4vw,21px);
+  }
+}
