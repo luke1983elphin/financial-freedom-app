@@ -327,7 +327,9 @@
 
                 <div id="dashboardSimplified" class="dashboard-simplified mt-6"></div>
 
-                <section class="premium-trajectory" aria-label="Net worth trajectory">
+                <details class="premium-trajectory" aria-label="Net worth trajectory">
+                  <summary class="premium-trajectory-toggle"><span>Wealth trajectory</span><span class="premium-trajectory-toggle-action">View chart</span></summary>
+                  <div class="premium-trajectory-content">
                   <div class="premium-trajectory-heading">
                     <div>
                       <p class="premium-eyebrow">WEALTH TRAJECTORY</p>
@@ -345,7 +347,8 @@
                     <svg id="netWorthChart" class="chart" viewBox="0 0 760 300" role="img" aria-label="Net worth over time"></svg>
                   </article>
                   </div>
-                </section>
+                </div>
+                </details>
 
                 <details id="dashboardDetails" class="dashboard-details card mt-6">
                   <summary>View Financial Details</summary>
