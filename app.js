@@ -9816,7 +9816,7 @@
     const originalOpenSnapshot = loadRetirementScenarioSnapshot;
     loadRetirementScenarioSnapshot = scenario => { openedSnapshotName = scenario?.name || "Saved retirement scenario"; return originalOpenSnapshot(scenario); };
     const originalBaseline = currentRetirementComparisonScenario;
-    currentRetirementComparisonScenario = view => ({ ...originalBaseline(view), name: String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:") ? `${openedSnapshotName || "Saved retirement scenario"} (retirement baseline)` : "Retirement baseline" });
+    currentRetirementComparisonScenario = view => ({ ...originalBaseline(view), source: String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:") ? "Saved retirement scenario — recalculated with current engine" : "current", name: String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:") ? `${openedSnapshotName || "Saved retirement scenario"} (retirement baseline)` : "Retirement baseline" });
     const originalSummary = semiRetirementComparisonSummary;
     semiRetirementComparisonSummary = (view, inputs = semiRetirementScenarioInputs) => {
       const summary = originalSummary(view, inputs), end = view.keyResults?.projectionEnd;
@@ -10516,6 +10516,79 @@
     renderSemiRetirementComparisonPrintReport = (...args) => print(...args).replace("<h1>Retirement Scenario Comparison</h1>", `<h1>Retirement Scenario Comparison</h1><p>Calculation support ID: ${escapeHtml(retirementSupportCapture?.id || "Unavailable")}</p>`);
     const annual = renderSemiRetirementAnnualProjectionHtml;
     renderSemiRetirementAnnualProjectionHtml = (...args) => annual(...args).replaceAll("Unfunded spending", "RET-01 · Annual funding gap");
+    const savedComparison = renderScenarioComparison;
+    renderScenarioComparison = (scenarios, containerId = "scenarioComparisonReport") => {
+      savedComparison(scenarios, containerId);
+      const container = document.getElementById(containerId);
+      const selected = [savedScenarioComparisonAnchorId, savedScenarioComparisonTargetId].map(id => scenarios.find(s => s.id === id));
+      if (container?.querySelector("table") && selected.every(Boolean)) attachSavedCalculationSupport(container, selected.map(s => savedSupportSource(s)), selected.map(s => s.id).join(":"));
+    };
+  }
+
+  const savedSupportCaptures = new Map();
+  function savedSupportSource(scenario, currentResult = null, comparison = false) {
+    const type = normaliseSavedScenarioType(scenario.scenarioType);
+    const sourceLabel = currentResult ? "Current plan" : type === "retirement" ? "Saved retirement scenario — historical snapshot" : "Historical snapshot";
+    const nominal = scenario.keyResultSnapshot || { rows: [] };
+    const displayed = scenario.keyResultSnapshot ? scenarioForDollarDisplay(scenario).keyResultSnapshot : { rows: [] };
+    const rate = type === "retirement" ? window.FFSDollarBasis.inflationPercent(scenario.scenarioInputSnapshot) : scenario.plan?.investing?.inflationPct;
+    const figures = [];
+    if (nominal.retirementOutcome) {
+      const original = nominal.retirementOutcome;
+      const converted = savedOutcomeForDisplay(original, scenario.scenarioInputSnapshot);
+      for (const section of retirementOutcomeSections(converted)) for (const row of section.rows) {
+        const field = section.title === "At full retirement" ? { "Accessible investments": "accessibleAtRetirement", "Superannuation": "superAtRetirement", "Retirement funding assets": "fundingAssetsAtRetirement" }[row.label] : null;
+        const capital = row.label.startsWith("Capital assets remaining");
+        const engine = field ? original[field] : capital ? original.capital?.totalNetEquity : null;
+        const value = field ? converted[field] : capital ? converted.capital?.totalNetEquity : null;
+        const year = field ? original.fullRetirement?.calendarYear : original.horizon?.calendarYear;
+        figures.push({ ref: window.FFSCalculationSupport.savedReference(section.title + ": " + row.label), label: row.label, period: year || "Retained milestone", units: field || capital ? "AUD" : "Milestone", engine, value, display: row.value, rate, years: window.FFSDollarBasis.calendarHorizon(year, scenario.scenarioInputSnapshot), rule: field || capital ? "Retained retirement outcome; optional display-only discount by saved inflation and milestone year" : "Retained milestone; no new calculation" });
+      }
+    } else {
+      const originalRows = new Map(keyResultRows(nominal).map(row => [row.label, row]));
+      for (const row of keyResultRows(displayed)) {
+        const original = originalRows.get(row.label) || {};
+        const engine = original.scenarioValue ?? original.rawValue ?? original.value ?? null;
+        const value = row.scenarioValue ?? row.rawValue ?? null;
+        const years = { "1-year net worth": 1, "2-year net worth": 2, "Long-term net worth": 30 }[row.label] ?? 0;
+        const units = /progress/i.test(row.label) ? "%" : /age/i.test(row.label) ? "Age / status" : /monthly/i.test(row.label) ? "AUD/month" : "AUD";
+        const display = comparison && typeof row.scenarioValue === "number" ? (/progress/i.test(row.label) ? plainPercent(row.scenarioValue) : money(row.scenarioValue)) : scenarioRowDisplayValue(row);
+        figures.push({ ref: window.FFSCalculationSupport.savedReference(row.label), label: row.label, period: years ? `Projection year ${years}` : /monthly/i.test(row.label) ? "Monthly" : "Snapshot date", units, engine, value, display, years, rate, rule: typeof engine === "number" ? "Retained numeric result; forecast amounts discounted only for selected Today’s Dollars basis" : "Retained text only; numeric workings unavailable" });
+      }
+    }
+    return { label: `${sourceLabel}: ${scenario.name || "Current plan"}`, name: scenario.name || "Current plan", savedAt: scenario.savedAt, version: scenario.calculationVersion || (currentResult ? CALCULATION_VERSION : null), figures,
+      inputs: { plan: scenario.plan, scenarioInputs: scenario.scenarioInputSnapshot, basePlan: scenario.basePlanSnapshot }, retained: nominal,
+      workings: currentResult ? { investments: currentResult.investmentProjection, super: currentResult.superProjection, netWorth: currentResult.netWorthProjection, cashflow: financialPlanKeyResultSnapshot(currentResult) } : null };
+  }
+
+  function attachSavedCalculationSupport(container, sources, key, inputDifferences = []) {
+    const comparison = [];
+    const rows = container.querySelectorAll(".stage2-snapshot-results > div, table tbody tr");
+    rows.forEach(item => {
+      const heading = item.querySelector("dt, th");
+      if (!heading) return;
+      const label = heading.textContent, ref = window.FFSCalculationSupport.savedReference(label);
+      const left = sources[0]?.figures.find(f => f.label === label), right = sources[1]?.figures.find(f => f.label === label);
+      const cells = item.querySelectorAll("dd, td");
+      comparison.push({ ref, label, left: left?.value ?? null, right: right?.value ?? null, leftDisplay: cells[0]?.textContent, rightDisplay: cells[1]?.textContent, units: `${left?.units || 'Retained text'} / ${left?.period || 'saved horizon'}` });
+      heading.textContent = `${ref} · ${label}`;
+      if (item.matches("div") && typeof left?.value === "number" && typeof right?.value === "number") {
+        const difference = right.value - left.value;
+        const node = document.createElement("dd");
+        const formatted = left.units === '%' ? `${difference >= 0 ? '+' : ''}${difference.toFixed(1)} percentage points` : `${difference >= 0 ? '+' : '−'}${money(Math.abs(difference))}`;
+        node.textContent = `Difference (saved minus current): ${formatted}`; item.append(node);
+      }
+    });
+    for (const li of container.querySelectorAll("li")) {
+      const figure = sources.at(-1)?.figures.find(f => li.textContent === `${f.label}: ${f.display}`);
+      if (figure) li.prepend(document.createTextNode(`${figure.ref} · `));
+    }
+    const captured = window.FFSCalculationSupport.capture(savedSupportCaptures.get(key), { area: "saved", sources, comparison, inputDifferences, settings: { basis: forecastDollarBasis } });
+    savedSupportCaptures.set(key, captured);
+    const control = document.createElement("div"); control.className = "calculation-support-controls";
+    control.innerHTML = `<p class="field-help">Calculation support ID: <span data-saved-support-id>${escapeHtml(captured.id)}</span></p><button class="btn" type="button" data-saved-support>Download calculation support (Excel)</button>${sources.some(source => !source.workings) ? '<p class="field-help">Workings unavailable for this snapshot</p>' : ''}`;
+    control.querySelector("button").addEventListener("click", () => downloadBlob(new Blob([window.FFSCalculationSupport.bytes(captured)], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), `${captured.id}.xlsx`));
+    container.append(control);
   }
 
   function renderSemiRetirementComparisonHtml(currentViewModel) {
@@ -18824,13 +18897,17 @@
       const heading = node("h3", `${compare ? "Compare with current plan" : "Saved snapshot"}: ${scenario.name || "Unnamed snapshot"}`); heading.tabIndex = -1;
       viewer.append(heading, node("p", "Read-only view. Your current plan and saved history are unchanged. Saved results retain their original calculation version and date; display values follow the page’s dollar-basis toggle."), node("p", `Saved ${scenarioDisplayDate(scenario)} · ${scenario.notes || "No notes"}`));
       const displayedSnapshot = scenario.keyResultSnapshot ? scenarioForDollarDisplay(scenario).keyResultSnapshot : { rows: [] };
+      const currentResult = compare ? calculatePlan(plan) : null;
+      const currentScenario = currentResult ? { name: "Current plan", plan, keyResultSnapshot: financialPlanKeyResultSnapshot(currentResult) } : null;
+      const supportSources = compare ? [savedSupportSource(currentScenario, currentResult), savedSupportSource(scenario, null, true)] : [savedSupportSource(scenario)];
+      let supportInputDifferences = [];
       const outcome = document.createElement("div");
       outcome.innerHTML = normaliseSavedScenarioType(scenario.scenarioType) === "retirement" ? savedRetirementOutcomeHtml(scenario.keyResultSnapshot, scenario) : keyResultsListHtml(displayedSnapshot, 100);
       viewer.append(outcome);
       if (compare) {
         const savedValue = row => row?.scenarioValue != null && typeof row.scenarioValue === "number"
           ? (/progress/i.test(row.label) ? plainPercent(row.scenarioValue) : money(row.scenarioValue)) : scenarioRowDisplayValue(row);
-        const current = keyResultRows(scenarioForDollarDisplay({plan, keyResultSnapshot: financialPlanKeyResultSnapshot(calculatePlan(plan))}).keyResultSnapshot);
+        const current = keyResultRows(scenarioForDollarDisplay(currentScenario).keyResultSnapshot);
         const saved = new Map(keyResultRows(displayedSnapshot).map(row => [row.label, row]));
         const list = document.createElement("dl"); list.className = "stage2-snapshot-results";
         for (const row of current) {
@@ -18839,10 +18916,13 @@
         viewer.append(list, node("p", "Current figures use your current plan and model. Saved figures are historical; they are not recalculated here."));
         const inputs = document.createElement("details"); inputs.append(node("summary", "Recorded plan-input differences"));
         const differences = scenario.plan ? ui.inputDifferences(PLAN_SCHEMA.migrate(CALC.clonePlan(plan)).plan, PLAN_SCHEMA.migrate(CALC.clonePlan(scenario.plan)).plan) : [];
+        supportInputDifferences = differences;
         const ul = document.createElement("ul");
         for (const diff of differences) ul.append(node("li", `${ui.inputLabel(diff.path, plan, scenario.plan)} — Current: ${valueText(diff.current)}; Saved: ${valueText(diff.saved)}`));
         inputs.append(differences.length ? ul : node("p", "No recorded plan-input differences. Snapshot names, notes and app metadata are not financial changes.")); viewer.append(inputs);
       }
+      viewer.append(node("p", supportSources.map(source => source.label).join(" · ")));
+      attachSavedCalculationSupport(viewer, supportSources, `snapshot:${id}:${compare}`, supportInputDifferences);
       const close = node("button", "Back to saved scenarios", "btn"); close.type = "button"; close.addEventListener("click", () => { viewer.hidden = true; selection = null; document.querySelector(`[data-open-scenario="${CSS.escape(id)}"]`)?.focus(); });
       const home = node("button", "Return to current plan", "btn"); home.type = "button"; home.addEventListener("click", () => showWorkspace("dashboard")); viewer.append(close, home);
       if (focus) { heading.focus({preventScroll:true}); viewer.scrollIntoView({block:"start",behavior:"smooth"}); updateSaveStatus(compare ? "Comparing stored results with your current plan. Neither plan is changed." : "Viewing historical saved results only. Current plan unchanged."); }

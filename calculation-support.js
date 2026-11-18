@@ -118,6 +118,48 @@
     for (const sheet of tables.slice(1)) overview.rows.push([cell(sheet.name), { formula: `HYPERLINK("#'${sheet.name}'!A1","Open worksheet")`, style: 7 }]);
     return tables;
   }
-  function bytes(captured) { return global.FFSWeeklyPlannerExport.createSupportBytes(captured.data.area === 'growth' ? growthTables(captured) : retirementTables(captured)); }
-  global.FFSCalculationSupport = { capture, retirementTables, growthTables, bytes };
+  function savedReference(label) {
+    let hash = 2166136261;
+    for (const char of label) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
+    return `SAV-${(hash >>> 0).toString(16).toUpperCase()}`;
+  }
+  function savedTables(captured) {
+    const { sources, settings, comparison } = captured.data;
+    const overview = table('Overview', ['Calculation support', 'Value'], [['Export ID', captured.id], ['Area', 'Saved Scenarios'], ['Display basis', settings.basis], ['Scope', 'Only the saved snapshot or comparison identified below. Historical results are not recalculated.']]);
+    const results = table('Results and reconciliation', ['Reference', 'Figure', 'Source', 'Period', 'Units', 'Calculation rule', 'Underlying retained value', 'Display basis value', 'Exact displayed value', 'Difference']);
+    const inputs = table('Inputs and assumptions', ['Source', 'Path', 'Retained value']);
+    const workings = table('Retained workings', ['Source', 'Path', 'Value']);
+    const differences = table('Financial differences', ['Input', 'Current plan', 'Saved plan']);
+    const conversion = table('Dollar conversion', ['Reference', 'Source', 'Nominal AUD', 'Inflation decimal', 'Projection years', 'Today’s Dollars', 'Selected basis value', 'Captured value', 'Difference']);
+    const comparisonSheet = table('Comparison', ['Reference', 'Figure', sources[0]?.label || 'Source 1', sources[1]?.label || 'Source 2', 'Source 1 numeric', 'Source 2 numeric', 'Difference: source 2 minus 1', 'Units / period']);
+    const notes = table('Review notes', ['Review level', 'Scope / status'], [['Arithmetic reconciles', 'Numeric comparison differences use source 2 minus source 1. Missing values remain unavailable and are never replaced by zero. Display rounding is reported separately.'], ['Independently benchmarked', 'Not claimed.'], ['Professionally reviewed', 'Not reviewed.'], ['Historical scope', 'Retained snapshots may omit annual calculations. Current engine calculations must not be substituted for missing historical workings.'], ['Engine-supplied estimates', 'Current plan workings and saved retirement outputs are supplied by their respective engines. Tax/pension algorithms and historical model rules are outside workbook coverage.'], ['Dollar basis', 'Converted forecast figures use each source’s inflation and period. Original retained values remain in the underlying-value column. Text-only historical values cannot be reliably converted.']]);
+    for (const source of sources) {
+      overview.rows.push(row([source.label, `${source.name}; saved ${source.savedAt || 'current session'}; calculation ${source.version || 'not retained'}`]));
+      for (const figure of source.figures) {
+        results.rows.push(row([figure.ref, figure.label, source.label, figure.period, figure.units, figure.rule, figure.engine, figure.value, figure.display, typeof figure.value === 'number' ? Math.round(figure.value) - figure.value : 'Not numeric / unavailable']));
+        if (typeof figure.engine === 'number' && figure.units.startsWith('AUD') && typeof figure.value === 'number') {
+          const n = conversion.rows.length + 1;
+          const rate = Number.isFinite(figure.rate) && figure.rate > -100 ? figure.rate / 100 : 0;
+          const real = figure.engine / (1 + rate) ** figure.years;
+          const selected = settings.basis === 'today' ? real : figure.engine;
+          conversion.rows.push([...row([figure.ref, source.label, figure.engine, rate, figure.years]), formula(`C${n}/(1+D${n})^E${n}`, real), formula(settings.basis === 'today' ? `F${n}` : `C${n}`, selected), cell(figure.value), formula(`H${n}-G${n}`, figure.value - selected)]);
+        }
+      }
+      for (const [path, value] of flatten(source.inputs)) inputs.rows.push(row([source.label, path, value]));
+      if (!source.workings) workings.rows.push(row([source.label, 'Coverage', 'Workings unavailable for this snapshot']));
+      for (const [path, value] of flatten(source.workings || source.retained || {})) workings.rows.push(row([source.label, path, value]));
+    }
+    for (const diff of captured.data.inputDifferences || []) differences.rows.push(row([diff.path, diff.current, diff.saved]));
+    for (const item of comparison || []) {
+      const n = comparisonSheet.rows.length + 1;
+      const numeric = typeof item.left === 'number' && typeof item.right === 'number';
+      comparisonSheet.rows.push([...row([item.ref, item.label, item.leftDisplay, item.rightDisplay, item.left, item.right]), numeric ? formula(`F${n}-E${n}`, item.right - item.left) : cell('Not comparable: value not retained'), cell(item.units)]);
+    }
+    const tables = [overview, results, comparisonSheet, conversion, inputs, workings, differences, notes];
+    overview.widths = notes.widths = [40, 100]; inputs.widths = workings.widths = [45, 80, 55]; differences.widths = [70, 50, 50]; results.widths = [22, 45, 45, 25, 20, 70, 25, 25, 45, 25]; comparisonSheet.widths = [22, 40, 50, 50, 25, 25, 30, 30];
+    for (const sheet of tables.slice(1)) overview.rows.push([cell(sheet.name), { formula: `HYPERLINK("#'${sheet.name}'!A1","Open worksheet")`, style: 7 }]);
+    return tables;
+  }
+  function bytes(captured) { return global.FFSWeeklyPlannerExport.createSupportBytes(captured.data.area === 'saved' ? savedTables(captured) : captured.data.area === 'growth' ? growthTables(captured) : retirementTables(captured)); }
+  global.FFSCalculationSupport = { capture, retirementTables, growthTables, savedTables, savedReference, bytes };
 })(globalThis);
