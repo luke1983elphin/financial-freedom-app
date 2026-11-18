@@ -9,6 +9,7 @@
   const hashes = Object.freeze({dashboard:'progress',semiretirement:'future',decision:'change',weeklyplan:'weekly',setup:'plan',assumptions:'assumptions',investments:'investments',super:'super',goals:'goals',scenarios:'scenarios',reports:'reports',progress:'financial-history'});
   function routeFromHash(hash) {
     const value=String(hash || '').replace(/^#/,'');
+    if(value==='welcome')return {view:'welcome',future:'retirement'};
     if(value==='future-growth')return {view:'semiretirement',future:'growth'};
     const view=Object.keys(hashes).find(key=>hashes[key]===value);
     return view ? {view,future:'retirement'} : null;
@@ -82,12 +83,6 @@
         else {future=route.future || 'retirement';navigate(route.view);if(future==='growth')openGrowth();}
       }finally{restoring=false;}
     }
-    document.getElementById('headerHomeLink')?.addEventListener('click',event=>{
-      // Navigate in place so the user's current plan stays loaded and unchanged.
-      event.preventDefault();
-      follow({view:'welcome'});
-      record('welcome');
-    });
     root.addEventListener('popstate',()=>{
       if(['#privacy','#terms'].includes(root.location.hash))return;
       const route=routeFromHash(root.location.hash);follow(route || {view:'welcome'});
