@@ -82,6 +82,12 @@
         else {future=route.future || 'retirement';navigate(route.view);if(future==='growth')openGrowth();}
       }finally{restoring=false;}
     }
+    document.getElementById('headerHomeLink')?.addEventListener('click',event=>{
+      // Navigate in place so the user's current plan stays loaded and unchanged.
+      event.preventDefault();
+      follow({view:'welcome'});
+      record('welcome');
+    });
     root.addEventListener('popstate',()=>{
       if(['#privacy','#terms'].includes(root.location.hash))return;
       const route=routeFromHash(root.location.hash);follow(route || {view:'welcome'});
