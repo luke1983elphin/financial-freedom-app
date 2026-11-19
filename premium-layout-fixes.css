@@ -1,0 +1,57 @@
+/* Stage 1d: fix overlapping sticky header, brand link and empty chart density. */
+#headerHomeLink,
+#headerHomeLink:link,
+#headerHomeLink:visited,
+#headerHomeLink:hover,
+#headerHomeLink:focus {
+  color: inherit;
+  text-decoration: none !important;
+}
+#headerHomeLink h1,
+#headerHomeLink .brand-kicker { text-decoration: none !important; }
+#headerHomeLink:focus-visible { outline: 3px solid #18a77c; outline-offset: 5px; border-radius: 5px; }
+@media screen {
+  .app-header { isolation: isolate; }
+  #appWorkspace { scroll-margin-top: 100px; }
+  #appWorkspace .view-section { scroll-margin-top: 100px; }
+  .premium-trajectory {
+    margin-top: 12px !important;
+    padding: 0 !important;
+    overflow: hidden;
+  }
+  .premium-trajectory-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 18px;
+    cursor: pointer;
+    list-style: none;
+    color: #f5f9ff;
+    font-weight: 800;
+    font-size: clamp(15px,2vw,19px);
+  }
+  .premium-trajectory-toggle::-webkit-details-marker { display: none; }
+  .premium-trajectory-toggle-action {
+    font-size: 12px;
+    font-weight: 600;
+    color: #65e5b7;
+    white-space: nowrap;
+  }
+  .premium-trajectory[open] .premium-trajectory-toggle-action { font-size: 0; }
+  .premium-trajectory[open] .premium-trajectory-toggle-action::after {
+    content: 'Hide chart';
+    font-size: 12px;
+  }
+  .premium-trajectory-content { padding: 0 16px 16px; }
+}
+@media screen and (max-width: 767px) {
+  .app-header { position: relative !important; top: auto !important; }
+  .app-header-shell { padding-top: 10px !important; padding-bottom: 10px !important; }
+  #appWorkspace { scroll-margin-top: 0; }
+  #appWorkspace .view-section { scroll-margin-top: 0; }
+  .premium-trajectory-content { padding: 0 10px 10px; }
+}
+@media print {
+  .premium-trajectory { display: none !important; }
+}

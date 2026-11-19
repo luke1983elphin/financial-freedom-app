@@ -7,6 +7,12 @@
     <link rel="stylesheet" href="tailwind-static.css">
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="welcome-samples.css">
+    <link rel="stylesheet" href="premium-dashboard.css">
+    <link rel="stylesheet" href="premium-mobile-layout.css">
+    <link rel="stylesheet" href="premium-trajectory.css">
+    <link rel="stylesheet" href="premium-layout-fixes.css">
+    <link rel="stylesheet" href="premium-accessibility.css">
+    <link rel="stylesheet" href="premium-structure.css">
   </head>
   <body class="bg-white text-ink antialiased">
     <div class="min-h-screen">
@@ -320,9 +326,50 @@
               </section>
 
               <section class="view-section" data-view-panel="dashboard">
-                <div class="section-heading"><h2>My Freedom Progress</h2><p>Where am I now, and how close am I to financial freedom?</p></div>
+                <div class="section-heading premium-dashboard-intro">
+                  <div class="premium-dashboard-heading">
+                    <div>
+                      <span class="premium-dashboard-kicker">YOUR FINANCIAL OVERVIEW</span>
+                      <h2>My Freedom Progress</h2>
+                      <p>See where you stand today and explore your future wealth.</p>
+                    </div>
+                    <span class="premium-dashboard-live-label">Your plan · Your assumptions</span>
+                  </div>
+                </div>
 
+                <div class="premium-dashboard-layout">
+                  <section class="premium-dashboard-primary" aria-label="Your financial position">
+                    <div class="premium-panel-heading"><span>01</span><h3>Your position and next steps</h3></div>
                 <div id="dashboardSimplified" class="dashboard-simplified mt-6"></div>
+
+                  </section>
+                  <section class="premium-dashboard-secondary" aria-label="Your wealth forecast">
+                    <div class="premium-panel-heading"><span>02</span><h3>Your wealth outlook</h3></div>
+                <details class="premium-trajectory" aria-label="Net worth trajectory" open>
+                  <summary class="premium-trajectory-toggle"><span>Wealth trajectory</span><span class="premium-trajectory-toggle-action">View chart</span></summary>
+                  <div class="premium-trajectory-content">
+                  <div class="premium-trajectory-heading">
+                    <div>
+                      <p class="premium-eyebrow">WEALTH TRAJECTORY</p>
+                      <h3>Your financial outlook</h3>
+                      <p>Based on your current Financial Plan and its forecast assumptions.</p>
+                    </div>
+                    <span class="premium-trajectory-note">Modelled projection</span>
+                  </div>
+                  <div class="premium-trajectory-chart">
+                  <article class="card">
+                    <div class="card-heading">
+                      <h3>Net worth over time</h3>
+                      <span id="netWorthNote"></span>
+                    </div>
+                    <svg id="netWorthChart" class="chart" viewBox="0 0 760 300" role="img" aria-label="Net worth over time"></svg>
+                  </article>
+                  </div>
+                </div>
+                </details>
+
+                  </section>
+                </div>
 
                 <details id="dashboardDetails" class="dashboard-details card mt-6">
                   <summary>View Financial Details</summary>
@@ -376,13 +423,6 @@
                 <div id="financialProgressDashboardCard" class="mt-4"></div>
 
                 <div class="dashboard-chart-grid mt-6 grid gap-4 xl:grid-cols-2">
-                  <article class="card">
-                    <div class="card-heading">
-                      <h3>Net worth over time</h3>
-                      <span id="netWorthNote"></span>
-                    </div>
-                    <svg id="netWorthChart" class="chart" viewBox="0 0 760 300" role="img" aria-label="Net worth over time"></svg>
-                  </article>
                   <article class="card">
                     <div class="card-heading">
                       <h3>Investment growth</h3>
