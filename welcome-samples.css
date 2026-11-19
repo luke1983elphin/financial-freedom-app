@@ -110,3 +110,13 @@
     font-weight: 500;
   }
 }
+
+/* The outer legacy disclosure duplicates the visible card-chooser button. */
+@media (max-width: 760px) {
+  #homeView #introSampleActions [data-s3-key="sample"] > summary {
+    display: none !important;
+  }
+  #homeView #introSampleActions [data-s3-key="sample"] > .s3-scope {
+    margin-top: 0;
+  }
+}
