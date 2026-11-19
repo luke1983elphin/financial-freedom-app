@@ -120,3 +120,20 @@
     margin-top: 0;
   }
 }
+
+/* Mobile welcome: only the actual sample-card chooser is visible.
+   The older outer disclosure and explanatory copy remain in the DOM for
+   existing logic but do not occupy space on mobile. */
+@media (max-width: 760px) {
+  #homeView #introSampleActions [data-s3-key="sample"] > summary,
+  #homeView #introSampleActions #samplePlanSummary {
+    display: none !important;
+  }
+  #homeView #introSampleActions [data-s3-key="sample"] > .s3-scope {
+    display: none !important;
+  }
+  #homeView #introSampleActions [data-s3-key="sample"] {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
+}
