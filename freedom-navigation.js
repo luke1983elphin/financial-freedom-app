@@ -60,6 +60,11 @@
         const heading=document.querySelector(`[data-view-panel="${section.view}"] > .section-heading`);
         if(heading){heading.querySelector('h2').textContent=section.label;heading.querySelector('p').textContent=section.subtitle;}
       });
+      // The mobile welcome page has its own sample-card chooser. Keep the
+      // enclosing legacy disclosure expanded and hide its redundant toggle.
+      // This preserves all existing sample-selection handlers.
+      const sampleDisclosure=document.querySelector('#introSampleActions [data-s3-key="sample"]');
+      if(sampleDisclosure && root.matchMedia('(max-width: 760px)').matches)sampleDisclosure.open=true;
       const sampleSummary=document.querySelector('[data-s3-key="sample"] > summary');if(sampleSummary)sampleSummary.textContent='Explore a Sample Plan';
       document.querySelector('#heroSamplePlanMenu > summary').textContent='Explore a Sample Plan';
       document.getElementById('heroDemoButton').textContent='Open selected sample';
