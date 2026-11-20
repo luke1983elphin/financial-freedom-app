@@ -1,0 +1,67 @@
+/* Desktop-only Progress refinement. Reuses existing dynamic cards and values.
+   Deliberately leaves mobile, calculations, persistence and navigation alone. */
+@media screen and (min-width: 1024px) {
+  [data-view-panel="dashboard"] > .section-heading {
+    margin-bottom: 6px;
+  }
+  [data-view-panel="dashboard"] > .section-heading h2 {
+    font-size: clamp(28px,2.4vw,36px);
+    letter-spacing: -.035em;
+    line-height: 1.1;
+  }
+  [data-view-panel="dashboard"] #dashboardSimplified {
+    gap: 14px;
+    margin-top: 16px;
+  }
+  [data-view-panel="dashboard"] #dashboardSimplified .dashboard-compact-card {
+    padding: clamp(16px,1.5vw,22px);
+    gap: 11px;
+    border-radius: 17px;
+    box-shadow: 0 8px 25px rgba(15,39,66,.045);
+  }
+  [data-view-panel="dashboard"] #dashboardSimplified .dashboard-compact-card h3 {
+    font-size: clamp(19px,1.5vw,24px);
+    line-height: 1.16;
+  }
+  [data-view-panel="dashboard"] #dashboardSimplified .dashboard-simplified-grid {
+    gap: 14px;
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    align-items: start;
+  }
+  [data-view-panel="dashboard"] #dashboardSimplified .dashboard-snapshot-grid {
+    grid-template-columns: repeat(4,minmax(0,1fr));
+    gap: 10px;
+  }
+  [data-view-panel="dashboard"] #dashboardSimplified .dashboard-future-results {
+    grid-template-columns: repeat(3,minmax(0,1fr));
+    gap: 10px;
+  }
+  [data-view-panel="dashboard"] #dashboardSimplified .dashboard-snapshot-grid .summary-tile,
+  [data-view-panel="dashboard"] #dashboardSimplified .dashboard-future-results .summary-tile {
+    padding: 14px;
+    border-radius: 13px;
+  }
+  [data-view-panel="dashboard"] #dashboardSimplified .dashboard-current-action {
+    padding: 11px 13px;
+    gap: 5px;
+  }
+  [data-view-panel="dashboard"] #dashboardSimplified .dashboard-age-control {
+    gap: 9px;
+  }
+  [data-view-panel="dashboard"] #dashboardSimplified .dashboard-action-row {
+    flex-wrap: wrap;
+  }
+  [data-view-panel="dashboard"] #dashboardDetails {
+    margin-top: 14px;
+    box-shadow: 0 8px 25px rgba(15,39,66,.045);
+  }
+  [data-view-panel="dashboard"] #dashboardDetails > summary {
+    padding: 15px 20px;
+    min-height: 54px;
+  }
+}
+@media screen and (min-width: 1024px) and (max-width: 1199px) {
+  [data-view-panel="dashboard"] #dashboardSimplified .dashboard-future-results {
+    grid-template-columns: repeat(2,minmax(0,1fr));
+  }
+}
