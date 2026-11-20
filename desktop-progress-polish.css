@@ -163,3 +163,8 @@
   body.printing-saved-scenarios [data-view-panel="scenarios"] { display:block !important; }
   body.printing-saved-scenarios [data-view-panel="scenarios"] .card { box-shadow:none !important; }
 }
+
+/* Anchor dropdown to its own trigger rather than the entire page/header. */
+.report-choice-anchor { position:relative; display:inline-flex; align-items:center; }
+.report-choice-anchor .report-choice-menu { top:calc(100% + 8px); right:0; left:auto; }
+@media (max-width:760px) { .report-choice-anchor .report-choice-menu { position:absolute; top:calc(100% + 8px); right:0; left:auto; } }
