@@ -1,0 +1,170 @@
+/* Desktop-only Progress refinement. Reuses existing dynamic cards and values.
+   Deliberately leaves mobile, calculations, persistence and navigation alone. */
+@media screen and (min-width: 1024px) {
+  [data-view-panel="dashboard"] > .section-heading {
+    margin-bottom: 6px;
+  }
+  [data-view-panel="dashboard"] > .section-heading h2 {
+    font-size: clamp(28px,2.4vw,36px);
+    letter-spacing: -.035em;
+    line-height: 1.1;
+  }
+  [data-view-panel="dashboard"] #dashboardSimplified {
+    gap: 14px;
+    margin-top: 16px;
+  }
+  [data-view-panel="dashboard"] #dashboardSimplified .dashboard-compact-card {
+    padding: clamp(16px,1.5vw,22px);
+    gap: 11px;
+    border-radius: 17px;
+    box-shadow: 0 8px 25px rgba(15,39,66,.045);
+  }
+  [data-view-panel="dashboard"] #dashboardSimplified .dashboard-compact-card h3 {
+    font-size: clamp(19px,1.5vw,24px);
+    line-height: 1.16;
+  }
+  [data-view-panel="dashboard"] #dashboardSimplified .dashboard-simplified-grid {
+    gap: 14px;
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    align-items: start;
+  }
+  [data-view-panel="dashboard"] #dashboardSimplified .dashboard-snapshot-grid {
+    grid-template-columns: repeat(4,minmax(0,1fr));
+    gap: 10px;
+  }
+  [data-view-panel="dashboard"] #dashboardSimplified .dashboard-future-results {
+    grid-template-columns: repeat(3,minmax(0,1fr));
+    gap: 10px;
+  }
+  [data-view-panel="dashboard"] #dashboardSimplified .dashboard-snapshot-grid .summary-tile,
+  [data-view-panel="dashboard"] #dashboardSimplified .dashboard-future-results .summary-tile {
+    padding: 14px;
+    border-radius: 13px;
+  }
+  [data-view-panel="dashboard"] #dashboardSimplified .dashboard-current-action {
+    padding: 11px 13px;
+    gap: 5px;
+  }
+  [data-view-panel="dashboard"] #dashboardSimplified .dashboard-age-control {
+    gap: 9px;
+  }
+  [data-view-panel="dashboard"] #dashboardSimplified .dashboard-action-row {
+    flex-wrap: wrap;
+  }
+  [data-view-panel="dashboard"] #dashboardDetails {
+    margin-top: 14px;
+    box-shadow: 0 8px 25px rgba(15,39,66,.045);
+  }
+  [data-view-panel="dashboard"] #dashboardDetails > summary {
+    padding: 15px 20px;
+    min-height: 54px;
+  }
+}
+@media screen and (min-width: 1024px) and (max-width: 1199px) {
+  [data-view-panel="dashboard"] #dashboardSimplified .dashboard-future-results {
+    grid-template-columns: repeat(2,minmax(0,1fr));
+  }
+}
+
+/* Desktop: one compact decision area, then the actual existing model chart. */
+@media screen and (min-width: 1024px) {
+  [data-view-panel="dashboard"] #dashboardSimplified .dashboard-simplified-grid {
+    display: grid;
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    gap: 14px;
+    align-items: stretch;
+  }
+  [data-view-panel="dashboard"] #dashboardSimplified .dashboard-simplified-grid > * {
+    min-width: 0;
+  }
+  [data-view-panel="dashboard"] #dashboardSimplified .dashboard-simplified-grid > .dashboard-compact-card {
+    margin: 0;
+  }
+  [data-view-panel="dashboard"] .dashboard-overview-chart {
+    margin-top: 16px;
+    padding: 20px 22px;
+    border: 1px solid #dbe5ec;
+    border-radius: 18px;
+    background: #fff;
+    box-shadow: 0 8px 25px rgba(15,39,66,.045);
+  }
+  [data-view-panel="dashboard"] .dashboard-overview-chart-heading {
+    margin-bottom: 12px;
+  }
+  [data-view-panel="dashboard"] .dashboard-overview-eyebrow {
+    margin: 0 0 4px;
+    color: #167b63;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .10em;
+  }
+  [data-view-panel="dashboard"] .dashboard-overview-chart-heading h3 {
+    margin: 0;
+    font-size: 23px;
+    color: #0d2a45;
+  }
+  [data-view-panel="dashboard"] .dashboard-overview-chart-heading p:last-child {
+    margin: 4px 0 0;
+    color: #607186;
+    font-size: 13px;
+  }
+  [data-view-panel="dashboard"] .dashboard-overview-chart > .card {
+    padding: 12px 0 0;
+    margin: 0;
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+  }
+  [data-view-panel="dashboard"] .dashboard-overview-chart .chart {
+    display: block;
+    width: 100%;
+    max-height: 290px;
+  }
+}
+@media screen and (max-width: 1023px) {
+  [data-view-panel="dashboard"] .dashboard-overview-chart {
+    margin-top: 16px;
+    padding: 14px;
+    background: #fff;
+    border: 1px solid #dbe5ec;
+    border-radius: 16px;
+  }
+  [data-view-panel="dashboard"] .dashboard-overview-chart-heading h3 { margin: 0; font-size: 20px; }
+  [data-view-panel="dashboard"] .dashboard-overview-eyebrow { color: #167b63; font-size: 11px; font-weight: 800; }
+  [data-view-panel="dashboard"] .dashboard-overview-chart-heading p:last-child { color: #607186; font-size: 13px; }
+  [data-view-panel="dashboard"] .dashboard-overview-chart > .card { padding: 8px 0; border: 0; box-shadow: none; }
+}
+
+/* Keep the legacy comparison renderer available to existing scripts, but remove its confusing UI at all widths. */
+.decision-approaches-hidden { display: none !important; }
+
+/* Report selector in the top banner */
+.report-choice-menu[hidden] { display:none !important; }
+.report-choice-menu {
+  position:absolute; right:24px; top:calc(100% - 3px); z-index:100;
+  display:flex; flex-direction:column; gap:8px; min-width:245px;
+  padding:12px; background:#fff; border:1px solid #dbe5ec;
+  border-radius:14px; box-shadow:0 14px 34px rgba(15,39,66,.16);
+}
+.report-choice-menu .btn { justify-content:flex-start; text-align:left; }
+.scenario-print-actions { display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin:14px 0 20px; }
+.scenario-print-actions span { font-size:13px; color:#64748b; }
+@media (max-width:760px) {
+  .report-choice-menu { position:fixed; left:16px; right:16px; top:110px; min-width:0; }
+}
+@media print {
+  body.printing-saved-scenarios .app-header,
+  body.printing-saved-scenarios .workspace-nav,
+  body.printing-saved-scenarios .sidebar,
+  body.printing-saved-scenarios .scenario-print-actions,
+  body.printing-saved-scenarios .scenario-legacy-save-card,
+  body.printing-saved-scenarios .scenario-filter-bar,
+  body.printing-saved-scenarios .app-legal-footer { display:none !important; }
+  body.printing-saved-scenarios [data-view-panel="scenarios"] { display:block !important; }
+  body.printing-saved-scenarios [data-view-panel="scenarios"] .card { box-shadow:none !important; }
+}
+
+/* Anchor dropdown to its own trigger rather than the entire page/header. */
+.report-choice-anchor { position:relative; display:inline-flex; align-items:center; }
+.report-choice-anchor .report-choice-menu { top:calc(100% + 8px); right:0; left:auto; }
+@media (max-width:760px) { .report-choice-anchor .report-choice-menu { position:absolute; top:calc(100% + 8px); right:0; left:auto; } }
