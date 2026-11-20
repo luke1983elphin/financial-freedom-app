@@ -2250,6 +2250,7 @@
       fullRetirement: point(full),
       accessibleAtRetirement: full?.household?.closingAccessibleInvestmentBalance ?? null,
       superAtRetirement: full?.household?.totalSuperBalance ?? null,
+      superAtHorizon: end?.household?.totalSuperBalance ?? null,
       fundingAssetsAtRetirement: full?.household?.totalInvestableAssets ?? null,
       accessibleExhaustion: depletion("closingAccessibleInvestmentBalance", view.longevity?.accessibleFundsExhausted, "totalAccessibleWithdrawal"),
       superExhaustion: depletion("totalSuperBalance", null, "totalSuperWithdrawal"),
