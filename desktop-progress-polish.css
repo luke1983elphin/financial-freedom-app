@@ -137,3 +137,29 @@
 
 /* Keep the legacy comparison renderer available to existing scripts, but remove its confusing UI at all widths. */
 .decision-approaches-hidden { display: none !important; }
+
+/* Report selector in the top banner */
+.report-choice-menu[hidden] { display:none !important; }
+.report-choice-menu {
+  position:absolute; right:24px; top:calc(100% - 3px); z-index:100;
+  display:flex; flex-direction:column; gap:8px; min-width:245px;
+  padding:12px; background:#fff; border:1px solid #dbe5ec;
+  border-radius:14px; box-shadow:0 14px 34px rgba(15,39,66,.16);
+}
+.report-choice-menu .btn { justify-content:flex-start; text-align:left; }
+.scenario-print-actions { display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin:14px 0 20px; }
+.scenario-print-actions span { font-size:13px; color:#64748b; }
+@media (max-width:760px) {
+  .report-choice-menu { position:fixed; left:16px; right:16px; top:110px; min-width:0; }
+}
+@media print {
+  body.printing-saved-scenarios .app-header,
+  body.printing-saved-scenarios .workspace-nav,
+  body.printing-saved-scenarios .sidebar,
+  body.printing-saved-scenarios .scenario-print-actions,
+  body.printing-saved-scenarios .scenario-legacy-save-card,
+  body.printing-saved-scenarios .scenario-filter-bar,
+  body.printing-saved-scenarios .app-legal-footer { display:none !important; }
+  body.printing-saved-scenarios [data-view-panel="scenarios"] { display:block !important; }
+  body.printing-saved-scenarios [data-view-panel="scenarios"] .card { box-shadow:none !important; }
+}
