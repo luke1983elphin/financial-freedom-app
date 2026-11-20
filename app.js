@@ -16073,6 +16073,7 @@
       ] },
       { title: "How long the plan lasts", rows: [exhausted("Accessible investments", outcome.accessibleExhaustion),
         exhausted("Superannuation", outcome.superExhaustion),
+        { label: `Superannuation remaining at ${horizon}`, value: Number.isFinite(Number(outcome.superAtHorizon)) && outcome.superAtHorizon !== null ? semiRetirementMoney(outcome.superAtHorizon) : "Not recorded in this saved scenario — re-save to include balance" },
         { label: `Capital assets remaining at ${horizon}`, value: outcome.capital?.debtUnknown ? "Equity unavailable — linked debt unknown" : semiRetirementMoney(outcome.capital?.totalNetEquity) } ] },
       { title: "Plan horizon", rows: outcome.firstShortfall ? [
         { label: "Retirement spending shortfall starts", value: ages(outcome.firstShortfall) },
