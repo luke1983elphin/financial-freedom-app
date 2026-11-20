@@ -168,3 +168,19 @@
 .report-choice-anchor { position:relative; display:inline-flex; align-items:center; }
 .report-choice-anchor .report-choice-menu { top:calc(100% + 8px); right:0; left:auto; }
 @media (max-width:760px) { .report-choice-anchor .report-choice-menu { position:absolute; top:calc(100% + 8px); right:0; left:auto; } }
+
+/* Scenario-specific printing; do not fall through to the financial plan print stylesheet. */
+.scenario-print-inline { margin-top:12px; }
+#saved-scenario-print-root { display:none; }
+@media print {
+  body.printing-scenario-report > *:not(#saved-scenario-print-root) { display:none !important; }
+  body.printing-scenario-report #saved-scenario-print-root {
+    display:block !important; position:static !important; width:100% !important;
+    padding:0 !important; background:#fff !important; color:#111827 !important;
+    font-size:11pt !important;
+  }
+  body.printing-scenario-report #saved-scenario-print-root h1 { font-size:20pt; margin:0 0 12px; }
+  body.printing-scenario-report #saved-scenario-print-root .card,
+  body.printing-scenario-report #saved-scenario-print-root > * { break-inside:avoid; box-shadow:none !important; }
+  body.printing-scenario-report #saved-scenario-print-root button { display:none !important; }
+}
