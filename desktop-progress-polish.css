@@ -134,3 +134,6 @@
   [data-view-panel="dashboard"] .dashboard-overview-chart-heading p:last-child { color: #607186; font-size: 13px; }
   [data-view-panel="dashboard"] .dashboard-overview-chart > .card { padding: 8px 0; border: 0; box-shadow: none; }
 }
+
+/* Keep the legacy comparison renderer available to existing scripts, but remove its confusing UI at all widths. */
+.decision-approaches-hidden { display: none !important; }
