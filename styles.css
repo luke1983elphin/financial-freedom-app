@@ -10645,3 +10645,18 @@ body[data-freedom-stage] #appWorkspace { scroll-margin-top: calc(var(--app-heade
   .welcome-features > h3 { font-size: 18px; }
   .welcome-feature-card { grid-template-columns: 36px minmax(0,1fr); gap: 12px; }
 }
+
+/* Keep the full weekly date range inside its highlighted header panel. */
+.weekly-plan-header { min-width: 0; }
+.weekly-plan-header > * { min-width: 0; }
+.weekly-plan-header-stat { min-width: 0; box-sizing: border-box; }
+@media (min-width: 760px) {
+  .weekly-plan-header { grid-template-columns: minmax(0, 1fr) minmax(240px, max-content); }
+  .weekly-plan-header-stat { width: auto; max-width: 100%; }
+}
+.weekly-plan-header-stat strong {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-size: clamp(17px, 2vw, 26px);
+  line-height: 1.25;
+}
