@@ -325,6 +325,19 @@
 
                 <div id="dashboardSimplified" class="dashboard-simplified mt-6"></div>
 
+                <section class="dashboard-overview-chart" aria-label="Wealth trajectory">
+                  <div class="dashboard-overview-chart-heading">
+                    <div><p class="dashboard-overview-eyebrow">YOUR WEALTH OUTLOOK</p><h3>How your net worth could grow</h3><p>Based on the current plan and its forecast assumptions.</p></div>
+                  </div>
+                  <article class="card">
+                    <div class="card-heading">
+                      <h3>Net worth over time</h3>
+                      <span id="netWorthNote"></span>
+                    </div>
+                    <svg id="netWorthChart" class="chart" viewBox="0 0 760 300" role="img" aria-label="Net worth over time"></svg>
+                  </article>
+                </section>
+
                 <details id="dashboardDetails" class="dashboard-details card mt-6">
                   <summary>View Financial Details</summary>
                   <div class="dashboard-detail-content mt-4">
@@ -377,13 +390,7 @@
                 <div id="financialProgressDashboardCard" class="mt-4"></div>
 
                 <div class="dashboard-chart-grid mt-6 grid gap-4 xl:grid-cols-2">
-                  <article class="card">
-                    <div class="card-heading">
-                      <h3>Net worth over time</h3>
-                      <span id="netWorthNote"></span>
-                    </div>
-                    <svg id="netWorthChart" class="chart" viewBox="0 0 760 300" role="img" aria-label="Net worth over time"></svg>
-                  </article>
+
                   <article class="card">
                     <div class="card-heading">
                       <h3>Investment growth</h3>
