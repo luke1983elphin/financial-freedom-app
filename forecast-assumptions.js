@@ -9,13 +9,13 @@
     parent[last] = value;
   };
   const fields = Object.freeze([
-    { id: "investment", key: "expectedInvestmentReturnPct", label: "Investment return", group: "essential", note: "Total annual return for investments without their own rate. Includes growth and income; individual investment settings take priority." },
-    { id: "super", key: "expectedSuperReturnPct", label: "Superannuation return", group: "essential", note: "Used for your plan's super forecast. New retirement projections start with this rate before retirement and one percentage point less afterwards, with a minimum of zero." },
-    { id: "home", key: "principalResidenceGrowthRatePct", label: "Principal residence growth", group: "essential", property: "home", note: "Growth in your home's value. Property equity is not automatically available to pay for retirement." },
-    { id: "property", key: "investmentPropertyGrowthRatePct", label: "Investment property growth", group: "essential", property: "investment", note: "Growth in property value, not rental income. An individual property's growth assumption takes priority." },
-    { id: "inflation", key: "inflationPct", label: "Inflation", group: "essential", note: "Raises future retirement spending and modelled rental cash income. Also converts future amounts into today's purchasing power." },
-    { id: "wages", key: "wageGrowthPct", label: "Wage growth", group: "advanced", note: "Used when your plan has saved retirement timing. The older wealth-building forecast keeps wages fixed." },
-    { id: "withdrawal", key: "safeWithdrawalRatePct", label: "Illustrative safe withdrawal rate", group: "advanced", note: "Estimates financial freedom targets and income illustrations; it is not a guaranteed safe rate or the detailed retirement spending rule. An entered zero uses the existing 4% fallback." }
+    { id: "investment", key: "expectedInvestmentReturnPct", label: "Investment return", group: "essential", note: "The yearly return includes growth in value and income, such as dividends. If an investment has its own rate, the app uses that rate." },
+    { id: "super", key: "expectedSuperReturnPct", label: "Superannuation return", group: "essential", note: "This is the yearly return your plan assumes for your super. In new retirement forecasts, 6.5% before retirement becomes 5.5% after retirement. The lowest rate after retirement is 0%." },
+    { id: "home", key: "principalResidenceGrowthRatePct", label: "Principal residence growth", group: "essential", property: "home", note: "How much you expect your home’s value to grow each year. Your home’s value only helps fund retirement if you free up some of that money." },
+    { id: "property", key: "investmentPropertyGrowthRatePct", label: "Investment property growth", group: "essential", property: "investment", note: "How much you expect your investment property’s value to grow each year. The app estimates rent separately and uses the property’s own growth rate if you’ve entered one." },
+    { id: "inflation", key: "inflationPct", label: "Inflation", group: "essential", note: "How much prices rise each year. The app uses this rate to estimate future retirement costs and rental income, and to show what future amounts are worth in today’s dollars." },
+    { id: "wages", key: "wageGrowthPct", label: "Wage growth", group: "advanced", note: "How much you expect pay to rise each year. Your plan applies this rate once you save your retirement timing. Until then, it keeps pay steady." },
+    { id: "withdrawal", key: "safeWithdrawalRatePct", label: "Illustrative safe withdrawal rate", group: "advanced", note: "The share of your investments you might draw each year. The app uses it to estimate your financial freedom target and potential income. It’s a guide. Entering 0% uses the 4% default." }
   ].map(Object.freeze));
   function propertyPaths(kind) {
     const names = kind === "home" ? ["principalResidenceGrowth", "homeGrowth"] : ["investmentPropertyGrowth", "propertyGrowth"];
