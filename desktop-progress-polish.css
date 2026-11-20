@@ -65,3 +65,72 @@
     grid-template-columns: repeat(2,minmax(0,1fr));
   }
 }
+
+/* Desktop: one compact decision area, then the actual existing model chart. */
+@media screen and (min-width: 1024px) {
+  [data-view-panel="dashboard"] #dashboardSimplified .dashboard-simplified-grid {
+    display: grid;
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    gap: 14px;
+    align-items: stretch;
+  }
+  [data-view-panel="dashboard"] #dashboardSimplified .dashboard-simplified-grid > * {
+    min-width: 0;
+  }
+  [data-view-panel="dashboard"] #dashboardSimplified .dashboard-simplified-grid > .dashboard-compact-card {
+    margin: 0;
+  }
+  [data-view-panel="dashboard"] .dashboard-overview-chart {
+    margin-top: 16px;
+    padding: 20px 22px;
+    border: 1px solid #dbe5ec;
+    border-radius: 18px;
+    background: #fff;
+    box-shadow: 0 8px 25px rgba(15,39,66,.045);
+  }
+  [data-view-panel="dashboard"] .dashboard-overview-chart-heading {
+    margin-bottom: 12px;
+  }
+  [data-view-panel="dashboard"] .dashboard-overview-eyebrow {
+    margin: 0 0 4px;
+    color: #167b63;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .10em;
+  }
+  [data-view-panel="dashboard"] .dashboard-overview-chart-heading h3 {
+    margin: 0;
+    font-size: 23px;
+    color: #0d2a45;
+  }
+  [data-view-panel="dashboard"] .dashboard-overview-chart-heading p:last-child {
+    margin: 4px 0 0;
+    color: #607186;
+    font-size: 13px;
+  }
+  [data-view-panel="dashboard"] .dashboard-overview-chart > .card {
+    padding: 12px 0 0;
+    margin: 0;
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+  }
+  [data-view-panel="dashboard"] .dashboard-overview-chart .chart {
+    display: block;
+    width: 100%;
+    max-height: 290px;
+  }
+}
+@media screen and (max-width: 1023px) {
+  [data-view-panel="dashboard"] .dashboard-overview-chart {
+    margin-top: 16px;
+    padding: 14px;
+    background: #fff;
+    border: 1px solid #dbe5ec;
+    border-radius: 16px;
+  }
+  [data-view-panel="dashboard"] .dashboard-overview-chart-heading h3 { margin: 0; font-size: 20px; }
+  [data-view-panel="dashboard"] .dashboard-overview-eyebrow { color: #167b63; font-size: 11px; font-weight: 800; }
+  [data-view-panel="dashboard"] .dashboard-overview-chart-heading p:last-child { color: #607186; font-size: 13px; }
+  [data-view-panel="dashboard"] .dashboard-overview-chart > .card { padding: 8px 0; border: 0; box-shadow: none; }
+}
