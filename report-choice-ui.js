@@ -3,7 +3,7 @@
   'use strict';
   const menu = document.getElementById('reportChoiceMenu');
   const exportButton = document.getElementById('exportButton');
-  const mobileExport = document.querySelector('[data-mobile-action="export"]');
+  const mobileReports = document.getElementById('mobileReportsGroup');
   const scenarioPrint = document.getElementById('printSavedScenariosButton');
   const closeMenu = () => { if (menu) menu.hidden = true; };
   const showMenu = () => { if (menu) menu.hidden = !menu.hidden; };
@@ -20,21 +20,21 @@
   if (exportButton) exportButton.addEventListener('click', (event) => {
     event.preventDefault(); event.stopImmediatePropagation(); showMenu();
   }, true);
-  if (mobileExport) mobileExport.addEventListener('click', (event) => {
-    event.preventDefault(); event.stopImmediatePropagation();
-    const sheet = document.getElementById('mobileActionMenu');
-    if (sheet) sheet.open = false;
-    showMenu();
-  }, true);
-  if (menu) menu.addEventListener('click', (event) => {
+  const chooseReport = (event) => {
     const choice = event.target.closest('[data-report-choice]');
     if (!choice) return;
+    if (mobileReports?.contains(choice)) {
+      mobileReports.open = false;
+      document.getElementById('mobileActionMenu').open = false;
+    }
     if (choice.dataset.reportChoice === 'plan') openSection('reports');
     else openSection('scenarios');
-  });
+  };
+  menu?.addEventListener('click', chooseReport);
+  mobileReports?.addEventListener('click', chooseReport);
   document.addEventListener('click', (event) => {
     if (menu && !menu.hidden && !menu.contains(event.target) &&
-      event.target !== exportButton && event.target !== mobileExport) closeMenu();
+      !exportButton?.contains(event.target)) closeMenu();
   });
   if (scenarioPrint) scenarioPrint.addEventListener('click', () => {
     document.body.classList.add('printing-saved-scenarios');

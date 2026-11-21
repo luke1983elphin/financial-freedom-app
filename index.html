@@ -66,7 +66,13 @@
                   <button type="button" role="menuitem" data-mobile-action="delete-all-data">Delete all Financial Freedom data</button>
                 </div>
               </details>
-              <button type="button" role="menuitem" data-mobile-action="export">Reports</button>
+              <details class="mobile-plan-group" id="mobileReportsGroup">
+                <summary role="button">Reports</summary>
+                <div>
+                  <button type="button" role="menuitem" data-report-choice="plan">Financial Plan Report</button>
+                  <button type="button" role="menuitem" data-report-choice="scenarios">Saved Scenarios</button>
+                </div>
+              </details>
             </div>
           </details>
           <!-- Legacy action targets required during startup. -->
