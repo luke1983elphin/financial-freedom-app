@@ -3,7 +3,7 @@
   "files": {
     "calculator.js": "77c04fef8a213cd06cd774d9e5eda333cda07cc4ba901b77a8e25245b313c65c",
     "semiRetirementProjection.js": "ab45687699a72d08cc33c1557e6b91bdd88eaebd1b3b8d2efe3316aaedd4cd97",
-    "semiRetirementUi.js": "327177b602c9f9298c8392486373e4effa2d525d61aebfeac8ab3efb8a7af6cc",
+    "semiRetirementUi.js": "f9bfa1bf57bfcce15885939e7ca8a59da6b9646b84b800a5dfd4ef0271be4758",
     "v2-data.js": "935fb66f828874f0ccc267d99d611a47113a85315cb983e45ff49390a84d8baa",
     "storage.js": "c85374d3b59ad306de5d3657d8ff44c12eb69c1f4d4e1b71228656228a4ff58d",
     "security.js": "19caa32b797a87c7ddbbe4c7352717ce1f7df52e7292a0de529449c24f7baa4b",
@@ -1392,5 +1392,10 @@
         "current": "d3d435b16bd9b9225ad070cd126eed80d01e65f789b5b9274427af3c7e08ead1"
       }
     ]
+  },
+  "issue95PropertyDeduplication": {
+    "note": "Canonical home/non-home property records suppress duplicate legacy aggregate holdings, including zero/deleted canonical entries. Old numerical fixture archived; an independent regression subtracts only the duplicated 690000/760000 property wealth and compares every other output exactly.",
+    "previous": "327177b602c9f9298c8392486373e4effa2d525d61aebfeac8ab3efb8a7af6cc",
+    "current": "f9bfa1bf57bfcce15885939e7ca8a59da6b9646b84b800a5dfd4ef0271be4758"
   }
 }

@@ -124,7 +124,7 @@
         make(
           "p",
           "",
-          "Individual total-return rates and property growth overrides stay fixed by default. Opting in copies that scenario’s investment return to explicit investments and removes applicable property overrides in its cloned plan only. Income yield, cash/reinvestment treatment, taxes and loan settings remain unchanged. Total return already includes yield. A total return below an existing income yield is rejected.",
+          "Individual total-return rates and property growth overrides stay fixed by default. Other property without a rate also keeps its existing 0% retirement fallback. Opting in applies that scenario’s rates to these fixed assets in the comparison only. Income yield, cash/reinvestment treatment, taxes and loan settings remain unchanged. Total return already includes yield. A total return below an existing income yield is rejected.",
         ),
       );
       for (const asset of root.FFSForecastAssumptions.investments(
@@ -156,7 +156,7 @@
         make(
           "p",
           "field-help",
-          "Individual asset overrides stay fixed by default. Expand the asset-rate explanation to review them, or explicitly include them in a scenario below.",
+          "Property equity can be identical across scenarios when individual growth rates or the Other property 0% fallback remain fixed. Each scenario lists the actual property rates used. Select “Apply scenario rates to fixed assets” to vary them without changing My Plan.",
         ),
       );
       panel.append(overrides);
@@ -224,7 +224,7 @@
         check.dataset.growthOverrides = name;
         check.setAttribute(
           "aria-label",
-          `${name}: include individual asset rates`,
+          `${name}: apply scenario rates to fixed assets`,
         );
         check.addEventListener("change", () => {
           scenarios[name].includeOverrides = check.checked;
@@ -233,7 +233,7 @@
         });
         label.append(
           check,
-          document.createTextNode(" Include individual asset rates"),
+          document.createTextNode(" Apply scenario rates to fixed assets"),
         );
         card.append(label);
         const error = make("p", "fa-field-error");
@@ -278,6 +278,12 @@
               ),
             );
           displayed[name] = api.display(row, inflation, basis);
+          const rates = make("ul", "growth-property-rates");
+          rates.setAttribute("aria-label", name + " effective property growth rates");
+          for (const property of result.propertyRates) {
+            rates.append(make("li", "", property.name + ": " + property.value + "% — " + property.treatment));
+          }
+          if (result.propertyRates.length) card.append(rates);
           card.append(
             make("p", "", `Year ${year} net worth`),
             make("strong", "growth-total", money(displayed[name].netWorth)),

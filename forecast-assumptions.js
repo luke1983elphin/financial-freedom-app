@@ -57,18 +57,21 @@
   function properties(plan = {}) {
     const retirement = Boolean(plan.personal?.retirementTiming?.people?.length);
     const projected = root.FFSSemiRetirementUi.buildSemiRetirementScenarioDefaults(root.FFSCalculator.clonePlan(plan), {}).draft.assets;
-    return (plan.assetItems || []).filter(asset => root.FFSCalculator.isActiveFinancialRecord(asset)
-      && root.FFSCalculator.assetCapabilities(asset.category).supportsPropertyGrowth).map(asset => {
-        const snapshot = projected.find(item=>item.id===asset.id);
-        const individual = propertyOverrideKeys(asset).length > 0;
-        const main = (asset.category === "home" ? root.FFSCalculator.principalResidenceGrowthRateForAsset(plan) : root.FFSCalculator.propertyGrowthRateForAsset(plan, asset)) * 100;
-        const supportedMainKeys = ["propertyGrowthRatePct","capitalGrowthRatePct","expectedGrowthRatePct","growthRatePct","propertyGrowthRate","capitalGrowthRate","expectedGrowthRate","growthRate"];
-        const applicable = retirement ? snapshot?.growthRateSource === "asset-specific" : asset.category !== "home" && supportedMainKeys.some(key=>own(asset,key));
-        return {id:asset.id,name:asset.name || "Property",value:Number((retirement && snapshot ? snapshot.annualGrowthRatePct : main).toFixed(10)),
-          source:applicable ? "Individual property setting" : "Plan default",canReset:individual && applicable,
-          note: individual && !applicable ? `A separate property setting is retained for retirement projections (${snapshot?.annualGrowthRatePct ?? "not available"}%). It is not used by this plan's current forecast.` : ""};
-      });
+    return projected.filter(asset => ["principal-residence", "investment-property", "other-property"].includes(asset.propertyTypeGroup)).map(snapshot => {
+      const asset = (plan.assetItems || []).find(item => item.id === snapshot.id) || {};
+      const home = snapshot.propertyTypeGroup === "principal-residence";
+      const individual = propertyOverrideKeys(asset).length > 0;
+      const main = (home ? root.FFSCalculator.principalResidenceGrowthRateForAsset(plan) : root.FFSCalculator.propertyGrowthRateForAsset(plan, asset)) * 100;
+      const supportedMainKeys = ["propertyGrowthRatePct","capitalGrowthRatePct","expectedGrowthRatePct","growthRatePct","propertyGrowthRate","capitalGrowthRate","expectedGrowthRate","growthRate"];
+      const applicable = retirement ? snapshot.growthRateSource === "asset-specific" : !home && supportedMainKeys.some(key => asset[key] != null && asset[key] !== "" && Number.isFinite(Number(asset[key])) && Number(asset[key]) >= (key.endsWith("Pct") ? -100 : -1));
+      const zeroFallback = retirement && snapshot.growthRateSource === "zero-fallback" && snapshot.propertyTypeGroup === "other-property";
+      return {id:snapshot.id,name:asset.name || snapshot.name || "Property",group:snapshot.propertyTypeGroup,openingValue:snapshot.openingValue,
+        value:Number((retirement ? snapshot.annualGrowthRatePct : main).toFixed(10)),
+        source:applicable ? "Individual property setting" : zeroFallback ? "Zero-growth fallback" : "Plan default",canReset:individual && applicable,zeroFallback,
+        note:zeroFallback ? "Other property keeps its existing 0% retirement fallback unless explicitly included in a growth scenario." : individual && !applicable ? "A separate property setting is retained for retirement projections (" + snapshot.annualGrowthRatePct + "%). It is not used by this plan's current forecast." : ""};
+    });
   }
+
   // Recognise existing fields; never add an inheritance flag or change the schema.
   function propertyOverrideKeys(asset) {
     return ["principalResidenceGrowth", "homeGrowth", "propertyGrowth", "capitalGrowth", "expectedGrowth", "growth", "assetSpecificGrowth", "annualGrowth"]

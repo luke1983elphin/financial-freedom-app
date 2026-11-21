@@ -394,6 +394,11 @@
   function projectionAssetsFromPlan(plan = {}) {
     const items = (Array.isArray(plan.assetItems) ? plan.assetItems : []).filter(item => global.FFSCalculator?.isActiveFinancialRecord?.(item) !== false);
     const propertyLike = new Set([...PROPERTY_TYPES, "vehicle"]);
+    // Canonical records own their property bucket, including zero/deleted records.
+    // Legacy aggregate balances are fallbacks, never additional holdings.
+    const canonicalProperties = Array.isArray(plan.assetItems) ? plan.assetItems : [];
+    const hasHomeRecords = canonicalProperties.some(item => propertyTypeGroup(item.category || item.type) === "principal-residence");
+    const hasNonHomeRecords = canonicalProperties.some(item => ["investment-property", "other-property"].includes(propertyTypeGroup(item.category || item.type)));
     const growthAssumptions = propertyGrowthAssumptionsFromPlan(plan);
     const detailed = items
       .filter((item) => propertyLike.has(item.category || item.type)
@@ -424,24 +429,22 @@
       })
       .filter((item) => item.openingValue > 0 || item.type === "rentalInvestmentProperty");
     if (detailed.length) {
-      const hasPrincipalResidence = detailed.some((item) => propertyTypeGroup(item.type) === "principal-residence");
-      const hasLegacyOtherProperty = detailed.some((item) => item.id === "legacy-other-property" || propertyTypeGroup(item.type) === "other-property");
-      if (!hasPrincipalResidence && nonNegative(plan.assets?.homeValue) > 0) {
+      if (!hasHomeRecords && nonNegative(plan.assets?.homeValue) > 0) {
         const resolvedGrowth = resolvePlanPropertyGrowthRatePct(plan, { type: "home" }, growthAssumptions);
         detailed.unshift({ id: "legacy-home", name: "Home", type: "home", openingValue: nonNegative(plan.assets.homeValue), annualGrowthRatePct: resolvedGrowth.ratePct, growthRateSource: resolvedGrowth.source, propertyTypeGroup: resolvedGrowth.group, includeInNetWorth: true, isAccessibleAsset: false });
       }
-      if (!hasLegacyOtherProperty && nonNegative(plan.assets?.otherPropertyValue) > 0) {
+      if (!hasNonHomeRecords && nonNegative(plan.assets?.otherPropertyValue) > 0) {
         const resolvedGrowth = resolvePlanPropertyGrowthRatePct(plan, { type: "otherProperty" }, growthAssumptions);
         detailed.push({ id: "legacy-other-property", name: "Other property", type: "otherProperty", openingValue: nonNegative(plan.assets.otherPropertyValue), annualGrowthRatePct: resolvedGrowth.ratePct, growthRateSource: resolvedGrowth.source, propertyTypeGroup: resolvedGrowth.group, includeInNetWorth: true, isAccessibleAsset: false });
       }
       return detailed;
     }
     const fallback = [];
-    if (nonNegative(plan.assets?.homeValue) > 0) {
+    if (!hasHomeRecords && nonNegative(plan.assets?.homeValue) > 0) {
       const resolvedGrowth = resolvePlanPropertyGrowthRatePct(plan, { type: "home" }, growthAssumptions);
       fallback.push({ id: "legacy-home", name: "Home", type: "home", openingValue: nonNegative(plan.assets.homeValue), annualGrowthRatePct: resolvedGrowth.ratePct, growthRateSource: resolvedGrowth.source, propertyTypeGroup: resolvedGrowth.group, includeInNetWorth: true, isAccessibleAsset: false });
     }
-    if (nonNegative(plan.assets?.otherPropertyValue) > 0) {
+    if (!hasNonHomeRecords && nonNegative(plan.assets?.otherPropertyValue) > 0) {
       const resolvedGrowth = resolvePlanPropertyGrowthRatePct(plan, { type: "otherProperty" }, growthAssumptions);
       fallback.push({ id: "legacy-other-property", name: "Other property", type: "otherProperty", openingValue: nonNegative(plan.assets.otherPropertyValue), annualGrowthRatePct: resolvedGrowth.ratePct, growthRateSource: resolvedGrowth.source, propertyTypeGroup: resolvedGrowth.group, includeInNetWorth: true, isAccessibleAsset: false });
     }
