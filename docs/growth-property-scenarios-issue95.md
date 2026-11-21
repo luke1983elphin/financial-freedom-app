@@ -1,5 +1,7 @@
 # Issue #95: property growth comparison audit
 
+Historical audit: Issue #98 subsequently made scenario property rates automatic. See [the current comparison semantics](growth-property-scenarios-issue98.md). The duplicate-property and equity corrections described here remain in effect.
+
 ## Findings
 
 Identical property equity is not, by itself, evidence that growth scenarios failed. The existing contract holds explicit asset growth overrides fixed unless the user opts in. The reported $529,857 can be reproduced under that contract; the user's private plan and screenshot totals were not accessed, so this is a synthetic reproduction rather than a claim about their exact inputs.

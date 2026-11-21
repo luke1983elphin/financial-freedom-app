@@ -52,7 +52,7 @@ function fixture(timing = false) {
       id: "rental",
       category: "rentalInvestmentProperty",
       value: 400000,
-      propertyGrowthRatePct: 4,
+      propertyGrowthRatePct: 3,
     },
   ];
   p.incomeItems = [
@@ -108,12 +108,16 @@ for (const timing of [false, true])
     assert.equal(JSON.stringify(p), before);
     assert.equal(Boolean(r.retirement), timing);
   });
-test("all sample plans preserve full unadjusted Base results", () => {
+test("sample Base preserves the saved forecast when property rates match and never mutates the plan", () => {
   for (const sample of c.FFS_DATA.samplePlans) {
     const p = plain(sample.plan),
       r = G.calculate(p, G.suggested(p).Base, forecast);
     assert.equal(r.ok, true, sample.name + JSON.stringify(r.errors));
-    assert.equal(JSON.stringify(r.result), JSON.stringify(forecast(p)));
+    const base=G.suggested(p).Base;
+    const matches=A.properties(p).every(a=>a.value===base.values[a.group==='principal-residence'?'principalResidenceGrowthRatePct':'investmentPropertyGrowthRatePct']);
+    if(matches)assert.equal(JSON.stringify(r.result), JSON.stringify(forecast(p)));
+    else assert.ok(r.propertyRates.every(a=>a.value===base.values[a.group==='principal-residence'?'principalResidenceGrowthRatePct':'investmentPropertyGrowthRatePct']));
+    assert.deepEqual(p,plain(sample.plan));
   }
 });
 test("bands are offsets to effective values, including aliases and explicit zero", () => {
@@ -135,13 +139,14 @@ test("bands are offsets to effective values, including aliases and explicit zero
 test("unchanged imported assumptions retain exact representation", () => {
   const p = fixture();
   p.assumptions = { propertyGrowthRate: 0.043, homeGrowthRatePct: 0 };
+  p.assetItems[2].propertyGrowthRatePct=4.3;
   p.investing.inflationPct = 0;
   assert.equal(
     JSON.stringify(G.overlay(p, G.suggested(p).Base).plan),
     JSON.stringify(p),
   );
 });
-test("all three overlays preserve unrelated inputs, snapshots and fixed overrides", () => {
+test("all three overlays preserve unrelated inputs, snapshots and financial-investment overrides", () => {
   const p = fixture(true);
   p.savedScenarios = [
     {
@@ -155,7 +160,6 @@ test("all three overlays preserve unrelated inputs, snapshots and fixed override
     const r = G.overlay(p, scenario);
     assert.equal(r.ok, true);
     for (const key of [
-      "assetItems",
       "incomeItems",
       "expenseItems",
       "liabilityItems",
@@ -164,6 +168,8 @@ test("all three overlays preserve unrelated inputs, snapshots and fixed override
       "downsizing",
     ])
       assert.deepEqual(plain(r.plan[key]), plain(p[key]));
+    assert.deepEqual(plain(r.plan.assetItems[0]),plain(p.assetItems[0]));
+    assert.equal(r.plan.assetItems[2].value,p.assetItems[2].value);
     assert.equal(r.plan.investing.inflationPct, p.investing.inflationPct);
   }
   assert.equal(JSON.stringify(p), before);
@@ -299,14 +305,14 @@ function propertyFixture(type, timing, override=3) {
   if(timing)p.personal.retirementTiming={people:[{id:'person1',fullRetirementAge:65,hasSemiRetirement:false,alreadyRetired:false}]};
   return p;
 }
-for(const timing of [false,true])for(const type of nonHomeTypes)test(`Issue 95: ${type}, timing=${timing}, fixed and included rates reconcile equity and total wealth`,()=>{
+for(const timing of [false,true])for(const type of nonHomeTypes)test(`Issue 95: ${type}, timing=${timing}, default scenario rates reconcile equity and total wealth`,()=>{
   const p=propertyFixture(type,timing),before=JSON.stringify(p),bands=G.suggested(p);
   const fixed=Object.values(bands).map(s=>G.calculate(p,s,forecast));
   assert.ok(fixed.every(r=>r.ok));
-  assert.equal(new Set(fixed.map(r=>r.rows.find(row=>row.year===15).property)).size,1);
-  assert.ok(fixed.every(r=>r.propertyRates.find(a=>a.id==='property').treatment==='Fixed individual rate'));
+  assert.equal(new Set(fixed.map(r=>r.rows.find(row=>row.year===15).property)).size,3);
+  assert.ok(fixed.every(r=>r.propertyRates.find(a=>a.id==='property').treatment==='Scenario rate'));
   for(const scenario of Object.values(bands)){
-    scenario.includeOverrides=true;const r=G.calculate(p,scenario,forecast);assert.equal(r.ok,true,JSON.stringify(r.errors));
+    const r=G.calculate(p,scenario,forecast);assert.equal(r.ok,true,JSON.stringify(r.errors));
     const row=r.rows.find(row=>row.year===15),rate=scenario.values.investmentPropertyGrowthRatePct;
     const expected=400000*(1+rate/100)**15-100000;
     assert.ok(Math.abs(row.property-expected)<.1,`${row.property} vs ${expected}`);
@@ -328,13 +334,14 @@ test('Issue 95: inherited rental rates respond by default for every non-home inv
   }
 });
 
-test('Issue 95: Other property zero fallback is disclosed and changes only with explicit comparison opt-in',()=>{
+test('Issue 95: Other property zero fallback remains in normal forecasts while comparisons use scenario growth',()=>{
   for(const legacyOnly of [false,true]){
     const p=propertyFixture('otherProperty',true);delete p.assetItems[0].capitalGrowthRatePct;
     if(legacyOnly){p.assetItems=[];p.liabilityItems=[];}
     const before=JSON.stringify(p),bands=G.suggested(p);
     for(const s of Object.values(bands)){
-      const fixed=G.calculate(p,s,forecast);assert.equal(fixed.propertyRates[0].value,0);assert.equal(fixed.propertyRates[0].treatment,'Fixed zero-growth fallback');
+      assert.equal(A.properties(p)[0].value,0);
+      const fixed=G.calculate(p,s,forecast);assert.equal(fixed.propertyRates[0].value,s.values.investmentPropertyGrowthRatePct);assert.equal(fixed.propertyRates[0].treatment,'Scenario rate');
       s.includeOverrides=true;const changed=G.calculate(p,s,forecast);assert.equal(changed.ok,true,JSON.stringify(changed.errors));
       assert.equal(changed.propertyRates[0].value,s.values.investmentPropertyGrowthRatePct);assert.equal(changed.propertyRates[0].treatment,'Scenario rate');
     }
@@ -379,13 +386,13 @@ test('Issue 95: full financial fixture changes are only removal of duplicated pr
   assert.deepEqual(capture(),expected);
 });
 
-test('Issue 95: explicit zero and decimal overrides stay fixed until opt-in, including home aliases',()=>{
+test('Issue 95: explicit zero and decimal overrides remain in My Plan while all property comparisons vary',()=>{
   for(const category of [...nonHomeTypes,'home','principalResidence','principal_residence']){
     const p=propertyFixture(category,true);if(['home','principalResidence','principal_residence'].includes(category)){p.assets.homeValue=400000;p.assets.otherPropertyValue=0;p.liabilityItems=[];}
     for(const settings of [{capitalGrowthRatePct:0},{capitalGrowthRate:.03}]){
       delete p.assetItems[0].capitalGrowthRatePct;delete p.assetItems[0].capitalGrowthRate;Object.assign(p.assetItems[0],settings);
       const scenario=G.suggested(p).Higher,original=JSON.stringify(p),fixed=G.calculate(p,scenario,forecast);
-      assert.equal(fixed.ok,true);assert.equal(fixed.propertyRates[0].value,settings.capitalGrowthRatePct===0?0:3);
+      assert.equal(fixed.ok,true);assert.equal(fixed.propertyRates[0].value,5);assert.equal(A.properties(p)[0].value,settings.capitalGrowthRatePct===0?0:3);
       scenario.includeOverrides=true;const varied=G.calculate(p,scenario,forecast);assert.equal(varied.ok,true);assert.equal(varied.propertyRates[0].value,5);assert.equal(JSON.stringify(p),original);
     }
   }
@@ -396,5 +403,44 @@ test('Issue 95: scenario growth leaves principal-and-interest debt schedules unc
     const p=propertyFixture('investmentProperty',timing);Object.assign(p.liabilityItems[0],{interestRatePct:6,repayment:10000,repaymentFrequency:'annually',repaymentType:'principalAndInterest'});
     const schedules=Object.values(G.suggested(p)).map(s=>{s.includeOverrides=true;const r=G.calculate(p,s,forecast);assert.equal(r.ok,true);return Array.from({length:15},(_,i)=>C.projectedDebtAtYear(r.result,i+1));});
     assert.deepEqual(schedules[0],schedules[1]);assert.deepEqual(schedules[1],schedules[2]);assert.ok(schedules[0][14]<100000);
+  }
+});
+
+test('Issue 98: Eagle Point, another investment property and land follow scenario property rates with exact matching Base parity',()=>{
+  const p=fixture(true);p.assetItems[2].name='259 Eagle Point Road';
+  p.assetItems.push({id:'land',name:'Vacant land',category:'otherProperty',value:200000,capitalGrowthRatePct:3},{id:'commercial',name:'Commercial property',category:'commercialInvestmentProperty',value:300000,capitalGrowthRatePct:3});
+  p.assets.otherPropertyValue=900000;p.assets.homeValue=800000;
+  p.liabilityItems=[{id:'loan',type:'rentalPropertyLoan',linkedAssetId:'rental',balance:100000,interestRatePct:6,repayment:10000,repaymentFrequency:'annually',termYears:30,repaymentType:'principalAndInterest'}];
+  const before=JSON.stringify(p),normal=JSON.stringify(forecast(p)),bands=G.suggested(p);
+  const base=G.calculate(p,bands.Base,forecast);assert.equal(base.ok,true);assert.equal(JSON.stringify(base.plan),before);assert.equal(JSON.stringify(base.result),normal);
+  const results=Object.values(bands).map(s=>G.calculate(p,s,forecast));
+  results.forEach((r,index)=>{assert.equal(r.ok,true);assert.ok(r.propertyRates.filter(a=>a.group!=='principal-residence').every(a=>a.value===[1,3,5][index]));assert.equal(r.plan.assetItems[0].expectedTotalReturnPct,8);});
+  const values=results.map(r=>r.rows.find(row=>row.year===15).property);assert.ok(values[0]<values[1]&&values[1]<values[2]);
+  const debt=results.map(r=>C.projectedDebtAtYear(r.result,15));assert.equal(new Set(debt).size,1);
+  const different=G.suggested(p).Higher;different.values.principalResidenceGrowthRatePct=9;different.values.expectedInvestmentReturnPct=12;
+  const separated=G.calculate(p,different,forecast);assert.equal(separated.propertyRates.find(a=>a.group==='principal-residence').value,9);assert.ok(separated.propertyRates.filter(a=>a.group!=='principal-residence').every(a=>a.value===5));
+  assert.equal(JSON.stringify(p),before);assert.equal(JSON.stringify(forecast(p)),normal);
+});
+
+test('Issue 98: financial-investment checkbox changes returns without controlling property growth',()=>{
+  const p=fixture(true),s=G.suggested(p).Higher;
+  const unchecked=G.calculate(p,s,forecast);s.includeOverrides=true;const checked=G.calculate(p,s,forecast);
+  assert.equal(unchecked.plan.assetItems[0].expectedTotalReturnPct,8);assert.equal(checked.plan.assetItems[0].expectedTotalReturnPct,10);
+  assert.deepEqual(plain(unchecked.propertyRates),plain(checked.propertyRates));
+  assert.deepEqual(plain(unchecked.result.retirementProjection.years.map(r=>r.properties)),plain(checked.result.retirementProjection.years.map(r=>r.properties)));
+  assert.equal(p.assetItems[2].propertyGrowthRatePct,3);
+});
+
+test('Issue 98: Base uses plan-wide comparison rates when saved individual property rates differ',()=>{
+  const p=fixture(true);p.assetItems[2].propertyGrowthRatePct=9;const original=JSON.stringify(p),normal=JSON.stringify(forecast(p));
+  const base=G.calculate(p,G.suggested(p).Base,forecast);assert.equal(base.ok,true);assert.equal(base.propertyRates.find(a=>a.id==='rental').value,3);
+  assert.notEqual(JSON.stringify(base.plan),original);assert.notEqual(JSON.stringify(base.result),normal);assert.equal(JSON.stringify(p),original);assert.equal(JSON.stringify(forecast(p)),normal);
+});
+
+test('Issue 98: matching Base preserves existing Other property override representations exactly',()=>{
+  for(const [key,value] of Object.entries({capitalGrowthRatePct:3,propertyGrowthRatePct:3,annualGrowthRatePct:3,assetSpecificGrowthRatePct:3,capitalGrowthRate:.03,propertyGrowthRate:.03})){
+    const p=propertyFixture('otherProperty',true);delete p.assetItems[0].capitalGrowthRatePct;p.assetItems[0][key]=value;
+    const before=JSON.stringify(p),normal=JSON.stringify(forecast(p)),r=G.calculate(p,G.suggested(p).Base,forecast);
+    assert.equal(r.ok,true);assert.equal(JSON.stringify(r.plan),before,key);assert.equal(JSON.stringify(r.result),normal,key);
   }
 });
