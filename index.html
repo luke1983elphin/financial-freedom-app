@@ -28,19 +28,15 @@
               <summary class="btn plan-menu-trigger">Plan</summary>
               <div class="plan-menu-panel">
                 <button type="button" id="planNewButton">New Plan</button>
-                <button type="button" id="planSaveButton">Save Plan</button>
-                <button type="button" id="planLoadButton">Load Plan</button>
-                <button type="button" id="planDuplicateButton">Duplicate Plan</button>
-                <button type="button" id="planExportJsonButton">Export complete backup</button>
-                <button type="button" id="planImportJsonButton">Import Plan</button>
-                <button type="button" id="planClearSavedButton">Clear Saved Plan</button>
-                <button type="button" id="deleteAllDataButton">Delete all Financial Freedom data on this device</button>
+                <button type="button" id="planExportJsonButton">Export Plan Backup</button>
+                <button type="button" id="planImportJsonButton">Import Plan Backup</button>
               </div>
             </details>
-            <div class="report-choice-anchor"><button class="btn" type="button" id="exportButton" aria-haspopup="true" aria-controls="reportChoiceMenu" aria-expanded="false">Print / Export</button>
+            <button class="btn" type="button" id="manageDataButton">Manage Data</button>
+            <div class="report-choice-anchor"><button class="btn" type="button" id="exportButton" aria-haspopup="true" aria-controls="reportChoiceMenu" aria-expanded="false">Reports</button>
             <div class="report-choice-menu" id="reportChoiceMenu" hidden aria-label="Choose a report to print or export">
               <button class="btn" type="button" data-report-choice="plan">Financial Plan Report</button>
-              <button class="btn" type="button" data-report-choice="scenarios">Saved Scenarios</button>
+              <button class="btn" type="button" data-report-choice="scenarios">Saved Retirement Scenario Reports</button>
             </div></div>
           </div>
           <details class="mobile-action-menu" id="mobileActionMenu">
@@ -55,16 +51,12 @@
                 <summary role="button">Plan</summary>
                 <div>
                   <button type="button" role="menuitem" data-mobile-action="new-plan">New Plan</button>
-                  <button type="button" role="menuitem" data-mobile-action="save-plan">Save Plan</button>
-                  <button type="button" role="menuitem" data-mobile-action="load-plan">Load Plan</button>
-                  <button type="button" role="menuitem" data-mobile-action="duplicate-plan">Duplicate Plan</button>
-                  <button type="button" role="menuitem" data-mobile-action="export-plan-json">Export complete backup</button>
-                  <button type="button" role="menuitem" data-mobile-action="import-plan-json">Import Plan</button>
-                  <button type="button" role="menuitem" data-mobile-action="clear-saved-plan">Clear Saved Plan</button>
-                  <button type="button" role="menuitem" data-mobile-action="delete-all-data">Delete all Financial Freedom data</button>
+                  <button type="button" role="menuitem" data-mobile-action="export-plan-json">Export Plan Backup</button>
+                  <button type="button" role="menuitem" data-mobile-action="import-plan-json">Import Plan Backup</button>
                 </div>
               </details>
-              <button type="button" role="menuitem" data-mobile-action="export">Print / Export</button>
+              <button type="button" role="menuitem" data-mobile-action="manage-data">Manage Data</button>
+              <button type="button" role="menuitem" data-mobile-action="export" aria-haspopup="true" aria-controls="reportChoiceMenu" aria-expanded="false">Reports</button>
             </div>
           </details>
           <input class="hidden" id="planImportJsonInput" type="file" accept="application/json,.json">
@@ -692,7 +684,7 @@
                     <input class="field-input" id="scenarioName" type="text" placeholder="e.g. Base case">
                     <label class="field-label mt-4" for="scenarioNotes">Notes</label>
                     <textarea class="field-input min-h-28" id="scenarioNotes" placeholder="Optional notes"></textarea>
-                    <button class="btn btn-primary mt-4 w-full justify-center" type="button" id="saveScenarioPanelButton">Save Plan to Saved Scenarios</button>
+                    <button class="btn btn-primary mt-4 w-full justify-center" type="button" id="saveScenarioPanelButton">Save to Saved Scenarios</button>
                   </div>
                   <div class="card">
                     <div class="mb-4 flex items-center justify-between gap-3">
@@ -791,7 +783,7 @@
                   </div>
                   <div class="report-toolbar-actions">
                     <button class="btn" type="button" data-view="progress">Track Your Progress</button>
-                    <button class="btn btn-primary" type="button" id="reportPrintButton">Print / Export</button>
+                    <button class="btn btn-primary" type="button" id="reportPrintButton">Reports</button>
                   </div>
                 </div>
 

@@ -1,6 +1,6 @@
 # Backup Coverage
 
-`Export complete backup` produces the complete local plan backup. `Export Weekly Plan Backup` is a separate Weekly Plan-only backup. A browser download being initiated does not prove the file was retained elsewhere.
+`Export Plan Backup` produces the complete local plan backup. `Export Weekly Plan Backup` is a separate Weekly Plan-only backup. A browser download being initiated does not prove the file was retained elsewhere.
 
 | Data | Complete local plan JSON | Weekly Plan JSON | Notes |
 | --- | --- | --- | --- |
@@ -20,3 +20,5 @@
 | Provider/hosting logs | NOT INCLUDED | NOT INCLUDED | Outside browser backup scope |
 
 Supported legacy full-plan payloads continue through validation and migration. Weekly backups continue through `FFSWeeklyPlan.importPayload` and `migrate`. Invalid files are rejected before replacing the current stored plan.
+
+Manage Data provides separate exports for the preserved pre-menu-update plans, using scenarios and history from that same preserved copy. Export Plan Backup covers the active plan, not those separate older plans. Export older plans before deleting browser data if you wish to keep them. The raw recovery copy is for recovery assistance and is not an importable plan backup. Reports produces printable summaries/PDFs, not restorable JSON backups.

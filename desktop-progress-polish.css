@@ -188,3 +188,10 @@
   body.printing-scenario-report #saved-scenario-print-root .scenario-card-section { break-inside:avoid; padding:10px !important; }
   body.printing-scenario-report #saved-scenario-print-root button { display:none !important; }
 }
+
+/* Reports popup stays available outside the desktop-only toolbar. */
+body > .report-choice-menu { position:fixed; right:16px; max-width:calc(100vw - 32px); }
+@media print { body > .report-choice-menu { display:none !important; } }
+
+/* Backup results stay visible when invoked from a scrolled workspace. */
+#durabilityNotice.backup-feedback { position:fixed; inset:auto 16px 16px; z-index:45; max-width:760px; max-height:40vh; overflow:auto; border-radius:14px; box-shadow:0 8px 28px rgba(15,39,66,.16); }
