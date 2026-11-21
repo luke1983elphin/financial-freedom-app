@@ -287,3 +287,114 @@ test("a rejected plan-linked scenario cannot silently fall back to legacy foreca
     /unsupported by the plan-linked retirement/,
   );
 });
+
+const nonHomeTypes = ['investmentProperty','rentalInvestmentProperty','rentalProperty','residentialInvestmentProperty','commercialInvestmentProperty','incomeProducingProperty','otherProperty'];
+function propertyFixture(type, timing, override=3) {
+  const p=plain(C.emptyPlan());Object.assign(p.personal,{person1Name:'Alex',person1Age:43,fullRetirementAge:65,targetAnnualSpending:0});
+  Object.assign(p.investing,{inflationPct:2.5,annualInvestingTarget:0});
+  p.assetItems=[{id:'property',name:'Audited property',category:type,value:400000,owner:'person1',...(override===undefined?{}:{capitalGrowthRatePct:override})}];
+  // The legacy aggregate mirrors this same canonical holding; it is not a second asset.
+  p.assets.otherPropertyValue=400000;
+  p.liabilityItems=[{id:'loan',name:'Linked loan',type:'rentalPropertyLoan',linkedAssetId:'property',balance:100000,interestRatePct:0,repayment:0,termYears:30,repaymentType:'interestOnly'}];
+  if(timing)p.personal.retirementTiming={people:[{id:'person1',fullRetirementAge:65,hasSemiRetirement:false,alreadyRetired:false}]};
+  return p;
+}
+for(const timing of [false,true])for(const type of nonHomeTypes)test(`Issue 95: ${type}, timing=${timing}, fixed and included rates reconcile equity and total wealth`,()=>{
+  const p=propertyFixture(type,timing),before=JSON.stringify(p),bands=G.suggested(p);
+  const fixed=Object.values(bands).map(s=>G.calculate(p,s,forecast));
+  assert.ok(fixed.every(r=>r.ok));
+  assert.equal(new Set(fixed.map(r=>r.rows.find(row=>row.year===15).property)).size,1);
+  assert.ok(fixed.every(r=>r.propertyRates.find(a=>a.id==='property').treatment==='Fixed individual rate'));
+  for(const scenario of Object.values(bands)){
+    scenario.includeOverrides=true;const r=G.calculate(p,scenario,forecast);assert.equal(r.ok,true,JSON.stringify(r.errors));
+    const row=r.rows.find(row=>row.year===15),rate=scenario.values.investmentPropertyGrowthRatePct;
+    const expected=400000*(1+rate/100)**15-100000;
+    assert.ok(Math.abs(row.property-expected)<.1,`${row.property} vs ${expected}`);
+    assert.equal(row.netWorth,row.property,'one canonical property, one debt, no phantom aggregate');
+    assert.equal(C.projectedDebtAtYear(r.result,15),100000);
+    assert.equal(r.propertyRates.find(a=>a.id==='property').value,rate);
+    const today=G.display(row,2.5,'today'),future=G.display(row,2.5,'future');
+    assert.equal(future.property,row.property);assert.equal(today.property,row.property/1.025**15);assert.equal(today.netWorth,today.property);
+    if(timing){assert.equal(r.result.retirementProjection.years[14].properties.length,1);assert.equal(r.result.retirementProjection.years[14].properties[0].linkedLoanClosingBalance,100000);}
+  }
+  assert.equal(JSON.stringify(p),before);
+});
+
+test('Issue 95: inherited rental rates respond by default for every non-home investment classification',()=>{
+  for(const timing of [false,true])for(const type of nonHomeTypes.filter(t=>t!=='otherProperty')){
+    const p=propertyFixture(type,timing);delete p.assetItems[0].capitalGrowthRatePct;
+    const values=Object.values(G.suggested(p)).map(s=>{const r=G.calculate(p,s,forecast);assert.equal(r.ok,true);return r.rows.find(row=>row.year===15).property;});
+    assert.ok(values[0]<values[1]&&values[1]<values[2],type);
+  }
+});
+
+test('Issue 95: Other property zero fallback is disclosed and changes only with explicit comparison opt-in',()=>{
+  for(const legacyOnly of [false,true]){
+    const p=propertyFixture('otherProperty',true);delete p.assetItems[0].capitalGrowthRatePct;
+    if(legacyOnly){p.assetItems=[];p.liabilityItems=[];}
+    const before=JSON.stringify(p),bands=G.suggested(p);
+    for(const s of Object.values(bands)){
+      const fixed=G.calculate(p,s,forecast);assert.equal(fixed.propertyRates[0].value,0);assert.equal(fixed.propertyRates[0].treatment,'Fixed zero-growth fallback');
+      s.includeOverrides=true;const changed=G.calculate(p,s,forecast);assert.equal(changed.ok,true,JSON.stringify(changed.errors));
+      assert.equal(changed.propertyRates[0].value,s.values.investmentPropertyGrowthRatePct);assert.equal(changed.propertyRates[0].treatment,'Scenario rate');
+    }
+    assert.equal(JSON.stringify(p),before);
+  }
+});
+
+test('Issue 95: removed and zero-value canonical properties do not resurrect stale legacy aggregates',()=>{
+  for(const mutate of [a=>a.value=0,a=>a.isDeleted=true]){
+    const p=propertyFixture('investmentProperty',true);p.liabilityItems=[];mutate(p.assetItems[0]);
+    const draft=U.buildSemiRetirementScenarioDefaults(p,C.calculatePlan(p)).draft;
+    assert.equal(draft.assets.filter(a=>a.propertyTypeGroup==='investment-property'||a.propertyTypeGroup==='other-property').length,0);
+  }
+});
+
+test('Issue 95: historical retirement snapshot inputs and outcomes survive corrected live property mapping',()=>{
+  const p=propertyFixture('investmentProperty',true);const saved=plain(U.buildSemiRetirementScenarioDefaults(p,C.calculatePlan(p)).draft);
+  saved.assets.push({...saved.assets[0],id:'historical-extra',name:'Historical additional holding',openingValue:12345});
+  const before=JSON.stringify(saved),outcome=JSON.stringify(U.runSemiRetirementProjection(c.FFSSemiRetirementProjection,saved));
+  p.savedScenarios=[{draft:saved}];const s=G.suggested(p).Higher;s.includeOverrides=true;const r=G.calculate(p,s,forecast);
+  assert.equal(r.ok,true);assert.equal(JSON.stringify(saved),before);assert.equal(JSON.stringify(U.runSemiRetirementProjection(c.FFSSemiRetirementProjection,saved)),outcome);
+  assert.deepEqual(plain(r.plan.savedScenarios),plain(p.savedScenarios));
+});
+
+// Independently reconcile the two previously duplicated sample-plan fixtures.
+// All other fields (including tax, pensions, debt and funding) must remain exact.
+test('Issue 95: full financial fixture changes are only removal of duplicated property wealth',async()=>{
+  const {gunzipSync}=await import('node:zlib');const {capture}=await import('../scripts/ux-stage1-parity.mjs');
+  const expected=JSON.parse(gunzipSync(readFileSync(new URL('fixtures/ux-stage1-before.pre-issue95.json.gz',import.meta.url))));
+  const adjustments={'established-family-wealth-building':690000,'pre-retirement':760000};
+  const subtract=(object,keys,value)=>keys.forEach(key=>object[key]=Math.round((object[key]-value)*100)/100);
+  const remove=assets=>assets.filter(asset=>(asset.id||asset.assetId)!=='legacy-other-property');
+  for(const fixture of expected){const value=adjustments[fixture.name];if(!value)continue;
+    fixture.records.draft.assets=remove(fixture.records.draft.assets);
+    for(const key of ['retirement','scenario']){
+      const outcome=fixture.records[key];outcome.inputs.assets=remove(outcome.inputs.assets);
+      for(const row of outcome.result.years){row.assets=remove(row.assets);row.properties=remove(row.properties);subtract(row.household,['totalPropertyValue','totalPropertyEquity','totalNetWorth'],value);}
+      subtract(outcome.result.summary,['totalPropertyValueAtEndAge','totalPropertyEquityAtEndAge','totalNetWorthAtEndAge'],value);
+      const retained=outcome.result.summary.retainedAssets;retained.assets=remove(retained.assets);subtract(retained,['totalValue','totalNetEquity'],value);
+    }
+  }
+  assert.deepEqual(capture(),expected);
+});
+
+test('Issue 95: explicit zero and decimal overrides stay fixed until opt-in, including home aliases',()=>{
+  for(const category of [...nonHomeTypes,'home','principalResidence','principal_residence']){
+    const p=propertyFixture(category,true);if(['home','principalResidence','principal_residence'].includes(category)){p.assets.homeValue=400000;p.assets.otherPropertyValue=0;p.liabilityItems=[];}
+    for(const settings of [{capitalGrowthRatePct:0},{capitalGrowthRate:.03}]){
+      delete p.assetItems[0].capitalGrowthRatePct;delete p.assetItems[0].capitalGrowthRate;Object.assign(p.assetItems[0],settings);
+      const scenario=G.suggested(p).Higher,original=JSON.stringify(p),fixed=G.calculate(p,scenario,forecast);
+      assert.equal(fixed.ok,true);assert.equal(fixed.propertyRates[0].value,settings.capitalGrowthRatePct===0?0:3);
+      scenario.includeOverrides=true;const varied=G.calculate(p,scenario,forecast);assert.equal(varied.ok,true);assert.equal(varied.propertyRates[0].value,5);assert.equal(JSON.stringify(p),original);
+    }
+  }
+});
+
+test('Issue 95: scenario growth leaves principal-and-interest debt schedules unchanged',()=>{
+  for(const timing of [false,true]){
+    const p=propertyFixture('investmentProperty',timing);Object.assign(p.liabilityItems[0],{interestRatePct:6,repayment:10000,repaymentFrequency:'annually',repaymentType:'principalAndInterest'});
+    const schedules=Object.values(G.suggested(p)).map(s=>{s.includeOverrides=true;const r=G.calculate(p,s,forecast);assert.equal(r.ok,true);return Array.from({length:15},(_,i)=>C.projectedDebtAtYear(r.result,i+1));});
+    assert.deepEqual(schedules[0],schedules[1]);assert.deepEqual(schedules[1],schedules[2]);assert.ok(schedules[0][14]<100000);
+  }
+});

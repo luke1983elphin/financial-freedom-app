@@ -47,7 +47,7 @@ try{
  await cdp.send('Page.navigate',{url:`http://127.0.0.1:${server.address().port}/`});await wait(()=>cdp.eval('Boolean(window.FFSF04 && window.FFSStage1BrowserTestHooks)'));
  const evidence=[];
  for(const route of ['legacy','linked-control','linked-F11']){
-  const linked=route!=='legacy',knownF11=route==='linked-F11',expectedNetWorth=knownF11?868000:268000;
+  const linked=route!=='legacy',knownF11=route==='linked-F11',expectedNetWorth=268000;
   const p=await cdp.eval(`(()=>{const p=FFSCalculator.emptyPlan();Object.assign(p.personal,{person1Name:'Landlord',person1Age:45,fullRetirementAge:65});
    Object.assign(p.investing,{annualInvestingTarget:0,expectedInvestmentReturnPct:0,expectedSuperReturnPct:0,inflationPct:2.5});
    p.assetItems=[{id:'rental',name:'Rental',category:${JSON.stringify(linked&&!knownF11?'otherProperty':'investmentProperty')},value:600000,propertyGrowthRatePct:3}];
@@ -63,7 +63,7 @@ try{
   assert.equal(nominal.find(x=>x.x===1).y,350000);assert.equal(nominal.find(x=>x.x===10).y,350000);
   if(!linked){const growth=await cdp.eval('FFSF04.growth()');assert.deepEqual(growth.map(x=>x.value),[256000,268000,280000]);}
   await cdp.eval("document.querySelector('[data-dollar-basis=\"today\"]').click()");
-  const text=await cdp.eval('FFSF04.report()');assert.ok(text.includes(knownF11?'846,829':'261,463'));assert.ok(!text.includes('overstate net worth and understate debt'));
+  const text=await cdp.eval('FFSF04.report()');assert.ok(text.includes('261,463'));assert.ok(!text.includes('overstate net worth and understate debt'));
   const charts=await cdp.eval('window.__stage2Charts');assert.ok(Math.abs(charts.reportDebtChart[0].points.find(x=>x.x===1).y-350000/1.025)<.01);
   assert.equal(await cdp.eval('FFSF04.result().netWorthProjection[0].closingBalance'),expectedNetWorth);
   await cdp.eval("FFSF04.seed({id:'historical',scenarioType:'financial-plan',keyResultSnapshot:{rows:[{label:'1-year net worth',rawValue:618000}]}})");

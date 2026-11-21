@@ -64,7 +64,21 @@
         .filter((item) => item.canReset)
         .map((item) => item.id);
     }
-    return api.apply(plan, draft, baseline);
+    const applied = api.apply(plan, draft, baseline);
+    if (applied.ok && scenario.includeOverrides && plan.personal?.retirementTiming?.people?.length) {
+      // Preserve the existing 0% Other property baseline, but explicitly apply
+      // the selected rate when the user includes its fixed rate in a scenario.
+      for (const property of api.properties(plan).filter(item => item.group === "other-property" && (item.canReset || item.zeroFallback))) {
+        applied.plan.assetItems ||= [];
+        let asset = applied.plan.assetItems.find(item => item.id === property.id);
+        if (!asset) {
+          asset = {id:property.id,name:property.name,category:"otherProperty",value:property.openingValue};
+          applied.plan.assetItems.push(asset);
+        }
+        asset.capitalGrowthRatePct = scenario.values.investmentPropertyGrowthRatePct;
+      }
+    }
+    return applied;
   }
   function calculate(plan, scenario, forecast) {
     const applied = overlay(plan, scenario);
@@ -121,6 +135,11 @@
         plan: applied.plan,
         result,
         rows,
+        propertyRates: root.FFSForecastAssumptions.properties(applied.plan).map(property => {
+          const original = root.FFSForecastAssumptions.properties(plan).find(item => item.id === property.id);
+          return {...property, treatment: scenario.includeOverrides && (original?.canReset || original?.zeroFallback)
+            ? "Scenario rate" : property.canReset ? "Fixed individual rate" : property.zeroFallback ? "Fixed zero-growth fallback" : "Scenario rate"};
+        }),
         retirement: retirement
           ? {
               exhaustedYear: retirement.allRetirementFundsExhaustedYear,

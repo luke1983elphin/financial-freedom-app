@@ -113,8 +113,8 @@ test('F04 saved-scenario comparison does not turn unavailable debt into zero or 
 test('F04 repeated calculations remain deterministic and do not mutate inputs',()=>{
  const p=fixture();assert.deepEqual(calculate(p),calculate(p));
 });
-test('F04 does not conceal or change the separate F11 duplicate-property defect',()=>{
+test('Issue 95: canonical rental and legacy aggregate represent one property, with F04 debt unchanged',()=>{
  const p=fixture({linked:true});p.assetItems[0].category='investmentProperty';
- const r=U.applyRetirementForecast(p,calculate(p));assert.equal(r.netWorthProjection[0].closingBalance,868000);
+ const r=U.applyRetirementForecast(p,calculate(p));assert.equal(r.netWorthProjection[0].closingBalance,268000);
  assert.equal(C.projectedDebtAtYear(r,1),350000);assert.equal(r.retirementProjection.years[0].liabilities.length,1);
 });
