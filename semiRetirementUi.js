@@ -831,7 +831,6 @@
         semiRetirementAccessibleWithdrawal: 0,
         oneOffLifestyleEvents: [],
         oneOffIncomeEvents: [],
-        agePension: { enabled: true },
         plannedConcessionalContributions: [],
         downsizeHomeEvent: defaultDownsizeHomeEvent(people, assets, currentYear()),
         workingPhaseSurplusDestination: defaultWorkingPhaseSurplusDestination(plan),
