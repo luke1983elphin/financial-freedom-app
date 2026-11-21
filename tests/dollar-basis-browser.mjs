@@ -1292,7 +1292,7 @@ test('U06-U10 mobile disclosures are keyboard accessible, retain edits and prese
   assert.equal(await evaluate('JSON.stringify(__dollarTest.retirement().result)'),retirement);
 });
 
-test('U08 More tools preference and dollar controls stay discoverable without plan changes',async()=>{
+test('U08 More tools starts closed and dollar controls stay discoverable without plan changes',async()=>{
   await cdp.send('Emulation.setDeviceMetricsOverride',{width:390,height:900,deviceScaleFactor:1,mobile:true});
   await navigate();await evaluate('localStorage.clear()');await navigate();await fixture();
   assert.equal(await evaluate('document.getElementById("moreNavigation").open'),false);
@@ -1306,8 +1306,9 @@ test('U08 More tools preference and dollar controls stay discoverable without pl
   await journeyTap('[data-dollar-basis=today]',operations);
   assert.match(await evaluate('document.querySelector("[data-s3-key=dollars] > summary").textContent'),/Today/);
   assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),plan);
+  await evaluate("localStorage.setItem('ffs.ui.moreNavigationOpen','true')");
   await navigate();await fixture();
-  assert.equal(await evaluate('document.getElementById("moreNavigation").open'),true,'explicit expanded preference survives reload');
+  assert.equal(await evaluate('document.getElementById("moreNavigation").open'),false,'More tools starts closed on reload even with an older expanded preference');
 });
 
 test('U06 lower setup fields remain clear of the compact footer and simulated keyboard',async()=>{
@@ -1913,7 +1914,7 @@ test('Update My Plan on My Freedom Progress opens the existing editor and respec
   for (const width of [375, 768, 1366]) {
     await cdp.send('Emulation.setDeviceMetricsOverride', {width, height: 900, deviceScaleFactor: 1, mobile: width < 600});
     await navigate();
-    await evaluate('localStorage.clear()');
+    await evaluate("localStorage.clear(); localStorage.setItem('ffs.ui.moreNavigationOpen', 'true')");
     await navigate();
     const stored = await fourNavSavedFixture('Dashboard update fixture');
     await evaluate("FFSStage1BrowserTestHooks.showWorkspace('dashboard')");

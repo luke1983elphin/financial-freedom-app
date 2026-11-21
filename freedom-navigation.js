@@ -15,7 +15,7 @@
     return view ? {view,future:'retirement'} : null;
   }
   function mount(document,{getContext,navigate,hasSavedPlan}) {
-    let mode='welcome',future='retirement',started=false,restoring=false,defaultMoreApplied=false;
+    let mode='welcome',future='retirement',started=false,restoring=false;
     let welcomeSaved=getContext().returning;
     const home=document.getElementById('homeView'),workspace=document.getElementById('appWorkspace');
     const futureView=document.querySelector('[data-view-panel="semiretirement"]');
@@ -71,8 +71,6 @@
       document.getElementById('samplePlanSummary').textContent='Sample plans contain fictional information. Enter your own household information to produce personalised projections.';
       const next=home.querySelector('#introSampleActions > .s3-scope');if(next)next.textContent='Enter your household information, then review your personalised financial freedom journey.';
       const cue=document.getElementById('s3CurrentScreen');if(cue)cue.textContent=`${context.isDemo?'Fictional sample · ':''}${document.querySelector(`.workspace-nav [data-view="${context.view}"] span`)?.textContent || document.querySelector(`[data-view-panel="${context.view}"] > .section-heading h2`)?.textContent || 'Your workspace'}`;
-      const more=document.getElementById('moreNavigation');
-      if(!defaultMoreApplied&&cue){defaultMoreApplied=true;try{if(localStorage.getItem('ffs.ui.moreNavigationOpen')===null)more.open=false;}catch{more.open=false;}}
       controls.querySelectorAll('button').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.freedomFuture===future)));
       const showGrowth=mode==='workspace'&&context.view==='semiretirement'&&future==='growth';
       host.hidden=!showGrowth;

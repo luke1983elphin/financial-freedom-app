@@ -19178,13 +19178,6 @@
         renderOutputs();
       });
     });
-    const moreNavigation = document.getElementById("moreNavigation");
-    if (moreNavigation) {
-      try { moreNavigation.open = localStorage.getItem("ffs.ui.moreNavigationOpen") !== "false"; } catch { moreNavigation.open = true; }
-      moreNavigation.addEventListener("toggle", () => {
-        try { localStorage.setItem("ffs.ui.moreNavigationOpen", String(moreNavigation.open)); } catch { /* UI remains usable without storage. */ }
-      });
-    }
     document.addEventListener("toggle", (event) => {
       const details = event.target;
       if (!details?.dataset?.semiDetailState) return;
