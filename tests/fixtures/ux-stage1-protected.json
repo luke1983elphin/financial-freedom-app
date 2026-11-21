@@ -756,7 +756,7 @@
     "saveCurrentPlanAsScenario": "de0270611b4fa31d5d9552b5f89a97d5c922e3d0cbdd17031616ec06e918c62c",
     "openSavedScenarios": "54591a9a555fced784ea8ca18ceccb47992ad71de221df220a56caf82ddbcf0a",
     "renderScenariosLegacy": "0f77a61aad8cb58442d2f87c3f2216ed807d3b81fd48afe050b6baf272dc6822",
-    "scenarioCardHtml": "6d824e6f0125edafa03180b1cf5b70d98f393f9b1092d3d77dedd59e60f683c8",
+    "scenarioCardHtml": "f83abf6aa42fef3bff6c2956dbb209f2e1b6223f83331e4a8c340bf0c3c1973f",
     "syncInputs": "dd5aa9ccddc71deeb18b70faf2dbe6885982a1482516ee38fbc40b459d2dcd97",
     "syncCollectionInputs": "de44eeee811c11f862f69d7e3cc3bcd1c441cc9e457d71100f3cc333c86a17ee",
     "addCollectionItem": "849788f752e1bc47f8b339609dbe6aee7a2b28ea0f9483fb47800abdd5c32daf",
@@ -1283,6 +1283,13 @@
         "previous": "e16c57b1b6ed117b91a0faf606be787b07fc85da7aeeb954a19829acb2e22bcb",
         "current": "455d6f35cb32c3865804c386a18d2641455a600fb3553fda51144437ed91710d"
       }
-    ]
+    ],
+    "concurrentBaseUpdate": {
+      "base": "ebfb645877315d37f199806be8080a6aa0520840",
+      "note": "PR #90 changed saved scenario card spending before #89 merged. This function is unchanged in the follow-up; refresh its stale base fingerprint only.",
+      "name": "scenarioCardHtml",
+      "previous": "6d824e6f0125edafa03180b1cf5b70d98f393f9b1092d3d77dedd59e60f683c8",
+      "current": "f83abf6aa42fef3bff6c2956dbb209f2e1b6223f83331e4a8c340bf0c3c1973f"
+    }
   }
 }
