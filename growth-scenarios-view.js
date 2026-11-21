@@ -67,7 +67,7 @@
         make(
           "p",
           "",
-          "Illustrative deterministic assumptions, not likelihoods, confidence intervals or financial advice. All edits stay in this comparison session. Base starts with your saved plan; unsaved Assumptions edits are excluded.",
+          "Illustrative deterministic assumptions, not likelihoods, confidence intervals or financial advice. All edits stay in this comparison session. Base starts with saved plan-wide rates; properties use those comparison rates even if their My Plan individual rates differ. Unsaved Assumptions edits are excluded.",
         ),
       );
       if (isDemo())
@@ -118,13 +118,13 @@
       panel.append(actions);
       const overrides = make("details", "growth-overrides");
       overrides.append(
-        make("summary", "", "How individual asset rates are treated"),
+        make("summary", "", "How comparison rates are applied"),
       );
       overrides.append(
         make(
           "p",
           "",
-          "Individual total-return rates and property growth overrides stay fixed by default. Other property without a rate also keeps its existing 0% retirement fallback. Opting in applies that scenario’s rates to these fixed assets in the comparison only. Income yield, cash/reinvestment treatment, taxes and loan settings remain unchanged. Total return already includes yield. A total return below an existing income yield is rejected.",
+          "Properties automatically use the scenario property growth fields. Individual financial-investment total-return rates stay fixed unless you select the investment-return checkbox. Income yield, cash/reinvestment treatment, taxes and loan settings remain unchanged. Total return already includes yield. A total return below an existing income yield is rejected.",
         ),
       );
       for (const asset of root.FFSForecastAssumptions.investments(
@@ -142,21 +142,21 @@
           make(
             "p",
             "",
-            `${asset.name}: ${asset.value}% · ${asset.source}. ${asset.note}`,
+            `${asset.name}: My Plan ${asset.value}% · ${asset.source}. Comparison uses ${asset.group === "principal-residence" ? "Principal residence growth" : "Investment property growth"}.`,
           ),
         );
       overrides.append(
         make(
           "p",
           "",
-          "Only overrides used by the current forecast can be included. Other retained property settings remain fixed. Home and investment property figures below are equity after modelled debt; property equity is not automatically available for retirement spending.",
+          "The checkbox affects financial investments only; properties never require it. My Plan individual rates and normal retirement forecasts remain unchanged. Home and investment property figures below are equity after modelled debt; property equity is not automatically available for retirement spending.",
         ),
       );
       panel.append(
         make(
           "p",
           "field-help",
-          "Property equity can be identical across scenarios when individual growth rates or the Other property 0% fallback remain fixed. Each scenario lists the actual property rates used. Select “Apply scenario rates to fixed assets” to vary them without changing My Plan.",
+          "Properties automatically follow their scenario growth field: homes use Principal residence growth; investment properties and Other property/land use Investment property growth. The effective rates are shown in each scenario. My Plan and saved retirement snapshots keep their own rates.",
         ),
       );
       panel.append(overrides);
@@ -194,7 +194,7 @@
             "p",
             "field-help",
             name === "Base"
-              ? "Starts at saved values. Editing Base is session-only."
+              ? "Starts at saved plan-wide rates. Base matches the saved forecast when its property rates match the rates used by that forecast. All changes are session-only."
               : `${name === "Lower" ? "−" : "+"}3 percentage points for investments/super; ${name === "Lower" ? "−" : "+"}2 for property, from saved Base. Suggested bands stop at −99.99% where needed to stay above the engine’s −100% limit. Manual edits do not relabel the scenario.`,
           ),
         );
@@ -224,7 +224,7 @@
         check.dataset.growthOverrides = name;
         check.setAttribute(
           "aria-label",
-          `${name}: apply scenario rates to fixed assets`,
+          `${name}: apply scenario return to individual investments`,
         );
         check.addEventListener("change", () => {
           scenarios[name].includeOverrides = check.checked;
@@ -233,7 +233,7 @@
         });
         label.append(
           check,
-          document.createTextNode(" Apply scenario rates to fixed assets"),
+          document.createTextNode(" Apply scenario return to individual investments"),
         );
         card.append(label);
         const error = make("p", "fa-field-error");

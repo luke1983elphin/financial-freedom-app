@@ -59,16 +59,19 @@
       for (const asset of api.investments(plan).filter((item) => item.explicit))
         draft.assets[asset.id].expectedTotalReturnPct =
           scenario.values.expectedInvestmentReturnPct;
-      draft.resetProperties = api
-        .properties(plan)
-        .filter((item) => item.canReset)
-        .map((item) => item.id);
     }
+    const propertyRate = property => scenario.values[property.group === "principal-residence"
+      ? "principalResidenceGrowthRatePct" : "investmentPropertyGrowthRatePct"];
+    // Property fields always drive the temporary comparison. Preserve an equal
+    // override exactly so an unadjusted Base can still match the saved plan.
+    draft.resetProperties = api.properties(plan)
+      .filter(property => property.canReset && property.value !== propertyRate(property))
+      .map(property => property.id);
     const applied = api.apply(plan, draft, baseline);
-    if (applied.ok && scenario.includeOverrides && plan.personal?.retirementTiming?.people?.length) {
-      // Preserve the existing 0% Other property baseline, but explicitly apply
-      // the selected rate when the user includes its fixed rate in a scenario.
-      for (const property of api.properties(plan).filter(item => item.group === "other-property" && (item.canReset || item.zeroFallback))) {
+    if (applied.ok && plan.personal?.retirementTiming?.people?.length) {
+      // Other property has a 0% normal-forecast fallback; the comparison must
+      // instead use its non-home property field, including aggregate-only plans.
+      for (const property of api.properties(applied.plan).filter(item => item.group === "other-property" && item.value !== propertyRate(item))) {
         applied.plan.assetItems ||= [];
         let asset = applied.plan.assetItems.find(item => item.id === property.id);
         if (!asset) {
@@ -135,11 +138,8 @@
         plan: applied.plan,
         result,
         rows,
-        propertyRates: root.FFSForecastAssumptions.properties(applied.plan).map(property => {
-          const original = root.FFSForecastAssumptions.properties(plan).find(item => item.id === property.id);
-          return {...property, treatment: scenario.includeOverrides && (original?.canReset || original?.zeroFallback)
-            ? "Scenario rate" : property.canReset ? "Fixed individual rate" : property.zeroFallback ? "Fixed zero-growth fallback" : "Scenario rate"};
-        }),
+        propertyRates: root.FFSForecastAssumptions.properties(applied.plan)
+          .map(property => ({...property, treatment: "Scenario rate"})),
         retirement: retirement
           ? {
               exhaustedYear: retirement.allRetirementFundsExhaustedYear,
