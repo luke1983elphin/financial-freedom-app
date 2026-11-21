@@ -57,6 +57,7 @@
   function normaliseOneOffIncomeEvents(events = []) {
     return (Array.isArray(events) ? events : []).map((event, index) => ({
       id: String(event.id || oneOffIncomeEventId(index)),
+      ...(event.assetSaleId ? { assetSaleId: String(event.assetSaleId).trim() } : {}),
       description: String(event.description || event.name || "").trim(),
       amountTodayDollars: roundCurrency(nonNegative(event.amountTodayDollars ?? event.amount ?? event.todayDollarAmount)),
       year: Math.round(number(event.year ?? event.calendarYear)),
@@ -391,6 +392,7 @@
     const growthAssumptions = propertyGrowthAssumptionsFromPlan(plan);
     const detailed = items
       .filter((item) => propertyLike.has(item.category || item.type)
+        || (item.category || item.type) === "personalUse"
         || ((item.category || item.type) !== "super" && (item.includeInFI === false || item.includeInFi === false
           || item.includeInFiAssets === false || item.excludeFromFI === true || item.excludeFromFi === true || item.isPersonalUse === true)))
       .map((item, index) => {
@@ -1008,7 +1010,7 @@
       const prefix = `scenario.oneOffIncomeEvents.${index}`;
       if (incomeEventIds.has(event.id)) add(`${prefix}.id`, "One-off income events need unique IDs.");
       incomeEventIds.add(event.id);
-      if (!event.description) add(`${prefix}.description`, "Add a short description, such as inheritance, family assistance or insurance proceeds.");
+      if (!event.description && !event.assetSaleId) add(`${prefix}.description`, "Add a short description, such as inheritance, family assistance or insurance proceeds.");
       if (event.amountTodayDollars <= 0) add(`${prefix}.amountTodayDollars`, "Enter an amount greater than $0.");
       if (!Number.isFinite(event.year) || event.year < startYear || event.year > endYear) add(`${prefix}.year`, "Choose a year within this projection.");
     });
