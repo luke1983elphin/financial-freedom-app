@@ -7370,7 +7370,10 @@
             <span class="metric-label">Where you are now</span>
             <h3>Your financial position</h3>
           </div>
-          <button class="dashboard-text-button" type="button" data-dashboard-detail-open>View Financial Details</button>
+          <div class="dashboard-snapshot-actions">
+            <button class="btn btn-small dashboard-update-plan" type="button" data-view="setup">Update My Plan</button>
+            <button class="dashboard-text-button" type="button" data-dashboard-detail-open>View Financial Details</button>
+          </div>
         </div>
         <div class="dashboard-snapshot-grid">
           ${summaryTile("Financial Freedom %", plainPercent(percent), "", "financialFreedomProgress")}
@@ -19175,13 +19178,6 @@
         renderOutputs();
       });
     });
-    const moreNavigation = document.getElementById("moreNavigation");
-    if (moreNavigation) {
-      try { moreNavigation.open = localStorage.getItem("ffs.ui.moreNavigationOpen") !== "false"; } catch { moreNavigation.open = true; }
-      moreNavigation.addEventListener("toggle", () => {
-        try { localStorage.setItem("ffs.ui.moreNavigationOpen", String(moreNavigation.open)); } catch { /* UI remains usable without storage. */ }
-      });
-    }
     document.addEventListener("toggle", (event) => {
       const details = event.target;
       if (!details?.dataset?.semiDetailState) return;

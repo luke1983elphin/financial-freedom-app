@@ -53,8 +53,6 @@
       const nav = document.querySelector('.workspace-nav');
       if (nav && !document.getElementById('s3CurrentScreen')) {
         const cue=document.createElement('p');cue.id='s3CurrentScreen';cue.className='s3-current-screen';nav.prepend(cue);
-        const more=document.getElementById('moreNavigation');
-        try {if(localStorage.getItem('ffs.ui.moreNavigationOpen')===null)more.open=!mobile.matches;}catch {more.open=!mobile.matches;}
       }
       const view=document.body.dataset.activeView;
       const active=document.querySelector(`.workspace-nav [data-view="${view}"]`);

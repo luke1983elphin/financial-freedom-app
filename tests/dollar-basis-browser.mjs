@@ -1292,7 +1292,7 @@ test('U06-U10 mobile disclosures are keyboard accessible, retain edits and prese
   assert.equal(await evaluate('JSON.stringify(__dollarTest.retirement().result)'),retirement);
 });
 
-test('U08 More tools preference and dollar controls stay discoverable without plan changes',async()=>{
+test('U08 More tools starts closed and dollar controls stay discoverable without plan changes',async()=>{
   await cdp.send('Emulation.setDeviceMetricsOverride',{width:390,height:900,deviceScaleFactor:1,mobile:true});
   await navigate();await evaluate('localStorage.clear()');await navigate();await fixture();
   assert.equal(await evaluate('document.getElementById("moreNavigation").open'),false);
@@ -1306,8 +1306,9 @@ test('U08 More tools preference and dollar controls stay discoverable without pl
   await journeyTap('[data-dollar-basis=today]',operations);
   assert.match(await evaluate('document.querySelector("[data-s3-key=dollars] > summary").textContent'),/Today/);
   assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),plan);
+  await evaluate("localStorage.setItem('ffs.ui.moreNavigationOpen','true')");
   await navigate();await fixture();
-  assert.equal(await evaluate('document.getElementById("moreNavigation").open'),true,'explicit expanded preference survives reload');
+  assert.equal(await evaluate('document.getElementById("moreNavigation").open'),false,'More tools starts closed on reload even with an older expanded preference');
 });
 
 test('U06 lower setup fields remain clear of the compact footer and simulated keyboard',async()=>{
@@ -1907,4 +1908,27 @@ test('Try a Change uses household names, preserves income ownership and shows ze
     }
   })()`);
   assert.equal(await evaluate(`document.querySelector('#comparisonSummary [data-surplus-figure=change] strong').textContent`), '$0/week');
+});
+
+test('Update My Plan on My Freedom Progress opens the existing editor and respects sample mode', async () => {
+  for (const width of [375, 768, 1366]) {
+    await cdp.send('Emulation.setDeviceMetricsOverride', {width, height: 900, deviceScaleFactor: 1, mobile: width < 600});
+    await navigate();
+    await evaluate("localStorage.clear(); localStorage.setItem('ffs.ui.moreNavigationOpen', 'true')");
+    await navigate();
+    const stored = await fourNavSavedFixture('Dashboard update fixture');
+    await evaluate("FFSStage1BrowserTestHooks.showWorkspace('dashboard')");
+    assert.equal(await evaluate('document.getElementById("moreNavigation").open'), false);
+    assert.ok(await evaluate('document.querySelector(".dashboard-update-plan").getBoundingClientRect().height >= 44'));
+    const operations = [];
+    await journeyTap('.dashboard-update-plan', operations);
+    assert.ok(operations.some(action => action.status === 'pointer-click'), JSON.stringify(operations));
+    assert.equal(await evaluate('document.body.dataset.activeView'), 'setup');
+    assert.equal(await evaluate('FFSStage1BrowserTestHooks.getPlan().personal.person1Name'), 'Dashboard update fixture');
+    assert.equal(await evaluate(`localStorage.getItem(${JSON.stringify(stored.key)})`), stored.raw);
+    await evaluate('document.getElementById("heroDemoButton").click()');
+    assert.equal(await evaluate('document.body.dataset.freedomSample'), 'true');
+    assert.equal(await evaluate('getComputedStyle(document.querySelector(".dashboard-update-plan")).display'), 'none');
+    assert.ok(await evaluate('document.querySelector("[data-demo-return]").getClientRects().length'));
+  }
 });
