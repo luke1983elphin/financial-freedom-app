@@ -152,7 +152,7 @@ test('downsizing released cash assessed in same year, replacement home exempt',(
  assert.ok(result.years[0].household.estimatedAgePension<E.projectRetirementScenario(input(100000)).years[0].household.estimatedAgePension);
 });
 test('unsupported forecasts warn and add no cash',()=>{const i=input();i.scenario.agePension.unsupported=true;const r=E.projectRetirementScenario(i);assert.equal(r.years[0].household.estimatedAgePension,null);assert.ok(r.warnings.some(w=>w.includes('Age Pension not included')));});
-test('panel placement, default off, native checkbox and annual output',()=>{
+test('panel placement, editable native checkbox and annual output',()=>{
  const app=readFileSync(new URL('../app.js',import.meta.url),'utf8');
  const down=app.indexOf('${semiRetirementDownsizeHomeEventHtml(draft)}');
  const panel=app.indexOf('<summary>Age Pension</summary>',down);
@@ -160,6 +160,25 @@ test('panel placement, default off, native checkbox and annual output',()=>{
  assert.ok(app.includes('draft.scenario?.agePension?.enabled === true ? " checked" : ""'));
  assert.ok(app.includes('type === "checkbox" ? target.checked'));
  assert.ok(app.includes('Estimated Age Pension (before tax)'));
+});
+
+test('only new retirement scenarios opt in; persisted on, off and legacy inputs retain their setting',()=>{
+ const UI=context.FFSSemiRetirementUi, C=context.FFSCalculator;
+ const plan=C.emptyPlan(); plan.personal.person1Age=67; plan.personal.person2Age=0;
+ const result=C.calculatePlan(plan);
+ const existing=UI.buildSemiRetirementScenarioDefaults(plan,result).draft;
+ const fresh=UI.buildSemiRetirementScenarioDefaults(plan,result,{newScenario:true}).draft;
+ assert.equal(fresh.scenario.agePension.enabled,true);
+ assert.equal(existing.scenario.agePension,undefined);
+ for(const setting of [undefined,{enabled:false},{enabled:true}]) {
+   const saved=structuredClone(fresh);
+   if(setting) saved.scenario.agePension=setting; else delete saved.scenario.agePension;
+   const reopened=JSON.parse(JSON.stringify(saved));
+   const inputs=UI.scenarioDraftToProjectionInputs(reopened);
+   assert.equal(inputs.scenario.agePension?.enabled===true,setting?.enabled===true);
+   assert.deepEqual(reopened,saved);
+ }
+ assert.equal(UI.scenarioDraftToProjectionInputs(fresh).scenario.agePension.enabled,true);
 });
 
 const senior=(income,extra={})=>({eligible:true,taxableIncome:income,...extra});

@@ -156,6 +156,10 @@ after(async () => {
 });
 
 
+async function changeField(fieldPath, value) {
+  await evaluate(`(()=>{const field=document.querySelector('[data-semi-input="'+${JSON.stringify(fieldPath)}+'"]');field.value=${JSON.stringify(String(value))};field.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+}
+
 for (const width of [1366, 375]) test('Age Pension browser placement and interaction at '+width+'px', async () => {
   await evaluate('localStorage.clear(); sessionStorage.clear()');
   await navigate();
@@ -164,10 +168,10 @@ for (const width of [1366, 375]) test('Age Pension browser placement and interac
   await evaluate("FFSStage1BrowserTestHooks.setPlan(FFS_DATA.samplePlans[1].plan,'semiretirement');document.querySelector('[data-dollar-basis=future]').click()");
   await waitFor(()=>evaluate(`Boolean(document.querySelector('[data-semi-input="scenario.agePension.enabled"]'))`));
   const state=await evaluate(`(()=>{const pension=document.querySelector('[data-semi-detail-state="agePension"]'); const down=document.querySelector('[data-semi-detail-state="downsizeHome"]');const setting=[...document.querySelectorAll('h4')].find(x=>x.textContent==='Projection settings'); return {collapsed:!pension.open, checked:pension.querySelector('input').checked, ordered:!!(pension.compareDocumentPosition(setting)&Node.DOCUMENT_POSITION_FOLLOWING), width:document.documentElement.scrollWidth,viewport:innerWidth};})()`);
-  assert.equal(state.collapsed,true); assert.equal(state.checked,false); assert.equal(state.ordered,true);
+  assert.equal(state.collapsed,true); assert.equal(state.checked,true); assert.equal(state.ordered,true);
   assert.ok(await evaluate(`(()=>{const pension=document.querySelector('[data-semi-detail-state="agePension"]');const down=document.querySelector('[data-semi-detail-state="downsizeHome"]');const advanced=pension.querySelector('[data-semi-detail-state="agePensionAdvanced"]');return pension.previousElementSibling===down && !advanced.open && advanced.querySelectorAll('input[type="checkbox"]').length===3;})()`));
   assert.ok(state.width<=state.viewport+1,JSON.stringify(state));
-  await evaluate(`document.querySelector('[data-semi-detail-state="agePension"] summary').click();document.querySelector('[data-semi-input="scenario.agePension.enabled"]').click();document.querySelector('[data-semi-action="calculate"]').click();`);
+  await evaluate(`document.querySelector('[data-semi-detail-state="agePension"] summary').click();document.querySelector('[data-semi-action="calculate"]').click();`);
   await waitFor(()=>evaluate(`document.body.textContent.includes('Before-tax pension over this projection')`));
   assert.equal(await evaluate(`document.querySelector('[data-semi-input="scenario.agePension.enabled"]').checked`),true);
   assert.ok(await evaluate(`document.body.textContent.includes('without. First unfunded year without pension:')`));
@@ -190,4 +194,57 @@ for (const width of [1366, 375]) test('Age Pension browser placement and interac
   assert.equal(await evaluate(`document.body.textContent.includes('Before-tax pension over this projection')`),false);
   assert.equal(await evaluate(`Boolean(document.querySelector('.age-pension-table'))`),false);
   assert.deepEqual(browserMessages,[],'no browser errors or warnings');
+});
+
+test('personal asset sale conversion, saving, reopening, comparisons and pension reports', async () => {
+  await evaluate('localStorage.clear(); sessionStorage.clear()');
+  await navigate();
+  await cdp.send('Emulation.setDeviceMetricsOverride',{width:1366,height:900,deviceScaleFactor:1,mobile:false});
+  await evaluate(`(()=>{const plan=structuredClone(FFS_DATA.samplePlans[1].plan);plan.assetItems.push({id:'sale-campervan',name:'Campervan',category:'vehicle',owner:'person1',value:80000,ownershipPercent:100});FFSStage1BrowserTestHooks.setPlan(plan,'semiretirement');FFSStage1BrowserTestHooks.closeDurabilityDialog();})()`);
+  assert.ok(await evaluate(`Boolean(document.querySelector('[data-semi-action="add-personal-asset-sale"]'))`));
+  await evaluate(`document.querySelector('[data-semi-action="add-one-off-income-event"]').click()`);
+  await changeField('scenario.oneOffIncomeEvents.0.description','Campervan proceeds');
+  await changeField('scenario.oneOffIncomeEvents.0.amountTodayDollars',65000);
+  const before=await evaluate(`({year:document.querySelector('[data-semi-input="scenario.oneOffIncomeEvents.0.year"]').value,amount:document.querySelector('[data-semi-input="scenario.oneOffIncomeEvents.0.amountTodayDollars"]').value})`);
+  const options=await evaluate(`Array.from(document.querySelector('[data-semi-input="scenario.oneOffIncomeEvents.0.assetSaleId"]').options).map(o=>({value:o.value,text:o.textContent}))`);
+  assert.ok(options.some(o=>o.value==='sale-campervan'));
+  assert.ok(!options.some(o=>/home|investment property/i.test(o.text)));
+  await changeField('scenario.oneOffIncomeEvents.0.assetSaleId','sale-campervan');
+  assert.deepEqual(await evaluate(`({year:document.querySelector('[data-semi-input="scenario.oneOffIncomeEvents.0.year"]').value,amount:document.querySelector('[data-semi-input="scenario.oneOffIncomeEvents.0.amountTodayDollars"]').value})`),before);
+  assert.equal(await evaluate(`document.querySelectorAll('[data-one-off-income-id]').length`),1);
+  await evaluate(`document.querySelector('[data-semi-action="add-one-off-income-event"]').click()`);
+  assert.equal(await evaluate(`Boolean(document.querySelector('[data-semi-input="scenario.oneOffIncomeEvents.1.assetSaleId"] option[value="sale-campervan"]'))`),false);
+  await evaluate(`document.querySelectorAll('[data-semi-action="remove-one-off-income-event"]')[1].click();document.querySelector('[data-semi-action="calculate"]').click();document.querySelector('[data-save-stage-g-scenario="retirement"]').click();document.querySelector('#stageGScenarioName').value='Asset sale pension on';document.querySelector('[data-scenario-save-action="save"]').click()`);
+  const onId=await evaluate(`document.querySelector('.scenario-library-card [data-open-scenario]').dataset.openScenario`);
+  await evaluate(`document.querySelector('[data-open-scenario="${onId}"]').click()`);
+  assert.equal(await evaluate(`document.querySelector('[data-semi-input="scenario.agePension.enabled"]').checked`),true);
+  assert.equal(await evaluate(`document.querySelector('[data-semi-input="scenario.oneOffIncomeEvents.0.assetSaleId"]').value`),'sale-campervan');
+  assert.ok(await evaluate(`Boolean(document.querySelector('.age-pension-table'))`));
+  await evaluate(`document.querySelector('[data-semi-input="scenario.agePension.enabled"]').click();document.querySelector('[data-semi-action="calculate"]').click()`);
+  assert.equal(await evaluate(`Boolean(document.querySelector('.age-pension-table'))`),false);
+  await evaluate(`document.querySelector('[data-save-stage-g-scenario="retirement"]').click();document.querySelector('#stageGScenarioName').value='Asset sale pension off';document.querySelector('[data-scenario-save-action="save"]').click()`);
+  const offId=await evaluate(`Array.from(document.querySelectorAll('.scenario-library-card')).find(c=>c.textContent.includes('Asset sale pension off')).querySelector('[data-open-scenario]').dataset.openScenario`);
+  await navigate();
+  await evaluate(`FFSStage1BrowserTestHooks.showWorkspace('scenarios');document.querySelector('[data-open-scenario="${offId}"]').click()`);
+  assert.equal(await evaluate(`document.querySelector('[data-semi-input="scenario.agePension.enabled"]').checked`),false);
+  await evaluate(`FFSStage1BrowserTestHooks.showWorkspace('scenarios');document.querySelector('[data-compare-scenario="${onId}"]').click()`);
+  assert.ok(await evaluate(`document.querySelector('.semi-retirement-comparison-print-report').textContent.includes('Asset sale pension on')`));
+  const report=await evaluate(`document.querySelector('.semi-retirement-comparison-print-report').textContent`);
+  assert.match(report,/Retirement Age Pension/);
+  assert.match(report,/Included subject to eligibility/);
+  assert.match(report,/Excluded/);
+  await evaluate(`document.querySelector('[data-semi-action="export-comparison-pdf"]').click()`);
+  assert.ok(await evaluate('window.__printCalls>0'));
+  await cdp.send('Emulation.setEmulatedMedia',{media:'print'});
+  await evaluate(`document.body.dataset.printMode='retirement-comparison'`);
+  assert.ok(await evaluate(`document.querySelector('.semi-retirement-comparison-print-report').getBoundingClientRect().height>0`));
+  await cdp.send('Emulation.setEmulatedMedia',{media:'screen'});
+  await evaluate(`delete document.body.dataset.printMode`);
+  // A pre-pension saved snapshot has no setting at all; opening it must remain off.
+  await evaluate(`(()=>{const key='ffs-scenarios-v3-mobile-dashboard-ux-test';const saved=JSON.parse(localStorage.getItem(key));const legacy=saved.find(s=>s.id==='${offId}');delete legacy.scenarioInputSnapshot.scenario.agePension;localStorage.setItem(key,JSON.stringify(saved));})()`);
+  await navigate();
+  await evaluate(`FFSStage1BrowserTestHooks.showWorkspace('scenarios');document.querySelector('[data-open-scenario="${offId}"]').click()`);
+  assert.equal(await evaluate(`document.querySelector('[data-semi-input="scenario.agePension.enabled"]').checked`),false);
+  assert.equal(await evaluate(`Boolean(document.querySelector('.age-pension-table'))`),false);
+  assert.deepEqual(browserMessages,[]);
 });

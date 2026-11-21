@@ -2,8 +2,8 @@
   "baseline": "bd23b2a",
   "files": {
     "calculator.js": "77c04fef8a213cd06cd774d9e5eda333cda07cc4ba901b77a8e25245b313c65c",
-    "semiRetirementProjection.js": "42cecba918b1d7d1b65376f5490d607219f7a953e71f5ab90bba24f2ff292594",
-    "semiRetirementUi.js": "4e87341a23a3e38592f1d32619efaf35859d14cf83ac5949fb21dfdf1be524dd",
+    "semiRetirementProjection.js": "52fe796ebeeeb14d258c40bbc6636777ef717542feb0f48418a4dcd84540e1fe",
+    "semiRetirementUi.js": "7659f0ecc3703954bc7b5102f30f2efe382752bf2665d950dcda130ac10adb33",
     "v2-data.js": "935fb66f828874f0ccc267d99d611a47113a85315cb983e45ff49390a84d8baa",
     "storage.js": "c85374d3b59ad306de5d3657d8ff44c12eb69c1f4d4e1b71228656228a4ff58d",
     "security.js": "19caa32b797a87c7ddbbe4c7352717ce1f7df52e7292a0de529449c24f7baa4b",
@@ -412,7 +412,7 @@
     "renderEngagementFullJourney": "88cab29028d8e316b34a3f1376c8068a5e6336555af5c6b2b636f08bf1ef205a",
     "semiRetirementUiEnabled": "33e8ebfbc3268731e1d9ddab5cefeabe89931dd9e7c82d01c6a452898c5fe79f",
     "cloneScenarioDraft": "b516474d2beb187434fcb98710ce7dc6a008baf92e7b7b4fa3e50976ba52efec",
-    "ensureSemiRetirementScenarioDraft": "8df0d9a6c7b5747d0f3942ea596d21b107357464b4a9ac943cc036d425db4afa",
+    "ensureSemiRetirementScenarioDraft": "12da9c6b7c9051f1ccd0322783080fda6fc1effd6099457862c446a63baeb64b",
     "semiRetirementValue": "e37ee4682b3f1a1ceb93006645141e2d07efa838023806872e95a493421fe8f2",
     "semiRetirementComparisonValue": "9c627bee2cea433f00d9954f6abae6672748a6b79c9bd440f533706a9048ee9e",
     "semiRetirementError": "06d6ea11c52c25b6571f44aaedd4e1f0bdbf30beb38c0246d8e259a680463386",
@@ -431,7 +431,7 @@
     "semiRetirementDownsizeHomeSummary": "a52e773207f0d7866ed0885b084c372fa26743fd043da2de38a185ac736541de",
     "semiRetirementLegacyOptionalDrawNoticeHtml": "b463b4967b2d076f483c26b4295af6b2a08108162e8ba4bcebc295ca86c709c8",
     "semiRetirementOneOffLifestyleEventsHtml": "7fdd7c13a9da04c9a0d68da36bdfa58f2efb3efe0870dbbd2b0b7eca7a6bef55",
-    "semiRetirementOneOffIncomeEventsHtml": "67a1b6b3278e5b13530e1e30e3fb745eae7a12b54d8d3b01830433ae588a2342",
+    "semiRetirementOneOffIncomeEventsHtml": "3e519291f6789016102260409e5cb7e3f79f44b75b7944c53b8bc79885030e76",
     "semiRetirementPlannedConcessionalContributionsHtml": "45f67810db58792a572f8f7707b291d80ffc40a0c2a006dc0467331ad8a817cc",
     "semiRetirementDownsizeHomeEventHtml": "a1fc6a89facc33b10b4d493bdc27f3568a75dfd4d50e0815ef935c688f06db01",
     "semiRetirementPersonPanel": "ec7f1e450dffd8dc8a2ec7898ed970d504442aeac8a772b6bf36c704cba7b073",
@@ -528,7 +528,7 @@
     "useFinancialPlanLivingExpensesForSemiRetirementScenario": "1f91b2ac8f41e7747d2cd85b87a2cd1b9fc7b20266db1a49858fdbaa920bae85",
     "addSemiRetirementOneOffLifestyleEvent": "74b28461f7f3bb221647179aa01a706d9c1f8d6b74f7d523266659147d6c75c9",
     "removeSemiRetirementOneOffLifestyleEvent": "660cc3e32932b6369eeaf0f454b09d7aa9a6e109b9ff307e719a4ebe5bdb5b3c",
-    "addSemiRetirementOneOffIncomeEvent": "a63cd52b900f87ae311dfc146e4ddeb8233b69d9c467a85d5bedb996d7c4f470",
+    "addSemiRetirementOneOffIncomeEvent": "47f8856923e77c61b7195c50175f4e7178fefcddf6b6c6ad061e3730ea919a8e",
     "removeSemiRetirementOneOffIncomeEvent": "2002faa28742ff2cbc772e4258b20a6c44add33af683f5598fc4f1d4188a6a1f",
     "addSemiRetirementPlannedConcessionalContribution": "7a7b0bada764820225f62aacc35ca6f9d45b0303fe009d271587c67a371f41e3",
     "removeSemiRetirementPlannedConcessionalContribution": "07bcbd15c429365666a57c0bf70a8904c7b4b2663082f654b276a2503f3854bb",
@@ -731,7 +731,7 @@
     "buildDecisionScenarioSaveContext": "387a672652358c293098d8d27e6935b38cb5e74b53a8a2c8a27d27f056a6cbba",
     "scenarioPathValue": "d6cf4a7d7633bd5204ce944c2d2c63e5124cd1ccb60afbe46318aa6cd945ca0b",
     "retirementChangeRows": "a3d5c666471d539050e69c9f6d52837390de260d739f454fcdd5cab22a263bd4",
-    "retirementOutcomeSections": "e16c57b1b6ed117b91a0faf606be787b07fc85da7aeeb954a19829acb2e22bcb",
+    "retirementOutcomeSections": "455d6f35cb32c3865804c386a18d2641455a600fb3553fda51144437ed91710d",
     "retirementKeyResultSnapshot": "5040fd262c60a978f527fb86702044142a2687c1576f119bc783470c34a213e0",
     "savedRetirementOutcomeHtml": "b45ed24e0e8386a36110c994a4c1e1e6a09da7b4f9d5d3fd1d8c79a61e8beb6e",
     "savedRetirementChangesHtml": "dd9088655574c0bac4672b955bfc7b538d5cf68111b45eb31fe2c0bccbe6e03c",
@@ -1241,5 +1241,48 @@
       }
     ],
     "fixtures": "Pre-F04 full outputs and investment SHA fixtures retained as *.pre-f04.*; independent deltas in docs/f04-property-debt/deltas.json."
+  },
+  "personalAssetSalesAndPensionDefault": {
+    "scope": "PR #89: personal asset sales and new-scenario pension default only. Pension eligibility formulas unchanged.",
+    "baseline": "7bc2d50be66f504f6657bb1e7ec4fccd56740e92",
+    "note": "retirementOutcomeSections has a stale historical fingerprint; verified byte-equivalent function hash to PR base before refreshing. Other historical exclusions remain unchanged.",
+    "changes": [
+      {
+        "group": "files",
+        "name": "semiRetirementProjection.js",
+        "previous": "42cecba918b1d7d1b65376f5490d607219f7a953e71f5ab90bba24f2ff292594",
+        "current": "52fe796ebeeeb14d258c40bbc6636777ef717542feb0f48418a4dcd84540e1fe"
+      },
+      {
+        "group": "files",
+        "name": "semiRetirementUi.js",
+        "previous": "4e87341a23a3e38592f1d32619efaf35859d14cf83ac5949fb21dfdf1be524dd",
+        "current": "7659f0ecc3703954bc7b5102f30f2efe382752bf2665d950dcda130ac10adb33"
+      },
+      {
+        "group": "appFunctions",
+        "name": "ensureSemiRetirementScenarioDraft",
+        "previous": "8df0d9a6c7b5747d0f3942ea596d21b107357464b4a9ac943cc036d425db4afa",
+        "current": "12da9c6b7c9051f1ccd0322783080fda6fc1effd6099457862c446a63baeb64b"
+      },
+      {
+        "group": "appFunctions",
+        "name": "semiRetirementOneOffIncomeEventsHtml",
+        "previous": "67a1b6b3278e5b13530e1e30e3fb745eae7a12b54d8d3b01830433ae588a2342",
+        "current": "3e519291f6789016102260409e5cb7e3f79f44b75b7944c53b8bc79885030e76"
+      },
+      {
+        "group": "appFunctions",
+        "name": "addSemiRetirementOneOffIncomeEvent",
+        "previous": "a63cd52b900f87ae311dfc146e4ddeb8233b69d9c467a85d5bedb996d7c4f470",
+        "current": "47f8856923e77c61b7195c50175f4e7178fefcddf6b6c6ad061e3730ea919a8e"
+      },
+      {
+        "group": "appFunctions",
+        "name": "retirementOutcomeSections",
+        "previous": "e16c57b1b6ed117b91a0faf606be787b07fc85da7aeeb954a19829acb2e22bcb",
+        "current": "455d6f35cb32c3865804c386a18d2641455a600fb3553fda51144437ed91710d"
+      }
+    ]
   }
 }

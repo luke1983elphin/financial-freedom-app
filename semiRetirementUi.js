@@ -790,7 +790,7 @@
     };
   }
 
-  function buildSemiRetirementScenarioDefaults(plan = {}, result = {}) {
+  function buildSemiRetirementScenarioDefaults(plan = {}, result = {}, { newScenario = false } = {}) {
     const lifestyleSpending = defaultScenarioLifestyleSpending(plan, result);
     const people = [personDefaults(plan, result, 1)];
     if (hasSecondPerson(plan, result)) people.push(personDefaults(plan, result, 2));
@@ -831,6 +831,8 @@
         semiRetirementAccessibleWithdrawal: 0,
         oneOffLifestyleEvents: [],
         oneOffIncomeEvents: [],
+        // Main-plan forecasts also use this builder; only new retirement scenarios opt in.
+        ...(newScenario ? { agePension: { enabled: true } } : {}),
         plannedConcessionalContributions: [],
         downsizeHomeEvent: defaultDownsizeHomeEvent(people, assets, currentYear()),
         workingPhaseSurplusDestination: defaultWorkingPhaseSurplusDestination(plan),
@@ -2034,6 +2036,7 @@
     return [
       { label: "Projection start year", value: inputs.projectionStartYear ?? assumptions.projectionStartYear ?? null, type: "plain" },
       { label: "Projection end age", value: inputs.projectionEndAge ?? null, type: "age" },
+      { label: "Retirement Age Pension", value: inputs.scenario?.agePension?.enabled === true ? "Included subject to eligibility" : "Excluded", type: "plain" },
       { label: "Inflation", value: inputs.inflationRate, type: "percentRate" },
       { label: "Accessible investment return", value: inputs.accessibleInvestments?.annualReturnRate, type: "percentRate" },
       { label: "Accessible investment fees", value: inputs.accessibleInvestments?.annualFeesRate, type: "percentRate" },
