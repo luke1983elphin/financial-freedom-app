@@ -2,7 +2,7 @@
   "baseline": "bd23b2a",
   "files": {
     "calculator.js": "77c04fef8a213cd06cd774d9e5eda333cda07cc4ba901b77a8e25245b313c65c",
-    "semiRetirementProjection.js": "ab9bc41d50f8597991eb38933ee776fb253a96100c650979b20c2efe938bd5a4",
+    "semiRetirementProjection.js": "ab45687699a72d08cc33c1557e6b91bdd88eaebd1b3b8d2efe3316aaedd4cd97",
     "semiRetirementUi.js": "327177b602c9f9298c8392486373e4effa2d525d61aebfeac8ab3efb8a7af6cc",
     "v2-data.js": "935fb66f828874f0ccc267d99d611a47113a85315cb983e45ff49390a84d8baa",
     "storage.js": "c85374d3b59ad306de5d3657d8ff44c12eb69c1f4d4e1b71228656228a4ff58d",
@@ -1361,5 +1361,10 @@
         "current": "f583c3696421820b25f7a4aa6852f98ac41e12c32abcdbaaad7eda46fbe03041"
       }
     ]
+  },
+  "propertySaleDebtValidationReview": {
+    "note": "PR #93: validate only conflicting stable asset links involving the selected sale asset; unrelated unlinked debts remain untouched.",
+    "previous": "ab9bc41d50f8597991eb38933ee776fb253a96100c650979b20c2efe938bd5a4",
+    "current": "ab45687699a72d08cc33c1557e6b91bdd88eaebd1b3b8d2efe3316aaedd4cd97"
   }
 }

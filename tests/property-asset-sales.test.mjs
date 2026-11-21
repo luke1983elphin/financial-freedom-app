@@ -59,13 +59,12 @@ test('sale proceeds inflate once, cost percentage follows gross, taxable gains s
  assert.equal(c.FFSDollarBasis.displayedValue(sale.netBeforeTax,1,2.5,'today'),294000);
 });
 
-test('duplicate, home, missing, unknown debt and incomplete tax instructions fail validation',()=>{
+test('duplicate, home, missing and incomplete tax instructions fail validation',()=>{
  for(const mutate of [
   d=>d.scenario.oneOffIncomeEvents.push({...d.scenario.oneOffIncomeEvents[0],id:'twice',year:2028}),
   d=>d.assets[0].type='home',d=>d.scenario.oneOffIncomeEvents[0].assetSaleId='missing',
   d=>d.scenario.oneOffIncomeEvents[0].taxTreatment='',d=>delete d.scenario.oneOffIncomeEvents[0].taxableCapitalGainPerson1,
   d=>d.scenario.oneOffIncomeEvents[0].sellingCostPct=101,
-  d=>d.liabilities.push({id:'unknown',name:'Unknown mortgage',type:'rentalPropertyLoan',openingBalance:10000,interestRatePct:0,repaymentAmount:0,remainingTermYears:30}),
  ]){const d=draft();mutate(d);assert.ok(invalid(d).length);}
 });
 
@@ -96,4 +95,37 @@ test('sale repays the scheduled outstanding balance and prevents further interes
 test('capital-gain allocation must respect sole ownership after a plan ownership edit',()=>{
  const d=draft({joint:true});d.assets[0].owner='person1';assert.ok(invalid(d).some(e=>e.path.endsWith('taxableCapitalGainPerson2')));
  d.scenario.oneOffIncomeEvents[0].taxableCapitalGainPerson2=0;assert.equal(project(d).result.years[1].people[1].totalTaxableIncome,0);
+});
+
+for (const rental of [false, true]) {
+ for (const type of ['homeLoan', 'mortgage', 'investmentLoan', 'otherDebt', 'rentalPropertyLoan']) {
+  test(`${rental ? 'investment property' : 'vacant land'} sale leaves unrelated unlinked ${type} untouched`,()=>{
+   const d=draft({rental});
+   d.assets.push({id:'home',name:'Principal residence',type:'home',openingValue:500000,annualGrowthRatePct:0,ownershipPercent:100});
+   d.liabilities.push({id:'unrelated',name:'Separate home loan',type,openingBalance:200000,interestRatePct:6,repaymentAmount:1500,repaymentFrequency:'monthly',remainingTermYears:30,repaymentType:'principalAndInterest'});
+   const before=JSON.stringify(d),baseline=clone(d);baseline.scenario.oneOffIncomeEvents=[];
+   const ordinary=project(baseline).result,withSale=project(d).result;
+   assert.equal(JSON.stringify(d),before);
+   const sale=withSale.years[1].household.assetSales[0];assert.equal(sale.linkedDebtRepaid,0);assert.deepEqual(Array.from(sale.linkedLoanIds),[]);assert.equal(sale.netBeforeTax,294000);
+   assert.deepEqual(clone(withSale.years.map(row=>row.liabilities)),clone(ordinary.years.map(row=>row.liabilities)),'balances, interest and repayments follow the unchanged loan schedule');
+   assert.ok(withSale.years[1].liabilities[0].closingBalance>0);
+   assert.ok(!withSale.summary.debtPayoffMilestones.some(m=>m.liabilityId==='unrelated'));
+  });
+ }
+}
+
+for (const directConflict of [false,true]) test(`conflicting sale-linked debt requires correction (direct conflict=${directConflict})`,()=>{
+ const d=draft({rental:true,debt:100000});
+ d.assets.push({...d.assets[0],id:'other',name:'Other property'});
+ d.liabilities[0].linkedAssetId=directConflict?'other':'';
+ if(!directConflict)d.propertyIncome.push({...d.propertyIncome[0],id:'other-rent',name:'Other rent',linkedAssetId:'other',linkedLoanIds:['loan']});
+ const errors=invalid(d);
+ assert.ok(errors.some(e=>e.path==='scenario.oneOffIncomeEvents.0.assetSaleId'&&/Land loan/.test(e.message)),JSON.stringify(errors));
+});
+
+test('conflicting links wholly unrelated to the sale do not block a debt-free sale',()=>{
+ const d=draft({rental:true,debt:100000});
+ d.assets.push({...d.assets[0],id:'other',name:'Other property'},{...d.assets[0],id:'third',name:'Third property'});
+ d.liabilities[0].linkedAssetId='other';d.propertyIncome[0].linkedAssetId='third';
+ const sale=project(d).result.years[1];assert.equal(sale.household.assetSales[0].linkedDebtRepaid,0);assert.equal(sale.liabilities[0].closingBalance,100000);
 });

@@ -477,10 +477,15 @@
 
   // Resolve the same stable asset -> rental income -> loan relationships used
   // by retained equity. Ambiguous relationships are rejected before projection.
-  function saleDebtAssetId(debt, assets, propertyIncome) {
-    if (debt.linkedAssetId) return debt.linkedAssetId;
+  function saleDebtAssetIds(debt, propertyIncome) {
     const ids = new Set(propertyIncome.filter(income => income.id === debt.linkedRentalIncomeId
-      || income.linkedLoanIds?.includes(debt.id)).map(income => income.linkedAssetId).filter(Boolean));
+      || linkedLoanIds(income.linkedLoanIds).includes(debt.id)).map(income => income.linkedAssetId).filter(Boolean));
+    if (debt.linkedAssetId) ids.add(debt.linkedAssetId);
+    return ids;
+  }
+
+  function saleDebtAssetId(debt, assets, propertyIncome) {
+    const ids = saleDebtAssetIds(debt, propertyIncome);
     return ids.size === 1 ? [...ids][0] : null;
   }
 
@@ -1583,9 +1588,11 @@
             if (asset.owner === "person2" && number(event.taxableCapitalGainPerson1) > 0) addValidation(errors, `${prefix}.taxableCapitalGainPerson1`, "This asset belongs to person 2. Check the ownership or capital-gain allocation.");
           }
           const debts = (input.liabilities || []).map(normaliseProjectionLiability);
-          debts.filter(debt => isSaleableProperty(asset) && debt.openingBalance > 0 && !saleDebtAssetId(debt, input.assets || [], input.propertyIncome || [])
-            && ["homeLoan", "mortgage", "rentalPropertyLoan", "investmentPropertyLoan", "investmentLoan", "otherDebt"].includes(debt.type))
-            .forEach(debt => addValidation(errors, `${prefix}.assetSaleId`, `Link ${debt.name} to the correct asset before modelling a sale; its secured asset is unknown.`));
+          debts.filter(debt => {
+            if (!isSaleableProperty(asset) || debt.openingBalance <= 0) return false;
+            const assetIds = saleDebtAssetIds(debt, input.propertyIncome || []);
+            return assetIds.has(asset.id) && assetIds.size > 1;
+          }).forEach(debt => addValidation(errors, `${prefix}.assetSaleId`, `Link ${debt.name} to the correct asset before modelling a sale; its asset links conflict.`));
         }
       } else if (!event.description) {
         addValidation(errors, `${prefix}.description`, "Add a short description, such as inheritance, family assistance or insurance proceeds.");

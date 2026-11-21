@@ -34,7 +34,7 @@ The retirement engine now supports explicit non-home property sales as described
 
 ## Validation
 
-- `pnpm run verify`: **71 suites, 1,329 tests passed**, zero failures/skips/cancellations. Includes test inventory, syntax checks, runner failure-propagation checks, security scans, tax/debt/retirement/scenario/report tests and parity checks.
+- `pnpm run verify`: **71 suites, 1,342 tests passed**, zero failures/skips/cancellations. Includes test inventory, syntax checks, runner failure-propagation checks, security scans, tax/debt/retirement/scenario/report tests and parity checks.
 - Nine existing complete financial fixtures retain **exact numerical parity**. Protected-file fingerprints were updated only for the changed adapter and audited refresh/render functions; calculation and storage protections remain enforced.
 - Seventeen new regression cases cover dirty live drafts with/without timing, ownership/value/growth/loan edits, temporary vs saved comparisons, incomplete historical snapshots, all supported property classes, explicit vehicle depreciation/personal-asset growth, 2073 valuation, retained equity/estate data, stable-ID sales, removal and reclassification, rental cessation, CGT funding, outstanding debt settlement, negative-equity shortfalls, pension asset-test inputs and sole-owner gain allocation.
 - `node --test tests/retirement-asset-sync-browser.mjs`: two cases passed in headless Edge. Exercises a dirty forecast, a My Plan update, preserved spending adjustment, save/reopen, current-vs-historical comparison, print disclosures and both PDF export paths. No browser warnings/errors. The existing `tests/age-pension-browser.mjs` also passes all three desktop/mobile/personal-sale cases.
@@ -55,4 +55,12 @@ The new browser regression is separate from the unit inventory, matching the rep
 
 Additional synthetic export evidence: [saved rental-sale report](asset-sync-evidence/issue92-saved-sale.pdf) and [rental-sale comparison](asset-sync-evidence/issue92-comparison.pdf). The example sells a $300,000-today rental in 2027, applies 2% selling costs, settles its $100,000 nominal loan and includes a $50,000 nominal net capital gain through personal tax.
 
-No merge or deployment has been performed.
+No merge has been performed. Vercel automatically created a preview for the initial PR push; automatic deployment is now disabled for this review branch.
+
+## PR #93 debt-validation review correction
+
+The original sale validator treated every unlinked loan of a potentially secured type as a blocker, even without a relationship to the property being sold. Validation now gathers stable direct asset and rental-income links, and rejects conflicting links only when they involve the selected sale asset. Settlement uses the same relationship resolution; an unrelated or unlinked debt is not repaid from sale proceeds. Loan type and display name do not establish security.
+
+Thirteen regression cases cover vacant land and investment property sales with unrelated unlinked loans, unchanged balances/interest/repayments, conflicting direct and indirect sale-linked debt, and conflicts wholly unrelated to the sale. Before the correction, eleven of these cases failed; all 24 asset-sale tests now pass. The full verification passes 71 suites / 1,342 tests, and all nine numerical parity fixtures remain identical.
+
+Browser verification after the correction: the two asset-sync/sale export cases pass. The broader pnpm run test:browser run reports 78 passed and 11 failed: nine existing disclosure/startup/report-label assertions in dollar-basis-browser.mjs and setup timeouts in the F04 and F08 browser files. All eleven failures reproduce against the unchanged pre-correction PR commit 3787873. They are not a clean browser-suite pass and remain review limitations outside this debt-validation correction.
