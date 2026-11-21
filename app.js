@@ -8769,7 +8769,7 @@
 
   function ensureSemiRetirementScenarioDraft(result, options = {}) {
     if (!window.FFSSemiRetirementUi) return null;
-    const defaults = window.FFSSemiRetirementUi.buildSemiRetirementScenarioDefaults(plan, result);
+    const defaults = window.FFSSemiRetirementUi.buildSemiRetirementScenarioDefaults(plan, result, { newScenario: true });
     const shouldReset = options.force
       || (plan.personal?.retirementTiming && !String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:") && semiRetirementScenarioSourceKey !== defaults.sourceKey)
       || !semiRetirementScenarioDraft

@@ -1408,6 +1408,7 @@ test("a personal asset sale funds the scenario once and removes the asset from t
       { id: "campervan", name: "Campervan", type: "vehicle", openingValue: 120000 },
       { id: "boat", name: "Boat", type: "personalUse", openingValue: 20000 },
       { id: "home", name: "Home", type: "home", openingValue: 500000 },
+      { id: "rental", name: "Rental", type: "investmentProperty", openingValue: 400000 },
     ],
     scenario: { oneOffIncomeEvents: [sale] },
   });
@@ -1425,7 +1426,18 @@ test("a personal asset sale funds the scenario once and removes the asset from t
   assert.equal(after.household.oneOffIncome, 0);
   assert.equal(input.assets[0].openingValue, 120000);
 
-  for (const events of [[sale, { ...sale, id: "second-sale", year: 2028 }], [{ ...sale, assetSaleId: "home" }], [{ ...sale, assetSaleId: "missing" }]]) {
+  assert.ok(ENGINE.retainedAssetsAtYear(before, false).assets.some(asset => asset.id === "campervan"));
+  assert.ok(!ENGINE.retainedAssetsAtYear(during, false).assets.some(asset => asset.id === "campervan"));
+  const incomeOnly = structuredClone(input);
+  incomeOnly.scenario.oneOffIncomeEvents = [{ ...sale, assetSaleId: undefined, description: "Existing income" }];
+  const unlinked = ENGINE.projectRetirementScenario(incomeOnly);
+  for (const [index, row] of result.years.entries()) {
+    assert.equal(row.household.totalAccessibleAssets, unlinked.years[index].household.totalAccessibleAssets,
+      "converting income to a sale must not add proceeds again");
+    assert.equal(row.household.oneOffIncome, unlinked.years[index].household.oneOffIncome);
+  }
+
+  for (const events of [[sale, { ...sale, id: "second-sale", year: 2028 }], [{ ...sale, assetSaleId: "home" }], [{ ...sale, assetSaleId: "rental" }], [{ ...sale, assetSaleId: "missing" }]]) {
     const invalid = ENGINE.projectRetirementScenario({ ...input, scenario: { ...input.scenario, oneOffIncomeEvents: events } });
     assert.equal(invalid.validation.isValid, false);
     assert.ok(invalid.validation.errors.some(error => error.path.endsWith(".assetSaleId")));

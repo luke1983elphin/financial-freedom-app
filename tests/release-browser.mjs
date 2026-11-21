@@ -254,7 +254,7 @@ test('saved custom names survive comparison edits and reopening restores saved r
   await evaluate(`document.querySelector('[data-compare-scenario="${id}"]').click()`);
   await evaluate(`(()=>{const e=document.querySelector('[data-semi-comparison-input="people.0.fullRetirementAge"]');e.value='65';e.dispatchEvent(new Event('change',{bubbles:true}));})()`);
   const report=await evaluate("document.querySelector('.semi-retirement-comparison-print-report').textContent");
-  assert.match(report,/Retire at 62 - custom/);assert.match(report,/Alex retires at 65 · Jordan retires at 62/);
+  assert.match(report,/Retire at 62 - custom/);assert.match(report,/Alex retires at 65 \(\d{4}\) · Jordan retires at 62 \(\d{4}\)/);
   await navigate();
   await evaluate("FFSStage1BrowserTestHooks.showWorkspace('scenarios')");
   assert.match(await evaluate("document.querySelector('.scenario-library-card').textContent"),/Alex retires at 62 · Jordan retires at 62/);
@@ -307,7 +307,7 @@ test('comparison print preserves headers, assumptions and funding detail for dis
     assert.match(printed.assumptions,/Inflation/);
     assert.match(printed.assumptions,/Accessible investment return/);
     assert.match(printed.text,/Retire at 65/);
-    assert.match(printed.text,/Alex retires at 65 · Jordan retires at 65/);
+    assert.match(printed.text,/Alex retires at 65 \(\d{4}\) · Jordan retires at 65 \(\d{4}\)/);
     assert.match(printed.text,new RegExp(`First year both retired: ${new Date().getFullYear()+34}.*Alex 66, Jordan 65`));
     assert.match(printed.text,new RegExp(`Alex was already retired from ${new Date().getFullYear()+33}`));
     assert.doesNotMatch(printed.text,/No key assumptions available/);
@@ -315,7 +315,7 @@ test('comparison print preserves headers, assumptions and funding detail for dis
     assert.equal(printed.appHeader,0);
     assert.ok(printed.nav);
     assert.equal(await evaluate("(()=>{const banner=document.querySelector('#demoModeBanner');const hidden=banner.classList.contains('hidden');banner.classList.remove('hidden');const display=getComputedStyle(banner).display;banner.classList.toggle('hidden',hidden);return display;})()"),'none','even active sample exploration controls never enter printed reports');
-    assert.equal(await evaluate("getComputedStyle(document.querySelector('.semi-retirement-print-closing')).breakInside"), 'avoid', 'keep assumptions and disclaimer together when they fit on a page');
+    assert.equal(await evaluate("getComputedStyle(document.querySelector('.semi-retirement-print-closing')).breakInside"), 'auto', 'long assumptions can flow across pages');
     await writeFile(path.join(output,`comparison-${year}.pdf`),Buffer.from((await cdp.send('Page.printToPDF',{printBackground:true,preferCSSPageSize:true})).data,'base64'));
     await writeFile(path.join(output,`comparison-${year}.json`),JSON.stringify(printed,null,2));
     await cdp.send('Emulation.setEmulatedMedia',{media:'screen'});
@@ -336,7 +336,7 @@ test('five alternative preview isolates baseline, exports readable groups and su
   assert.equal(await evaluate("document.querySelector('.semi-retirement-comparison-table').dataset.comparisonCount"),'6');
   assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'),planBefore,'creating comparisons must not change the plan');
   const overview = await evaluate("document.querySelector('.semi-retirement-comparison-print-report').innerHTML");
-  for (const name of ['Current Plan','Retire 3 years earlier','Retire 3 years later','Spend 10% less','Spend 10% more','Invest $5,000 more']) assert.ok(overview.includes(name));
+  for (const name of ['Retirement baseline','Retire 3 years earlier','Retire 3 years later','Spend 10% less','Spend 10% more','Invest $5,000 more']) assert.ok(overview.includes(name),name);
   assert.ok(overview.includes('Shared assumptions'));
   assert.ok(overview.includes('Assumptions that differ'));
   assert.ok(overview.includes('Forecast end (year and ages)'));
@@ -361,7 +361,7 @@ test('five alternative preview isolates baseline, exports readable groups and su
   await cdp.send('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
   await evaluate("(()=>{const e=document.querySelector('[data-semi-report-detail]');e.value='full';e.dispatchEvent(new Event('change',{bubbles:true}));})()");
   assert.equal(await evaluate("document.querySelectorAll('.semi-comparison-detail-group').length"),3);
-  assert.ok(await evaluate("[...document.querySelectorAll('.semi-comparison-detail-group .semi-retirement-comparison-breakdown')].every(g=>g.children.length<=3 && g.firstElementChild.innerText.includes('Current Plan'))"));
+  assert.ok(await evaluate("[...document.querySelectorAll('.semi-comparison-detail-group .semi-retirement-comparison-breakdown')].every(g=>g.children.length<=3 && g.firstElementChild.innerText.includes('Retirement baseline'))"));
   await evaluate("document.querySelector('[data-semi-action=export-comparison-pdf]').click()");
   await cdp.send('Emulation.setEmulatedMedia',{media:'print'});
   await writeFile(path.join(output,'five-alternatives-full.pdf'),Buffer.from((await cdp.send('Page.printToPDF',{printBackground:true,preferCSSPageSize:true})).data,'base64'));
