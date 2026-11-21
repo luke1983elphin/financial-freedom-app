@@ -1437,7 +1437,7 @@ test("a personal asset sale funds the scenario once and removes the asset from t
     assert.equal(row.household.oneOffIncome, unlinked.years[index].household.oneOffIncome);
   }
 
-  for (const events of [[sale, { ...sale, id: "second-sale", year: 2028 }], [{ ...sale, assetSaleId: "home" }], [{ ...sale, assetSaleId: "rental" }], [{ ...sale, assetSaleId: "missing" }]]) {
+  for (const events of [[sale, { ...sale, id: "second-sale", year: 2028 }], [{ ...sale, assetSaleId: "home" }], [{ ...sale, assetSaleId: "missing" }]]) {
     const invalid = ENGINE.projectRetirementScenario({ ...input, scenario: { ...input.scenario, oneOffIncomeEvents: events } });
     assert.equal(invalid.validation.isValid, false);
     assert.ok(invalid.validation.errors.some(error => error.path.endsWith(".assetSaleId")));

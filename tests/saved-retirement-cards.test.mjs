@@ -13,7 +13,7 @@ const ctx={window:{FFSSemiRetirementUi:UI,FFSSemiRetirementProjection:ENGINE},co
 vm.runInNewContext(functions(['savedRetirementSpendingHtml','retirementScenarioSummary','retirementScenarioSubtitle','semiRetirementMoney','semiRetirementAgeList','retirementOutcomeSections','retirementKeyResultSnapshot','savedRetirementOutcomeHtml','savedRetirementChangesHtml','scenarioChange','scenarioChangeText','changedInputsListHtml','keyResultRows','keyResultsListHtml','normaliseSavedScenarioType','savedScenarioTypeLabel','scenarioCardHtml','scenarioSnapshotRows','scenarioRowDisplayValue','scenarioComparisonRows']),ctx);
 function outcome(change=()=>{}) {const input=fixture();change(input);const result=ENGINE.projectRetirementScenario(input);assert.equal(result.validation.isValid,true,JSON.stringify(result.validation));const view=UI.buildSemiRetirementResultsViewModel(result,input,{people:input.people});return {input,result,view,snapshot:ctx.retirementKeyResultSnapshot(view)};}
 test('new retirement result snapshots record the corrected projection engine version',()=>{
- assert.equal(outcome().snapshot.projectionEngineVersion,'2026.27.4-f08');
+ assert.equal(outcome().snapshot.projectionEngineVersion,'2026.27.5-asset-sales');
 });
 test('full retirement snapshot separates accessible, super and funding assets',()=>{
  const {snapshot,result}=outcome();const o=snapshot.retirementOutcome,h=result.years[0].household;

@@ -8770,23 +8770,35 @@
   function ensureSemiRetirementScenarioDraft(result, options = {}) {
     if (!window.FFSSemiRetirementUi) return null;
     const defaults = window.FFSSemiRetirementUi.buildSemiRetirementScenarioDefaults(plan, result, { newScenario: true });
-    const shouldReset = options.force
-      || (plan.personal?.retirementTiming && !String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:") && semiRetirementScenarioSourceKey !== defaults.sourceKey)
-      || !semiRetirementScenarioDraft
-      || (!semiRetirementScenarioDirty && semiRetirementScenarioSourceKey !== defaults.sourceKey);
+    const savedScenario = String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:");
+    const sourceChanged = !savedScenario && semiRetirementScenarioSourceKey !== defaults.sourceKey;
+    const shouldReset = options.force || !semiRetirementScenarioDraft || sourceChanged;
     if (shouldReset) {
-      semiRetirementScenarioDraft = cloneScenarioDraft(defaults.draft);
+      const refresh = sourceChanged && semiRetirementScenarioDraft && !options.force;
+      const previousDefaults = semiRetirementScenarioInitialDraft;
+      semiRetirementScenarioDraft = refresh
+        ? window.FFSSemiRetirementUi.refreshPlanLinkedDraft(semiRetirementScenarioDraft, previousDefaults, defaults.draft)
+        : cloneScenarioDraft(defaults.draft);
+      if (refresh) {
+        semiRetirementComparisonScenarios.forEach(scenario => {
+          if (scenario.source === "saved") return;
+          scenario.draft = window.FFSSemiRetirementUi.refreshPlanLinkedDraft(scenario.draft, previousDefaults, defaults.draft);
+          runSemiRetirementComparisonForScenario(scenario);
+        });
+        syncLegacySemiRetirementComparisonState(activeSemiRetirementComparisonScenario());
+      }
+      clearSemiRetirementAdjustmentState();
       semiRetirementScenarioInitialDraft = cloneScenarioDraft(defaults.draft);
       semiRetirementScenarioSourceKey = defaults.sourceKey;
       semiRetirementScenarioResult = null;
       semiRetirementScenarioInputs = null;
       semiRetirementScenarioResultDraft = null;
       semiRetirementScenarioErrors = [];
-      semiRetirementScenarioDirty = false;
+      semiRetirementScenarioDirty = refresh && semiRetirementScenarioDirty;
     }
-    const savedScenario = String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:");
+    const usingSavedScenario = String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:");
     (semiRetirementScenarioDraft.people || []).forEach((person, index) => {
-      if (savedScenario && Number(person.currentAge) > 0) return;
+      if (usingSavedScenario) return;
       const key = person.id === "person2" ? "person2" : person.id === "person1" ? "person1" : `person${index + 1}`;
       const age = Number(plan.personal?.[`${key}Age`]);
       if (Number.isFinite(age) && age > 0) person.currentAge = age;
@@ -9007,7 +9019,7 @@
   function semiRetirementOneOffIncomeEventsHtml(draft = semiRetirementScenarioDraft) {
     const events = window.FFSSemiRetirementUi?.normaliseOneOffIncomeEvents?.(draft?.scenario?.oneOffIncomeEvents) || [];
     const yearOptions = semiRetirementOneOffYearOptions(draft);
-    const saleableAssets = (draft?.assets || []).filter(window.FFSSemiRetirementProjection.isSaleablePersonalAsset);
+    const saleableAssets = (draft?.assets || []).filter(window.FFSSemiRetirementProjection.isSaleableAsset);
     return `
       <section class="semi-retirement-one-off-section semi-retirement-one-off-income-section" data-one-off-income>
         <div class="semi-retirement-one-off-heading">
@@ -9016,7 +9028,7 @@
             <p class="field-help">Add scenario-only lump sums such as an inheritance, family assistance, insurance proceeds or another non-recurring cash receipt.</p>
           </div>
           <button class="btn btn-small" type="button" data-semi-action="add-one-off-income-event">+ Add income</button>
-          ${saleableAssets.some(asset => !events.some(event => event.assetSaleId === asset.id)) ? `<button class="btn btn-small" type="button" data-semi-action="add-personal-asset-sale">+ Sell a personal asset</button>` : ""}
+          ${saleableAssets.some(asset => !events.some(event => event.assetSaleId === asset.id)) ? `<button class="btn btn-small" type="button" data-semi-action="add-personal-asset-sale">+ Sell an asset</button>` : ""}
         </div>
         ${events.length ? `
           <div class="semi-retirement-one-off-list">
@@ -9026,6 +9038,7 @@
                 .filter(asset => !events.some(other => other.id !== event.id && other.assetSaleId === asset.id))
                 .map(asset => [asset.id, asset.name])];
               const saleAsset = saleableAssets.find(asset => asset.id === event.assetSaleId);
+              const grossSale = event.saleProceedsBasis === "gross" || (saleAsset && window.FFSSemiRetirementProjection.isSaleableProperty(saleAsset));
               if (event.assetSaleId && !saleAsset) assetOptions.push([event.assetSaleId, "Previously selected asset is unavailable"]);
               const ageLabel = window.FFSSemiRetirementUi?.eventAgeLabel?.(draft, event.year) || "";
               const timingSummary = `${money(event.amountTodayDollars)} - ${event.year || "Choose a year"}${ageLabel ? ` - ${ageLabel}` : ""}`;
@@ -9036,9 +9049,15 @@
                     <span>${escapeHtml(timingSummary)}</span>
                   </summary>
                   <div class="semi-retirement-one-off-fields">
-                    ${assetOptions.length > 1 ? semiRetirementInput({ label: "Personal asset to sell", path: `${prefix}.assetSaleId`, type: "select", options: assetOptions, help: "Adds the proceeds and removes the asset from this scenario in the selected year." }) : ""}
+                    ${assetOptions.length > 1 ? semiRetirementInput({ label: "Asset to sell", path: `${prefix}.assetSaleId`, type: "select", options: assetOptions, help: "Adds the proceeds and removes the asset from this scenario in the selected year." }) : ""}
                     ${event.assetSaleId ? "" : semiRetirementInput({ label: "Description", path: `${prefix}.description`, type: "text", help: "Example: inheritance, family assistance or insurance proceeds." })}
-                    ${semiRetirementInput({ label: event.assetSaleId ? "Sale proceeds in today's dollars" : "Amount in today's dollars", path: `${prefix}.amountTodayDollars`, step: "1000", infoKey: "semiOneOffIncomeAmount", help: event.assetSaleId ? "Enter the amount you expect to receive after selling costs." : undefined })}
+                    ${semiRetirementInput({ label: event.assetSaleId ? (grossSale ? "Expected gross proceeds in today's dollars" : "Sale proceeds after costs in today's dollars (saved input)") : "Amount in today's dollars", path: `${prefix}.amountTodayDollars`, step: "1000", infoKey: "semiOneOffIncomeAmount", help: event.assetSaleId ? "Sale occurs at the start of the selected year. Linked loans are repaid before remaining proceeds fund retirement. Ordinary one-off income does not sell an asset." : undefined })}
+                    ${event.assetSaleId && grossSale ? `
+                      ${semiRetirementInput({ label: "Selling costs (%)", path: `${prefix}.sellingCostPct`, step: "0.1", help: "Agent, legal and other sale costs, deducted from gross proceeds. Loan repayment is separate." })}
+                      ${semiRetirementInput({ label: "Sale tax treatment", path: `${prefix}.taxTreatment`, type: "select", options: [["", "Choose tax treatment"], ["net-capital-gain", "Enter net taxable capital gains"], ["exempt", "No taxable capital gain (confirmed)"]], help: "The app does not calculate the CGT cost base, losses, exemptions or discounts. Enter net taxable gains after these adjustments, or explicitly confirm no taxable gain. Existing personal income tax calculations apply once; do not deduct a separate tax estimate from proceeds." })}
+                      ${event.taxTreatment === "net-capital-gain" ? (draft.people || []).map((person,index) => semiRetirementInput({ label: `${person.name || `Person ${index+1}`} net taxable capital gain (sale-year dollars)`, path: `${prefix}.${person.id === "person2" ? "taxableCapitalGainPerson2" : "taxableCapitalGainPerson1"}`, step: "1000", help: "Enter this owner's share after applicable selling costs, capital losses and CGT discount. Use nominal dollars in the sale year; this amount is not inflated. Enter 0 if this person has no gain. Review this input if the sale price, year or ownership changes." })).join("") : ""}
+                      <p class="field-help">Rent and its net property expenses stop from the sale year. Unlinked living expenses are unchanged. The principal residence uses the downsizing pathway.</p>
+                    ` : ""}
                     ${semiRetirementInput({ label: "Year", path: `${prefix}.year`, type: "select", options: yearOptions, infoKey: "semiOneOffIncomeYear" })}
                     <button class="btn btn-small" type="button" data-semi-action="remove-one-off-income-event" data-event-id="${escapeHtml(event.id)}">Remove</button>
                   </div>
@@ -9907,7 +9926,7 @@
   function retirementComparisonContext(scenarioSet) {
     const basis = forecastDollarBasis === "today" ? "today's dollars" : "future dollars";
     return `<div class="retirement-report-context"><p><strong>Retirement Scenario Comparison.</strong> Baseline: ${escapeHtml(scenarioSet[0]?.name || "Not available")} is the retirement scenario currently being explored, including its adjustments. It is separate from the Current Financial Plan Report. Export both outputs for a complete review; they are not a combined report.</p>
-      <p>Forecast balances: ${basis}. Today's-dollar balances use each scenario's inflation assumption and projection year. Lifestyle inputs remain in today's dollars. Assumptions and calculation/rule disclosures follow.</p>
+      <p>Forecast balances: ${basis}. Today's-dollar balances use each scenario's inflation assumption and projection year. Lifestyle inputs remain in today's dollars. Saved scenarios retain historical assets, loans and assumptions; they do not follow subsequent My Plan edits. Assumptions and calculation/rule disclosures follow.</p>
       <p>First non-super depletion is not the end of all retirement funding: super or continuing income may fund later spending, and later inflows may replenish investments. Total funding-asset exhaustion and first unfunded required cashflow are separate milestones. Retained property equity does not resolve a cashflow shortfall.</p>
       <ul>${scenarioSet.map(scenario => `<li><strong>${escapeHtml(scenario.name)}</strong>${scenario.isCurrent ? " (baseline)" : scenario.source === "saved" ? " (saved scenario inputs)" : " (temporary comparison)"}: forecast ${escapeHtml(String(scenario.viewModel?.annualRows?.[0]?.calendarYear ?? "not available"))} to ${escapeHtml(String(scenario.viewModel?.keyResults?.projectionEnd?.calendarYear ?? "not available"))}.</li>`).join("")}</ul></div>`;
   }
@@ -10467,11 +10486,11 @@
           <div class="semi-retirement-print-assumptions">
             ${scenarioSet.map((scenario) => {
               const assumptionRows = scenario.viewModel?.assumptions?.rows || [];
-              const important = assumptionRows.filter((row) => /retirement|semi|spending|inflation|investment return|super return|property.*growth/i.test(row.label || ""));
+              const important = assumptionRows.filter((row) => /retirement|semi|spending|inflation|investment return|super return|property.*growth|asset sale/i.test(row.label || ""));
               return `
                 <article class="semi-retirement-comparison-breakdown-card">
                   <h4>${escapeHtml(scenario.name)}</h4>${retirementScenarioSubtitle(scenario)}
-                  ${important.map((row) => semiRetirementBreakdownRow(row.label, semiRetirementAssumptionValue(row), row.note)).join("") || `<p>Assumptions unavailable: this scenario has no assumption rows in its projection output.</p>`}
+                  ${important.map((row) => /^Asset sale:/.test(row.label) ? `<section class="semi-retirement-asset-sale-assumption"><h5>${escapeHtml(row.label)}</h5><p>${escapeHtml(semiRetirementAssumptionValue(row))}</p><small>${escapeHtml(row.note || "")}</small></section>` : semiRetirementBreakdownRow(row.label, semiRetirementAssumptionValue(row), row.note)).join("") || `<p>Assumptions unavailable: this scenario has no assumption rows in its projection output.</p>`}
                 </article>
               `;
             }).join("")}
@@ -10910,7 +10929,7 @@
     const hasOneOffLifestyle = Number(household.oneOffLifestyleSpending || 0) > 0 || oneOffLifestyleRows.length > 0;
     const oneOffIncomeRows = (household.oneOffIncomeEvents || []).map((event) => ({
       label: `One-off income - ${event.description || "Income"}`,
-      value: `+${semiRetirementMoney(event.projectedAmount)} (${semiRetirementMoney(event.amountTodayDollars)} today)`,
+      value: event.assetSaleId ? window.FFSSemiRetirementUi.assetSaleSummary(event, semiRetirementMoney) : `+${semiRetirementMoney(event.projectedAmount)} (${semiRetirementMoney(event.amountTodayDollars)} today)`,
     }));
     const hasOneOffIncome = Number(household.oneOffIncome || 0) > 0 || oneOffIncomeRows.length > 0;
     const downsizeEvent = household.downsizeHomeEvent || null;
@@ -11340,7 +11359,7 @@
       <section class="semi-retirement-scenario card" data-semi-retirement-scenario>
         <div class="semi-retirement-scenario-note">
           <strong>${String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:") ? "Saved scenario comparison" : "Your retirement plan"}</strong>
-          <p>${String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:") ? "This saved scenario remains separate from your Financial Plan." : "Retirement timing is saved to your plan and used in Future. Other adjustments here let you explore this scenario."}</p>
+          <p>${String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:") ? "Historical snapshot: assets, loans, ages and assumptions use the saved inputs, not subsequent My Plan edits. Return to my retirement plan to use current inputs." : "Retirement timing is saved to your plan and used in Future. Assets and loans follow My Plan edits; other scenario adjustments are retained unless their source plan input changes."}</p>
         </div>
         <details class="semi-retirement-disclaimer">
           <summary>About this projection</summary>${modellingInformationHtml()}
@@ -11491,6 +11510,15 @@
         ? target.value
         : Number(target.value);
     window.FFSSemiRetirementUi.setDraftPath(semiRetirementScenarioDraft, path, Number.isFinite(value) || type !== "number" ? value : 0);
+    if (/^scenario\.oneOffIncomeEvents\.\d+\.assetSaleId$/.test(path) && value) {
+      const event = window.FFSSemiRetirementUi.getDraftPath(semiRetirementScenarioDraft, path.replace(/\.assetSaleId$/, ""));
+      Object.assign(event, { saleProceedsBasis: "gross", sellingCostPct: 0, taxTreatment: "" });
+      delete event.taxableCapitalGainPerson1;
+      delete event.taxableCapitalGainPerson2;
+    }
+    if (/\.taxableCapitalGainPerson[12]$/.test(path) && target.value.trim() === "") {
+      window.FFSSemiRetirementUi.setDraftPath(semiRetirementScenarioDraft, path, "");
+    }
     if (path.endsWith(".hasSemiRetirement")) {
       captureSemiRetirementDetailsState();
       const personPath = path.replace(".hasSemiRetirement", "");
@@ -11844,14 +11872,14 @@
     const range = window.FFSSemiRetirementUi.projectionYearRange(semiRetirementScenarioDraft);
     const year = Number.isFinite(Number(range.startYear)) ? Number(range.startYear) : currentYear();
     const saleAsset = sellAsset ? (semiRetirementScenarioDraft.assets || []).find(asset =>
-      window.FFSSemiRetirementProjection.isSaleablePersonalAsset(asset)
+      window.FFSSemiRetirementProjection.isSaleableAsset(asset)
       && !events.some(event => event.assetSaleId === asset.id)
     ) : null;
     if (sellAsset && !saleAsset) return;
     const nextIndex = events.length;
     events.push({
       id: window.FFSSemiRetirementUi.oneOffIncomeEventId(nextIndex),
-      ...(saleAsset ? { assetSaleId: saleAsset.id } : {}),
+      ...(saleAsset ? { assetSaleId: saleAsset.id, saleProceedsBasis: "gross", sellingCostPct: 0, taxTreatment: "" } : {}),
       description: "",
       amountTodayDollars: 0,
       year,
@@ -16100,6 +16128,9 @@
         { label: "Retirement spending shortfall starts", value: ages(outcome.firstShortfall) },
         { label: "Projection continues to", value: horizon },
       ] : [{ label: "Retirement spending funded through", value: horizon }] },
+      ...(outcome.assetSales?.length ? [{ title: "Asset sales", rows: outcome.assetSales.map(sale => ({
+        label: `${sale.description} (${sale.year})`, value: window.FFSSemiRetirementUi.assetSaleSummary(sale, semiRetirementMoney),
+      })) }] : []),
     ];
   }
 
@@ -17301,7 +17332,7 @@
     renderOutputs();
     const previousEngineVersion = scenario.keyResultSnapshot?.projectionEngineVersion;
     const recalculationNotice = previousEngineVersion !== window.FFSSemiRetirementProjection.VERSION
-      ? " Recalculated with corrected tax funding. Saved inputs and previous results remain unchanged; review before saving a new scenario."
+      ? " Recalculated with the current calculation engine. Saved inputs and previous results remain unchanged; review before saving a new scenario."
       : "";
     updateSaveStatus("Retirement Planning scenario opened for review. Financial Plan unchanged." + recalculationNotice);
   }
@@ -17853,7 +17884,7 @@
     const hasOneOffLifestyle = Number(household.oneOffLifestyleSpending || 0) > 0 || oneOffLifestyleRows.length > 0;
     const oneOffIncomeRows = (household.oneOffIncomeEvents || []).map((event) => ({
       label: `One-off income - ${event.description || "Income"}`,
-      value: `+${yearMoney(event.projectedAmount)} (${semiRetirementMoney(event.amountTodayDollars)} today)`,
+      value: event.assetSaleId ? window.FFSSemiRetirementUi.assetSaleSummary(event, yearMoney) : `+${yearMoney(event.projectedAmount)} (${semiRetirementMoney(event.amountTodayDollars)} today)`,
     }));
     const hasOneOffIncome = Number(household.oneOffIncome || 0) > 0 || oneOffIncomeRows.length > 0;
     const downsizeEvent = household.downsizeHomeEvent || null;
@@ -18512,7 +18543,10 @@
     }
     const full = retirementDisplayFields(outcome, ["accessibleAtRetirement", "superAtRetirement", "fundingAssetsAtRetirement"], outcome.fullRetirement?.calendarYear, inputs);
     const endYear = outcome.horizon?.calendarYear;
-    return { ...full, capital: outcome.capital ? {
+    return { ...full,
+      ...(outcome.assetSales ? { assetSales: outcome.assetSales.map(sale => retirementDisplayFields(sale,
+        ["grossProceeds", "sellingCosts", "linkedDebtRepaid", "netBeforeTax", "additionalFundsRequired", "taxableCapitalGainPerson1", "taxableCapitalGainPerson2"], sale.year, inputs)) } : {}),
+      capital: outcome.capital ? {
       ...retirementDisplayFields(outcome.capital, ["totalNetEquity"], endYear, inputs),
       assets: (outcome.capital.assets || []).map(asset => retirementDisplayFields(asset, ["netEquity"], endYear, inputs)),
     } : null };
@@ -18778,7 +18812,7 @@
     scenarioCardHtml = scenario => {
       const type = normaliseSavedScenarioType(scenario.scenarioType);
       const copy = { ...scenario, changedInputs: ui.financialChanges(scenario.changedInputs) };
-      const scope = type === "retirement" ? "Opens a temporary retirement draft and recalculates it. Your current plan and stored history stay unchanged; saving a new scenario is a separate action."
+      const scope = type === "retirement" ? "Historical snapshot: saved assets, loans, ages and assumptions do not follow later My Plan edits. Opening recalculates those saved inputs; stored results remain unchanged. Saving a new scenario is a separate action."
         : type === "decision" ? "Opens saved settings in a temporary Try a Change draft. Your current financial plan and stored snapshot stay unchanged."
         : "View historical results without replacing your current plan. Compare with current plan shows today's plan beside the stored results.";
       const label = type === "retirement" ? "Open retirement scenario" : type === "decision" ? "Open temporary change" : "View saved snapshot";

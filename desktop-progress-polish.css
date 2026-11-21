@@ -172,6 +172,8 @@
 /* Scenario-specific printing; do not fall through to the financial plan print stylesheet. */
 .scenario-print-inline { margin-top:12px; }
 #saved-scenario-print-root { display:none; }
+.semi-retirement-asset-sale-assumption { min-width:0; overflow-wrap:anywhere; }
+.semi-retirement-asset-sale-assumption :is(h5,p,small) { display:block; margin:6px 0; }
 @media print {
   body.printing-scenario-report > *:not(#saved-scenario-print-root) { display:none !important; }
   body.printing-scenario-report #saved-scenario-print-root {
@@ -182,5 +184,7 @@
   body.printing-scenario-report #saved-scenario-print-root h1 { font-size:20pt; margin:0 0 12px; }
   body.printing-scenario-report #saved-scenario-print-root .card,
   body.printing-scenario-report #saved-scenario-print-root > * { break-inside:avoid; box-shadow:none !important; }
+  body.printing-scenario-report #saved-scenario-print-root > .scenario-library-card { display:block; break-inside:auto; page-break-inside:auto; padding:10px !important; }
+  body.printing-scenario-report #saved-scenario-print-root .scenario-card-section { break-inside:avoid; padding:10px !important; }
   body.printing-scenario-report #saved-scenario-print-root button { display:none !important; }
 }

@@ -130,14 +130,14 @@ test('dirty main retirement drafts refresh read-only ages without losing one-off
  d.scenario.oneOffLifestyleEvents=[{id:'expense',year:d.projectionStartYear+2,amountTodayDollars:5000}];
  d.scenario.oneOffIncomeEvents=[{id:'income',year:d.projectionStartYear+3,amountTodayDollars:7000}];
  const before=JSON.stringify(d.scenario);
- const ctx={window:{FFSSemiRetirementUi:U},plan:p,semiRetirementScenarioDraft:d,semiRetirementScenarioDirty:true,semiRetirementScenarioSourceKey:'old',cloneScenarioDraft:clone};
+ const ctx={window:{FFSSemiRetirementUi:U},plan:p,semiRetirementScenarioDraft:d,semiRetirementScenarioDirty:true,semiRetirementScenarioSourceKey:U.basePlanSourceKey(p,C.calculatePlan(p)),cloneScenarioDraft:clone};
  vm.runInNewContext(extract('ensureSemiRetirementScenarioDraft'),ctx);
  ctx.ensureSemiRetirementScenarioDraft(C.calculatePlan(p));
  assert.deepEqual(Array.from(d.people,person=>person.currentAge),[43,41]);assert.equal(JSON.stringify(d.scenario),before);
  assert.equal(U.eventAgeLabel(d,d.projectionStartYear+2),'Alex age 45 / Sam age 43');
  ctx.semiRetirementScenarioSourceKey='saved-scenario:test';d.people[0].currentAge=50;
  ctx.ensureSemiRetirementScenarioDraft(C.calculatePlan(p));assert.equal(d.people[0].currentAge,50);
- d.people[1].currentAge=0;ctx.ensureSemiRetirementScenarioDraft(C.calculatePlan(p));assert.equal(d.people[1].currentAge,41);
+ d.people[1].currentAge=0;ctx.ensureSemiRetirementScenarioDraft(C.calculatePlan(p));assert.equal(d.people[1].currentAge,0,'saved missing ages must not be silently borrowed from the current plan');
 });
 test('tax-free income adds cash without changing personal tax, HELP or employer super',()=>{
  for(const owner of ['person1','person2','joint']){

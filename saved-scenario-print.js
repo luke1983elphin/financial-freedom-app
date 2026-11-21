@@ -18,6 +18,8 @@
     root.append(date);
     for (const node of nodes) {
       const copy = node.cloneNode(true);
+      // Printed reports must include holdings even when the screen disclosure is closed.
+      copy.querySelectorAll('details').forEach(el => { el.open = true; });
       copy.querySelectorAll('button,input,textarea,select,[role="button"],.scenario-print-inline').forEach(el => el.remove());
       root.append(copy);
     }
