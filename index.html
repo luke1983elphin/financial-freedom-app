@@ -28,16 +28,17 @@
               <summary class="btn plan-menu-trigger">Plan</summary>
               <div class="plan-menu-panel">
                 <button type="button" id="planNewButton">New Plan</button>
-                <button type="button" id="planSaveButton">Save Plan</button>
-                <button type="button" id="planLoadButton">Load Plan</button>
-                <button type="button" id="planDuplicateButton">Duplicate Plan</button>
-                <button type="button" id="planExportJsonButton">Export complete backup</button>
-                <button type="button" id="planImportJsonButton">Import Plan</button>
-                <button type="button" id="planClearSavedButton">Clear Saved Plan</button>
+                <button type="button" id="planExportJsonButton">Export Plan Backup</button>
+                <button type="button" id="planImportJsonButton">Import Plan Backup</button>
+              </div>
+            </details>
+            <details class="plan-menu">
+              <summary class="btn plan-menu-trigger">Manage Data</summary>
+              <div class="plan-menu-panel">
                 <button type="button" id="deleteAllDataButton">Delete all Financial Freedom data on this device</button>
               </div>
             </details>
-            <div class="report-choice-anchor"><button class="btn" type="button" id="exportButton" aria-haspopup="true" aria-controls="reportChoiceMenu" aria-expanded="false">Print / Export</button>
+            <div class="report-choice-anchor"><button class="btn" type="button" id="exportButton" aria-haspopup="true" aria-controls="reportChoiceMenu" aria-expanded="false">Reports</button>
             <div class="report-choice-menu" id="reportChoiceMenu" hidden aria-label="Choose a report to print or export">
               <button class="btn" type="button" data-report-choice="plan">Financial Plan Report</button>
               <button class="btn" type="button" data-report-choice="scenarios">Saved Scenarios</button>
@@ -55,18 +56,26 @@
                 <summary role="button">Plan</summary>
                 <div>
                   <button type="button" role="menuitem" data-mobile-action="new-plan">New Plan</button>
-                  <button type="button" role="menuitem" data-mobile-action="save-plan">Save Plan</button>
-                  <button type="button" role="menuitem" data-mobile-action="load-plan">Load Plan</button>
-                  <button type="button" role="menuitem" data-mobile-action="duplicate-plan">Duplicate Plan</button>
-                  <button type="button" role="menuitem" data-mobile-action="export-plan-json">Export complete backup</button>
-                  <button type="button" role="menuitem" data-mobile-action="import-plan-json">Import Plan</button>
-                  <button type="button" role="menuitem" data-mobile-action="clear-saved-plan">Clear Saved Plan</button>
+                  <button type="button" role="menuitem" data-mobile-action="export-plan-json">Export Plan Backup</button>
+                  <button type="button" role="menuitem" data-mobile-action="import-plan-json">Import Plan Backup</button>
+                </div>
+              </details>
+              <details class="mobile-plan-group">
+                <summary role="button">Manage Data</summary>
+                <div>
                   <button type="button" role="menuitem" data-mobile-action="delete-all-data">Delete all Financial Freedom data</button>
                 </div>
               </details>
-              <button type="button" role="menuitem" data-mobile-action="export">Print / Export</button>
+              <button type="button" role="menuitem" data-mobile-action="export">Reports</button>
             </div>
           </details>
+          <!-- Retain the legacy action targets while app.js binds them at startup. -->
+          <div hidden inert>
+            <button type="button" id="planSaveButton">Save Plan</button>
+            <button type="button" id="planLoadButton">Load Plan</button>
+            <button type="button" id="planDuplicateButton">Duplicate Plan</button>
+            <button type="button" id="planClearSavedButton">Clear Saved Plan</button>
+          </div>
           <input class="hidden" id="planImportJsonInput" type="file" accept="application/json,.json">
         </div>
       </header>
