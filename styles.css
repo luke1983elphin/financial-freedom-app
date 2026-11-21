@@ -10684,3 +10684,16 @@ body[data-freedom-stage] #appWorkspace { scroll-margin-top: calc(var(--app-heade
 .decision-surplus-figure.is-negative strong { color: #ac291f; }
 #dashboardCashSurplus { scroll-margin-top: calc(var(--collection-actions-top, 72px) + 8px); }
 @media (max-width: 600px) { .decision-surplus-grid { grid-template-columns: minmax(0, 1fr); } }
+
+.dashboard-snapshot-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+.dashboard-snapshot-actions .dashboard-update-plan {
+  width: auto;
+  min-height: 44px;
+  flex: 0 1 auto;
+}
+body[data-freedom-sample="true"] .dashboard-update-plan { display: none; }

@@ -7370,7 +7370,10 @@
             <span class="metric-label">Where you are now</span>
             <h3>Your financial position</h3>
           </div>
-          <button class="dashboard-text-button" type="button" data-dashboard-detail-open>View Financial Details</button>
+          <div class="dashboard-snapshot-actions">
+            <button class="btn btn-small dashboard-update-plan" type="button" data-view="setup">Update My Plan</button>
+            <button class="dashboard-text-button" type="button" data-dashboard-detail-open>View Financial Details</button>
+          </div>
         </div>
         <div class="dashboard-snapshot-grid">
           ${summaryTile("Financial Freedom %", plainPercent(percent), "", "financialFreedomProgress")}

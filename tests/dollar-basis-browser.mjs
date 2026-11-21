@@ -1908,3 +1908,26 @@ test('Try a Change uses household names, preserves income ownership and shows ze
   })()`);
   assert.equal(await evaluate(`document.querySelector('#comparisonSummary [data-surplus-figure=change] strong').textContent`), '$0/week');
 });
+
+test('Update My Plan on My Freedom Progress opens the existing editor and respects sample mode', async () => {
+  for (const width of [375, 768, 1366]) {
+    await cdp.send('Emulation.setDeviceMetricsOverride', {width, height: 900, deviceScaleFactor: 1, mobile: width < 600});
+    await navigate();
+    await evaluate('localStorage.clear()');
+    await navigate();
+    const stored = await fourNavSavedFixture('Dashboard update fixture');
+    await evaluate("FFSStage1BrowserTestHooks.showWorkspace('dashboard')");
+    assert.equal(await evaluate('document.getElementById("moreNavigation").open'), false);
+    assert.ok(await evaluate('document.querySelector(".dashboard-update-plan").getBoundingClientRect().height >= 44'));
+    const operations = [];
+    await journeyTap('.dashboard-update-plan', operations);
+    assert.ok(operations.some(action => action.status === 'pointer-click'), JSON.stringify(operations));
+    assert.equal(await evaluate('document.body.dataset.activeView'), 'setup');
+    assert.equal(await evaluate('FFSStage1BrowserTestHooks.getPlan().personal.person1Name'), 'Dashboard update fixture');
+    assert.equal(await evaluate(`localStorage.getItem(${JSON.stringify(stored.key)})`), stored.raw);
+    await evaluate('document.getElementById("heroDemoButton").click()');
+    assert.equal(await evaluate('document.body.dataset.freedomSample'), 'true');
+    assert.equal(await evaluate('getComputedStyle(document.querySelector(".dashboard-update-plan")).display'), 'none');
+    assert.ok(await evaluate('document.querySelector("[data-demo-return]").getClientRects().length'));
+  }
+});
