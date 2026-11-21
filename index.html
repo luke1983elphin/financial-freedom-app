@@ -56,7 +56,13 @@
                 </div>
               </details>
               <button type="button" role="menuitem" data-mobile-action="manage-data">Manage Data</button>
-              <button type="button" role="menuitem" data-mobile-action="export" aria-haspopup="true" aria-controls="reportChoiceMenu" aria-expanded="false">Reports</button>
+              <details class="mobile-plan-group" id="mobileReportsGroup">
+                <summary role="button">Reports</summary>
+                <div>
+                  <button type="button" role="menuitem" data-report-choice="plan">Financial Plan Report</button>
+                  <button type="button" role="menuitem" data-report-choice="scenarios">Saved Retirement Scenario Reports</button>
+                </div>
+              </details>
             </div>
           </details>
           <input class="hidden" id="planImportJsonInput" type="file" accept="application/json,.json">

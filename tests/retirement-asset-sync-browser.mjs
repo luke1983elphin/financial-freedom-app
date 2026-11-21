@@ -321,7 +321,8 @@ for (const width of [1366, 820, 390]) test('Issue 100: backup, legacy recovery, 
   const mobile=await evaluate(`getComputedStyle(document.querySelector('.toolbar-actions')).display==='none'`);
   const menu=mobile?'#mobilePlanGroup':'#planMenu';
   assert.deepEqual(await evaluate(`Array.from(document.querySelectorAll('${menu} button')).map(b=>b.textContent.trim())`),['New Plan','Export Plan Backup','Import Plan Backup']);
-  const click=async(desktop,mobileAction)=>evaluate(mobile?`document.querySelector('#mobileActionMenu').open=true;document.querySelector('#mobilePlanGroup').open=true;document.querySelector('[data-mobile-action="${mobileAction}"]').click()`:`document.querySelector('#planMenu').open=true;document.querySelector('${desktop}').click()`);
+  const reportRoot=mobile?'#mobileReportsGroup':'#reportChoiceMenu';
+  const click=async(desktop,mobileAction)=>{ if(mobile&&mobileAction==='export'){await evaluate(`document.querySelector('#mobileActionMenu').open=true;document.querySelector('#mobileReportsGroup').open=true`);return;} return evaluate(mobile?`document.querySelector('#mobileActionMenu').open=true;document.querySelector('#mobilePlanGroup').open=true;document.querySelector('[data-mobile-action="${mobileAction}"]').click()`:`document.querySelector('#planMenu').open=true;document.querySelector('${desktop}').click()`); };
   const downloadRoot=path.join(root,'output/plan-menu');await mkdir(downloadRoot,{recursive:true});
   const downloadDir=await mkdtemp(path.join(downloadRoot,'downloads-'));
   await cdp.send('Browser.setDownloadBehavior',{behavior:'allow',downloadPath:downloadDir});
@@ -352,10 +353,10 @@ for (const width of [1366, 820, 390]) test('Issue 100: backup, legacy recovery, 
   const older=JSON.parse(await evaluate('__backupBlob.text()'));assert.equal(older.plan.personal.person1Name,'Legacy Backup');assert.deepEqual(older.scenarios,backup.scenarios);
   await click('#exportButton','export');
   assert.equal(await evaluate('document.querySelector("#exportButton").textContent'),'Reports');
-  assert.equal(await evaluate(`document.querySelector('#reportChoiceMenu').getBoundingClientRect().width>0`),true);
-  await evaluate(`document.querySelector('[data-report-choice="plan"]').click()`);
+  assert.equal(await evaluate(`document.querySelector('${reportRoot}').getBoundingClientRect().width>0`),true);
+  await evaluate(`document.querySelector('${reportRoot} [data-report-choice="plan"]').click()`);
   assert.equal(await evaluate(`document.querySelector('[data-view-panel="reports"]').classList.contains('hidden')`),false);
-  await click('#exportButton','export');await evaluate(`document.querySelector('[data-report-choice="scenarios"]').click()`);
+  await click('#exportButton','export');await evaluate(`document.querySelector('${reportRoot} [data-report-choice="scenarios"]').click()`);
   assert.equal(await evaluate(`document.querySelector('[data-view-panel="scenarios"]').classList.contains('hidden')`),false);
   await click('#manageDataButton','manage-data');await evaluate(`document.querySelector('[data-durability-action="delete-all"]').click()`);
   assert.match(await evaluate('document.querySelector("#durabilityDialogBody").textContent'),/permanently.*preserved older plans/s);

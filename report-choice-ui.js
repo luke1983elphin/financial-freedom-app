@@ -3,28 +3,17 @@
   'use strict';
   const menu = document.getElementById('reportChoiceMenu');
   const exportButton = document.getElementById('exportButton');
-  const mobileExport = document.querySelector('[data-mobile-action="export"]');
+  const mobileReports = document.getElementById('mobileReportsGroup');
   const scenarioPrint = document.getElementById('printSavedScenariosButton');
-  let trigger = null;
-  // Outside the desktop-only toolbar so the same report choices work on mobile.
-  if (menu) document.body.appendChild(menu);
-  const closeMenu = () => {
-    if (menu) menu.hidden = true;
-    [exportButton, mobileExport].forEach(button => button?.setAttribute('aria-expanded', 'false'));
-  };
-  const showMenu = (button) => {
+  const closeMenu = () => { if (menu) menu.hidden = true; exportButton?.setAttribute('aria-expanded', 'false'); };
+  const showMenu = () => {
     if (!menu) return;
-    const opening = menu.hidden;
-    closeMenu();
-    if (!opening) return;
-    trigger = button;
-    menu.style.top = Math.min(document.querySelector('.app-header').getBoundingClientRect().bottom + 8, innerHeight - 160) + 'px';
-    menu.hidden = false;
-    button?.setAttribute('aria-expanded', 'true');
-    menu.querySelector('button')?.focus();
+    menu.hidden = !menu.hidden;
+    exportButton?.setAttribute('aria-expanded', String(!menu.hidden));
+    if (!menu.hidden) menu.querySelector('button')?.focus();
   };
   document.addEventListener('keydown', event => {
-    if (event.key === 'Escape' && menu && !menu.hidden) { closeMenu(); trigger?.focus(); }
+    if (event.key === 'Escape' && menu && !menu.hidden) { closeMenu(); exportButton?.focus(); }
   });
   const openSection = (view) => {
     closeMenu();
@@ -37,23 +26,23 @@
   };
   // Capture existing export clicks before the legacy handler invokes printing.
   if (exportButton) exportButton.addEventListener('click', (event) => {
-    event.preventDefault(); event.stopImmediatePropagation(); showMenu(exportButton);
+    event.preventDefault(); event.stopImmediatePropagation(); showMenu();
   }, true);
-  if (mobileExport) mobileExport.addEventListener('click', (event) => {
-    event.preventDefault(); event.stopImmediatePropagation();
-    const sheet = document.getElementById('mobileActionMenu');
-    if (sheet) sheet.open = false;
-    showMenu(mobileExport);
-  }, true);
-  if (menu) menu.addEventListener('click', (event) => {
+  const chooseReport = (event) => {
     const choice = event.target.closest('[data-report-choice]');
     if (!choice) return;
+    if (mobileReports?.contains(choice)) {
+      mobileReports.open = false;
+      document.getElementById('mobileActionMenu').open = false;
+    }
     if (choice.dataset.reportChoice === 'plan') openSection('reports');
     else openSection('scenarios');
-  });
+  };
+  menu?.addEventListener('click', chooseReport);
+  mobileReports?.addEventListener('click', chooseReport);
   document.addEventListener('click', (event) => {
     if (menu && !menu.hidden && !menu.contains(event.target) &&
-      event.target !== exportButton && event.target !== mobileExport) closeMenu();
+      !exportButton?.contains(event.target)) closeMenu();
   });
   if (scenarioPrint) scenarioPrint.addEventListener('click', () => {
     document.body.classList.add('printing-saved-scenarios');

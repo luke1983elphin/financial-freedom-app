@@ -1,6 +1,6 @@
 # Issue #100 — Plan menu, backup and data management
 
-Base: `bfaeee4` (latest main inspected before implementation). Branch: `feature/plan-backup-data-menu`.
+Base: `bfaeee4` at initial inspection; reconciled with `ffea62a` after PRs #101/#102 advanced main during verification. Branch: `feature/plan-backup-data-menu`.
 
 ## Findings and changes
 
@@ -9,7 +9,7 @@ Base: `bfaeee4` (latest main inspected before implementation). Branch: `feature/
 - Manage Data exports individual preserved plans with scenarios, weekly records and history from that same preservation point. It also exports a raw recovery copy for malformed or unsupported records. These copies remain local until explicitly deleted; they are not silently mixed with the active plan's export. Current-plan backups still use the existing format and atomic import validation/write transaction.
 - Both desktop and mobile receive visible export/import feedback. Downloads are synchronous from the action and object URLs remain available for 60 seconds; iPhone/iPad feedback explains saving a Safari preview to Files. The app reports download initiation, not unverifiable permanent file retention.
 - Delete all is separate from Plan, explains its permanent scope, provides backup access, and defaults focus to Cancel. The owned-key inventory now includes the three display preferences previously omitted. Preference writes use the coordinator so deletion cannot immediately recreate them. Unrelated same-origin data remains intact.
-- Reports replaces Print / Export. Financial Plan Report and Saved Retirement Scenario Reports remain available. The shared report popup was inside the hidden desktop toolbar; moving it outside makes it available to mobile as well. Escape and expanded-state feedback are supported.
+- Reports replaces Print / Export. Financial Plan Report and Saved Retirement Scenario Reports remain available. The final integration retains main’s new Reports subgroup inside the mobile Actions menu. The desktop report popup also supports Escape and expanded-state feedback.
 - No calculator, Age Pension, growth model, scenario assumptions, Try a Change or Weekly Mission calculations were changed. Existing numerical fixtures are unchanged. Only intentionally changed persistence/presentation fingerprints were updated.
 
 ## Verification
@@ -29,4 +29,4 @@ The user flow is Plan/Manage Data → browser storage or downloaded JSON → val
 
 Browser automation uses installed Edge/Chromium with desktop, tablet and phone viewport metrics. Physical iPhone Safari/Files interaction needs a manual device check; mobile emulation is not evidence of WebKit testing. Raw recovery exports intentionally require recovery assistance rather than bypassing normal import validation. The pre-update recovery copy uses additional browser storage; if storage is full the app preserves existing records and pauses saves until space is available.
 
-The feature branch explicitly disables Vercel Git deployment. No merge or deployment is requested or performed.
+The overlapping main changes were merged into the feature branch only; the application was not merged into main. The feature branch explicitly disables Vercel Git deployment. No merge or deployment is requested or performed.

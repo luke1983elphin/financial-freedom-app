@@ -110,6 +110,7 @@ test("R6 release candidate exposes the complete navigation and export inventory"
   for (const item of nav.items) assert.ok(html.includes('data-view-panel="'+item.split(':')[0]+'"'));
   assert.match(app, /Export comparison PDF/);
   assert.match(html, /Export Plan Backup/);
+  assert.match(html, /Import Plan Backup/);
   assert.match(html, /id="weeklyPlanBackupExportButton">Export backup/);
 });
 
