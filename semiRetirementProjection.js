@@ -24,7 +24,7 @@
   const FEATURE_FLAGS = {
     semiRetirementProjectionEnabled: resolveSemiRetirementProjectionFlag(),
   };
-  const PROJECTION_VERSION = "2026.27.4-f08";
+  const PROJECTION_VERSION = "2026.27.5-asset-sales";
   const DEFAULT_CONTRIBUTIONS_TAX_RATE = 0.15;
   const DEFAULT_EMPLOYER_SUPER_RATE = 0.12;
   const DOWNSIZER_CONTRIBUTION_LIMIT = 300000;
@@ -465,6 +465,32 @@
       && number(asset.openingValue) > 0 && number(asset.ownershipPercent, 100) > 0;
   }
 
+  function isSaleableProperty(asset) {
+    const type = normaliseAssetType(asset.type || asset.category);
+    return PROPERTY_ASSET_TYPES.has(type) && !["home", "principalResidence", "principal_residence"].includes(type)
+      && !asset.isAccessibleAsset && number(asset.openingValue) > 0 && number(asset.ownershipPercent, 100) > 0;
+  }
+
+  function isSaleableAsset(asset) {
+    return isSaleablePersonalAsset(asset) || isSaleableProperty(asset);
+  }
+
+  // Resolve the same stable asset -> rental income -> loan relationships used
+  // by retained equity. Ambiguous relationships are rejected before projection.
+  function saleDebtAssetId(debt, assets, propertyIncome) {
+    if (debt.linkedAssetId) return debt.linkedAssetId;
+    const ids = new Set(propertyIncome.filter(income => income.id === debt.linkedRentalIncomeId
+      || income.linkedLoanIds?.includes(debt.id)).map(income => income.linkedAssetId).filter(Boolean));
+    return ids.size === 1 ? [...ids][0] : null;
+  }
+
+  function saleIncomeAssetId(income, liabilities) {
+    if (income.linkedAssetId) return income.linkedAssetId;
+    const ids = new Set(liabilities.filter(debt => income.linkedLoanIds?.includes(debt.id)
+      || debt.linkedRentalIncomeId === income.id).map(debt => debt.linkedAssetId).filter(Boolean));
+    return ids.size === 1 ? [...ids][0] : null;
+  }
+
   function normaliseProjectionLiability(liability = {}, index = 0) {
     const type = normaliseLiabilityType(liability.type || liability.category || liability.liabilityType);
     const id = normaliseRecordId(liability, "liability", index);
@@ -631,6 +657,11 @@
     return {
       id: normaliseRecordId(item, "one-off-income", index),
       ...(item.assetSaleId ? { assetSaleId: String(item.assetSaleId).trim() } : {}),
+      ...(item.assetSaleId && (item.saleProceedsBasis === "gross" || item.taxTreatment) ? {
+        saleProceedsBasis: "gross", sellingCostPct: item.sellingCostPct ?? 0,
+        taxTreatment: item.taxTreatment || "", taxableCapitalGainPerson1: item.taxableCapitalGainPerson1,
+        taxableCapitalGainPerson2: item.taxableCapitalGainPerson2,
+      } : {}),
       description: String(item.description || item.name || "").trim(),
       amountTodayDollars: roundCurrency(Math.max(0, number(item.amountTodayDollars ?? item.amount ?? item.todayDollarAmount))),
       year: Math.round(number(item.year ?? item.calendarYear)),
@@ -1529,15 +1560,33 @@
     const soldAssetIds = new Set();
     const saleableAssets = new Set((Array.isArray(input.assets) ? input.assets : [])
       .map((asset, index) => normaliseProjectionAsset(asset, index))
-      .filter(isSaleablePersonalAsset).map(asset => asset.id));
+      .filter(isSaleableAsset).map(asset => asset.id));
     oneOffIncomeEvents.forEach((event, index) => {
       const prefix = `scenario.oneOffIncomeEvents.${index}`;
       if (oneOffIncomeIds.has(event.id)) addValidation(errors, `${prefix}.id`, "One-off income events need unique IDs.");
       oneOffIncomeIds.add(event.id);
       if (event.assetSaleId) {
-        if (!saleableAssets.has(event.assetSaleId)) addValidation(errors, `${prefix}.assetSaleId`, "Choose an existing personal asset.");
+        if (!saleableAssets.has(event.assetSaleId)) addValidation(errors, `${prefix}.assetSaleId`, "Choose an existing personal asset or non-home property. Use downsizing for the principal residence.");
         if (soldAssetIds.has(event.assetSaleId)) addValidation(errors, `${prefix}.assetSaleId`, "This asset can only be sold once per scenario.");
         soldAssetIds.add(event.assetSaleId);
+        const asset = (input.assets || []).find(asset => asset.id === event.assetSaleId);
+        if (asset && (isSaleableProperty(asset) || event.saleProceedsBasis === "gross")) {
+          if (!hasFiniteNumber(event.sellingCostPct) || Number(event.sellingCostPct) < 0 || Number(event.sellingCostPct) > 100) addValidation(errors, `${prefix}.sellingCostPct`, "Enter selling costs between 0% and 100%.");
+          if (!["net-capital-gain", "exempt"].includes(event.taxTreatment)) addValidation(errors, `${prefix}.taxTreatment`, "Confirm the sale's tax treatment.");
+          if (event.taxTreatment === "net-capital-gain") {
+            (input.people || []).forEach((person, personIndex) => {
+              const key = person.id === "person2" ? "taxableCapitalGainPerson2" : "taxableCapitalGainPerson1";
+              if (!hasFiniteNumber(event[key]) || Number(event[key]) < 0) addValidation(errors, `${prefix}.${key}`, "Enter this person's net taxable capital gain in sale-year dollars (0 if none), after applicable costs, losses and discounts.");
+            });
+            if (!(input.people || []).some(person => person.id === "person2") && number(event.taxableCapitalGainPerson2) > 0) addValidation(errors, `${prefix}.taxableCapitalGainPerson2`, "Person 2 is not in this scenario.");
+            if (asset.owner === "person1" && number(event.taxableCapitalGainPerson2) > 0) addValidation(errors, `${prefix}.taxableCapitalGainPerson2`, "This asset belongs to person 1. Check the ownership or capital-gain allocation.");
+            if (asset.owner === "person2" && number(event.taxableCapitalGainPerson1) > 0) addValidation(errors, `${prefix}.taxableCapitalGainPerson1`, "This asset belongs to person 2. Check the ownership or capital-gain allocation.");
+          }
+          const debts = (input.liabilities || []).map(normaliseProjectionLiability);
+          debts.filter(debt => isSaleableProperty(asset) && debt.openingBalance > 0 && !saleDebtAssetId(debt, input.assets || [], input.propertyIncome || [])
+            && ["homeLoan", "mortgage", "rentalPropertyLoan", "investmentPropertyLoan", "investmentLoan", "otherDebt"].includes(debt.type))
+            .forEach(debt => addValidation(errors, `${prefix}.assetSaleId`, `Link ${debt.name} to the correct asset before modelling a sale; its secured asset is unknown.`));
+        }
       } else if (!event.description) {
         addValidation(errors, `${prefix}.description`, "Add a short description, such as inheritance, family assistance or insurance proceeds.");
       }
@@ -1955,7 +2004,9 @@
         rentalCashIncomeGrowthSource: "cpi",
         hierarchy: "Property-specific rate, then scenario-level rate for the matching property type, then a documented 0% fallback only where no applicable rate exists.",
       },
-      propertySaleTreatment: normalised.scenario.downsizeHomeEvent.enabled
+      propertySaleTreatment: normalised.scenario.oneOffIncomeEvents.some(event => event.assetSaleId && isSaleableProperty(normalised.assets.find(asset => asset.id === event.assetSaleId) || {}))
+        ? "Explicit non-home property sales occur at the start of the selected year. Selling costs and linked opening debt are deducted once, linked rental cash/tax income ceases, and user-supplied net capital gains enter the existing owner tax calculation. Cost bases, capital losses and CGT discounts are not inferred."
+        : normalised.scenario.downsizeHomeEvent.enabled
         ? "A scenario-only home-downsizing transaction is modelled in the selected year; otherwise no automatic property sale, refinance or redraw event is assumed."
         : "No automatic property sale, refinance, downsizing or redraw event is assumed.",
       offsetTreatment: "Offset cash remains an accessible asset and reduces linked home-loan interest while the loan exists. Offset cash earns no normal accessible-investment return during the same period. If retirement spending draws from offset cash, later loan-interest calculations use the remaining offset balance. If the linked loan is repaid, remaining offset cash is treated as ordinary accessible cash from the next projection year.",
@@ -2031,6 +2082,42 @@
     for (let yearIndex = 0; yearIndex <= maxYears; yearIndex += 1) {
       const calendarYear = normalised.projectionStartYear + yearIndex;
       const financialYear = CALC.financialYearForCalendarYear(calendarYear);
+      // Sales occur at the start of the selected annual row: no rent, expenses
+      // already netted against rent, interest or scheduled repayments thereafter.
+      const soldByThisYear = id => saleYearByAsset.has(id) && calendarYear >= saleYearByAsset.get(id);
+      const activePropertyIncome = normalised.propertyIncome.filter(income => !soldByThisYear(saleIncomeAssetId(income, normalised.liabilities)));
+      const stoppedIncomeIds = new Set(normalised.propertyIncome.filter(income => soldByThisYear(saleIncomeAssetId(income, normalised.liabilities))).map(income => income.id));
+      const activeProjection = saleYearByAsset.size ? { ...normalised,
+        propertyIncome: activePropertyIncome,
+        passiveIncome: normalised.passiveIncome.filter(income => !soldByThisYear(income.linkedAssetId) && !stoppedIncomeIds.has(income.sourceIncomeId)),
+      } : normalised;
+      const assetSalesThisYear = incomeEvents.filter(event => event.assetSaleId && event.year === calendarYear).map(event => {
+        const asset = assetsById.get(event.assetSaleId);
+        const grossMode = isSaleableProperty(asset) || event.saleProceedsBasis === "gross";
+        const grossProceeds = todayDollarAmount(event.amountTodayDollars, normalised.inflationRate, yearIndex);
+        const sellingCosts = grossMode ? roundCurrency(grossProceeds * number(event.sellingCostPct) / 100) : 0;
+        const loans = normalised.liabilities.filter(debt => saleDebtAssetId(debt, normalised.assets, normalised.propertyIncome) === asset.id);
+        const linkedDebtRepaid = roundCurrency(loans.reduce((sum, debt) => sum + number(liabilityStates[debt.id]), 0));
+        loans.forEach(debt => {
+          if (liabilityStates[debt.id] > 0 && !debtPayoffRecorded.has(debt.id)) {
+            summary.debtPayoffMilestones.push({ liabilityId: debt.id, name: debt.name, calendarYear,
+              person1Age: normalised.people[0].currentAge + yearIndex,
+              person2Age: normalised.people[1] ? normalised.people[1].currentAge + yearIndex : null, type: debt.type });
+            debtPayoffRecorded.add(debt.id);
+          }
+          liabilityStates[debt.id] = 0;
+        });
+        const netBeforeTax = roundCurrency(grossProceeds - sellingCosts - linkedDebtRepaid);
+        return { id: event.id, assetSaleId: asset.id, description: event.description, year: calendarYear,
+          amountTodayDollars: event.amountTodayDollars, grossProceeds, sellingCosts, linkedDebtRepaid,
+          linkedLoanIds: loans.map(debt => debt.id), netBeforeTax,
+          projectedAmount: Math.max(0, netBeforeTax), additionalFundsRequired: Math.max(0, -netBeforeTax),
+          taxTreatment: grossMode ? event.taxTreatment : "legacy-net-proceeds",
+          taxableCapitalGainPerson1: event.taxTreatment === "net-capital-gain" ? number(event.taxableCapitalGainPerson1) : 0,
+          taxableCapitalGainPerson2: event.taxTreatment === "net-capital-gain" ? number(event.taxableCapitalGainPerson2) : 0,
+        };
+      });
+      const saleFundingShortfall = roundCurrency(assetSalesThisYear.reduce((sum, sale) => sum + sale.additionalFundsRequired, 0));
       const peopleYear = normalised.people.map((person) => {
         const age = person.currentAge + yearIndex;
         const employmentPhase = employmentPhaseForAge(person, age);
@@ -2052,7 +2139,7 @@
         const ordinaryOpening=Math.max(0,accessibleOpening-activeOffsetTotal(offsetStates,liabilityStates));
         investmentComponents=CALC.allocateInvestmentMovement(investmentComponents,ordinaryOpening-investmentComponents.reduce((n,a)=>n+a.value,0));
       }
-      const passiveIncomeRows = projectPassiveIncomeRows(normalised, yearIndex, investmentComponents);
+      const passiveIncomeRows = projectPassiveIncomeRows(activeProjection, yearIndex, investmentComponents);
       peopleYear.forEach((person) => {
         const source = normalised.people.find((item) => item.id === person.id) || person;
         const passive = passiveIncomeForPerson(passiveIncomeRows, person.id);
@@ -2083,7 +2170,9 @@
           calendarYear,
         );
         const taxReducingConcessionalContribution = roundCurrency(recurringAdditionalSuperContribution + salarySacrificeSuper + plannedExtraConcessionalContribution);
-        const taxableIncomeBeforeConcessional = roundCurrency(person.grossEmploymentIncome + passive.taxableIncome - otherPreTaxPackaging);
+        const taxableCapitalGain = roundCurrency(assetSalesThisYear.reduce((sum, sale) => sum + number(sale[person.id === "person2" ? "taxableCapitalGainPerson2" : "taxableCapitalGainPerson1"]), 0));
+        if (taxableCapitalGain > 0) person.taxableCapitalGain = taxableCapitalGain;
+        const taxableIncomeBeforeConcessional = roundCurrency(person.grossEmploymentIncome + passive.taxableIncome + taxableCapitalGain - otherPreTaxPackaging);
         const taxableIncomeAfterConcessional = roundCurrency(Math.max(0, taxableIncomeBeforeConcessional - taxReducingConcessionalContribution));
         person.employmentIncome = roundCurrency(person.grossEmploymentIncome);
         person.interestIncome = passive.interestIncome;
@@ -2195,7 +2284,7 @@
         summary,
       });
       downsizeHomeEvent.warnings.forEach((warning) => warnings.push(`${calendarYear}: ${warning}`));
-      const propertyIncomeRows = projectPropertyIncomeRows(normalised, liabilityRows, yearIndex);
+      const propertyIncomeRows = projectPropertyIncomeRows(activeProjection, liabilityRows, yearIndex);
       const propertyRows = projectPropertyRows(normalised, assetRows, liabilityRows, propertyIncomeRows);
       const debtIdsLinkedToPropertyIncome = new Set(propertyIncomeRows.flatMap((income) => income.linkedLoanIds));
       const totalDebtRepayments = roundCurrency(liabilityRows.reduce((total, debt) => total + debt.totalRepayment, 0));
@@ -2210,7 +2299,7 @@
       const legacyFlatLoanRepayments = normalised.liabilities.length
         ? 0
         : roundCurrency(normalised.household.annualLoanPrincipalRepayments);
-      const annualDebtCashRequirement = roundCurrency(scheduledDebtCashRequirement + legacyFlatLoanRepayments);
+      const annualDebtCashRequirement = roundCurrency(scheduledDebtCashRequirement + legacyFlatLoanRepayments + saleFundingShortfall);
       const netRentalCashflow = roundCurrency(propertyIncomeRows.reduce((total, income) => total + income.netPropertyCashflow, 0));
       const totalPropertyValue = roundCurrency(propertyRows.reduce((total, property) => total + property.closingValue, 0));
       const totalPropertyDebt = roundCurrency(propertyRows.reduce((total, property) => total + property.linkedLoanClosingBalance, 0));
@@ -2241,6 +2330,11 @@
         normalised.inflationRate,
         yearIndex,
       );
+      if (assetSalesThisYear.length) {
+        oneOffIncome.events = oneOffIncome.events.map(event => assetSalesThisYear.find(sale => sale.id === event.id) || event);
+        oneOffIncome.total = roundCurrency(oneOffIncome.events.reduce((sum, event) => sum + event.projectedAmount, 0));
+        oneOffIncome.totalTodayDollars = roundCurrency(oneOffIncome.total / Math.pow(1 + normalised.inflationRate, yearIndex));
+      }
       const oneOffIncomeAccessibleContribution = oneOffIncome.total;
       const oneOffIncomeTodayDollars = oneOffIncome.totalTodayDollars;
       const totalProjectedLifestyleSpending = roundCurrency(applicableLifestyleSpending + oneOffLifestyleSpending);
@@ -2252,7 +2346,7 @@
           people: peopleYear, assets: assetRows, liabilities: liabilityRows,
           accessibleBalance: Math.max(0, accessibleOpening + unallocatedSurplusBalance
             + oneOffIncomeAccessibleContribution + number(downsizeHomeEvent.accessibleInvestmentContribution)
-            - number(downsizeHomeEvent.additionalFundsRequired)),
+            - number(downsizeHomeEvent.additionalFundsRequired) - saleFundingShortfall),
           otherIncome: normalised.household.otherAnnualIncome
             + passiveIncomeRows.filter(row => ["otherTaxableIncome", "otherPassive", "taxFree"].includes(row.type)).reduce((sum, row) => sum + number(row.taxableIncome), 0),
           rentalIncome: propertyIncomeRows.reduce((sum, row) => sum + Math.max(0, number(row.taxableRentalIncome)), 0),
@@ -2652,6 +2746,7 @@
           rentalTaxableIncome: person.rentalTaxableIncome,
           distributionIncome: person.distributionIncome,
           otherTaxableIncome: person.otherTaxableIncome,
+          ...(person.taxableCapitalGain > 0 ? { taxableCapitalGain: person.taxableCapitalGain } : {}),
           totalPassiveTaxableIncome: person.totalPassiveTaxableIncome,
           totalPassiveCashIncome: person.totalPassiveCashIncome,
           taxableIncomeBeforeModelledConcessionalContributions: person.taxableIncomeBeforeModelledConcessionalContributions,
@@ -2746,6 +2841,7 @@
           oneOffIncome: oneOffIncomeAccessibleContribution,
           oneOffIncomeTodayDollars,
           oneOffIncomeEvents: oneOffIncome.events,
+          ...(assetSalesThisYear.length ? { assetSales: assetSalesThisYear, assetSaleFundingShortfall: saleFundingShortfall } : {}),
           totalProjectedLifestyleSpending,
           annualLifestyleSurplusOrShortfall,
           cashSurplusOrShortfall,
@@ -2930,6 +3026,8 @@
     projectRetirementScenario,
     retainedAssetsAtYear,
     isSaleablePersonalAsset,
+    isSaleableProperty,
+    isSaleableAsset,
     validateRetirementProjectionInputs: validateInputs,
     normaliseRetirementProjectionInputs: normaliseInputs,
     projectDebtYearForAudit: projectDebtYear,

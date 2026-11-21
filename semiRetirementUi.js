@@ -58,6 +58,11 @@
     return (Array.isArray(events) ? events : []).map((event, index) => ({
       id: String(event.id || oneOffIncomeEventId(index)),
       ...(event.assetSaleId ? { assetSaleId: String(event.assetSaleId).trim() } : {}),
+      ...(event.assetSaleId && (event.saleProceedsBasis === "gross" || event.taxTreatment) ? {
+        saleProceedsBasis: "gross", sellingCostPct: event.sellingCostPct ?? 0,
+        taxTreatment: event.taxTreatment || "", taxableCapitalGainPerson1: event.taxableCapitalGainPerson1,
+        taxableCapitalGainPerson2: event.taxableCapitalGainPerson2,
+      } : {}),
       description: String(event.description || event.name || "").trim(),
       amountTodayDollars: roundCurrency(nonNegative(event.amountTodayDollars ?? event.amount ?? event.todayDollarAmount)),
       year: Math.round(number(event.year ?? event.calendarYear)),
@@ -388,7 +393,7 @@
 
   function projectionAssetsFromPlan(plan = {}) {
     const items = (Array.isArray(plan.assetItems) ? plan.assetItems : []).filter(item => global.FFSCalculator?.isActiveFinancialRecord?.(item) !== false);
-    const propertyLike = new Set(["home", "principalResidence", "principal_residence", "otherProperty", "rentalInvestmentProperty", "rentalProperty", "investmentProperty", "vehicle"]);
+    const propertyLike = new Set([...PROPERTY_TYPES, "vehicle"]);
     const growthAssumptions = propertyGrowthAssumptionsFromPlan(plan);
     const detailed = items
       .filter((item) => propertyLike.has(item.category || item.type)
@@ -399,7 +404,7 @@
         const type = item.category || item.type || "other";
         const resolvedGrowth = PROPERTY_TYPES.has(type)
           ? resolvePlanPropertyGrowthRatePct(plan, item, growthAssumptions)
-          : { ratePct: 0, source: "zero-fallback", group: "non-property" };
+          : { ratePct: propertySpecificGrowthRatePct(item) ?? 0, source: propertySpecificGrowthRatePct(item) === null ? "zero-fallback" : "asset-specific", group: "non-property" };
         return {
           id: String(item.id || `asset-${index + 1}`),
           name: String(item.name || item.description || `Asset ${index + 1}`),
@@ -853,6 +858,28 @@
     };
   }
 
+  // Refresh a live draft against its previous plan defaults. Changed plan fields
+  // win; scenario-only adjustments survive. Saved snapshots never call this.
+  function refreshPlanLinkedDraft(draft, previous, current) {
+    const copy = value => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
+    const merge = (value, before, after, key = "") => {
+      if (["assets", "liabilities", "propertyIncome", "passiveIncome"].includes(key)) return copy(after);
+      if (JSON.stringify(before) === JSON.stringify(after)) return copy(value === undefined ? after : value);
+      if (key === "people" && Array.isArray(after)) return after.map(person => merge(
+        value?.find(item => item.id === person.id), before?.find(item => item.id === person.id), person));
+      if (after && typeof after === "object" && !Array.isArray(after)) {
+        const output = {};
+        for (const field of new Set([...Object.keys(value || {}), ...Object.keys(before || {}), ...Object.keys(after)])) {
+          const next = merge(value?.[field], before?.[field], after[field], field);
+          if (next !== undefined) output[field] = next;
+        }
+        return output;
+      }
+      return copy(after);
+    };
+    return merge(draft, previous, current);
+  }
+
   // Present the existing retirement engine's rows to every main-plan future view.
   // Legacy plans keep their existing calculations until retirement timing is saved.
   const retirementForecastCache = new Map();
@@ -1111,7 +1138,7 @@
       assets: Array.isArray(draft.assets) ? clone(draft.assets).map((asset) => {
         const resolvedGrowth = PROPERTY_TYPES.has(asset.type || asset.category)
           ? resolveScenarioPropertyGrowthRatePct(draft, asset)
-          : { ratePct: 0, source: "zero-fallback", group: "non-property" };
+          : { ratePct: propertySpecificGrowthRatePct(asset) ?? 0, source: asset.growthRateSource || (propertySpecificGrowthRatePct(asset) === null ? "zero-fallback" : "asset-specific"), group: "non-property" };
         return {
           ...asset,
           annualGrowthRatePct: resolvedGrowth.ratePct,
@@ -1909,6 +1936,10 @@
     }));
   }
 
+  function assetSaleSummary(sale, format = value => roundCurrency(value).toLocaleString("en-AU", { style: "currency", currency: "AUD", maximumFractionDigits: 0 })) {
+    return `Gross proceeds ${format(sale.grossProceeds)}; selling costs ${format(sale.sellingCosts)}; linked loans repaid ${format(sale.linkedDebtRepaid)}; cash before personal tax ${format(sale.netBeforeTax)}. Net taxable gains: person 1 ${format(sale.taxableCapitalGainPerson1)}, person 2 ${format(sale.taxableCapitalGainPerson2)}. ${sale.taxTreatment === "exempt" ? "No taxable gain confirmed." : sale.taxTreatment === "legacy-net-proceeds" ? "Saved proceeds already exclude selling costs; no extra sale tax assumed." : "Gains are included once in annual personal tax; no separate flat CGT charge."}${sale.additionalFundsRequired > 0 ? ` Settlement shortfall ${format(sale.additionalFundsRequired)} is funded through the household withdrawal calculation.` : ""}`;
+  }
+
   function buildAssumptionRows(projection = {}, inputs = {}) {
     const assumptions = projection.assumptions || {};
     const people = asArray(inputs.people);
@@ -2072,6 +2103,10 @@
       ...passiveRows,
       ...offsetRows,
       ...noSaleRows,
+      ...asArray(projection.years).flatMap(row => asArray(row.household?.assetSales).map(sale => ({
+        label: `Asset sale: ${sale.description} (${row.calendarYear}, future dollars)`, type: "plain",
+        value: assetSaleSummary(sale), note: "Beginning-of-year sale. Linked rent, net property expenses and loan cashflows cease; personal tax is funded by the existing annual cashflow model. Gains are supplied after costs, losses and discounts, not calculated from a guessed cost base.",
+      }))),
     ].filter((row) => row.value !== undefined);
   }
 
@@ -2247,8 +2282,10 @@
       return null;
     };
     const capital = global.FFSSemiRetirementProjection?.retainedAssetsAtYear(end, false);
+    const assetSales = rows.flatMap(row => asArray(row.household?.assetSales));
     return {
       version: 1,
+      ...(assetSales.length ? { assetSales: clone(assetSales) } : {}),
       people: (view.people || []).map(person => ({ id: person.id, name: person.name,
         hasSemiRetirement: person.hasSemiRetirement, semiRetirementAge: person.semiRetirementAge,
         fullRetirementAge: person.fullRetirementAge, superAccessAge: person.superAccessAge })),
@@ -2475,6 +2512,8 @@
     retirementJourney,
     defaultWorkingPhaseSurplusDestination,
     buildSemiRetirementScenarioDefaults,
+    refreshPlanLinkedDraft,
+    assetSaleSummary,
     buildSavedRetirementOutcome,
     savedRetirementChanges,
     basePlanSourceKey,

@@ -67,12 +67,12 @@ try{
  assert.ok(opened.result,JSON.stringify(opened.errors));
  assert.equal(opened.result.years[0].household.closingAccessibleInvestmentBalance,2130043.30);
  assert.equal(await cdp.eval('JSON.stringify(FFSF08.saved())'),oldStored,'Opening does not overwrite old stored results or inputs');
- assert.ok(await cdp.eval("document.body.textContent.includes('Recalculated with corrected tax funding')"));
- const context=await cdp.eval('FFSF08.context()');assert.equal(context.keyResultSnapshot.projectionEngineVersion,'2026.27.4-f08');
+ assert.ok(await cdp.eval("document.body.textContent.includes('Recalculated with the current calculation engine')"));
+ const context=await cdp.eval('FFSF08.context()');assert.equal(context.keyResultSnapshot.projectionEngineVersion,'2026.27.5-asset-sales');
  await cdp.eval("FFSF08.saveNew();document.getElementById('stageGScenarioName').value='Corrected tax funding';document.querySelector('[data-scenario-save-action=save]').click()");
  const saved=await cdp.eval('FFSF08.saved()');
  assert.equal(saved.length,2);assert.equal(saved.find(s=>s.id==='old-f08').keyResultSnapshot.retirementOutcome.fundingAssetsAtRetirement,2140000);
- const corrected=saved.find(s=>s.id!=='old-f08');assert.equal(corrected.keyResultSnapshot.projectionEngineVersion,'2026.27.4-f08');
+ const corrected=saved.find(s=>s.id!=='old-f08');assert.equal(corrected.keyResultSnapshot.projectionEngineVersion,'2026.27.5-asset-sales');
  const reopened=await cdp.eval(`FFSF08.open(${JSON.stringify(corrected)})`);
  assert.deepEqual(reopened.inputs,opened.inputs);assert.deepEqual(reopened.result,opened.result);
  await cdp.eval("FFSStage1BrowserTestHooks.showWorkspace('reports');document.querySelector('[data-dollar-basis=\"today\"]').click()");

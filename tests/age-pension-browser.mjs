@@ -208,8 +208,9 @@ test('personal asset sale conversion, saving, reopening, comparisons and pension
   const before=await evaluate(`({year:document.querySelector('[data-semi-input="scenario.oneOffIncomeEvents.0.year"]').value,amount:document.querySelector('[data-semi-input="scenario.oneOffIncomeEvents.0.amountTodayDollars"]').value})`);
   const options=await evaluate(`Array.from(document.querySelector('[data-semi-input="scenario.oneOffIncomeEvents.0.assetSaleId"]').options).map(o=>({value:o.value,text:o.textContent}))`);
   assert.ok(options.some(o=>o.value==='sale-campervan'));
-  assert.ok(!options.some(o=>/home|investment property/i.test(o.text)));
+  assert.ok(!options.some(o=>/^home$|principal residence/i.test(o.text)));
   await changeField('scenario.oneOffIncomeEvents.0.assetSaleId','sale-campervan');
+  await changeField('scenario.oneOffIncomeEvents.0.taxTreatment','exempt');
   assert.deepEqual(await evaluate(`({year:document.querySelector('[data-semi-input="scenario.oneOffIncomeEvents.0.year"]').value,amount:document.querySelector('[data-semi-input="scenario.oneOffIncomeEvents.0.amountTodayDollars"]').value})`),before);
   assert.equal(await evaluate(`document.querySelectorAll('[data-one-off-income-id]').length`),1);
   await evaluate(`document.querySelector('[data-semi-action="add-one-off-income-event"]').click()`);

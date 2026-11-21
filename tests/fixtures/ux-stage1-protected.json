@@ -2,8 +2,8 @@
   "baseline": "bd23b2a",
   "files": {
     "calculator.js": "77c04fef8a213cd06cd774d9e5eda333cda07cc4ba901b77a8e25245b313c65c",
-    "semiRetirementProjection.js": "52fe796ebeeeb14d258c40bbc6636777ef717542feb0f48418a4dcd84540e1fe",
-    "semiRetirementUi.js": "7659f0ecc3703954bc7b5102f30f2efe382752bf2665d950dcda130ac10adb33",
+    "semiRetirementProjection.js": "ab9bc41d50f8597991eb38933ee776fb253a96100c650979b20c2efe938bd5a4",
+    "semiRetirementUi.js": "327177b602c9f9298c8392486373e4effa2d525d61aebfeac8ab3efb8a7af6cc",
     "v2-data.js": "935fb66f828874f0ccc267d99d611a47113a85315cb983e45ff49390a84d8baa",
     "storage.js": "c85374d3b59ad306de5d3657d8ff44c12eb69c1f4d4e1b71228656228a4ff58d",
     "security.js": "19caa32b797a87c7ddbbe4c7352717ce1f7df52e7292a0de529449c24f7baa4b",
@@ -412,7 +412,7 @@
     "renderEngagementFullJourney": "88cab29028d8e316b34a3f1376c8068a5e6336555af5c6b2b636f08bf1ef205a",
     "semiRetirementUiEnabled": "33e8ebfbc3268731e1d9ddab5cefeabe89931dd9e7c82d01c6a452898c5fe79f",
     "cloneScenarioDraft": "b516474d2beb187434fcb98710ce7dc6a008baf92e7b7b4fa3e50976ba52efec",
-    "ensureSemiRetirementScenarioDraft": "12da9c6b7c9051f1ccd0322783080fda6fc1effd6099457862c446a63baeb64b",
+    "ensureSemiRetirementScenarioDraft": "3851dd390a6300d8271215706e6f891f60250761f29ac5c654daaabb5d6ca316",
     "semiRetirementValue": "e37ee4682b3f1a1ceb93006645141e2d07efa838023806872e95a493421fe8f2",
     "semiRetirementComparisonValue": "9c627bee2cea433f00d9954f6abae6672748a6b79c9bd440f533706a9048ee9e",
     "semiRetirementError": "06d6ea11c52c25b6571f44aaedd4e1f0bdbf30beb38c0246d8e259a680463386",
@@ -431,7 +431,7 @@
     "semiRetirementDownsizeHomeSummary": "a52e773207f0d7866ed0885b084c372fa26743fd043da2de38a185ac736541de",
     "semiRetirementLegacyOptionalDrawNoticeHtml": "b463b4967b2d076f483c26b4295af6b2a08108162e8ba4bcebc295ca86c709c8",
     "semiRetirementOneOffLifestyleEventsHtml": "7fdd7c13a9da04c9a0d68da36bdfa58f2efb3efe0870dbbd2b0b7eca7a6bef55",
-    "semiRetirementOneOffIncomeEventsHtml": "3e519291f6789016102260409e5cb7e3f79f44b75b7944c53b8bc79885030e76",
+    "semiRetirementOneOffIncomeEventsHtml": "16abe0598a6a827bde28e525e049b440369d6ca55d38970bd4774825d3e1a846",
     "semiRetirementPlannedConcessionalContributionsHtml": "45f67810db58792a572f8f7707b291d80ffc40a0c2a006dc0467331ad8a817cc",
     "semiRetirementDownsizeHomeEventHtml": "a1fc6a89facc33b10b4d493bdc27f3568a75dfd4d50e0815ef935c688f06db01",
     "semiRetirementPersonPanel": "ec7f1e450dffd8dc8a2ec7898ed970d504442aeac8a772b6bf36c704cba7b073",
@@ -492,7 +492,7 @@
     "semiRetirementComparisonInput": "ab0680eb1579417cfe5b52b4ab17004f4b38487a9abcb7a098f96f602d441a6a",
     "renderSemiRetirementComparisonControls": "4132f90e6c0032bbf1c9e27e9483971b1ce36e1be1642582122c5c48ebf96381",
     "renderSemiRetirementComparisonSelector": "e8d1c7505c12ffc0182b92877dae8b2e6c0c99e8a0326a9c90108cf2a34cf594",
-    "renderSemiRetirementComparisonPrintReport": "77892363c8a6af86f42a10c7505e92ede926b536eb73b989225bb9bdf856c9a1",
+    "renderSemiRetirementComparisonPrintReport": "65ec2ef72a851103aeb8812bd15c262a0ba10c7ecc13db252c303dd37b8d4e7f",
     "renderSemiRetirementTimelineHtml": "0696f516b741974bfe180e73e01631fde316faf3d2f61de44094d8e87c35f646",
     "renderRetainedAssetsHtml": "8e6772e1a42f7e878fa2a9158906baf41a2d896c7af6d3c21145ae085cf51d48",
     "renderSemiRetirementLongevityHtml": "40f3c515ad962dc476d4c66aeb6763f1189a1f3846ea64513fa11478ed6a0c97",
@@ -503,15 +503,15 @@
     "renderSemiRetirementPropertyCard": "93599bdc0dd4fc3db1d99e08ce78481c9a0c7550bdcd53289c2c388f40de8eed",
     "renderSemiRetirementDebtPropertyHtml": "c395d82492151ec11c828c1a492b11dc11d134ebd9dcbb25624b2fb2645bb94c",
     "semiRetirementDetailRows": "c82b30c0477c1e16a6d58225004693105e5f9d28c01c21d9862b5e64572b5115",
-    "renderSemiRetirementAnnualDetailHtml": "a8e9125dd2ef781bf4415534a5d79306fe9a02fb9f767248cb1c2ef5ea5c1da6",
+    "renderSemiRetirementAnnualDetailHtml": "beb351f2c29b4063e8fda86a329debc4420ccd1c64a5440b04a386ea79b8bb65",
     "renderSemiRetirementAnnualProjectionHtml": "4ac55b610d8379dc05a39ca03abe93904966af40ffbdf1d06b9385c6dfe2e8ce",
     "renderSemiRetirementAssumptionsHtml": "5a6418aad62d266dd836ee35eef20c14d24a65e2f37d9cc59dc5255f2fb50b7a",
     "renderSemiRetirementWarningsHtml": "c4220c2d3d0bae77514b15f72adba882efa97cfc2653d74500dafca69fcd0234",
     "renderSemiRetirementDisclosureHtml": "d6927c28c17cc857625d1a706aeee1e4ecb87b0216c7b217bbbcdf4213ad9cae",
     "renderSemiRetirementScenarioResultHtml": "34744b9c9ed500dd9a4e27b33dad251838f73585c5e2f9bb0a2ed8b689073679",
-    "renderSemiRetirementScenario": "f53d4cd220020c0bdf531df99a43cb77e8e09cc54957d767cfadd50a2afedf34",
+    "renderSemiRetirementScenario": "93a9ab5128c41ac9ce85ef4557ee3eece312cb7b03dfaebeb2ae05f8fb00f2ad",
     "renderDecision": "dde7b6a51e36e3d63590e995620ddd189d17364a666a2f28afdaccf231806b99",
-    "updateSemiRetirementDraftFromInput": "c17cf716f6647e99b3d580a9738ed5110d2cd11ff9f4e08dca89346bdee7e4fd",
+    "updateSemiRetirementDraftFromInput": "a1b8e4c2108ed91becda1b2e30f8556a5a8bb5e9982345d58ad5563b46dee959",
     "clearSemiRetirementComparisonState": "38ed00bfd0d60453849ed6b8f5f3b729d7392fd357d627cd6f493f1ec0f4aa0a",
     "runSemiRetirementComparisonForScenario": "39559a3bfe6062d0cb73fc6a1793014f7b97cce2fa171f3a3c5113a1cc103285",
     "requestSemiRetirementComparisonReplacement": "0f787ba029935adc4010ae1a1d6daddfbbec5286baf0abc3a4550d753eb51b1c",
@@ -528,7 +528,7 @@
     "useFinancialPlanLivingExpensesForSemiRetirementScenario": "1f91b2ac8f41e7747d2cd85b87a2cd1b9fc7b20266db1a49858fdbaa920bae85",
     "addSemiRetirementOneOffLifestyleEvent": "74b28461f7f3bb221647179aa01a706d9c1f8d6b74f7d523266659147d6c75c9",
     "removeSemiRetirementOneOffLifestyleEvent": "660cc3e32932b6369eeaf0f454b09d7aa9a6e109b9ff307e719a4ebe5bdb5b3c",
-    "addSemiRetirementOneOffIncomeEvent": "47f8856923e77c61b7195c50175f4e7178fefcddf6b6c6ad061e3730ea919a8e",
+    "addSemiRetirementOneOffIncomeEvent": "1d05bcf551f74fea7bb1b5156c44d5891926ec88fb1f253d6bab8229503af10a",
     "removeSemiRetirementOneOffIncomeEvent": "2002faa28742ff2cbc772e4258b20a6c44add33af683f5598fc4f1d4188a6a1f",
     "addSemiRetirementPlannedConcessionalContribution": "7a7b0bada764820225f62aacc35ca6f9d45b0303fe009d271587c67a371f41e3",
     "removeSemiRetirementPlannedConcessionalContribution": "07bcbd15c429365666a57c0bf70a8904c7b4b2663082f654b276a2503f3854bb",
@@ -731,7 +731,7 @@
     "buildDecisionScenarioSaveContext": "387a672652358c293098d8d27e6935b38cb5e74b53a8a2c8a27d27f056a6cbba",
     "scenarioPathValue": "d6cf4a7d7633bd5204ce944c2d2c63e5124cd1ccb60afbe46318aa6cd945ca0b",
     "retirementChangeRows": "a3d5c666471d539050e69c9f6d52837390de260d739f454fcdd5cab22a263bd4",
-    "retirementOutcomeSections": "455d6f35cb32c3865804c386a18d2641455a600fb3553fda51144437ed91710d",
+    "retirementOutcomeSections": "4c9d9f30eded9e15b073d2f3d6b52c900754b2ff144499f3024fa42378deab53",
     "retirementKeyResultSnapshot": "5040fd262c60a978f527fb86702044142a2687c1576f119bc783470c34a213e0",
     "savedRetirementOutcomeHtml": "b45ed24e0e8386a36110c994a4c1e1e6a09da7b4f9d5d3fd1d8c79a61e8beb6e",
     "savedRetirementChangesHtml": "dd9088655574c0bac4672b955bfc7b538d5cf68111b45eb31fe2c0bccbe6e03c",
@@ -783,7 +783,7 @@
     "saveScenario": "03fb44f237491676e9b8e476788102a7699be5f438c74d0340944f00ba13482d",
     "findSavedScenario": "aa26c4cfcade4153b878054c737470ce6b242e813afbade5b370876d049e642c",
     "loadDecisionScenarioSnapshot": "d47382042d47307a9ccf6f7addc83932c127cd558898496f2dd1f7735a387501",
-    "loadRetirementScenarioSnapshot": "50b8224bb05f94452994025444d5cac299cd240519cf78a9c13fabd2c496b515",
+    "loadRetirementScenarioSnapshot": "f583c3696421820b25f7a4aa6852f98ac41e12c32abcdbaaad7eda46fbe03041",
     "openSavedScenario": "c771c9f010a1ab00e3351e50d09a2c78d3ab52fcb5c0ddf083b41c6c84e8ad91",
     "exploreDecisionOpportunity": "a3cd7773d88a5e1043f85a375c675aba400d75959c940464fe539eaf70e556d3",
     "compareSavedScenario": "5c39bfdd8ba2d54a559dabf8a1f23ff95dc7c230dbe78a2d0ba6926ffba1d68b",
@@ -1291,5 +1291,75 @@
       "previous": "6d824e6f0125edafa03180b1cf5b70d98f393f9b1092d3d77dedd59e60f683c8",
       "current": "f83abf6aa42fef3bff6c2956dbb209f2e1b6223f83331e4a8c340bf0c3c1973f"
     }
+  },
+  "assetSyncUpdate": {
+    "note": "Plan-linked refresh, explicit asset growth mapping and historical input disclosures; calculators and saved storage unchanged.",
+    "changes": [
+      {
+        "name": "semiRetirementUi.js",
+        "previous": "7659f0ecc3703954bc7b5102f30f2efe382752bf2665d950dcda130ac10adb33",
+        "current": "1d3446c7d3cfd828f382971dcb11283dc8d8b709d4c299eaf4e3d3002da4d887"
+      },
+      {
+        "name": "ensureSemiRetirementScenarioDraft",
+        "previous": "12da9c6b7c9051f1ccd0322783080fda6fc1effd6099457862c446a63baeb64b",
+        "current": "3851dd390a6300d8271215706e6f891f60250761f29ac5c654daaabb5d6ca316"
+      },
+      {
+        "name": "renderSemiRetirementScenario",
+        "previous": "f53d4cd220020c0bdf531df99a43cb77e8e09cc54957d767cfadd50a2afedf34",
+        "current": "93a9ab5128c41ac9ce85ef4557ee3eece312cb7b03dfaebeb2ae05f8fb00f2ad"
+      }
+    ]
+  },
+  "issue92Update": {
+    "note": "Explicit property disposal settlement and owner-supplied net gains routed through existing personal tax; no pension formula changes. Non-sale nine-fixture parity retained.",
+    "changes": [
+      {
+        "name": "semiRetirementUi.js",
+        "previous": "1d3446c7d3cfd828f382971dcb11283dc8d8b709d4c299eaf4e3d3002da4d887",
+        "current": "327177b602c9f9298c8392486373e4effa2d525d61aebfeac8ab3efb8a7af6cc"
+      },
+      {
+        "name": "semiRetirementProjection.js",
+        "previous": "52fe796ebeeeb14d258c40bbc6636777ef717542feb0f48418a4dcd84540e1fe",
+        "current": "ab9bc41d50f8597991eb38933ee776fb253a96100c650979b20c2efe938bd5a4"
+      },
+      {
+        "name": "semiRetirementOneOffIncomeEventsHtml",
+        "previous": "3e519291f6789016102260409e5cb7e3f79f44b75b7944c53b8bc79885030e76",
+        "current": "16abe0598a6a827bde28e525e049b440369d6ca55d38970bd4774825d3e1a846"
+      },
+      {
+        "name": "renderSemiRetirementComparisonPrintReport",
+        "previous": "77892363c8a6af86f42a10c7505e92ede926b536eb73b989225bb9bdf856c9a1",
+        "current": "65ec2ef72a851103aeb8812bd15c262a0ba10c7ecc13db252c303dd37b8d4e7f"
+      },
+      {
+        "name": "renderSemiRetirementAnnualDetailHtml",
+        "previous": "a8e9125dd2ef781bf4415534a5d79306fe9a02fb9f767248cb1c2ef5ea5c1da6",
+        "current": "beb351f2c29b4063e8fda86a329debc4420ccd1c64a5440b04a386ea79b8bb65"
+      },
+      {
+        "name": "updateSemiRetirementDraftFromInput",
+        "previous": "c17cf716f6647e99b3d580a9738ed5110d2cd11ff9f4e08dca89346bdee7e4fd",
+        "current": "a1b8e4c2108ed91becda1b2e30f8556a5a8bb5e9982345d58ad5563b46dee959"
+      },
+      {
+        "name": "addSemiRetirementOneOffIncomeEvent",
+        "previous": "47f8856923e77c61b7195c50175f4e7178fefcddf6b6c6ad061e3730ea919a8e",
+        "current": "1d05bcf551f74fea7bb1b5156c44d5891926ec88fb1f253d6bab8229503af10a"
+      },
+      {
+        "name": "retirementOutcomeSections",
+        "previous": "455d6f35cb32c3865804c386a18d2641455a600fb3553fda51144437ed91710d",
+        "current": "4c9d9f30eded9e15b073d2f3d6b52c900754b2ff144499f3024fa42378deab53"
+      },
+      {
+        "name": "loadRetirementScenarioSnapshot",
+        "previous": "50b8224bb05f94452994025444d5cac299cd240519cf78a9c13fabd2c496b515",
+        "current": "f583c3696421820b25f7a4aa6852f98ac41e12c32abcdbaaad7eda46fbe03041"
+      }
+    ]
   }
 }
