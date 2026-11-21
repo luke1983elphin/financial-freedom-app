@@ -9,6 +9,10 @@
     "ffs-user-state-v3-mobile-dashboard-ux-test",
     "ffs-plan-context-v3-mobile-dashboard-ux-test",
     "ffs-durability-state-v1",
+    "ffs-plan-menu-recovery-v1",
+    "ffs.ui.forecastDollarBasis",
+    "ffs.ui.forecastDollarBasisPlans.v1",
+    "ffs.ui.moreNavigationOpen",
     "ffs-data-deletion-in-progress-v1",
   ]);
   const KEY_PREFIXES = [
@@ -16,6 +20,7 @@
     "ffs-weekly-plan-v1:",
     "ffs-financial-snapshots-v1:",
   ];
+  const RECOVERY_KEY = "ffs-plan-menu-recovery-v1";
   const DELETION_MARKER_KEY = "ffs-data-deletion-in-progress-v1";
 
   function isOwnedKey(key) {
@@ -43,6 +48,7 @@
   function createStorageCoordinator(backend, options = {}) {
     const schedule = options.schedule || ((callback, delay) => global.setTimeout(callback, delay));
     const onIssue = typeof options.onIssue === "function" ? options.onIssue : () => {};
+    let recoveryFailure = null;
     let writesSuppressed = false;
     let suppressionReason = "";
 
@@ -72,6 +78,7 @@
     }
 
     function writeText(key, text, writeOptions = {}) {
+      if (recoveryFailure && !writeOptions.allowWhileSuppressed) return recoveryFailure;
       if (writesSuppressed && !writeOptions.allowWhileSuppressed) {
         return resultError(new Error(suppressionReason || "Data was deleted in another tab."), "write", key);
       }
@@ -97,6 +104,7 @@
     }
 
     function writeBatch(entries, writeOptions = {}) {
+      if (recoveryFailure && !writeOptions.allowWhileSuppressed) return recoveryFailure;
       if (writesSuppressed && !writeOptions.allowWhileSuppressed) {
         return resultError(new Error(suppressionReason || "Data was deleted in another tab."), "batch-write");
       }
@@ -143,6 +151,7 @@
     }
 
     function remove(key, removeOptions = {}) {
+      if (recoveryFailure && !removeOptions.allowWhileSuppressed) return recoveryFailure;
       if (writesSuppressed && !removeOptions.allowWhileSuppressed) {
         return resultError(new Error(suppressionReason || "Data was deleted in another tab."), "remove", key);
       }
@@ -180,6 +189,31 @@
       return { ok: true, keys };
     }
 
+    function preserveLegacyData() {
+      // Capture exact pre-migration strings once, before app startup can write anything.
+      // Keep corrupt/unsupported records too: export must not destroy recovery evidence.
+      recoveryFailure = null;
+      const existing = getText(RECOVERY_KEY);
+      if (existing.ok && existing.value !== null) return { ok: true };
+      const inventory = ownedKeys();
+      let result = !existing.ok ? existing : !inventory.ok ? inventory : null;
+      const entries = {};
+      if (!result) {
+        for (const key of inventory.keys) {
+          if (key === DELETION_MARKER_KEY || key === RECOVERY_KEY) continue;
+          const stored = getText(key);
+          if (!stored.ok) { result = stored; break; }
+          if (stored.value !== null) entries[key] = stored.value;
+        }
+      }
+      if (!result) result = writeJson(RECOVERY_KEY, { version: 1, preservedAt: new Date().toISOString(), entries });
+      if (!result.ok) {
+        recoveryFailure = { ...result, operation: "preserve-legacy", message: "Saving is paused because older browser data could not be preserved. Open Manage Data to export it, free browser storage, then reload. Existing plans have not been replaced." };
+        onIssue(recoveryFailure);
+      }
+      return result;
+    }
+
     function suppressWrites(reason = "Data was deleted in another tab.") {
       writesSuppressed = true;
       suppressionReason = reason;
@@ -215,6 +249,7 @@
           // A non-financial coordination marker may remain if storage becomes unavailable.
         }
       }, Number(deleteOptions.markerLifetimeMs) >= 0 ? Number(deleteOptions.markerLifetimeMs) : 1000);
+      recoveryFailure = null;
       return { ok: true, removed, marker };
     }
 
@@ -235,6 +270,7 @@
       writeBatch,
       remove,
       ownedKeys,
+      preserveLegacyData,
       deleteAllOwned,
       handleStorageEvent,
       suppressWrites,
@@ -246,6 +282,7 @@
 
   const api = {
     EXACT_KEYS,
+    RECOVERY_KEY,
     KEY_PREFIXES,
     DELETION_MARKER_KEY,
     isOwnedKey,

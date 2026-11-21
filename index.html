@@ -32,16 +32,11 @@
                 <button type="button" id="planImportJsonButton">Import Plan Backup</button>
               </div>
             </details>
-            <details class="plan-menu">
-              <summary class="btn plan-menu-trigger">Manage Data</summary>
-              <div class="plan-menu-panel">
-                <button type="button" id="deleteAllDataButton">Delete all Financial Freedom data on this device</button>
-              </div>
-            </details>
+            <button class="btn" type="button" id="manageDataButton">Manage Data</button>
             <div class="report-choice-anchor"><button class="btn" type="button" id="exportButton" aria-haspopup="true" aria-controls="reportChoiceMenu" aria-expanded="false">Reports</button>
             <div class="report-choice-menu" id="reportChoiceMenu" hidden aria-label="Choose a report to print or export">
               <button class="btn" type="button" data-report-choice="plan">Financial Plan Report</button>
-              <button class="btn" type="button" data-report-choice="scenarios">Saved Scenarios</button>
+              <button class="btn" type="button" data-report-choice="scenarios">Saved Retirement Scenario Reports</button>
             </div></div>
           </div>
           <details class="mobile-action-menu" id="mobileActionMenu">
@@ -60,28 +55,16 @@
                   <button type="button" role="menuitem" data-mobile-action="import-plan-json">Import Plan Backup</button>
                 </div>
               </details>
-              <details class="mobile-plan-group">
-                <summary role="button">Manage Data</summary>
-                <div>
-                  <button type="button" role="menuitem" data-mobile-action="delete-all-data">Delete all Financial Freedom data</button>
-                </div>
-              </details>
+              <button type="button" role="menuitem" data-mobile-action="manage-data">Manage Data</button>
               <details class="mobile-plan-group" id="mobileReportsGroup">
                 <summary role="button">Reports</summary>
                 <div>
                   <button type="button" role="menuitem" data-report-choice="plan">Financial Plan Report</button>
-                  <button type="button" role="menuitem" data-report-choice="scenarios">Saved Scenarios</button>
+                  <button type="button" role="menuitem" data-report-choice="scenarios">Saved Retirement Scenario Reports</button>
                 </div>
               </details>
             </div>
           </details>
-          <!-- Legacy action targets required during startup. -->
-          <div hidden inert>
-            <button type="button" id="planSaveButton">Save Plan</button>
-            <button type="button" id="planLoadButton">Load Plan</button>
-            <button type="button" id="planDuplicateButton">Duplicate Plan</button>
-            <button type="button" id="planClearSavedButton">Clear Saved Plan</button>
-          </div>
           <input class="hidden" id="planImportJsonInput" type="file" accept="application/json,.json">
         </div>
       </header>
@@ -707,7 +690,7 @@
                     <input class="field-input" id="scenarioName" type="text" placeholder="e.g. Base case">
                     <label class="field-label mt-4" for="scenarioNotes">Notes</label>
                     <textarea class="field-input min-h-28" id="scenarioNotes" placeholder="Optional notes"></textarea>
-                    <button class="btn btn-primary mt-4 w-full justify-center" type="button" id="saveScenarioPanelButton">Save Plan to Saved Scenarios</button>
+                    <button class="btn btn-primary mt-4 w-full justify-center" type="button" id="saveScenarioPanelButton">Save to Saved Scenarios</button>
                   </div>
                   <div class="card">
                     <div class="mb-4 flex items-center justify-between gap-3">
@@ -806,7 +789,7 @@
                   </div>
                   <div class="report-toolbar-actions">
                     <button class="btn" type="button" data-view="progress">Track Your Progress</button>
-                    <button class="btn btn-primary" type="button" id="reportPrintButton">Print / Export</button>
+                    <button class="btn btn-primary" type="button" id="reportPrintButton">Reports</button>
                   </div>
                 </div>
 

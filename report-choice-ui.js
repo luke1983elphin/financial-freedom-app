@@ -5,8 +5,16 @@
   const exportButton = document.getElementById('exportButton');
   const mobileReports = document.getElementById('mobileReportsGroup');
   const scenarioPrint = document.getElementById('printSavedScenariosButton');
-  const closeMenu = () => { if (menu) menu.hidden = true; };
-  const showMenu = () => { if (menu) menu.hidden = !menu.hidden; };
+  const closeMenu = () => { if (menu) menu.hidden = true; exportButton?.setAttribute('aria-expanded', 'false'); };
+  const showMenu = () => {
+    if (!menu) return;
+    menu.hidden = !menu.hidden;
+    exportButton?.setAttribute('aria-expanded', String(!menu.hidden));
+    if (!menu.hidden) menu.querySelector('button')?.focus();
+  };
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && menu && !menu.hidden) { closeMenu(); exportButton?.focus(); }
+  });
   const openSection = (view) => {
     closeMenu();
     const nav = document.querySelector('.nav-button[data-view="' + view + '"]');

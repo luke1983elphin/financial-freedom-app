@@ -17,3 +17,5 @@ The application uses `localStorage`. No application use of `sessionStorage`, Ind
 | `ffs-data-deletion-in-progress-v1` | Short-lived multi-tab deletion token | Derived coordination marker | Removed after coordination delay |
 
 Writes spanning several keys use a verified best-effort batch with rollback of already changed keys. `localStorage` provides no transaction or crash-atomicity guarantee. A rollback can itself fail if storage becomes unavailable; the UI reports failure and retains the open in-memory plan.
+
+Issue #100: `ffs-plan-menu-recovery-v1` stores an immutable pre-menu-update copy of owned browser records (including unreadable records). It is captured before startup writes; preservation failure blocks writes. Manage Data offers individual restorable older-plan backups and a raw recovery export. Explicit delete-all removes it. Display preferences `ffs.ui.forecastDollarBasis`, `ffs.ui.forecastDollarBasisPlans.v1`, and `ffs.ui.moreNavigationOpen` are also owned and removed by delete-all.

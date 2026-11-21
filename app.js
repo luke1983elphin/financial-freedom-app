@@ -48,6 +48,7 @@
       storageIssues.push(issue);
     },
   });
+  if (!STORAGE?.getText(window.FFSStorage.DELETION_MARKER_KEY).value) STORAGE?.preserveLegacyData();
   console.info(`Weekly Plan editor build: ${WEEKLY_EDITOR_BUILD_ID}`);
 
   function storageGetItem(key) {
@@ -4084,12 +4085,13 @@
     document.body.appendChild(link);
     link.click();
     link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1200);
+    window.setTimeout(() => URL.revokeObjectURL(url), 60000);
   }
 
   function showDurabilityNotice(message, actions = []) {
     const notice = document.getElementById("durabilityNotice");
     if (!notice) return;
+    notice.classList.remove("backup-feedback");
     notice.replaceChildren();
     const text = document.createElement("span");
     text.textContent = message;
@@ -4200,9 +4202,10 @@
   }
 
   function showPendingStorageIssues() {
-    const issue = storageIssues.find((item) => item.corrupt || item.operation === "read");
+    const issue = storageIssues.find((item) => item.operation === "preserve-legacy") || storageIssues.find((item) => item.corrupt || item.operation === "read");
     if (!issue) return;
     showDurabilityNotice(issue.message, [
+      { label: "Manage Data", action: "manage-data" },
       { label: "Import backup", action: "import" },
       { label: "Start new plan", action: "new-plan" },
       { label: "Continue current plan", action: "close-notice" },
@@ -4318,12 +4321,97 @@
   }
 
   function exportPlanJson() {
-    const payload = buildCompletePlanBackupPayload();
-    const json = JSON.stringify(payload, null, 2);
-    const blob = new Blob([json], { type: "application/json" });
-    downloadBlob(blob, safeFilename(`Financial-Freedom-Plan-${householdNameForFile()}`, "json"));
-    recordBackupExportInitiated("complete-plan");
-    updateSaveStatus("Complete backup download initiated. Keep the downloaded file somewhere you can find it later.");
+    try {
+      const payload = buildCompletePlanBackupPayload();
+      downloadBlob(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }), safeFilename('Financial-Freedom-Plan-' + householdNameForFile(), 'json'));
+      recordBackupExportInitiated("complete-plan");
+      backupFeedback("Plan backup download initiated. On iPhone or iPad, save the file to Files if Safari opens a preview. Check Downloads or Files before leaving this page.");
+    } catch {
+      backupFeedback("Export failed. Your plan has not been changed. Try again or use another browser to export your backup.");
+    }
+  }
+
+  function backupFeedback(message) {
+    updateSaveStatus(message.split(". ")[0] + (message.includes(". ") ? "." : ""));
+    showDurabilityNotice(message, [{ label: "Dismiss", action: "close-notice" }]);
+    document.getElementById("durabilityNotice")?.classList.add("backup-feedback");
+  }
+
+  function recoveryEntries() {
+    const saved = STORAGE?.readJson(window.FFSStorage.RECOVERY_KEY);
+    if (saved?.ok && saved.value?.entries) return saved.value.entries;
+    // If preservation failed (for example quota), export the originals in place.
+    const inventory = STORAGE?.ownedKeys();
+    if (!inventory?.ok) throw new Error("Browser storage is unavailable.");
+    return Object.fromEntries(inventory.keys.filter(key => key !== window.FFSStorage.RECOVERY_KEY).map(key => {
+      const entry = STORAGE.getText(key);
+      if (!entry.ok) throw new Error("Browser storage could not be read.");
+      return [key, entry.value];
+    }));
+  }
+
+  function recoverablePlans(entries = recoveryEntries()) {
+    const seen = new Set();
+    return Object.entries(entries).filter(([key, raw]) => {
+      if (key !== DRAFT_KEY && !key.startsWith(PERSONAL_PLAN_PREFIX)) return false;
+      if (seen.has(raw)) return false;
+      seen.add(raw);
+      return true;
+    });
+  }
+
+  function openManageData() {
+    document.getElementById("planMenu")?.removeAttribute("open");
+    const actions = [{ label: "Close", action: "close" }, { label: "Export Plan Backup", action: "export" }];
+    let recoveryNote = "";
+    try {
+      const entries = recoveryEntries();
+      recoverablePlans(entries).forEach(([key, raw], index) => {
+        let label = "Older saved plan " + (index + 1);
+        try {
+          const record = parseStoredPlanRecord(raw);
+          label = record?.plan?.personal?.person1Name || label;
+          actions.push({ label: "Export older plan: " + label, action: "recover-plan:" + index });
+        } catch { /* Raw export below preserves unsupported records without migration. */ }
+      });
+      if (Object.keys(entries).length) {
+        recoveryNote = " Older browser records remain available here. Export an older plan to restore it using Import Plan Backup. The raw recovery copy also retains unreadable records; keep it for recovery assistance.";
+        actions.push({ label: "Export raw recovery copy", action: "export-recovery-raw" });
+      }
+    } catch {
+      recoveryNote = " Older browser data could not be read. Try allowing browser storage and reload; no stored plans have been removed.";
+    }
+    actions.push({ label: "Delete all Financial Freedom data", action: "delete-all" });
+    openDurabilityDialog({ title: "Manage Data", body: "Your plan saves automatically in this browser on this device. Export Plan Backup includes the current plan, assumptions, saved scenarios, Weekly Plan and financial history. Reports are printable summaries, not restorable backups. Downloaded backups are separate from browser storage." + recoveryNote, actions });
+  }
+
+  function exportRecoveryData() {
+    try {
+      downloadBlob(new Blob([JSON.stringify({ type: "financial-freedom-raw-recovery", entries: recoveryEntries() }, null, 2)], { type: "application/json" }), "Financial-Freedom-Raw-Recovery.json");
+      closeDurabilityDialog();
+      backupFeedback("Raw recovery download initiated. Keep this file for recovery assistance; use an older plan backup for Import Plan Backup.");
+    } catch { backupFeedback("Recovery export failed. Stored data has not been changed. Allow browser storage and try again."); }
+  }
+
+  function exportRecoveryPlan(index) {
+    try {
+      const entries = recoveryEntries();
+      const [key, raw] = recoverablePlans(entries)[index];
+      const record = parseStoredPlanRecord(raw);
+      const id = key.startsWith(PERSONAL_PLAN_PREFIX) ? key.slice(PERSONAL_PLAN_PREFIX.length) : record.planId || record.plan?.meta?.planId || DEFAULT_PERSONAL_PLAN_ID;
+      const read = (key, fallback) => entries[key] ? JSON.parse(entries[key]) : fallback;
+      const payload = {
+        type: "financial-freedom-plan-export", schemaVersion: EXPORT_SCHEMA_VERSION,
+        exportedAt: new Date().toISOString(), planId: id, plan: record.plan, ui: record.ui || {},
+        scenarios: migrateScenarioList(read(SCENARIO_KEY, [])), userState: read(USER_STATE_KEY, {}),
+        weeklyPlan: read(PERSONAL_WEEKLY_PLAN_PREFIX + id, read(WEEKLY_PLAN_KEY, null)),
+        snapshots: read(SNAPSHOT_PREFIX + id, []),
+      };
+      validateImportedPlanPayload(payload);
+      downloadBlob(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }), safeFilename('Financial-Freedom-Older-Plan-' + (index + 1), 'json'));
+      closeDurabilityDialog();
+      backupFeedback("Older plan backup download initiated. Use Import Plan Backup to restore it. Current and preserved browser data have not been changed.");
+    } catch { backupFeedback("This older plan could not be exported as a backup. Export the raw recovery copy from Manage Data instead; the original data is preserved."); }
   }
 
   function validateImportedPlanPayload(payload) {
@@ -4361,12 +4449,12 @@
     try {
       imported = validateImportedPlanPayload(payload);
     } catch (error) {
-      updateSaveStatus(error.message || "Import failed. The file was not changed.");
+      backupFeedback(error.message || "Import failed. The file was not changed.");
       return;
     }
     const confirmed = window.confirm("Import this plan backup? This will replace the current plan and saved scenarios on this device.");
     if (!confirmed) {
-      updateSaveStatus("Import cancelled.");
+      backupFeedback("Import cancelled.");
       return;
     }
     const previousPlanId = activePlanId;
@@ -4429,7 +4517,7 @@
       activePlanId = previousPlanId;
       dataDeletionActive = previousDeletionState;
       planHasUnsavedChanges = previousUnsavedState;
-      updateSaveStatus(storageFailureMessage(writeResult));
+      backupFeedback(storageFailureMessage(writeResult));
       showStorageFailureNotice(writeResult);
       return;
     }
@@ -4445,13 +4533,13 @@
     recordSuccessfulDurableSave(savedAt);
     renderAll();
     showWorkspace(activeView || "dashboard");
-    updateSaveStatus("Plan imported successfully.");
+    backupFeedback("Plan backup imported successfully. The plan and saved scenarios are restored on this device.");
   }
 
   function importPlanJsonFile(file) {
     if (!file) return;
     if (Number(file.size) > MAX_IMPORT_BYTES) {
-      updateSaveStatus(`Import failed. Choose a Financial Freedom backup smaller than ${Math.floor(MAX_IMPORT_BYTES / 1024 / 1024)} MB.`);
+      backupFeedback(`Import failed. Choose a Financial Freedom backup smaller than ${Math.floor(MAX_IMPORT_BYTES / 1024 / 1024)} MB.`);
       return;
     }
     const reader = new FileReader();
@@ -4462,10 +4550,10 @@
           : JSON.parse(String(reader.result || ""));
         importPlanPayload(payload);
       } catch (error) {
-        updateSaveStatus(error?.message || "Import failed. Choose a valid Financial Freedom JSON export.");
+        backupFeedback(error?.message || "Import failed. Choose a valid Financial Freedom JSON export.");
       }
     };
-    reader.onerror = () => updateSaveStatus("Import failed. The selected file could not be read.");
+    reader.onerror = () => backupFeedback("Import failed. The selected file could not be read.");
     reader.readAsText(file);
   }
 
@@ -16691,7 +16779,7 @@
     renderScenarioComparison(scenarios);
     const list = document.getElementById("scenarioList");
     if (!scenarios.length) {
-      list.innerHTML = `<p class="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">No saved scenarios yet. Click Save Plan to store the current plan here.</p>`;
+      list.innerHTML = `<p class="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">No saved scenarios yet. Use Save to Saved Scenarios to store the current plan here.</p>`;
       return;
     }
     list.innerHTML = scenarios.map((scenario) => {
@@ -17209,9 +17297,10 @@
   function openDeleteAllDataConfirmation() {
     openDurabilityDialog({
       title: "Delete all Financial Freedom data on this device?",
-      body: "This removes local Financial Freedom plans, scenarios, Weekly Plan history, drafts, snapshots and preferences from this browser. Downloaded backup files are not deleted, and this does not remove records that may exist in external hosting or provider logs.",
+      body: "This permanently removes local Financial Freedom plans, saved retirement scenarios, Weekly Plan history, drafts, snapshots, preserved older plans and preferences from this browser. Export backups first if you want to keep them. Downloaded backup files are not deleted, and this does not remove records that may exist in external hosting or provider logs.",
       actions: [
         { label: "Cancel", action: "close" },
+        { label: "Export Plan Backup first", action: "export" },
         { label: "Delete all local data", action: "confirm-delete-all", primary: true },
       ],
     });
@@ -18759,7 +18848,7 @@
 
   function installForecastDisplayDefaults() {
     const api = window.FFSForecastDisplayPreferences;
-    const preferences = api.create({getItem: key => localStorage.getItem(key), setItem: (key, value) => localStorage.setItem(key, value)});
+    const preferences = api.create({getItem: key => localStorage.getItem(key), setItem: (key, value) => storageWriteText(key, value)});
     const key = target => api.identity(target || plan, activePlanId);
     forecastDollarBasis = preferences.activate(key(), {newPlan: !savedDraft});
     const originalBlank = blankUserPlan;
@@ -19097,7 +19186,7 @@
         const selected = control.dataset.dollarBasis;
         if (!["today", "future"].includes(selected) || selected === forecastDollarBasis) return;
         forecastDollarBasis = selected;
-        try { localStorage.setItem(DOLLAR_BASIS_KEY, forecastDollarBasis); }
+        try { storageWriteText(DOLLAR_BASIS_KEY, forecastDollarBasis); }
         catch { /* Selector remains usable without persistence. */ }
         renderOutputs();
       });
@@ -19106,7 +19195,7 @@
     if (moreNavigation) {
       try { moreNavigation.open = localStorage.getItem("ffs.ui.moreNavigationOpen") !== "false"; } catch { moreNavigation.open = true; }
       moreNavigation.addEventListener("toggle", () => {
-        try { localStorage.setItem("ffs.ui.moreNavigationOpen", String(moreNavigation.open)); } catch { /* UI remains usable without storage. */ }
+        try { storageWriteText("ffs.ui.moreNavigationOpen", String(moreNavigation.open)); } catch { /* UI remains usable without storage. */ }
       });
     }
     document.addEventListener("toggle", (event) => {
@@ -19697,6 +19786,9 @@
           closeDurabilityDialog();
           hideDurabilityNotice();
         }
+        if (action === "manage-data") openManageData();
+        if (action === "export-recovery-raw") exportRecoveryData();
+        if (action.startsWith("recover-plan:")) exportRecoveryPlan(Number(action.split(":")[1]));
         if (action === "delete-all") openDeleteAllDataConfirmation();
         if (action === "confirm-delete-all") deleteAllFinancialFreedomData();
         return;
@@ -19895,14 +19987,10 @@
         closeMobileActionMenu();
         if (action === "load-sample") loadSamplePlan();
         if (action === "enter-data") startMyPlan();
-        if (action === "save-plan") manualSavePlan();
         if (action === "new-plan") resetPlan();
-        if (action === "load-plan") openSavedScenarios();
-        if (action === "duplicate-plan") duplicateScenario();
+        if (action === "manage-data") openManageData();
         if (action === "export-plan-json") exportPlanJson();
         if (action === "import-plan-json") triggerImportPlanJson();
-        if (action === "clear-saved-plan") clearSavedPlan();
-        if (action === "delete-all-data") openDeleteAllDataConfirmation();
         if (action === "export") window.print();
         return;
       }
@@ -20221,16 +20309,12 @@
     document.getElementById("continueNewPlanButton").addEventListener("click", resetPlan);
     document.getElementById("enterDataButton").addEventListener("click", startMyPlan);
     document.getElementById("heroStartButton").addEventListener("click", startMyPlan);
+    document.getElementById("manageDataButton").addEventListener("click", openManageData);
     document.getElementById("planNewButton").addEventListener("click", resetPlan);
-    document.getElementById("planSaveButton").addEventListener("click", manualSavePlan);
     document.getElementById("saveScenarioPanelButton").addEventListener("click", saveScenario);
-    document.getElementById("planLoadButton").addEventListener("click", openSavedScenarios);
-    document.getElementById("planDuplicateButton").addEventListener("click", duplicateScenario);
     document.getElementById("planExportJsonButton").addEventListener("click", exportPlanJson);
     document.getElementById("planImportJsonButton").addEventListener("click", triggerImportPlanJson);
     document.getElementById("planImportJsonInput").addEventListener("change", (event) => importPlanJsonFile(event.target.files?.[0]));
-    document.getElementById("planClearSavedButton").addEventListener("click", clearSavedPlan);
-    document.getElementById("deleteAllDataButton").addEventListener("click", openDeleteAllDataConfirmation);
     document.getElementById("wizardPrevButton").addEventListener("click", () => {
       activeWizardStep = Math.max(0, activeWizardStep - 1);
       saveDraft();
@@ -20308,6 +20392,11 @@
       weeklyTimingReviewNoticeHtml,
       weeklyTimingRowsHtml,
       buildCompletePlanBackupPayload,
+      recoveryEntries,
+      recoverablePlans,
+      exportRecoveryPlan,
+      openManageData,
+      exportPlanJson,
       validateImportedPlanPayload,
       getPlan() {
         return plan;

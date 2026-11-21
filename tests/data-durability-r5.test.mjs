@@ -438,3 +438,56 @@ test("R5 closure I Weekly Plan restore fails closed and preserves the open week"
   assert.match(document.getElementById("wizardSaveStatus").textContent, /browser storage is unavailable/i);
   assert.doesNotMatch(document.getElementById("wizardSaveStatus").textContent, /backup imported/i);
 });
+
+
+test('Issue 100: legacy preservation is exact, idempotent and removed only by explicit deletion', () => {
+  const original = { 'ffs-current-plan-v3-mobile-dashboard-ux-test': '{unreadable', 'ffs-personal-plan-v1:old': '{"plan":{"personal":{"person1Name":"Older"}}}', unrelated: 'keep' };
+  const backend = new MemoryStorage(original);
+  const storage = API.createStorageCoordinator(backend, { schedule: () => {} });
+  assert.equal(storage.preserveLegacyData().ok, true);
+  const archive = backend.getItem(API.RECOVERY_KEY);
+  assert.equal(JSON.parse(archive).entries['ffs-current-plan-v3-mobile-dashboard-ux-test'], '{unreadable');
+  assert.equal(JSON.parse(archive).entries.unrelated, undefined);
+  storage.writeText('ffs-current-plan-v3-mobile-dashboard-ux-test', 'new');
+  assert.equal(storage.preserveLegacyData().ok, true);
+  assert.equal(backend.getItem(API.RECOVERY_KEY), archive);
+  storage.deleteAllOwned();
+  assert.equal(backend.getItem(API.RECOVERY_KEY), null);
+  assert.equal(backend.getItem('unrelated'), 'keep');
+});
+
+test('Issue 100: failed preservation blocks writes, batches and removal even after resume', () => {
+  const key = 'ffs-current-plan-v3-mobile-dashboard-ux-test';
+  const backend = new MemoryStorage({ [key]: 'original' });
+  backend.failOnSet = k => k === API.RECOVERY_KEY;
+  const storage = API.createStorageCoordinator(backend);
+  assert.equal(storage.preserveLegacyData().ok, false);
+  storage.resumeWrites();
+  assert.equal(storage.writeText(key, 'new').ok, false);
+  assert.equal(storage.writeBatch([{key,value:'new'}]).ok, false);
+  assert.equal(storage.remove(key).ok, false);
+  assert.equal(backend.getItem(key), 'original');
+  backend.failOnSet = null;
+  assert.equal(storage.preserveLegacyData().ok, true);
+  assert.equal(storage.writeText(key, 'new').ok, true);
+});
+
+test('Issue 100: startup preserves different legacy and namespaced plans with saved scenarios', () => {
+  const old = { version: 4, plan: { personal: { person1Name: 'Legacy' } } };
+  const current = { version: 4, plan: { personal: { person1Name: 'Current' } } };
+  const entries = { 'ffs-current-plan-v3-mobile-dashboard-ux-test': JSON.stringify(old), 'ffs-personal-plan-v1:personal-plan:default': JSON.stringify(current), 'ffs-scenarios-v3-mobile-dashboard-ux-test': '[]' };
+  const { hooks, context } = loadAppBackupHooks({ initialStorage: entries });
+  assert.equal(hooks.getPlan().personal.person1Name, 'Current');
+  assert.equal(hooks.recoverablePlans().length, 2);
+  assert.deepEqual(JSON.parse(JSON.stringify(hooks.recoveryEntries())), entries);
+  hooks.saveDraft();
+  assert.deepEqual(JSON.parse(context.localStorage.getItem(API.RECOVERY_KEY)).entries, entries);
+});
+
+test('Issue 100: delete-all includes display preferences without broad origin deletion', () => {
+  const entries = Object.fromEntries(['ffs.ui.forecastDollarBasis', 'ffs.ui.forecastDollarBasisPlans.v1', 'ffs.ui.moreNavigationOpen'].map(k => [k, 'value']));
+  const backend = new MemoryStorage({ ...entries, 'ffs.ui.unrelated': 'keep' });
+  API.createStorageCoordinator(backend, { schedule: () => {} }).deleteAllOwned();
+  for (const key of Object.keys(entries)) assert.equal(backend.getItem(key), null);
+  assert.equal(backend.getItem('ffs.ui.unrelated'), 'keep');
+});
