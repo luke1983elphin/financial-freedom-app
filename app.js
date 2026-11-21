@@ -9904,6 +9904,13 @@
       <ul>${scenarioSet.map(scenario => `<li><strong>${escapeHtml(scenario.name)}</strong>${scenario.isCurrent ? " (baseline)" : scenario.source === "saved" ? " (saved scenario inputs)" : " (temporary comparison)"}: forecast ${escapeHtml(String(scenario.viewModel?.annualRows?.[0]?.calendarYear ?? "not available"))} to ${escapeHtml(String(scenario.viewModel?.keyResults?.projectionEnd?.calendarYear ?? "not available"))}.</li>`).join("")}</ul></div>`;
   }
 
+  function savedRetirementSpendingHtml(scenario) {
+    const raw = scenario?.scenarioInputSnapshot?.household?.fullRetirementLifestyleSpending;
+    if (raw === null || raw === undefined || raw === "" || !Number.isFinite(Number(raw)) || Number(raw) < 0) return "";
+    // Retirement spending is an input target recorded in today's dollars, not a projected balance.
+    return `<p class="retirement-scenario-spending"><strong>Annual retirement spending:</strong> ${escapeHtml(money(Number(raw)))} per year (today's dollars)</p>`;
+  }
+
   function retirementScenarioSubtitle(scenario) {
     return `<small class="retirement-scenario-summary">${escapeHtml(retirementScenarioSummary(scenario))}</small>`;
   }
@@ -16624,7 +16631,7 @@
           <div>
             <span class="metric-label">${escapeHtml(savedScenarioTypeLabel(type))}</span>
             <h3>${escapeHtml(scenario.name || "Saved scenario")}</h3>
-            ${type === "retirement" ? retirementScenarioSubtitle(scenario) : ""}
+            ${type === "retirement" ? `${retirementScenarioSubtitle(scenario)}${savedRetirementSpendingHtml(scenario)}` : ""}
           </div>
           <span class="scenario-card-date">${escapeHtml(scenarioDisplayDate(scenario))}</span>
         </div>
