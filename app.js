@@ -1541,7 +1541,7 @@
   function scenarioTargetsHtml(basePlan, mode, adjustments = {}) {
     const loans = eligibleScenarioLoans(basePlan);
     const incomes = eligibleScenarioIncomes(basePlan);
-    const incomeHtml = incomes.length > 1 ? `<label class="field-label scenario-income-entry">Income entry for this change<select class="field-input" data-scenario-target="incomeItemId" data-scenario-mode="${mode}"><option value="">Choose an income entry</option>${incomes.map(item => `<option value="${escapeHtml(item.id)}" ${adjustments.incomeItemId === item.id ? "selected" : ""}>${escapeHtml(item.name || item.id)} — ${escapeHtml(item.owner)} (${escapeHtml(CALC.normaliseIncomeType(item.type || item.incomeType))})</option>`).join("")}</select></label>` : "";
+    const incomeHtml = incomes.length > 1 ? `<label class="field-label scenario-income-entry">Income entry for this change<select class="field-input" data-scenario-target="incomeItemId" data-scenario-mode="${mode}"><option value="">Choose an income entry</option>${incomes.map(item => `<option value="${escapeHtml(item.id)}" ${adjustments.incomeItemId === item.id ? "selected" : ""}>${escapeHtml(scenarioIncomeLabel(basePlan, item))}</option>`).join("")}</select></label>` : "";
     if (loans.length < 2) return incomeHtml;
     return incomeHtml + `<label class="field-label">Home loan for this change<select class="field-input" data-scenario-target="loanId" data-scenario-mode="${mode}"><option value="">Choose a home loan</option>${loans.map(item => `<option value="${escapeHtml(item.id)}" ${adjustments.loanId === item.id ? "selected" : ""}>${escapeHtml(item.name || item.id)}</option>`).join("")}</select></label>`;
   }
@@ -15713,7 +15713,75 @@
     return tiles;
   }
 
+  function scenarioIncomeLabel(basePlan, item) {
+    const personal = basePlan.personal || {};
+    const you = String(personal.person1Name || "").trim() || "You";
+    const partner = String(personal.person2Name || "").trim() || "Partner";
+    const owner = item.owner === "person2" ? partner : item.owner === "person1" ? you : "Joint";
+    const type = CALC.normaliseIncomeType(item.type || item.incomeType);
+    const typeLabel = incomeTypeLabels[type] || "Income";
+    const name = String(item.name || "").trim()
+      .replace(/\bPerson\s*1\b/gi, () => you)
+      .replace(/\bPerson\s*2\b/gi, () => partner);
+    return name ? `${name} — ${owner} (${typeLabel})` : `${owner} — ${typeLabel}`;
+  }
+
+  function decisionSurplusHtml(baseline, revised, currentPlan = baseline) {
+    const savedBase = baseline !== currentPlan;
+    const current = estimatedCashflow(currentPlan);
+    const starting = estimatedCashflow(baseline);
+    const after = revised ? estimatedCashflow(revised) : null;
+    const delta = after === null ? null : after - starting;
+    const signed = amount => money(Math.abs(amount)) === money(0)
+      ? money(0) : `${amount < 0 ? "−" : "+"}${money(Math.abs(amount))}`;
+    const tone = delta > 0 ? "is-positive" : delta < 0 ? "is-negative" : "";
+    const tile = (key, label, amount, { link = false, className = "", format = money } = {}) => {
+      const value = `${format(amount / 52)}/week`;
+      return `<div class="decision-surplus-figure ${className}" data-surplus-figure="${key}">
+        <dt>${label}</dt>
+        <dd>${link ? `<a href="#progress" data-cash-surplus-link aria-label="View cash surplus breakdown in My Freedom Progress, ${escapeHtml(value)}">${value}</a>` : `<strong>${value}</strong>`}
+          <small>${format(amount)}/year</small>
+        </dd>
+      </div>`;
+    };
+    return `<section class="decision-surplus" aria-label="Live Summary">
+      <h4>Live Summary</h4>
+      <p class="field-help">${savedBase
+        ? "This comparison starts from the saved plan. The linked current surplus is from My Freedom Progress."
+        : "Your starting position before applying changes. Available cash is what remains after expenses, debt repayments and planned contributions."}</p>
+      <dl class="decision-surplus-grid">
+        ${tile("current", "Current available cash surplus", current, { link: true, className: "is-baseline" })}
+        ${savedBase ? tile("saved", "Saved starting surplus", starting) : ""}
+        ${after === null ? "" : tile("change", "Change in available cash surplus", delta, { className: tone, format: signed })
+          + tile("revised", "Revised available cash surplus", after, { className: "is-revised" })}
+      </dl>
+    </section>`;
+  }
+
+  function installDecisionSurplusNavigation() {
+    const renderOriginalCashflow = renderCashflow;
+    renderCashflow = result => {
+      renderOriginalCashflow(result);
+      const breakdown = document.getElementById("dashboardSurplusRows");
+      if (breakdown) {
+        breakdown.innerHTML = document.getElementById("cashflowTable").innerHTML;
+        breakdown.insertAdjacentHTML("beforeend", cashflowRowHtml("Equivalent weekly surplus", estimatedCashflow(result) / 52));
+      }
+    };
+    document.addEventListener("click", event => {
+      const link = event.target.closest("[data-cash-surplus-link]");
+      if (!link || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+      showWorkspace("dashboard", { scroll: false });
+      document.getElementById("dashboardDetails").open = true;
+      const heading = document.getElementById("dashboardCashSurplus");
+      heading.focus({ preventScroll: true });
+      heading.scrollIntoView({ block: "start" });
+    });
+  }
+
   function renderComparison(result) {
+    const currentPlanResult = result;
     if (decisionScenarioBasePlan) result = calculatePlan(decisionScenarioBasePlan);
     const summary = document.getElementById("comparisonSummary");
     if (!summary) return;
@@ -15741,7 +15809,6 @@
     const currentPercent = freedomPercent(result);
     const revisedPercent = freedomPercent(revisedResult);
     const primaryTiles = [
-      summaryTile("Monthly cash surplus", `${money(current / 12)} -> ${money(revised / 12)}`, revised >= current ? "status-green" : "status-amber"),
       summaryTile("1-year net worth", `${money(netWorthAtYear(result, 1))} -> ${money(netWorthAtYear(revisedResult, 1))}`),
       summaryTile("2-year net worth", `${money(netWorthAtYear(result, 2))} -> ${money(netWorthAtYear(revisedResult, 2))}`),
       summaryTile("Long-term net worth", `${money(longTermNetWorth(result))} -> ${money(longTermNetWorth(revisedResult))}`),
@@ -15762,13 +15829,14 @@
     ];
     summary.innerHTML = `
       ${targetsHtml}
+      ${decisionSurplusHtml(result, revisedResult, currentPlanResult)}
       ${primaryTiles.join("")}
       <details class="decision-details decision-result-details">
         <summary>View details</summary>
         <div class="summary-grid mt-3">${technicalTiles.join("")}</div>
       </details>
     `;
-    } catch (error) { showScenarioInputError(summary, error, targetsHtml); }
+    } catch (error) { showScenarioInputError(summary, error, targetsHtml + decisionSurplusHtml(result, null, currentPlanResult)); }
   }
 
   function customWhatIfAdjustments() {
@@ -15833,6 +15901,7 @@
   }
 
   function renderWhatIf(result) {
+    const currentPlanResult = result;
     if (whatIfBaseSnapshot) result = calculatePlan(whatIfBaseSnapshot);
     const actions = document.getElementById("whatIfActions");
     const output = document.getElementById("whatIfResult");
@@ -15880,9 +15949,10 @@
     const fmtDelta = amount => `${amount >= 0 ? "+" : "−"}${money(Math.abs(amount))}`;
     const forecastRow = (label, before, after) => `<div class="what-if-forecast-row"><strong>${label}</strong><span>${money(before)}</span><span>${money(after)}</span><b>${fmtDelta(after - before)}</b></div>`;
     output.innerHTML = `
+      ${decisionSurplusHtml(result, adjustedResult, currentPlanResult)}
       <section class="what-if-flow">
         <div class="what-if-stage"><h4>1. What changes in your cashflow?</h4>
-          <p class="field-help">Compared with your existing plan, after the modelled tax, debt and investing effects of this change.</p>
+          <p class="field-help">Initial effect before you choose how to use any extra money. The Live Summary includes your allocation choice.</p>
           <div class="what-if-metrics">
             <div><small>Per week</small><strong>${fmtDelta(annualCashflowImpact / 52)}</strong></div>
             <div><small>Per month</small><strong>${fmtDelta(annualCashflowImpact / 12)}</strong></div>
@@ -15905,7 +15975,7 @@
           <p class="field-help">Remaining annual cash after your choice: ${money(estimatedCashflow(adjustedResult))}. A negative result means the revised plan may require additional funding. Unallocated cash is not automatically treated as an investment.</p>
         </div>
       </section>`;
-    } catch (error) { showScenarioInputError(output, error); }
+    } catch (error) { showScenarioInputError(output, error, decisionSurplusHtml(result, null, currentPlanResult)); }
   }
 
   function normaliseSavedScenarioType(type = "") {
@@ -18363,6 +18433,7 @@
   }
 
   function renderComparisonDollarBasis(result) {
+    const currentPlanResult = result;
     if (decisionScenarioBasePlan) result = calculatePlan(decisionScenarioBasePlan);
     const summary = document.getElementById("comparisonSummary");
     if (!summary) return;
@@ -18390,7 +18461,6 @@
     const currentPercent = freedomPercent(result);
     const revisedPercent = freedomPercent(revisedResult);
     const primaryTiles = [
-      summaryTile("Monthly cash surplus", `${money(current / 12)} -> ${money(revised / 12)}`, revised >= current ? "status-green" : "status-amber"),
       summaryTile("1-year net worth", `${forecastMoney(netWorthAtYear(result, 1), 1, result.plan?.investing?.inflationPct)} -> ${forecastMoney(netWorthAtYear(revisedResult, 1), 1, revisedResult.plan?.investing?.inflationPct)}`),
       summaryTile("2-year net worth", `${forecastMoney(netWorthAtYear(result, 2), 2, result.plan?.investing?.inflationPct)} -> ${forecastMoney(netWorthAtYear(revisedResult, 2), 2, revisedResult.plan?.investing?.inflationPct)}`),
       summaryTile("Long-term net worth", `${forecastMoney(longTermNetWorth(result), result.netWorthProjection.at(-1)?.year ?? 30, result.plan?.investing?.inflationPct)} -> ${forecastMoney(longTermNetWorth(revisedResult), revisedResult.netWorthProjection.at(-1)?.year ?? 30, revisedResult.plan?.investing?.inflationPct)}`),
@@ -18411,13 +18481,14 @@
     ];
     summary.innerHTML = `
       ${targetsHtml}
+      ${decisionSurplusHtml(result, revisedResult, currentPlanResult)}
       ${primaryTiles.join("")}
       <details class="decision-details decision-result-details">
         <summary>View details</summary>
         <div class="summary-grid mt-3">${technicalTiles.join("")}</div>
       </details>
     `;
-    } catch (error) { showScenarioInputError(summary, error, targetsHtml); }
+    } catch (error) { showScenarioInputError(summary, error, targetsHtml + decisionSurplusHtml(result, null, currentPlanResult)); }
   }
 
   function comparisonSurplusImpactTilesDollarBasis(result, revisedResult, comparison, annualAllocation) {
@@ -18463,6 +18534,7 @@
   }
 
   function renderWhatIfDollarBasis(result) {
+    const currentPlanResult = result;
     if (whatIfBaseSnapshot) result = calculatePlan(whatIfBaseSnapshot);
     const actions = document.getElementById("whatIfActions");
     const output = document.getElementById("whatIfResult");
@@ -18514,9 +18586,10 @@
       return `<div class="what-if-forecast-row"><strong>${label}</strong><span>${money(before)}</span><span>${money(after)}</span><b>${fmtDelta(after - before)}</b></div>`;
     };
     output.innerHTML = `
+      ${decisionSurplusHtml(result, adjustedResult, currentPlanResult)}
       <section class="what-if-flow">
         <div class="what-if-stage"><h4>1. What changes in your cashflow?</h4>
-          <p class="field-help">Compared with your existing plan, after the modelled tax, debt and investing effects of this change.</p>
+          <p class="field-help">Initial effect before you choose how to use any extra money. The Live Summary includes your allocation choice.</p>
           <div class="what-if-metrics">
             <div><small>Per week</small><strong>${fmtDelta(annualCashflowImpact / 52)}</strong></div>
             <div><small>Per month</small><strong>${fmtDelta(annualCashflowImpact / 12)}</strong></div>
@@ -18539,7 +18612,7 @@
           <p class="field-help">Remaining annual cash after your choice: ${money(estimatedCashflow(adjustedResult))}. A negative result means the revised plan may require additional funding. Unallocated cash is not automatically treated as an investment.</p>
         </div>
       </section>`;
-    } catch (error) { showScenarioInputError(output, error); }
+    } catch (error) { showScenarioInputError(output, error, decisionSurplusHtml(result, null, currentPlanResult)); }
   }
 
   function displayedFiTargetGap(result) {
@@ -20336,6 +20409,7 @@
   installForecastAssumptionsWorkspace();
   installMobileUsabilityStage2();
   bindEvents();
+  installDecisionSurplusNavigation();
   installForecastDisplayDefaults();
   installMobileUsabilityStage3();
   const fourSectionNavigation = installFourSectionNavigation();

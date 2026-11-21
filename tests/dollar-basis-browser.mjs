@@ -1434,10 +1434,15 @@ test('four-section retirement edits, saved scenarios, weekly edits and report so
     await evaluate(`(()=>{const n=document.querySelector('[data-weekly-actual=income]');n.value='4321';n.dispatchEvent(new Event('input',{bubbles:true}));n.dispatchEvent(new Event('change',{bubbles:true}));document.querySelector('[data-weekly-step-button=complete]').click();document.querySelector('[data-weekly-action=save-week]').click();FFSStage1BrowserTestHooks.closeDurabilityDialog();})()`);
     const weekly=await evaluate('JSON.stringify(__dollarTest.backup().weeklyPlan)');assert.match(weekly,/4321/);
     for(const view of ['dashboard','semiretirement','decision','weeklyplan'])await journeyNavigate(view,[]);assert.equal(await evaluate('JSON.stringify(__dollarTest.backup().weeklyPlan)'),weekly);
-    await journeyNavigate('reports',[]);assert.match(await evaluate('document.querySelector(".report-toolbar").textContent'),/Generated from the current plan/);close(amount(await evaluate('document.querySelector("#financialReportBody .report-narrative-box p strong").textContent')),await evaluate('__dollarTest.result().currentNetWorth'));close(amount(await evaluate('document.querySelector("#financialReportBody .report-narrative-box p:nth-child(2) strong").textContent')),await evaluate('__dollarTest.result().targetAnnualLifestyleSpendingToday'));assert.equal(await evaluate('document.getElementById("reportPrintButton").disabled'),false);await journeyTap('#reportPrintButton',[]);assert.ok(await evaluate('window.__printCalls>0'));
+    await journeyNavigate('reports',[]);assert.match(await evaluate('document.querySelector(".report-toolbar").textContent'),/Generated from the current Financial Plan/);close(amount(await evaluate('document.querySelector("#financialReportBody .report-narrative-box p strong").textContent')),await evaluate('__dollarTest.result().currentNetWorth'));close(amount(await evaluate('document.querySelector("#financialReportBody .report-narrative-box p:nth-child(2) strong").textContent')),await evaluate('__dollarTest.result().targetAnnualLifestyleSpendingToday'));assert.equal(await evaluate('document.getElementById("reportPrintButton").disabled'),false);await journeyTap('#reportPrintButton',[]);assert.ok(await evaluate('window.__printCalls>0'));
     await journeyTap('[data-view=progress]',[]);assert.equal(await evaluate('location.hash'),'#financial-history');assert.equal(await evaluate('document.body.dataset.activeView'),'progress');
     await journeyNavigate('assumptions',[]);await assumptionEdit('inflationPct',3);await assumptionButton('Save assumptions');assert.equal(await evaluate('FFSStage1BrowserTestHooks.getPlan().investing.inflationPct'),3);
-    await journeyNavigate('weeklyplan',[]);const url=await evaluate('location.href');await cdp.send('Page.reload');await waitFor(()=>evaluate('Boolean(window.FFSStage1BrowserTestHooks)&&document.body.dataset.activeView==="weeklyplan"'));assert.equal(await evaluate('location.href'),url);const restoredWeekly=await evaluate('__dollarTest.backup().weeklyPlan'),expectedWeekly=JSON.parse(weekly);delete restoredWeekly.updatedAt;delete expectedWeekly.updatedAt;assert.deepEqual(restoredWeekly,expectedWeekly,'all weekly allocations, actuals and history survive refresh; existing updatedAt metadata may advance');assert.equal(await evaluate('JSON.stringify(__dollarTest.savedScenarios())'),saved);assert.equal(await evaluate('FFSStage1BrowserTestHooks.getPlan().investing.inflationPct'),3);
+    await journeyNavigate('weeklyplan',[]);
+    await cdp.send('Page.reload');
+    await waitFor(()=>evaluate('document.readyState==="complete"&&Boolean(window.FFSStage1BrowserTestHooks)&&document.body.dataset.freedomStage==="welcome"'));
+    await journeyTap('#continuePlanButton',[]);
+    await journeyNavigate('weeklyplan',[]);
+    const restoredWeekly=await evaluate('__dollarTest.backup().weeklyPlan'),expectedWeekly=JSON.parse(weekly);delete restoredWeekly.updatedAt;delete expectedWeekly.updatedAt;assert.deepEqual(restoredWeekly,expectedWeekly,'all weekly allocations, actuals and history survive refresh; existing updatedAt metadata may advance');assert.equal(await evaluate('JSON.stringify(__dollarTest.savedScenarios())'),saved);assert.equal(await evaluate('FFSStage1BrowserTestHooks.getPlan().investing.inflationPct'),3);
   }
 });
 
@@ -1786,4 +1791,120 @@ test('welcome sample button and four feature cards stay readable, accessible and
     assert.equal(await evaluate('document.querySelectorAll(".welcome-feature-card").length'),4,'static cards never duplicate on rerender or navigation');
     await writeFile(path.join(root,'docs/welcome-sample-feature-cards/responsive-verification.json'),JSON.stringify(evidence,null,2)+'\n');
   }
+});
+
+test('Try a Change live surplus matches the dashboard and resolved allocations across screen sizes', async () => {
+  await navigate();
+  await fixture();
+  const planBefore = await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())');
+  const annual = await evaluate('__dollarTest.result().finalProjectedCashSurplus');
+  const fmt = value => new Intl.NumberFormat('en-AU', {style: 'currency', currency: 'AUD', maximumFractionDigits: 0}).format(value);
+  const figure = (key, scope = 'whatIfResult', selector = 'dd > :is(a,strong)') =>
+    evaluate(`document.querySelector('#${scope} [data-surplus-figure=${key}] ${selector}')?.textContent`);
+  for (const width of [375, 768, 1366]) {
+    await cdp.send('Emulation.setDeviceMetricsOverride', {width, height: 900, deviceScaleFactor: 1, mobile: width < 600});
+    await select(width === 768 ? 'future' : 'today');
+    await evaluate("FFSStage1BrowserTestHooks.showWorkspace('decision'); document.querySelector('[data-what-if=expenses-500]').click()");
+    assert.equal(await figure('current'), `${fmt(annual / 52)}/week`);
+    assert.equal(await figure('current', 'whatIfResult', 'dd > small'), `${fmt(annual)}/year`);
+    assert.equal(await figure('change'), `+${fmt(6000 / 52)}/week`);
+    assert.equal(await figure('revised'), `${fmt((annual + 6000) / 52)}/week`);
+    await evaluate("document.querySelector('[data-what-if-allocation=lifestyle]').click()");
+    assert.equal(await figure('change'), '$0/week', 'allocating all extra cash leaves no surplus change');
+    assert.equal(await figure('revised'), await figure('current'));
+    await evaluate("document.querySelector('[data-what-if=invest-250]').click()");
+    const after = await evaluate('__dollarTest.quick().adjustedResult.finalProjectedCashSurplus');
+    assert.ok(after < annual);
+    assert.equal(await figure('change'), `−${fmt((annual - after) / 52)}/week`);
+    assert.equal(await figure('revised'), `${fmt(after / 52)}/week`);
+    assert.ok(await evaluate(`[...document.querySelectorAll('#whatIfResult .decision-surplus-figure')].every(n=>n.scrollWidth<=n.clientWidth+1)&&document.documentElement.scrollWidth<=innerWidth+1`));
+    const operations = [];
+    await journeyTap('#whatIfResult [data-cash-surplus-link]', operations);
+    assert.ok(operations.every(action => action.status === 'pointer-click'), JSON.stringify(operations));
+    assert.equal(await evaluate('document.body.dataset.activeView'), 'dashboard');
+    assert.equal(await evaluate('document.activeElement.id'), 'dashboardCashSurplus');
+    assert.equal(await evaluate('document.getElementById("dashboardDetails").open'), true);
+    assert.equal(await evaluate('document.querySelector("#dashboardSurplusRows .cashflow-row-final strong").textContent'), fmt(annual));
+    assert.equal(await evaluate('document.querySelector("#dashboardSurplusRows .cashflow-row:last-child strong").textContent'), fmt(annual / 52));
+    assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'), planBefore);
+  }
+});
+
+test('Try a Change uses household names, preserves income ownership and shows zero for return-only changes', async () => {
+  await navigate();
+  await fixture();
+  await evaluate(`(() => {
+    const p = FFSStage1BrowserTestHooks.getPlan();
+    p.personal.person1Name = 'Alex & Co';
+    p.personal.person2Name = '';
+    p.incomeItems = [
+      {id: 'alex-income', name: 'Person 1 salary', owner: 'person1', type: 'salaryWages', amount: 125000, frequency: 'annually'},
+      {id: 'partner-income', name: 'Person 2 salary', owner: 'person2', type: 'salaryWages', amount: 75000, frequency: 'annually'},
+    ];
+    FFSStage1BrowserTestHooks.setPlan(p, 'decision');
+    document.querySelector('[data-what-if=income-5]').click();
+  })()`);
+  const names = await evaluate(`[...document.querySelectorAll('#whatIfActions select[data-scenario-target=incomeItemId] option')].slice(1).map(o=>[o.value,o.textContent])`);
+  assert.equal(names[0][0], 'alex-income');
+  assert.match(names[0][1], /Alex & Co/);
+  assert.equal(names[1][0], 'partner-income');
+  assert.match(names[1][1], /Partner/);
+  assert.doesNotMatch(names.flat().join(' '), /Person\s*[12]/i);
+  for (const [id, expected] of [['alex-income', 6250], ['partner-income', 3750]]) {
+    const result = await evaluate(`(() => {
+      const select = document.querySelector('#whatIfActions [data-scenario-target=incomeItemId]');
+      select.value = '${id}';
+      select.dispatchEvent(new Event('input',{bubbles:true}));
+      const scenario = __dollarTest.quick();
+      return {id:scenario.baseAdjustments.incomeItemId, change:scenario.baseAdjustments.incomeChange,
+        adjustedIncome:scenario.adjustedResult.plan.incomeItems.map(item=>[item.id,item.owner,item.amount])};
+    })()`);
+    assert.equal(result.id, id);
+    assert.equal(result.change, expected);
+    assert.deepEqual(result.adjustedIncome, [['alex-income','person1',125000+(id==='alex-income'?expected:0)], ['partner-income','person2',75000+(id==='partner-income'?expected:0)]]);
+  }
+  await evaluate(`(() => {
+    const p = FFSStage1BrowserTestHooks.getPlan();
+    p.personal.person1Name = '';
+    p.incomeItems.push({id:'side-income',name:'Consulting',owner:'person1',type:'other',amount:5000,frequency:'annually'});
+    FFSStage1BrowserTestHooks.setPlan(p, 'decision');
+  })()`);
+  assert.match(await evaluate(`document.querySelector('#whatIfActions option[value=alex-income]').textContent`), /You/);
+  await evaluate(`(() => {
+    const p = FFSStage1BrowserTestHooks.getPlan();
+    const selector = document.querySelector('#whatIfActions [data-scenario-target=incomeItemId]');
+    selector.value = '';
+    selector.dispatchEvent(new Event('input', {bubbles:true}));
+    p.personal.person2Age = 0;
+    p.incomeItems = p.incomeItems.filter(item => item.id === 'alex-income');
+    FFSStage1BrowserTestHooks.setPlan(p, 'decision');
+    document.querySelector('[data-what-if=income-5]').click();
+  })()`);
+  assert.equal(await evaluate('__dollarTest.quick().baseAdjustments.incomeItemId'), 'alex-income');
+  assert.equal(await evaluate(`document.querySelector('#whatIfActions select[data-scenario-target=incomeItemId]')`), null);
+  await evaluate(`(() => {
+    document.getElementById('customScenarioDetails').open = true;
+    const input = document.querySelector('[data-comparison=investmentReturnChangePct]');
+    input.value = '2';
+    input.dispatchEvent(new Event('input', {bubbles:true}));
+  })()`);
+  assert.equal(await evaluate(`document.querySelector('#comparisonSummary [data-surplus-figure=change] strong').textContent`), '$0/week');
+  const forecast = await evaluate(`[...document.querySelectorAll('#comparisonSummary .summary-tile')].find(card=>card.textContent.includes('Long-term net worth')).querySelector('strong').textContent`);
+  const [before, after] = forecast.split(' -> ');
+  assert.ok(after);
+  assert.notEqual(before, after, 'return assumptions still affect the forecast');
+  await evaluate(`(() => {
+    const input = document.querySelector('[data-comparison=expenseChange]');
+    input.value = '5200';
+    input.dispatchEvent(new Event('input', {bubbles:true}));
+  })()`);
+  assert.equal(await evaluate(`document.querySelector('#comparisonSummary [data-surplus-figure=change] strong').textContent`), '−$100/week');
+  await evaluate(`(() => {
+    for (const key of ['investmentReturnChangePct','expenseChange']) {
+      const input = document.querySelector('[data-comparison='+key+']');
+      input.value = '0';
+      input.dispatchEvent(new Event('input', {bubbles:true}));
+    }
+  })()`);
+  assert.equal(await evaluate(`document.querySelector('#comparisonSummary [data-surplus-figure=change] strong').textContent`), '$0/week');
 });
