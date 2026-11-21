@@ -9043,7 +9043,7 @@
               const ageLabel = window.FFSSemiRetirementUi?.eventAgeLabel?.(draft, event.year) || "";
               const timingSummary = `${money(event.amountTodayDollars)} - ${event.year || "Choose a year"}${ageLabel ? ` - ${ageLabel}` : ""}`;
               return `
-                <details class="semi-retirement-one-off-row" data-one-off-income-id="${escapeHtml(event.id)}">
+                <details class="semi-retirement-one-off-row" data-one-off-income-id="${escapeHtml(event.id)}" data-semi-detail-state="income:${escapeHtml(event.id)}"${semiRetirementDetailsOpenAttr(`income:${event.id}`)}>
                   <summary class="semi-retirement-one-off-summary">
                     <strong>${escapeHtml(event.assetSaleId ? `Sell ${saleAsset?.name || "personal asset"}` : event.description || `One-off income ${index + 1}`)}</strong>
                     <span>${escapeHtml(timingSummary)}</span>
@@ -11352,6 +11352,7 @@
       container.classList.add("hidden");
       return;
     }
+    captureSemiRetirementDetailsState();
     const draft = ensureSemiRetirementScenarioDraft(result);
     if (plan.personal?.retirementTiming && !String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:") && !semiRetirementScenarioResult && !semiRetirementScenarioErrors.length) ensureSemiRetirementBaseResult();
     container.classList.remove("hidden");
@@ -11497,6 +11498,68 @@
     `).join("");
     const passiveSummary = document.getElementById("decisionPassiveIncomeSummary");
     if (passiveSummary) passiveSummary.innerHTML = decisionPassiveIncomeSummaryHtml(result);
+  }
+
+  function refreshSemiRetirementIncomeEditor(target) {
+    // Retain the focused control to keep the mobile keyboard, native selection
+    // and unfinished number/text input alive.
+    const section = target.closest("[data-one-off-income]");
+    if (!section) return;
+    const scroll = { x: window.scrollX, y: window.scrollY };
+    captureSemiRetirementDetailsState();
+    const template = document.createElement("template");
+    template.innerHTML = semiRetirementOneOffIncomeEventsHtml();
+    const heading = section.querySelector(".semi-retirement-one-off-heading");
+    const nextHeading = template.content.querySelector(".semi-retirement-one-off-heading");
+    if (heading.innerHTML !== nextHeading.innerHTML) heading.innerHTML = nextHeading.innerHTML;
+    const structural = /\.(assetSaleId|taxTreatment)$/.test(target.dataset.semiInput);
+    for (const row of section.querySelectorAll("[data-one-off-income-id]")) {
+      const fresh = [...template.content.querySelectorAll("[data-one-off-income-id]")]
+        .find(node => node.dataset.oneOffIncomeId === row.dataset.oneOffIncomeId);
+      if (!fresh) continue;
+      row.querySelector("summary").innerHTML = fresh.querySelector("summary").innerHTML;
+      const fields = row.querySelector(".semi-retirement-one-off-fields");
+      const desired = [...fresh.querySelector(".semi-retirement-one-off-fields").children];
+      const existing = new Map([...fields.querySelectorAll("[data-semi-input]")]
+        .map(input => [input.dataset.semiInput, input.closest("label")]));
+      const retained = desired.map(label => {
+        const nextInput = label.querySelector("[data-semi-input]");
+        const oldLabel = nextInput && existing.get(nextInput.dataset.semiInput);
+        if (!oldLabel) return label;
+        const input = oldLabel.querySelector("[data-semi-input]");
+        // Refresh dependent defaults/options without replacing any input node.
+        if (structural && input !== target) {
+          if (input.tagName === "SELECT") input.innerHTML = nextInput.innerHTML;
+          input.value = nextInput.value;
+        }
+        const title = oldLabel.querySelector(".field-label");
+        const nextTitle = label.querySelector(".field-label");
+        if (title.innerHTML !== nextTitle.innerHTML) title.innerHTML = nextTitle.innerHTML;
+        const help = [...oldLabel.querySelectorAll("small")];
+        const nextHelp = [...label.querySelectorAll("small")];
+        if (help.map(node => node.outerHTML).join("") !== nextHelp.map(node => node.outerHTML).join("")) {
+          help.forEach(node => node.remove());
+          nextHelp.forEach(node => oldLabel.append(node));
+        }
+        if (nextInput.hasAttribute("aria-describedby")) input.setAttribute("aria-describedby", nextInput.getAttribute("aria-describedby"));
+        else input.removeAttribute("aria-describedby");
+        return oldLabel;
+      });
+      [...fields.children].filter(node => !retained.includes(node)).forEach(node => node.remove());
+      retained.forEach((node, index) => {
+        if (fields.children[index] !== node) fields.insertBefore(node, fields.children[index] || null);
+      });
+    }
+    // The draft is now dirty; remove stale results without rebuilding the editor.
+    const result = document.querySelector("#semiRetirementScenarioRoot .semi-retirement-scenario > .semi-retirement-result-card");
+    if (result) result.outerHTML = renderSemiRetirementScenarioResultHtml();
+    // Flush summary wrapping and dependent-field layout before restoring scroll.
+    section.getBoundingClientRect();
+    const restoreScroll = () => window.scrollTo({ left: scroll.x, top: scroll.y, behavior: "instant" });
+    restoreScroll();
+    window.requestAnimationFrame(() => {
+      if (target.isConnected && document.activeElement === target) restoreScroll();
+    });
   }
 
   function updateSemiRetirementDraftFromInput(target) {
@@ -11884,6 +11947,7 @@
       amountTodayDollars: 0,
       year,
     });
+    markSemiRetirementDetailsOpen(`income:${events[nextIndex].id}`);
     window.FFSSemiRetirementUi.setDraftPath(semiRetirementScenarioDraft, "scenario.oneOffIncomeEvents", events);
     clearSemiRetirementAdjustmentState();
     clearSemiRetirementComparisonState();
@@ -19423,6 +19487,10 @@
         const wasShared = target.dataset.retirementWasShared === "true" || retirementCoupleMode() === "shared";
         delete target.dataset.retirementWasShared;
         updateSemiRetirementDraftFromInput(target);
+        if (target.closest("[data-one-off-income-id]")) {
+          refreshSemiRetirementIncomeEditor(target);
+          return;
+        }
         const match = target.dataset.semiInput.match(/^people\.(\d+)\.(alreadyRetired|hasSemiRetirement|semiRetirementAge|fullRetirementAge|semiRetirementGrossIncome)$/);
         if (match) {
           const index = Number(match[1]), person = semiRetirementScenarioDraft.people[index];

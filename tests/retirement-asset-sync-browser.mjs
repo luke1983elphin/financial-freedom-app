@@ -220,3 +220,59 @@ test('Issue 92: sell a rental with debt and CGT, save/reopen and export complete
   await evaluate(`document.body.dataset.printMode='retirement-comparison'`);const pdf=await cdp.send('Page.printToPDF',{printBackground:true,preferCSSPageSize:true});await writeFile(path.join(out,'issue92-comparison.pdf'),Buffer.from(pdf.data,'base64'));await evaluate(`delete document.body.dataset.printMode`);
   assert.deepEqual(browserMessages,[]);
 });
+
+for (const width of [1366, 375, 390, 430]) test(`Issue 94: income and sale editing retains independent expansion, focus and scroll at ${width}px`, async () => {
+  await cdp.send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<760});
+  await evaluate('localStorage.clear();sessionStorage.clear()');await navigate();
+  await evaluate(`(()=>{const p=FFSCalculator.emptyPlan();Object.assign(p.personal,{person1Name:'Alex',person1Age:68,person2Name:'Sam',person2Age:68,fullRetirementAge:68,targetAnnualSpending:20000});p.assetItems=[{id:'land',name:'Vacant land',category:'otherProperty',value:300000,owner:'joint'},{id:'rental',name:'Rental property',category:'investmentProperty',value:400000,owner:'joint'}];p.assets.cash=100000;FFSStage1BrowserTestHooks.setPlan(p,'semiretirement');FFSStage1BrowserTestHooks.closeDurabilityDialog();document.querySelector('[data-semi-action="add-one-off-income-event"]').click();})()`);
+  await evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+  const first=await evaluate(`document.querySelector('[data-one-off-income-id]').dataset.oneOffIncomeId`);
+  assert.equal(await evaluate(`document.querySelector('[data-one-off-income-id]').open`),true,'new income opens');
+  async function edit(index,field,value,{typing=false,selection=false}={}) {
+    const selector=`[data-semi-input="scenario.oneOffIncomeEvents.${index}.${field}"]`;
+    await evaluate(`(()=>{const n=document.querySelector(${JSON.stringify(selector)});for(let p=n.parentElement;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;n.scrollIntoView({block:'center',behavior:'instant'});n.focus({preventScroll:true});window.__eventInput=n;window.__eventScroll=scrollY;})()`);
+    if(typing){
+      await evaluate(`__eventInput.value='';__eventInput.dispatchEvent(new Event('input',{bubbles:true}))`);
+      for(const character of String(value)) await cdp.send('Input.insertText',{text:character});
+    } else await evaluate(`__eventInput.value=${JSON.stringify(String(value))};__eventInput.dispatchEvent(new Event('input',{bubbles:true}))`);
+    await evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+    if(selection)await evaluate('__eventInput.setSelectionRange(2,5,"backward")');
+    await evaluate(`window.__eventScroll=scrollY;__eventInput.dispatchEvent(new Event('change',{bubbles:true}));window.__afterChange=scrollY`);
+    await evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+    const state=await evaluate(`(()=>{const n=document.querySelector(${JSON.stringify(selector)});return {same:n===__eventInput,focused:document.activeElement===n,open:n.closest('[data-one-off-income-id]').open,value:n.value,scroll:Math.abs(scrollY-__eventScroll),selection:[n.selectionStart,n.selectionEnd,n.selectionDirection]}})()`);
+    assert.equal(state.open,true,field);assert.equal(state.same,true,`${field}: native input retained`);assert.equal(state.focused,true,`${field}: keyboard focus`);assert.equal(state.value,String(value),field);assert.ok(state.scroll<=2,`${field}: scroll moved ${state.scroll}; ${await evaluate("JSON.stringify({before:__eventScroll,after:__afterChange,now:scrollY,max:document.documentElement.scrollHeight-innerHeight,visual:visualViewport.offsetTop})")}`);
+    if(selection)assert.deepEqual(state.selection,[2,5,'backward']);
+  }
+  await edit(0,'description','Family assistance',{typing:true,selection:true});
+  await edit(0,'amountTodayDollars',25000,{typing:true});
+  await edit(0,'year',2028);
+  await evaluate(`document.querySelector('[data-one-off-income-id] > summary').focus()`);await key('Enter');
+  assert.equal(await evaluate(`document.querySelector('[data-one-off-income-id]').open`),false,'explicit keyboard collapse');
+  await evaluate(`document.querySelector('[data-semi-action="add-personal-asset-sale"]').click()`);
+  await evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+  const saleId=await evaluate(`document.querySelectorAll('[data-one-off-income-id]')[1].dataset.oneOffIncomeId`);
+  assert.deepEqual(await evaluate(`Array.from(document.querySelectorAll('[data-one-off-income-id]')).map(n=>n.open)`),[false,true]);
+  await edit(1,'assetSaleId','rental');
+  await edit(1,'amountTodayDollars',450000,{typing:true});
+  await edit(1,'sellingCostPct',2.5,{typing:true});
+  await edit(1,'taxTreatment','net-capital-gain');
+  await edit(1,'taxableCapitalGainPerson1',50000,{typing:true});
+  await edit(1,'taxableCapitalGainPerson2',25000,{typing:true});
+  await edit(1,'year',2029);
+  assert.deepEqual(await evaluate(`Array.from(document.querySelectorAll('[data-one-off-income-id]')).map(n=>n.open)`),[false,true],'second event does not reopen first');
+  await edit(1,'taxTreatment','exempt');
+  assert.equal(await evaluate(`document.querySelector('[data-semi-input="scenario.oneOffIncomeEvents.1.taxableCapitalGainPerson1"]')===null`),true);
+  await edit(1,'taxTreatment','net-capital-gain');
+  assert.equal(await evaluate(`document.querySelector('[data-semi-input="scenario.oneOffIncomeEvents.1.taxableCapitalGainPerson1"]').value`),'50000');
+  await evaluate(`document.querySelector('[data-semi-action="calculate"]').click()`);
+  assert.deepEqual(await evaluate(`Array.from(document.querySelectorAll('[data-one-off-income-id]')).map(n=>n.open)`),[false,true],'full render retains independent states');
+  await evaluate(`document.querySelector('[data-save-stage-g-scenario="retirement"]').click();document.querySelector('#stageGScenarioName').value='Event editor ${width}';document.querySelector('[data-scenario-save-action="save"]').click()`);
+  await evaluate(`Array.from(document.querySelectorAll('.scenario-library-card')).find(c=>c.textContent.includes('Event editor ${width}')).querySelector('[data-open-scenario]').click()`);
+  assert.equal(await evaluate(`document.querySelector('[data-semi-input="scenario.oneOffIncomeEvents.0.description"]').value`),'Family assistance');
+  assert.equal(await evaluate(`document.querySelector('[data-semi-input="scenario.oneOffIncomeEvents.1.sellingCostPct"]').value`),'2.5');
+  await evaluate(`document.querySelector('[data-event-id="${first}"]').click()`);
+  assert.equal(await evaluate(`document.querySelector('[data-one-off-income-id]').dataset.oneOffIncomeId`),saleId,'state follows stable ID after index changes');
+  assert.equal(await evaluate(`document.querySelector('[data-one-off-income-id]').open`),true);
+  await edit(0,'sellingCostPct',3);
+  assert.deepEqual(browserMessages,[]);
+});

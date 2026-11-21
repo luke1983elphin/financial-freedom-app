@@ -431,7 +431,7 @@
     "semiRetirementDownsizeHomeSummary": "a52e773207f0d7866ed0885b084c372fa26743fd043da2de38a185ac736541de",
     "semiRetirementLegacyOptionalDrawNoticeHtml": "b463b4967b2d076f483c26b4295af6b2a08108162e8ba4bcebc295ca86c709c8",
     "semiRetirementOneOffLifestyleEventsHtml": "7fdd7c13a9da04c9a0d68da36bdfa58f2efb3efe0870dbbd2b0b7eca7a6bef55",
-    "semiRetirementOneOffIncomeEventsHtml": "16abe0598a6a827bde28e525e049b440369d6ca55d38970bd4774825d3e1a846",
+    "semiRetirementOneOffIncomeEventsHtml": "e1bdf9e827e50d9f9fa8ee60895ecafa1415f740a8748544e14b5e946cacba75",
     "semiRetirementPlannedConcessionalContributionsHtml": "45f67810db58792a572f8f7707b291d80ffc40a0c2a006dc0467331ad8a817cc",
     "semiRetirementDownsizeHomeEventHtml": "a1fc6a89facc33b10b4d493bdc27f3568a75dfd4d50e0815ef935c688f06db01",
     "semiRetirementPersonPanel": "ec7f1e450dffd8dc8a2ec7898ed970d504442aeac8a772b6bf36c704cba7b073",
@@ -509,7 +509,7 @@
     "renderSemiRetirementWarningsHtml": "c4220c2d3d0bae77514b15f72adba882efa97cfc2653d74500dafca69fcd0234",
     "renderSemiRetirementDisclosureHtml": "d6927c28c17cc857625d1a706aeee1e4ecb87b0216c7b217bbbcdf4213ad9cae",
     "renderSemiRetirementScenarioResultHtml": "34744b9c9ed500dd9a4e27b33dad251838f73585c5e2f9bb0a2ed8b689073679",
-    "renderSemiRetirementScenario": "93a9ab5128c41ac9ce85ef4557ee3eece312cb7b03dfaebeb2ae05f8fb00f2ad",
+    "renderSemiRetirementScenario": "7f6979124c0734db4e7e948f4931853846dd8e97da0f7dd4c5c199866e25bdd9",
     "renderDecision": "dde7b6a51e36e3d63590e995620ddd189d17364a666a2f28afdaccf231806b99",
     "updateSemiRetirementDraftFromInput": "a1b8e4c2108ed91becda1b2e30f8556a5a8bb5e9982345d58ad5563b46dee959",
     "clearSemiRetirementComparisonState": "38ed00bfd0d60453849ed6b8f5f3b729d7392fd357d627cd6f493f1ec0f4aa0a",
@@ -528,7 +528,7 @@
     "useFinancialPlanLivingExpensesForSemiRetirementScenario": "1f91b2ac8f41e7747d2cd85b87a2cd1b9fc7b20266db1a49858fdbaa920bae85",
     "addSemiRetirementOneOffLifestyleEvent": "74b28461f7f3bb221647179aa01a706d9c1f8d6b74f7d523266659147d6c75c9",
     "removeSemiRetirementOneOffLifestyleEvent": "660cc3e32932b6369eeaf0f454b09d7aa9a6e109b9ff307e719a4ebe5bdb5b3c",
-    "addSemiRetirementOneOffIncomeEvent": "1d05bcf551f74fea7bb1b5156c44d5891926ec88fb1f253d6bab8229503af10a",
+    "addSemiRetirementOneOffIncomeEvent": "01b4c71a24cd97a298d1c05bebca95595e3f5aead05fc340293959f8eeacbe70",
     "removeSemiRetirementOneOffIncomeEvent": "2002faa28742ff2cbc772e4258b20a6c44add33af683f5598fc4f1d4188a6a1f",
     "addSemiRetirementPlannedConcessionalContribution": "7a7b0bada764820225f62aacc35ca6f9d45b0303fe009d271587c67a371f41e3",
     "removeSemiRetirementPlannedConcessionalContribution": "07bcbd15c429365666a57c0bf70a8904c7b4b2663082f654b276a2503f3854bb",
@@ -796,7 +796,8 @@
     "renderSemiRetirementLongevityHtmlDollarBasis": "a6b7d33424d3faeb65058632184e1026306b1414de778669e7b49d3512bce8e4",
     "reportPresentationHtmlDollarBasis": "003450b0398929e9a4d8b9d10800697ab498cfa08a185b0c827ed5c409b8c0f6",
     "comparisonSurplusImpactTilesDollarBasis": "4f3817b695328bf27d1a6d68bd47ae3ab48fa161ebd23d4c3fc0d9d7745d4a1a",
-    "projectedDebtMoney": "4fcfa11007349f1add7015483b78ac7013e473afe97a522fbb8b301ca9f3ebca"
+    "projectedDebtMoney": "4fcfa11007349f1add7015483b78ac7013e473afe97a522fbb8b301ca9f3ebca",
+    "refreshSemiRetirementIncomeEditor": "d3d435b16bd9b9225ad070cd126eed80d01e65f789b5b9274427af3c7e08ead1"
   },
   "presentationSectionsExcluded": [
     "updateSetupNavigationLabel",
@@ -1366,5 +1367,30 @@
     "note": "PR #93: validate only conflicting stable asset links involving the selected sale asset; unrelated unlinked debts remain untouched.",
     "previous": "ab9bc41d50f8597991eb38933ee776fb253a96100c650979b20c2efe938bd5a4",
     "current": "ab45687699a72d08cc33c1557e6b91bdd88eaebd1b3b8d2efe3316aaedd4cd97"
+  },
+  "issue94PresentationUpdate": {
+    "note": "Stable event disclosure state and in-place income editor updates only. No engine, financial assumptions or saved-schema changes.",
+    "changes": [
+      {
+        "name": "semiRetirementOneOffIncomeEventsHtml",
+        "previous": "16abe0598a6a827bde28e525e049b440369d6ca55d38970bd4774825d3e1a846",
+        "current": "e1bdf9e827e50d9f9fa8ee60895ecafa1415f740a8748544e14b5e946cacba75"
+      },
+      {
+        "name": "renderSemiRetirementScenario",
+        "previous": "93a9ab5128c41ac9ce85ef4557ee3eece312cb7b03dfaebeb2ae05f8fb00f2ad",
+        "current": "7f6979124c0734db4e7e948f4931853846dd8e97da0f7dd4c5c199866e25bdd9"
+      },
+      {
+        "name": "addSemiRetirementOneOffIncomeEvent",
+        "previous": "1d05bcf551f74fea7bb1b5156c44d5891926ec88fb1f253d6bab8229503af10a",
+        "current": "01b4c71a24cd97a298d1c05bebca95595e3f5aead05fc340293959f8eeacbe70"
+      },
+      {
+        "name": "refreshSemiRetirementIncomeEditor",
+        "previous": null,
+        "current": "d3d435b16bd9b9225ad070cd126eed80d01e65f789b5b9274427af3c7e08ead1"
+      }
+    ]
   }
 }
