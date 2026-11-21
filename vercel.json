@@ -1,6 +1,24 @@
 {
   "git": {
-    "deploymentEnabled": { "fix/reporting-retirement-presentation": false, "main": false, "ui/welcome-sample-feature-cards": false, "ui/returning-dashboard-header": false, "ui/mobile-growth-todays-dollars": false, "ui/four-section-navigation": false, "ui/mobile-usability-stage3": false, "ui/mobile-usability-stage2": false, "ui/forecast-assumptions-mobile": false, "ui/assumptions-dedicated-workspace": false, "fix/f08-retirement-tax-funding": false, "fix/f04-property-debt-net-worth": false, "ui/mobile-annual-forecast-journey-review": false }
+    "deploymentEnabled": {
+      "fix/reporting-retirement-presentation": false,
+      "main": false,
+      "ui/welcome-sample-feature-cards": false,
+      "ui/returning-dashboard-header": false,
+      "ui/mobile-growth-todays-dollars": false,
+      "ui/four-section-navigation": false,
+      "ui/mobile-usability-stage3": false,
+      "ui/mobile-usability-stage2": false,
+      "ui/forecast-assumptions-mobile": false,
+      "ui/assumptions-dedicated-workspace": false,
+      "fix/f08-retirement-tax-funding": false,
+      "fix/f04-property-debt-net-worth": false,
+      "ui/mobile-annual-forecast-journey-review": false,
+      "codex/calculation-support-retirement": false,
+      "codex/calculation-support-growth": false,
+      "codex/calculation-support-saved": false,
+      "codex/calculation-support-try-change": false
+    }
   },
   "headers": [
     {
@@ -10,10 +28,22 @@
           "key": "Content-Security-Policy",
           "value": "default-src 'self'; script-src 'self'; style-src 'self'; style-src-elem 'self'; style-src-attr 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self'; worker-src 'none'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
         },
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-        { "key": "X-Frame-Options", "value": "DENY" },
-        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=(), payment=(), usb=()" }
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+        }
       ]
     }
   ]

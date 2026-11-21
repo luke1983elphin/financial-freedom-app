@@ -98,7 +98,8 @@
     };
     const card = (label, value, note, key) => {
       const node = make("article", "rr-card"); node.dataset.rrMetric = key;
-      node.append(make("span", "", label), make("strong", "", value), make("small", "", note));
+      const reference = { remaining: "RET-20", super: "RET-21" }[key];
+      node.append(make("span", "", reference ? `${reference} · ${label}` : label), make("strong", "", value), make("small", "", note));
       return node;
     };
     const panel = (key, title, description, nodes, critical = false) => {
@@ -144,6 +145,7 @@
     outlook.setAttribute("tabindex", "-1");
     const toolbar = make("div", "rr-toolbar");
     toolbar.append(make("span", "rr-basis", data.basisLabel));
+    if (context.supportControl) { const support = make("div"); support.innerHTML = context.supportControl; toolbar.append(support); }
     const save = header?.querySelector("[data-save-stage-g-scenario]"); if (save) toolbar.append(save);
     outlook.prepend(toolbar);
     outlook.append(make("p", "rr-headline", data.headline));
@@ -155,6 +157,7 @@
       card("Superannuation Remaining", amount(data.superRemaining), `Forecast end: ${endDate}. ${data.basisLabel}. ${data.allSuperAccessible ? "At modelled access ages; actual release rules still apply." : "Includes super that may be below access age; not all is withdrawable."}`, "super"));
     const shortfallStatus = make("div", `rr-shortfall-status ${data.shortfall ? "is-warning" : "is-funded"}`);
     shortfallStatus.dataset.rrMetric = "shortfall";
+    shortfallStatus.append(make("small", "", "RET-22 · Total retirement spending shortfall"));
     shortfallStatus.append(make("strong", "", data.shortfall ? `Projected retirement spending shortfall: ${amount(data.shortfallAmount)}.` : "No retirement spending shortfall projected."));
     if (data.shortfall) shortfallStatus.append(make("small", "", basis === "today" ? "Sum of each year's discounted unfunded spending." : "Total unfunded spending across the forecast."));
     outlook.append(grid, shortfallStatus, make("p", "rr-disclaimer", "These are estimates based on your assumptions, not guaranteed financial outcomes."));

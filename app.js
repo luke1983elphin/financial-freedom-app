@@ -1,4 +1,5 @@
 (function bootFinancialFreedomApp() {
+  let retirementSupportCapture = null;
   const DATA = window.FFS_DATA;
   const CALC = window.FFSCalculator;
   const SECURITY = window.FFSSecurity;
@@ -10475,15 +10476,59 @@
     `;
   }
 
+  function retirementSupportControl() {
+    return retirementSupportCapture ? `<p class="field-help">Calculation support ID: <span data-calculation-support-id>${escapeHtml(retirementSupportCapture.id)}</span></p><button type="button" class="btn btn-secondary" data-semi-action="download-calculation-support">Download calculation support (Excel)</button>` : "";
+  }
+
+  function captureRetirementSupport(scenarios, metrics) {
+    const fields = { assetsAtRetirement: "assetsAtRetirement", accessibleAtRetirement: "accessibleAtRetirement", superAtRetirement: "superAtRetirement", debtAtRetirement: "debtAtRetirement", projectionEndNetWorth: "projectedEndNetWorth", projectionEndAssets: "projectionEndAssets", projectionEndPropertyEquity: "projectionEndPropertyEquity", oneOffLifestyle: "oneOffLifestyleSpendingToday", concessional: "plannedConcessionalTotal" };
+    const engineFields = { assetsAtRetirement: "totalInvestableAssets", accessibleAtRetirement: "closingAccessibleInvestmentBalance", superAtRetirement: "totalSuperBalance", debtAtRetirement: "totalDebt", projectionEndNetWorth: "totalNetWorth", projectionEndAssets: "totalInvestableAssets", projectionEndPropertyEquity: "totalPropertyEquity" };
+    const figures = scenarios.flatMap(scenario => metrics.map((metric, index) => {
+      const milestone = scenario.viewModel.keyResults?.accessibleWhenBothFullyRetired?.row;
+      const end = scenario.result.years?.at(-1);
+      const sourceRow = metric.key.startsWith("projectionEnd") ? end : milestone;
+      const value = fields[metric.key] ? scenario.summary[fields[metric.key]] : metric.value(scenario.summary);
+      return { ref: `RET-${String(index + 2).padStart(2, "0")}`, label: metric.label, source: `${scenario.name} / ${scenario.source}`,
+        period: engineFields[metric.key] ? sourceRow?.calendarYear ?? "Milestone not reached" : `${scenario.result.years?.[0]?.calendarYear}–${end?.calendarYear}`,
+        units: fields[metric.key] ? "AUD" : "Year / milestone / status",
+        rule: engineFields[metric.key] ? `result.years at indicated milestone: household.${engineFields[metric.key]}; selected dollar conversion then whole-dollar display` : "Captured comparison summary; engine-supplied milestone or event aggregate",
+        engine: engineFields[metric.key] ? sourceRow?.household?.[engineFields[metric.key]] : value,
+        value, display: metric.value(scenario.summary) };
+    }));
+    const baseline = scenarios[0];
+    const outlook = window.FFSRetirementResults.presentation(baseline.viewModel, baseline.inputs, forecastDollarBasis);
+    const end = baseline.result.years.at(-1);
+    for (const [ref, label, value, engine, period] of [
+      ["RET-20", "Non-Super Investments Remaining", outlook.remaining, end.household.closingAccessibleInvestmentBalance, end.calendarYear],
+      ["RET-21", "Superannuation Remaining", outlook.superRemaining, end.household.totalSuperBalance, end.calendarYear],
+      ["RET-22", "Total retirement spending shortfall", outlook.shortfallAmount, baseline.result.years.reduce((sum, year) => sum + year.household.unmetSpending, 0), `${baseline.result.years[0].calendarYear}–${end.calendarYear}`],
+    ]) figures.push({ ref, label, source: `${baseline.name} / ${baseline.source}`, period, units: "AUD", rule: ref === "RET-22" ? "Sum of annual funding gaps; discount each year separately for Today’s Dollars" : "Engine closing balance; discount at forecast end for Today’s Dollars", engine, value, display: semiRetirementMoney(value) });
+    retirementSupportCapture = window.FFSCalculationSupport.capture(retirementSupportCapture, {
+      scenarios: scenarios.map(scenario => ({ name: scenario.name, source: scenario.source, result: scenario.result, inputs: scenario.inputs, draft: scenario.draft })),
+      figures, settings: { basis: forecastDollarBasis, layout: semiComparisonReportLayout, detail: semiComparisonReportDetail, mobileSelection: semiComparisonMobileSelection },
+    });
+  }
+
+  function installCalculationSupport() {
+    const definitions = semiRetirementComparisonMetricDefinitions;
+    semiRetirementComparisonMetricDefinitions = () => definitions().map((metric, index) => ({ ...metric, label: `RET-${String(index + 2).padStart(2, "0")} · ${metric.label}` }));
+    const print = renderSemiRetirementComparisonPrintReport;
+    renderSemiRetirementComparisonPrintReport = (...args) => print(...args).replace("<h1>Retirement Scenario Comparison</h1>", `<h1>Retirement Scenario Comparison</h1><p>Calculation support ID: ${escapeHtml(retirementSupportCapture?.id || "Unavailable")}</p>`);
+    const annual = renderSemiRetirementAnnualProjectionHtml;
+    renderSemiRetirementAnnualProjectionHtml = (...args) => annual(...args).replaceAll("Unfunded spending", "RET-01 · Annual funding gap");
+  }
+
   function renderSemiRetirementComparisonHtml(currentViewModel) {
     if (!semiRetirementScenarioResult || !currentViewModel?.isAvailable) return "";
     const scenarioSet = semiRetirementComparisonScenarioSet(currentViewModel);
     const metrics = semiRetirementComparisonMetricDefinitions();
+    captureRetirementSupport(scenarioSet, metrics);
     return `
       <section class="semi-retirement-results-section semi-retirement-comparison" id="retirementComparison" data-semi-comparison data-mobile-view="${scenarioSet.length > 1 ? semiComparisonMobileView : "manage"}" data-mobile-all="${semiComparisonMobileSelection === "all"}" data-mobile-all-outcomes="${semiComparisonShowAllOutcomes}">
         <div class="card-subheading">
           <div>
             <h4>Retirement Scenario Comparison</h4>
+            ${retirementSupportControl()}
             <p>Compare the retirement baseline with up to ${MAX_SEMI_RETIREMENT_COMPARISONS} Retirement Planning scenarios. Temporary comparisons and saved Retirement Planning scenarios use the same projection engine, and your Financial Plan is unchanged.</p>
           </div>
         </div>
@@ -18898,6 +18943,7 @@
         semiRetirementScenarioResult, semiRetirementScenarioInputs,
         semiRetirementScenarioResultDraft || semiRetirementScenarioDraft);
       return window.FFSRetirementResults.redesign(html, {
+        supportControl: retirementSupportControl(),
         view, inputs: semiRetirementScenarioInputs, basis: forecastDollarBasis,
         money: semiRetirementMoney, state: semiRetirementDetailsState,
         outcome: window.FFSSemiRetirementUi.buildSavedRetirementOutcome(view),
@@ -19696,6 +19742,10 @@
           renderSemiRetirementScenario(calculatePlan(plan));
         }
         if (semiAction.dataset.semiAction === "export-comparison-pdf") printSemiRetirementComparisonPdf();
+        if (semiAction.dataset.semiAction === "download-calculation-support" && retirementSupportCapture) {
+          const bytes = window.FFSCalculationSupport.bytes(retirementSupportCapture);
+          downloadBlob(new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), `${retirementSupportCapture.id}.xlsx`);
+        }
         if (semiAction.dataset.semiAction === "view-living-expenses") viewFinancialPlanLivingExpenses();
         if (semiAction.dataset.semiAction === "use-plan-living-expenses") useFinancialPlanLivingExpensesForSemiRetirementScenario();
         if (semiAction.dataset.semiAction === "add-one-off-lifestyle-event") addSemiRetirementOneOffLifestyleEvent();
@@ -20209,6 +20259,7 @@
   installAdditionalDollarDisplays();
   installReportingPresentation();
   installRetirementResultsPresentation();
+  installCalculationSupport();
   installForecastAssumptionsWorkspace();
   installMobileUsabilityStage2();
   bindEvents();
