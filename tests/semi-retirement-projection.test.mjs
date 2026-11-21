@@ -1398,3 +1398,36 @@ test("Stage G2D annual one-off funding leg reconciles through the normal waterfa
     requiredNeed,
   );
 });
+
+test("a personal asset sale funds the scenario once and removes the asset from the sale year", () => {
+  const { ENGINE } = loadProjectionEngine();
+  const sale = { id: "sale", assetSaleId: "campervan", year: 2027, amountTodayDollars: 100000 };
+  const input = baseInput({
+    inflationRate: 0.02,
+    assets: [
+      { id: "campervan", name: "Campervan", type: "vehicle", openingValue: 120000 },
+      { id: "boat", name: "Boat", type: "personalUse", openingValue: 20000 },
+      { id: "home", name: "Home", type: "home", openingValue: 500000 },
+    ],
+    scenario: { oneOffIncomeEvents: [sale] },
+  });
+  const result = ENGINE.projectRetirementScenario(input);
+  assert.equal(result.validation.isValid, true, JSON.stringify(result.validation.errors));
+  const [before, during, after] = result.years;
+  assert.equal(before.assets.find(asset => asset.id === "campervan").closingValue, 120000);
+  assert.equal(before.household.oneOffIncome, 0);
+  assert.equal(during.household.oneOffIncome, 102000);
+  assert.equal(during.household.oneOffIncomeEvents[0].description, "Sell Campervan");
+  for (const year of [during, after]) {
+    assert.equal(year.assets.some(asset => asset.id === "campervan"), false);
+    assert.equal(year.assets.some(asset => asset.id === "boat"), true);
+  }
+  assert.equal(after.household.oneOffIncome, 0);
+  assert.equal(input.assets[0].openingValue, 120000);
+
+  for (const events of [[sale, { ...sale, id: "second-sale", year: 2028 }], [{ ...sale, assetSaleId: "home" }], [{ ...sale, assetSaleId: "missing" }]]) {
+    const invalid = ENGINE.projectRetirementScenario({ ...input, scenario: { ...input.scenario, oneOffIncomeEvents: events } });
+    assert.equal(invalid.validation.isValid, false);
+    assert.ok(invalid.validation.errors.some(error => error.path.endsWith(".assetSaleId")));
+  }
+});

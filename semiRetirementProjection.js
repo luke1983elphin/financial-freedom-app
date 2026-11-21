@@ -458,6 +458,13 @@
     };
   }
 
+  function isSaleablePersonalAsset(asset) {
+    const type = normaliseAssetType(asset.type || asset.category);
+    return !asset.isAccessibleAsset && !PROPERTY_ASSET_TYPES.has(type) && type !== "super"
+      && (asset.isPersonalUse === true || PERSONAL_USE_ASSET_TYPES.has(type))
+      && number(asset.openingValue) > 0 && number(asset.ownershipPercent, 100) > 0;
+  }
+
   function normaliseProjectionLiability(liability = {}, index = 0) {
     const type = normaliseLiabilityType(liability.type || liability.category || liability.liabilityType);
     const id = normaliseRecordId(liability, "liability", index);
@@ -623,6 +630,7 @@
   function normaliseOneOffIncomeEvent(item = {}, index = 0) {
     return {
       id: normaliseRecordId(item, "one-off-income", index),
+      ...(item.assetSaleId ? { assetSaleId: String(item.assetSaleId).trim() } : {}),
       description: String(item.description || item.name || "").trim(),
       amountTodayDollars: roundCurrency(Math.max(0, number(item.amountTodayDollars ?? item.amount ?? item.todayDollarAmount))),
       year: Math.round(number(item.year ?? item.calendarYear)),
@@ -1518,11 +1526,21 @@
       ? input.scenario.oneOffIncomeEvents.map(normaliseOneOffIncomeEvent)
       : [];
     const oneOffIncomeIds = new Set();
+    const soldAssetIds = new Set();
+    const saleableAssets = new Set((Array.isArray(input.assets) ? input.assets : [])
+      .map((asset, index) => normaliseProjectionAsset(asset, index))
+      .filter(isSaleablePersonalAsset).map(asset => asset.id));
     oneOffIncomeEvents.forEach((event, index) => {
       const prefix = `scenario.oneOffIncomeEvents.${index}`;
       if (oneOffIncomeIds.has(event.id)) addValidation(errors, `${prefix}.id`, "One-off income events need unique IDs.");
       oneOffIncomeIds.add(event.id);
-      if (!event.description) addValidation(errors, `${prefix}.description`, "Add a short description, such as inheritance, family assistance or insurance proceeds.");
+      if (event.assetSaleId) {
+        if (!saleableAssets.has(event.assetSaleId)) addValidation(errors, `${prefix}.assetSaleId`, "Choose an existing personal asset.");
+        if (soldAssetIds.has(event.assetSaleId)) addValidation(errors, `${prefix}.assetSaleId`, "This asset can only be sold once per scenario.");
+        soldAssetIds.add(event.assetSaleId);
+      } else if (!event.description) {
+        addValidation(errors, `${prefix}.description`, "Add a short description, such as inheritance, family assistance or insurance proceeds.");
+      }
       if (!hasFiniteNumber(event.amountTodayDollars) || event.amountTodayDollars <= 0) addValidation(errors, `${prefix}.amountTodayDollars`, "Enter an amount greater than $0.");
       if (!Number.isFinite(event.year) || event.year < projectionStartYear || (projectionEndYear !== null && event.year > projectionEndYear)) {
         addValidation(errors, `${prefix}.year`, "Choose a year within this projection.");
@@ -1987,6 +2005,12 @@
     if (normalised.accessibleInvestments.externalAnnualAccessibleContribution > 0) {
       warnings.push("Planned accessible investment contribution while working is modelled only in working-phase years and ceases once the household enters semi-retirement.");
     }
+    const assetsById = new Map(normalised.assets.map(asset => [asset.id, asset]));
+    const saleYearByAsset = new Map(normalised.scenario.oneOffIncomeEvents
+      .filter(event => event.assetSaleId).map(event => [event.assetSaleId, event.year]));
+    const incomeEvents = normalised.scenario.oneOffIncomeEvents.map(event => event.assetSaleId
+      ? { ...event, description: `Sell ${assetsById.get(event.assetSaleId).name}` }
+      : event);
     const assetStates = {};
     normalised.assets.forEach((asset) => {
       assetStates[asset.id] = roundCurrency(asset.openingValue);
@@ -2121,7 +2145,9 @@
         person.superWithdrawal = 0;
       });
 
-      const assetRows = normalised.assets.map((asset) => {
+      const assetRows = normalised.assets.filter(asset =>
+        !saleYearByAsset.has(asset.id) || calendarYear < saleYearByAsset.get(asset.id)
+      ).map((asset) => {
         const replacementState = replacementHomeStates[asset.id] || null;
         const effectiveAsset = replacementState
           ? { ...asset, name: replacementState.name || asset.name, type: "home" }
@@ -2210,7 +2236,7 @@
       const oneOffLifestyleSpending = oneOffLifestyle.total;
       const oneOffLifestyleSpendingTodayDollars = oneOffLifestyle.totalTodayDollars;
       const oneOffIncome = oneOffIncomeEventsForYear(
-        normalised.scenario.oneOffIncomeEvents,
+        incomeEvents,
         calendarYear,
         normalised.inflationRate,
         yearIndex,
@@ -2903,6 +2929,7 @@
     featureFlags: FEATURE_FLAGS,
     projectRetirementScenario,
     retainedAssetsAtYear,
+    isSaleablePersonalAsset,
     validateRetirementProjectionInputs: validateInputs,
     normaliseRetirementProjectionInputs: normaliseInputs,
     projectDebtYearForAudit: projectDebtYear,

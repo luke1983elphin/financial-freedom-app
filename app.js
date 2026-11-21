@@ -9007,6 +9007,7 @@
   function semiRetirementOneOffIncomeEventsHtml(draft = semiRetirementScenarioDraft) {
     const events = window.FFSSemiRetirementUi?.normaliseOneOffIncomeEvents?.(draft?.scenario?.oneOffIncomeEvents) || [];
     const yearOptions = semiRetirementOneOffYearOptions(draft);
+    const saleableAssets = (draft?.assets || []).filter(window.FFSSemiRetirementProjection.isSaleablePersonalAsset);
     return `
       <section class="semi-retirement-one-off-section semi-retirement-one-off-income-section" data-one-off-income>
         <div class="semi-retirement-one-off-heading">
@@ -9015,22 +9016,29 @@
             <p class="field-help">Add scenario-only lump sums such as an inheritance, family assistance, insurance proceeds or another non-recurring cash receipt.</p>
           </div>
           <button class="btn btn-small" type="button" data-semi-action="add-one-off-income-event">+ Add income</button>
+          ${saleableAssets.some(asset => !events.some(event => event.assetSaleId === asset.id)) ? `<button class="btn btn-small" type="button" data-semi-action="add-personal-asset-sale">+ Sell a personal asset</button>` : ""}
         </div>
         ${events.length ? `
           <div class="semi-retirement-one-off-list">
             ${events.map((event, index) => {
               const prefix = `scenario.oneOffIncomeEvents.${index}`;
+              const assetOptions = [["", "None — one-off income"], ...saleableAssets
+                .filter(asset => !events.some(other => other.id !== event.id && other.assetSaleId === asset.id))
+                .map(asset => [asset.id, asset.name])];
+              const saleAsset = saleableAssets.find(asset => asset.id === event.assetSaleId);
+              if (event.assetSaleId && !saleAsset) assetOptions.push([event.assetSaleId, "Previously selected asset is unavailable"]);
               const ageLabel = window.FFSSemiRetirementUi?.eventAgeLabel?.(draft, event.year) || "";
               const timingSummary = `${money(event.amountTodayDollars)} - ${event.year || "Choose a year"}${ageLabel ? ` - ${ageLabel}` : ""}`;
               return `
                 <details class="semi-retirement-one-off-row" data-one-off-income-id="${escapeHtml(event.id)}">
                   <summary class="semi-retirement-one-off-summary">
-                    <strong>${escapeHtml(event.description || `One-off income ${index + 1}`)}</strong>
+                    <strong>${escapeHtml(event.assetSaleId ? `Sell ${saleAsset?.name || "personal asset"}` : event.description || `One-off income ${index + 1}`)}</strong>
                     <span>${escapeHtml(timingSummary)}</span>
                   </summary>
                   <div class="semi-retirement-one-off-fields">
-                    ${semiRetirementInput({ label: "Description", path: `${prefix}.description`, type: "text", help: "Example: inheritance, family assistance or insurance proceeds." })}
-                    ${semiRetirementInput({ label: "Amount in today's dollars", path: `${prefix}.amountTodayDollars`, step: "1000", infoKey: "semiOneOffIncomeAmount" })}
+                    ${assetOptions.length > 1 ? semiRetirementInput({ label: "Personal asset to sell", path: `${prefix}.assetSaleId`, type: "select", options: assetOptions, help: "Adds the proceeds and removes the asset from this scenario in the selected year." }) : ""}
+                    ${event.assetSaleId ? "" : semiRetirementInput({ label: "Description", path: `${prefix}.description`, type: "text", help: "Example: inheritance, family assistance or insurance proceeds." })}
+                    ${semiRetirementInput({ label: event.assetSaleId ? "Sale proceeds in today's dollars" : "Amount in today's dollars", path: `${prefix}.amountTodayDollars`, step: "1000", infoKey: "semiOneOffIncomeAmount", help: event.assetSaleId ? "Enter the amount you expect to receive after selling costs." : undefined })}
                     ${semiRetirementInput({ label: "Year", path: `${prefix}.year`, type: "select", options: yearOptions, infoKey: "semiOneOffIncomeYear" })}
                     <button class="btn btn-small" type="button" data-semi-action="remove-one-off-income-event" data-event-id="${escapeHtml(event.id)}">Remove</button>
                   </div>
@@ -11829,15 +11837,21 @@
     updateSaveStatus("Planned big expense removed. Calculate the Retirement Plan to update results.");
   }
 
-  function addSemiRetirementOneOffIncomeEvent() {
+  function addSemiRetirementOneOffIncomeEvent(sellAsset = false) {
     if (!window.FFSSemiRetirementUi) return;
     ensureSemiRetirementScenarioDraft(calculatePlan(plan));
     const events = window.FFSSemiRetirementUi.normaliseOneOffIncomeEvents(semiRetirementScenarioDraft.scenario?.oneOffIncomeEvents);
     const range = window.FFSSemiRetirementUi.projectionYearRange(semiRetirementScenarioDraft);
     const year = Number.isFinite(Number(range.startYear)) ? Number(range.startYear) : currentYear();
+    const saleAsset = sellAsset ? (semiRetirementScenarioDraft.assets || []).find(asset =>
+      window.FFSSemiRetirementProjection.isSaleablePersonalAsset(asset)
+      && !events.some(event => event.assetSaleId === asset.id)
+    ) : null;
+    if (sellAsset && !saleAsset) return;
     const nextIndex = events.length;
     events.push({
       id: window.FFSSemiRetirementUi.oneOffIncomeEventId(nextIndex),
+      ...(saleAsset ? { assetSaleId: saleAsset.id } : {}),
       description: "",
       amountTodayDollars: 0,
       year,
@@ -11851,7 +11865,7 @@
     semiRetirementScenarioDirty = true;
     renderSemiRetirementScenario(calculatePlan(plan));
     window.requestAnimationFrame(() => {
-      const target = document.querySelector(`[data-semi-input="scenario.oneOffIncomeEvents.${nextIndex}.description"]`);
+      const target = document.querySelector(`[data-semi-input="scenario.oneOffIncomeEvents.${nextIndex}.${saleAsset ? "assetSaleId" : "description"}"]`);
       target?.focus({ preventScroll: true });
       target?.scrollIntoView({ behavior: "smooth", block: "center" });
     });
@@ -19708,6 +19722,7 @@
         if (semiAction.dataset.semiAction === "add-one-off-lifestyle-event") addSemiRetirementOneOffLifestyleEvent();
         if (semiAction.dataset.semiAction === "remove-one-off-lifestyle-event") removeSemiRetirementOneOffLifestyleEvent(semiAction.dataset.eventId);
         if (semiAction.dataset.semiAction === "add-one-off-income-event") addSemiRetirementOneOffIncomeEvent();
+        if (semiAction.dataset.semiAction === "add-personal-asset-sale") addSemiRetirementOneOffIncomeEvent(true);
         if (semiAction.dataset.semiAction === "remove-one-off-income-event") removeSemiRetirementOneOffIncomeEvent(semiAction.dataset.eventId);
         if (semiAction.dataset.semiAction === "add-planned-concessional-contribution") addSemiRetirementPlannedConcessionalContribution();
         if (semiAction.dataset.semiAction === "remove-planned-concessional-contribution") removeSemiRetirementPlannedConcessionalContribution(semiAction.dataset.contributionId);
