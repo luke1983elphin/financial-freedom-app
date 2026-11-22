@@ -1832,6 +1832,7 @@ test('Try a Change live surplus matches the dashboard and resolved allocations a
 });
 
 test('Try a Change states how the extra $100 is funded and labels both forecast bases', async () => {
+  await cdp.send('Emulation.setDeviceMetricsOverride', {width: 375, height: 900, deviceScaleFactor: 1, mobile: true});
   await navigate();
   await fixture();
   await evaluate(`(() => {
@@ -1850,8 +1851,21 @@ test('Try a Change states how the extra $100 is funded and labels both forecast 
     }, 'decision');
     document.querySelector('[data-what-if=invest-100]').click();
   })()`);
+  await select('future');
+  assert.equal(await evaluate(`document.querySelector('.what-if-dollar-basis [data-dollar-basis=future]').getAttribute('aria-pressed')`), 'true');
+  assert.ok(await evaluate(`(() => {
+    const control = document.querySelector('.what-if-dollar-basis');
+    return control.nextElementSibling.classList.contains('what-if-forecast')
+      && [...control.querySelectorAll('button')].every(button => button.getBoundingClientRect().height >= 44)
+      && document.documentElement.scrollWidth <= innerWidth;
+  })()`));
+  const planBefore = await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())');
   for (const [basis, expected] of [['today', [5251, 27356, 58090]], ['future', [5382, 30950, 74360]]]) {
-    await select(basis);
+    const selector = `.what-if-dollar-basis [data-dollar-basis="${basis}"]`;
+    await evaluate(`document.querySelector(${JSON.stringify(selector)}).focus()`);
+    await key('Enter');
+    assert.ok(await evaluate(`document.activeElement.matches(${JSON.stringify(selector)})`));
+    assert.deepEqual(await evaluate(`[...document.querySelectorAll('[data-dollar-basis="${basis}"]')].map(button => button.getAttribute('aria-pressed'))`), ['true', 'true']);
     const summary = await evaluate(`document.getElementById('whatIfResult').textContent`);
     assert.match(summary, /\$934\/week/);
     assert.match(summary, /−\$100\/week/);
@@ -1864,6 +1878,7 @@ test('Try a Change states how the extra $100 is funded and labels both forecast 
     const deltas = await evaluate(`[...document.querySelectorAll('#whatIfResult .what-if-forecast-row:not(.what-if-forecast-head) b')].map(n => Number(n.textContent.replace(/[^0-9]/g, '')))`);
     assert.deepEqual(deltas, expected);
   }
+  assert.equal(await evaluate('JSON.stringify(FFSStage1BrowserTestHooks.getPlan())'), planBefore);
   await evaluate("document.querySelector('[data-what-if=expenses-500]').click()");
   assert.match(await evaluate("document.getElementById('whatIfResult').textContent"), /This change frees up cash you can allocate below/);
   assert.equal(await evaluate("document.querySelector('[data-what-if-allocation=investments]').disabled"), false);
