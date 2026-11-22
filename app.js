@@ -8615,14 +8615,6 @@
     `;
   }
 
-  function decisionPassiveIncomeSummaryHtml(result) {
-    return passiveIncomeConciseSummaryHtml(result, {
-      heading: "Passive income summary",
-      intro: "Keep the headline passive-income figures visible while detailed owner allocation and linked-property principal repayments stay available on request.",
-      detailsLabel: "View passive income details",
-    });
-  }
-
   function renderCashflow(result) {
     document.getElementById("cashflowTable").innerHTML = cashflowRows(result).map(([label, value]) => `
       ${cashflowRowHtml(label, value)}
@@ -11462,8 +11454,6 @@
     const customDetails = document.getElementById("customScenarioDetails");
     if (!readiness.readyForPersonalisedResults) {
       if (decisionList) decisionList.innerHTML = readinessGateHtml(readiness, "scenario comparisons");
-      const passiveSummary = document.getElementById("decisionPassiveIncomeSummary");
-      if (passiveSummary) passiveSummary.innerHTML = "";
       if (saveButton) saveButton.disabled = true;
       customDetails?.classList.add("hidden");
       return;
@@ -11502,8 +11492,6 @@
         </details>
       </article>
     `).join("");
-    const passiveSummary = document.getElementById("decisionPassiveIncomeSummary");
-    if (passiveSummary) passiveSummary.innerHTML = decisionPassiveIncomeSummaryHtml(result);
   }
 
   function refreshSemiRetirementIncomeEditor(target) {
@@ -15786,6 +15774,24 @@
     });
   }
 
+  function scenarioComparisonRowHtml(label, before, after, { format = money, formatDifference = format, infoKey = "" } = {}) {
+    const delta = after - before;
+    const difference = `${delta < 0 ? "−" : "+"}${formatDifference(Math.abs(delta))}`;
+    return `<div class="what-if-forecast-row"><strong>${escapeHtml(label)}${infoButtonHtml(infoKey, label)}</strong><span>${format(before)}</span><span>${format(after)}</span><b>${difference}</b></div>`;
+  }
+
+  function scenarioNetWorthRowHtml(label, before, after, year) {
+    return scenarioComparisonRowHtml(label,
+      displayedForecastAmount(netWorthAtYear(before, year), year, before.plan?.investing?.inflationPct),
+      displayedForecastAmount(netWorthAtYear(after, year), year, after.plan?.investing?.inflationPct));
+  }
+
+  function scenarioComparisonForecastHtml(rows, savedBase, className = "") {
+    return `<div class="what-if-forecast ${className}"><div class="what-if-forecast-row what-if-forecast-head"><strong>Measure</strong><span>${savedBase ? "Saved base plan" : "Current Plan"}</span><span>Adjusted Plan</span><b>Difference</b></div>
+      ${rows.join("")}
+    </div>`;
+  }
+
   function renderComparison(result) {
     const currentPlanResult = result;
     if (decisionScenarioBasePlan) result = calculatePlan(decisionScenarioBasePlan);
@@ -15812,13 +15818,15 @@
     const revisedResult = calculatePlan(revisedPlan);
     const current = estimatedCashflow(result);
     const revised = estimatedCashflow(revisedResult);
-    const currentPercent = freedomPercent(result);
-    const revisedPercent = freedomPercent(revisedResult);
-    const primaryTiles = [
-      summaryTile("1-year net worth", `${money(netWorthAtYear(result, 1))} -> ${money(netWorthAtYear(revisedResult, 1))}`),
-      summaryTile("2-year net worth", `${money(netWorthAtYear(result, 2))} -> ${money(netWorthAtYear(revisedResult, 2))}`),
-      summaryTile("Long-term net worth", `${money(longTermNetWorth(result))} -> ${money(longTermNetWorth(revisedResult))}`),
-      summaryTile("Financial Freedom progress", `${plainPercent(currentPercent)} -> ${plainPercent(revisedPercent)}`, revisedPercent >= currentPercent ? "status-green" : "status-amber", "decisionFreedomProgress"),
+    const primaryRows = [
+      scenarioNetWorthRowHtml("Net worth after 1 year", result, revisedResult, 1),
+      scenarioNetWorthRowHtml("Net worth after 2 years", result, revisedResult, 2),
+      scenarioComparisonRowHtml("Long-term net worth",
+        displayedForecastAmount(longTermNetWorth(result), result.netWorthProjection.at(-1)?.year ?? 30, result.plan?.investing?.inflationPct),
+        displayedForecastAmount(longTermNetWorth(revisedResult), revisedResult.netWorthProjection.at(-1)?.year ?? 30, revisedResult.plan?.investing?.inflationPct)),
+      scenarioComparisonRowHtml("Financial Freedom progress", Math.round(freedomPercent(result)), Math.round(freedomPercent(revisedResult)), {
+        format: plainPercent, formatDifference: points => `${points} pp`, infoKey: "decisionFreedomProgress",
+      }),
     ];
     const technicalTiles = [
       summaryTile("Current annual final surplus", money(current), current >= 0 ? "status-green" : "status-amber"),
@@ -15828,15 +15836,15 @@
       summaryTile("Estimated Medicare levy", `${money(result.taxEstimate.medicareLevy)} -> ${money(revisedResult.taxEstimate.medicareLevy)}`),
       summaryTile("Estimated Medicare levy surcharge", `${money(result.taxEstimate.medicareLevySurcharge)} -> ${money(revisedResult.taxEstimate.medicareLevySurcharge)}`),
       summaryTile("STSL compulsory repayment estimate", `${money(result.helpRepaymentEstimate.annualRepayment)} -> ${money(revisedResult.helpRepaymentEstimate.annualRepayment)}`),
-      summaryTile("Super balance in 2 years", `${money(superAtYear(result, 2))} -> ${money(superAtYear(revisedResult, 2))}`),
-      summaryTile("Investment balance in 2 years", `${money(investmentAtYear(result, 2))} -> ${money(investmentAtYear(revisedResult, 2))}`),
+      summaryTile("Super balance in 2 years", `${forecastMoney(superAtYear(result, 2), 2, result.plan?.investing?.inflationPct)} -> ${forecastMoney(superAtYear(revisedResult, 2), 2, revisedResult.plan?.investing?.inflationPct)}`),
+      summaryTile("Investment balance in 2 years", `${forecastMoney(investmentAtYear(result, 2), 2, result.plan?.investing?.inflationPct)} -> ${forecastMoney(investmentAtYear(revisedResult, 2), 2, revisedResult.plan?.investing?.inflationPct)}`),
       summaryTile("Debt balance now", `${money(result.totalLiabilities)} -> ${money(revisedResult.totalLiabilities)}`),
       ...comparisonSurplusImpactTiles(result, revisedResult, comparison, annualAllocation),
     ];
     summary.innerHTML = `
       ${targetsHtml}
       ${decisionSurplusHtml(result, revisedResult, currentPlanResult)}
-      ${primaryTiles.join("")}
+      ${scenarioComparisonForecastHtml(primaryRows, decisionScenarioBasePlan, "decision-comparison-forecast")}
       <details class="decision-details decision-result-details">
         <summary>View details</summary>
         <div class="summary-grid mt-3">${technicalTiles.join("")}</div>
@@ -16019,11 +16027,6 @@
       ? whatIfGrowthPreview(result, adjustedResult)
       : { before: result, after: adjustedResult };
     const fmtDelta = amount => `${amount >= 0 ? "+" : "−"}${money(Math.abs(amount))}`;
-    const forecastRow = (year) => {
-      const before = displayedForecastAmount(netWorthAtYear(growth.before, year), year, growth.before.plan?.investing?.inflationPct);
-      const after = displayedForecastAmount(netWorthAtYear(growth.after, year), year, growth.after.plan?.investing?.inflationPct);
-      return `<div class="what-if-forecast-row"><strong>Net worth after ${year} ${year === 1 ? "year" : "years"}</strong><span>${money(before)}</span><span>${money(after)}</span><b>${fmtDelta(after - before)}</b></div>`;
-    };
     output.innerHTML = `
       ${decisionSurplusHtml(result, adjustedResult, currentPlanResult)}
       <section class="what-if-flow">
@@ -16056,9 +16059,8 @@
           </div>
           ${growth.control || ""}
           ${growth.error ? `<p class="field-help" role="alert">Growth preview unavailable. ${escapeHtml(growth.error)}</p>`
-            : `<div class="what-if-forecast"><div class="what-if-forecast-row what-if-forecast-head"><strong>Measure</strong><span>Current</span><span>Changed</span><b>Difference</b></div>
-          ${[1, 5, 10].map(forecastRow).join("")}
-          </div>`}
+            : scenarioComparisonForecastHtml([1, 5, 10].map(year => scenarioNetWorthRowHtml(
+              `Net worth after ${year} ${year === 1 ? "year" : "years"}`, growth.before, growth.after, year)), whatIfBaseSnapshot)}
           <p class="field-help">Remaining annual cash after the change${canAllocate ? " and your allocation choice" : ""} is ${money(estimatedCashflow(adjustedResult))}.</p>
         </div>
       </section>`;
@@ -18519,65 +18521,6 @@
     `;
   }
 
-  function renderComparisonDollarBasis(result) {
-    const currentPlanResult = result;
-    if (decisionScenarioBasePlan) result = calculatePlan(decisionScenarioBasePlan);
-    const summary = document.getElementById("comparisonSummary");
-    if (!summary) return;
-    const readiness = personalisedResultsReadiness(plan, result);
-    if (!readiness.readyForPersonalisedResults) {
-      summary.innerHTML = readinessGateHtml(readiness, "custom scenario comparisons");
-      return;
-    }
-    const comparison = activeDecisionComparison();
-    document.querySelectorAll("[data-comparison]").forEach((input) => {
-      const value = comparison[input.dataset.comparison] ?? 0;
-      if (input.type === "checkbox") {
-        input.checked = Boolean(value);
-      } else if (input.value !== String(value)) {
-        input.value = value;
-      }
-    });
-    const targetsHtml = (decisionScenarioBasePlan ? '<p class="field-help">Reviewing this scenario against its saved base plan. Your current plan is unchanged.</p>' : "") + scenarioTargetsHtml(decisionScenarioBasePlan || plan, "detailed", comparison);
-    try {
-    const annualAllocation = comparisonSurplusAllocationAmount(result, comparison);
-    const revisedPlan = buildComparisonPlan(result);
-    const revisedResult = calculatePlan(revisedPlan);
-    const current = estimatedCashflow(result);
-    const revised = estimatedCashflow(revisedResult);
-    const currentPercent = freedomPercent(result);
-    const revisedPercent = freedomPercent(revisedResult);
-    const primaryTiles = [
-      summaryTile("1-year net worth", `${forecastMoney(netWorthAtYear(result, 1), 1, result.plan?.investing?.inflationPct)} -> ${forecastMoney(netWorthAtYear(revisedResult, 1), 1, revisedResult.plan?.investing?.inflationPct)}`),
-      summaryTile("2-year net worth", `${forecastMoney(netWorthAtYear(result, 2), 2, result.plan?.investing?.inflationPct)} -> ${forecastMoney(netWorthAtYear(revisedResult, 2), 2, revisedResult.plan?.investing?.inflationPct)}`),
-      summaryTile("Long-term net worth", `${forecastMoney(longTermNetWorth(result), result.netWorthProjection.at(-1)?.year ?? 30, result.plan?.investing?.inflationPct)} -> ${forecastMoney(longTermNetWorth(revisedResult), revisedResult.netWorthProjection.at(-1)?.year ?? 30, revisedResult.plan?.investing?.inflationPct)}`),
-      summaryTile("Financial Freedom progress", `${plainPercent(currentPercent)} -> ${plainPercent(revisedPercent)}`, revisedPercent >= currentPercent ? "status-green" : "status-amber", "decisionFreedomProgress"),
-    ];
-    const technicalTiles = [
-      summaryTile("Current annual final surplus", money(current), current >= 0 ? "status-green" : "status-amber"),
-      summaryTile("Revised annual final surplus", money(revised), revised >= 0 ? "status-green" : "status-amber"),
-      summaryTile("Taxable income estimate", `${money(result.taxEstimate.taxableIncomeAfterExtraSuper)} -> ${money(revisedResult.taxEstimate.taxableIncomeAfterExtraSuper)}`),
-      summaryTile("Estimated income tax", `${money(result.taxEstimate.incomeTax)} -> ${money(revisedResult.taxEstimate.incomeTax)}`),
-      summaryTile("Estimated Medicare levy", `${money(result.taxEstimate.medicareLevy)} -> ${money(revisedResult.taxEstimate.medicareLevy)}`),
-      summaryTile("Estimated Medicare levy surcharge", `${money(result.taxEstimate.medicareLevySurcharge)} -> ${money(revisedResult.taxEstimate.medicareLevySurcharge)}`),
-      summaryTile("STSL compulsory repayment estimate", `${money(result.helpRepaymentEstimate.annualRepayment)} -> ${money(revisedResult.helpRepaymentEstimate.annualRepayment)}`),
-      summaryTile("Super balance in 2 years", `${forecastMoney(superAtYear(result, 2), 2, result.plan?.investing?.inflationPct)} -> ${forecastMoney(superAtYear(revisedResult, 2), 2, revisedResult.plan?.investing?.inflationPct)}`),
-      summaryTile("Investment balance in 2 years", `${forecastMoney(investmentAtYear(result, 2), 2, result.plan?.investing?.inflationPct)} -> ${forecastMoney(investmentAtYear(revisedResult, 2), 2, revisedResult.plan?.investing?.inflationPct)}`),
-      summaryTile("Debt balance now", `${money(result.totalLiabilities)} -> ${money(revisedResult.totalLiabilities)}`),
-      ...comparisonSurplusImpactTiles(result, revisedResult, comparison, annualAllocation),
-    ];
-    summary.innerHTML = `
-      ${targetsHtml}
-      ${decisionSurplusHtml(result, revisedResult, currentPlanResult)}
-      ${primaryTiles.join("")}
-      <details class="decision-details decision-result-details">
-        <summary>View details</summary>
-        <div class="summary-grid mt-3">${technicalTiles.join("")}</div>
-      </details>
-    `;
-    } catch (error) { showScenarioInputError(summary, error, targetsHtml + decisionSurplusHtml(result, null, currentPlanResult)); }
-  }
-
   function comparisonSurplusImpactTilesDollarBasis(result, revisedResult, comparison, annualAllocation) {
     if (!annualAllocation || !["investments", "debt"].includes(comparison.surplusAllocationTarget)) return [];
     const allocationLabel = comparison.surplusAllocationTarget === "investments" ? "investments" : "debt repayment";
@@ -18936,6 +18879,11 @@
       });
       return result;
     };
+    const originalComparison = renderComparison;
+    renderComparison = (...args) => {
+      originalComparison(...args);
+      ui.decorateComparison(document.getElementById("comparisonSummary"), decisionScenarioBasePlan ? "Saved base plan" : "Current Plan");
+    };
     const originalWhatIf = renderWhatIf;
     renderWhatIf = (...args) => { const result = originalWhatIf(...args); ui.decorateComparison(document.getElementById("whatIfResult"), whatIfBaseSnapshot ? "Saved base plan" : "Current Plan"); return result; };
     const originalAdjustment = renderSemiRetirementAdjustmentControl;
@@ -19148,8 +19096,6 @@
     renderSemiRetirementAnnualProjectionHtml = (...args) => forecastDollarBasis === "today" ? renderSemiRetirementAnnualProjectionHtmlDollarBasis(...args) : nominalrenderSemiRetirementAnnualProjectionHtml(...args);
     const nominalreportPresentationHtml = reportPresentationHtml;
     reportPresentationHtml = (...args) => forecastDollarBasis === "today" ? reportPresentationHtmlDollarBasis(...args) : nominalreportPresentationHtml(...args);
-    const nominalrenderComparison = renderComparison;
-    renderComparison = (...args) => forecastDollarBasis === "today" ? renderComparisonDollarBasis(...args) : nominalrenderComparison(...args);
     const nominalcomparisonSurplusImpactTiles = comparisonSurplusImpactTiles;
     comparisonSurplusImpactTiles = (...args) => forecastDollarBasis === "today" ? comparisonSurplusImpactTilesDollarBasis(...args) : nominalcomparisonSurplusImpactTiles(...args);
     const nominalChart = lineChart;

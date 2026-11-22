@@ -9412,6 +9412,7 @@ body.scenario-save-modal-open {
 .what-if-allocation.selected { background: #d9efe2; border-color: #77ba95; box-shadow: inset 0 0 0 1px #77ba95; }
 .what-if-allocation:disabled { opacity: .45; }
 .what-if-forecast { overflow-x: auto; margin: 14px 0; }
+.decision-comparison-forecast { grid-column: 1 / -1; min-width: 0; margin: 0; }
 .what-if-forecast-row { display: grid; grid-template-columns: minmax(125px,1.6fr) repeat(3,minmax(90px,1fr)); gap: 10px; align-items: center; min-width: 480px; padding: 10px 4px; border-bottom: 1px solid #dce9e1; font-size: .85rem; }
 .what-if-forecast-row span,.what-if-forecast-row b { text-align: right; }
 .what-if-forecast-head { color: #577265; font-size: .75rem; }

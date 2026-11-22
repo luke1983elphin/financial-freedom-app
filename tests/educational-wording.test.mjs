@@ -4,8 +4,8 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 const source=readFileSync(new URL('../app.js',import.meta.url),'utf8');
 const extract=name=>{const a=source.indexOf('  function '+name+'(');assert.ok(a>=0);return source.slice(a,source.indexOf('\n  function ',a+5));};
-const nodes={decisionList:{innerHTML:''},decisionPassiveIncomeSummary:{innerHTML:''}};
-const ctx={plan:{},escapeHtml:String,percentFromRatio:n=>String(n),dollarsPerDollar:String,summaryTile:(l,v)=>`<div>${l}: ${v}</div>`,personalisedResultsReadiness:()=>({readyForPersonalisedResults:true}),decisionPassiveIncomeSummaryHtml:()=>'',document:{getElementById:id=>nodes[id],querySelector:()=>null}};
+const nodes={decisionList:{innerHTML:''}};
+const ctx={plan:{},escapeHtml:String,percentFromRatio:n=>String(n),dollarsPerDollar:String,summaryTile:(l,v)=>`<div>${l}: ${v}</div>`,personalisedResultsReadiness:()=>({readyForPersonalisedResults:true}),document:{getElementById:id=>nodes[id],querySelector:()=>null}};
 vm.runInNewContext(['modellingCopy','modellingInformationHtml','renderDecision','highestRecommendation','comparisonDiff','weeklyPriority'].map(extract).join('\n'),ctx);
 ctx.roundForDisplay=n=>Math.round(n*100)/100;ctx.money=n=>`$${n}`;
 test('Decision Engine displays alphabetical comparisons without scores, endorsement or result mutation',()=>{
