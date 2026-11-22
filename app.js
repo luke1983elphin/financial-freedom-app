@@ -622,6 +622,7 @@
   let customWhatIfOpen = false;
   let customWhatIfError = "";
   let whatIfAllocation = "unallocated";
+  let whatIfGrowthScenario = "Base";
   let whatIfTargets = {};
   let whatIfBaseSnapshot = null;
   let whatIfRestoredBaseAdjustments = null;
@@ -15946,6 +15947,28 @@
     }
   }
 
+  function whatIfGrowthPreview(result, adjustedResult) {
+    const api = window.FFSGrowthScenarios;
+    const presets = api.suggested(result.plan);
+    const scenario = presets[whatIfGrowthScenario];
+    const rates = scenario.values;
+    const rate = new Intl.NumberFormat("en-AU", { maximumFractionDigits: 4 });
+    const control = `<div class="what-if-dollar-basis">
+      <p class="dollar-basis-title">Growth scenario</p>
+      <div class="dollar-basis-segments" role="group" aria-label="Growth scenario" aria-describedby="whatIfGrowthDescription">
+        ${Object.keys(presets).map(name => `<button type="button" class="dollar-basis-segment" data-what-if-growth="${name}" aria-pressed="${name === whatIfGrowthScenario}">${name}</button>`).join("")}
+      </div>
+      <p class="dollar-basis-description" id="whatIfGrowthDescription">Annual plan-wide rates for both plans. Investments ${rate.format(rates.expectedInvestmentReturnPct)}%, super ${rate.format(rates.expectedSuperReturnPct)}%, home ${rate.format(rates.principalResidenceGrowthRatePct)}%, investment property ${rate.format(rates.investmentPropertyGrowthRatePct)}%. Individual investment rates still apply.</p>
+      ${whatIfGrowthScenario === "Base" ? "" : '<p class="dollar-basis-description">Growth preview only. Saving uses the Base forecast.</p>'}
+    </div>`;
+    if (whatIfGrowthScenario === "Base") return { control, before: result, after: adjustedResult };
+
+    const before = api.calculate(result.plan, scenario, calculatePlan);
+    const after = before.ok ? api.calculate(adjustedResult.plan, scenario, calculatePlan) : before;
+    if (!after.ok) return { control, error: after.errors[0].message };
+    return { control, before: before.result, after: after.result };
+  }
+
   function renderWhatIf(result) {
     const currentPlanResult = result;
     if (whatIfBaseSnapshot) result = calculatePlan(whatIfBaseSnapshot);
@@ -15992,10 +16015,13 @@
     actions.innerHTML += (whatIfBaseSnapshot ? '<p class="field-help">Reviewing this scenario against its saved base plan. Your current plan is unchanged.</p>' : "") + scenarioTargetsHtml(whatIfBaseSnapshot || plan, "quick", whatIfTargets);
     try {
     const { annualDifference, isCashflowSaving, annualCashflowImpact, investmentAbsorption, allocatable, choices, canAllocate, selection, baseAdjustments, firstResult, adjustedResult } = resolveWhatIfScenario(result);
+    const growth = window.FFSGrowthScenarios
+      ? whatIfGrowthPreview(result, adjustedResult)
+      : { before: result, after: adjustedResult };
     const fmtDelta = amount => `${amount >= 0 ? "+" : "−"}${money(Math.abs(amount))}`;
     const forecastRow = (year) => {
-      const before = displayedForecastAmount(netWorthAtYear(result, year), year, result.plan?.investing?.inflationPct);
-      const after = displayedForecastAmount(netWorthAtYear(adjustedResult, year), year, adjustedResult.plan?.investing?.inflationPct);
+      const before = displayedForecastAmount(netWorthAtYear(growth.before, year), year, growth.before.plan?.investing?.inflationPct);
+      const after = displayedForecastAmount(netWorthAtYear(growth.after, year), year, growth.after.plan?.investing?.inflationPct);
       return `<div class="what-if-forecast-row"><strong>Net worth after ${year} ${year === 1 ? "year" : "years"}</strong><span>${money(before)}</span><span>${money(after)}</span><b>${fmtDelta(after - before)}</b></div>`;
     };
     output.innerHTML = `
@@ -16028,9 +16054,11 @@
               ? "Estimated net worth in today’s dollars, adjusted for inflation."
               : "Estimated net worth in future dollars, before adjusting for inflation."}</p>
           </div>
-          <div class="what-if-forecast"><div class="what-if-forecast-row what-if-forecast-head"><strong>Measure</strong><span>Current</span><span>Changed</span><b>Difference</b></div>
+          ${growth.control || ""}
+          ${growth.error ? `<p class="field-help" role="alert">Growth preview unavailable. ${escapeHtml(growth.error)}</p>`
+            : `<div class="what-if-forecast"><div class="what-if-forecast-row what-if-forecast-head"><strong>Measure</strong><span>Current</span><span>Changed</span><b>Difference</b></div>
           ${[1, 5, 10].map(forecastRow).join("")}
-          </div>
+          </div>`}
           <p class="field-help">Remaining annual cash after the change${canAllocate ? " and your allocation choice" : ""} is ${money(estimatedCashflow(adjustedResult))}.</p>
         </div>
       </section>`;
@@ -20118,6 +20146,19 @@
         activeWhatIfId = whatIfButton.dataset.whatIf;
         whatIfAllocation = "unallocated";
         renderOutputs();
+        return;
+      }
+
+      const growthButton = event.target.closest("[data-what-if-growth]");
+      if (growthButton) {
+        const selected = growthButton.dataset.whatIfGrowth;
+        if (!["Lower", "Base", "Higher"].includes(selected) || selected === whatIfGrowthScenario) return;
+        const restoreFocus = growthButton === document.activeElement;
+        whatIfGrowthScenario = selected;
+        renderWhatIf(calculatePlan(plan));
+        if (restoreFocus) {
+          document.querySelector(`[data-what-if-growth="${selected}"]`)?.focus({ preventScroll: true });
+        }
         return;
       }
 
