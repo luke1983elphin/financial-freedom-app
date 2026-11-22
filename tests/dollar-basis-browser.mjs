@@ -401,21 +401,47 @@ test('dated retirement rows and comparison PDFs use scenario inflation', async (
   }
 });
 
-test('custom Decision Engine compares year-specific forecasts and ten-year surplus outcomes', async () => {
+test('custom Decision Engine uses labelled cards and preserves year-specific forecasts and surplus outcomes', async () => {
+  await cdp.send('Emulation.setDeviceMetricsOverride', {width: 375, height: 900, deviceScaleFactor: 1, mobile: true});
   await fixture(); await select('future');
-  await evaluate('__dollarTest.decisionAllocation()');
-  const read = () => evaluate("Object.fromEntries([...document.querySelectorAll('#comparisonSummary .summary-tile')].map(tile=>[tile.querySelector('span').firstChild.textContent.trim(),tile.querySelector('strong').textContent]))");
+  await evaluate("FFSStage1BrowserTestHooks.showWorkspace('decision'); document.getElementById('customScenarioDetails').open = true; __dollarTest.decisionAllocation()");
+  const read = () => evaluate(`Object.fromEntries([
+    ...[...document.querySelectorAll('#comparisonSummary .summary-tile')].map(tile =>
+      [tile.querySelector('span').firstChild.textContent.trim(), tile.querySelector('strong').textContent.split(' -> ')]),
+    ...[...document.querySelectorAll('#comparisonSummary [data-stage2-comparison]')].map(row =>
+      [row.firstElementChild.firstChild.textContent.trim(), [...row.querySelectorAll('.stage2-comparison-value')].map(node => node.textContent)])
+  ])`);
+  const layout = await evaluate(`(() => {
+    const panel = document.querySelector('[data-view-panel=decision]');
+    const forecast = panel.querySelector('#comparisonSummary .what-if-forecast');
+    return {
+      labels: [...forecast.querySelectorAll('[data-stage2-comparison]')].map(row =>
+        [...row.querySelectorAll('.stage2-comparison-label')].map(label => label.textContent)),
+      cardsFit: [...forecast.querySelectorAll('[data-stage2-comparison]')].every(row => row.scrollWidth <= row.clientWidth + 1),
+      headerHidden: getComputedStyle(forecast.querySelector('.what-if-forecast-head')).display === 'none',
+      passiveSummary: Boolean(panel.querySelector('.passive-income-breakdown-details, #decisionPassiveIncomeSummary')),
+      details: Boolean(panel.querySelector('#comparisonSummary .decision-result-details summary')),
+    };
+  })()`);
+  assert.deepEqual(layout.labels, Array.from({length: 4}, () => ['Current Plan', 'Adjusted Plan', 'Difference']));
+  assert.equal(layout.cardsFit, true);
+  assert.equal(layout.headerHidden, true);
+  assert.equal(layout.passiveSummary, false);
+  assert.equal(layout.details, true);
   const nominal = await read();
+  assert.match(nominal['Financial Freedom progress'][2], /pp$/);
   const rate = await evaluate('__dollarTest.result().plan.investing.inflationPct/100');
   await select('today');
   const real = await read();
-  for (const [label, year] of Object.entries({'1-year net worth':1,'2-year net worth':2,'Long-term net worth':30,'Super balance in 2 years':2,'Investment balance in 2 years':2,'Projected investment balance in 10 years':10,'Projected FI assets in 10 years':10,'Projected passive income in 10 years':10})) {
+  for (const [label, year] of Object.entries({'Net worth after 1 year':1,'Net worth after 2 years':2,'Long-term net worth':30,'Super balance in 2 years':2,'Investment balance in 2 years':2,'Projected investment balance in 10 years':10,'Projected FI assets in 10 years':10,'Projected passive income in 10 years':10})) {
     assert.ok(nominal[label],label);
-    const before=nominal[label].split('->').map(amount), after=real[label].split('->').map(amount);
+    const before = nominal[label].map(amount), after = real[label].map(amount);
     before.forEach((value,index)=>close(after[index],value/(1+rate)**year));
   }
-  assert.equal(real['Current annual final surplus'],nominal['Current annual final surplus']);
-  await select('future');assert.deepEqual(await read(),nominal);
+  assert.deepEqual(real['Current annual final surplus'],nominal['Current annual final surplus']);
+  await select('future'); assert.deepEqual(await read(),nominal);
+  await evaluate("FFSStage1BrowserTestHooks.showWorkspace('goals')");
+  assert.ok(await evaluate("document.querySelector('#goalsPassiveIncomeBreakdown .passive-income-breakdown-details') !== null"));
 });
 
 test('selector persists on reload and leaves unsaved text and plan unchanged', async () => {
@@ -1992,8 +2018,9 @@ test('Try a Change uses household names, preserves income ownership and shows ze
     input.dispatchEvent(new Event('input', {bubbles:true}));
   })()`);
   assert.equal(await evaluate(`document.querySelector('#comparisonSummary [data-surplus-figure=change] strong').textContent`), '$0/week');
-  const forecast = await evaluate(`[...document.querySelectorAll('#comparisonSummary .summary-tile')].find(card=>card.textContent.includes('Long-term net worth')).querySelector('strong').textContent`);
-  const [before, after] = forecast.split(' -> ');
+  const [before, after] = await evaluate(`[...document.querySelectorAll('#comparisonSummary [data-stage2-comparison]')]
+    .find(row => row.firstElementChild.textContent === 'Long-term net worth')
+    .querySelectorAll('.stage2-comparison-value').values().map(node => node.textContent).toArray()`);
   assert.ok(after);
   assert.notEqual(before, after, 'return assumptions still affect the forecast');
   await evaluate(`(() => {

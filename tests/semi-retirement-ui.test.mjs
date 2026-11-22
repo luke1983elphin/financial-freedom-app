@@ -1563,12 +1563,13 @@ test("Stage G5 Quick What-Ifs and custom scenario controls are progressively dis
   });
 });
 
-test("Stage G6 Passive Cash Income detail is collapsed in Decision Engine and Goals", () => {
-  const helperSnippet = sourceBetween(appSource, "function passiveIncomeConciseSummaryHtml", "function decisionPassiveIncomeSummaryHtml");
-  const decisionSnippet = sourceBetween(appSource, "function decisionPassiveIncomeSummaryHtml", "function renderCashflow");
+test("Stage G6 Passive Cash Income detail is collapsed in Goals and absent from Try a Change", () => {
+  const helperSnippet = sourceBetween(appSource, "function passiveIncomeConciseSummaryHtml", "function renderCashflow");
+  const decisionSnippet = sourceBetween(appSource, "function renderDecision", "function refreshSemiRetirementIncomeEditor");
   const goalsSnippet = sourceBetween(appSource, "function renderGoalsSummary", "function renderEngagementFullJourney");
   assert.match(helperSnippet, /<details class="passive-income-breakdown-details/);
-  assert.match(decisionSnippet, /View passive income details/);
+  assert.doesNotMatch(decisionSnippet, /passiveIncomeConciseSummaryHtml|decisionPassiveIncomeSummary/);
+  assert.doesNotMatch(indexSource, /id="decisionPassiveIncomeSummary"/);
   assert.match(goalsSnippet, /passiveIncomeConciseSummaryHtml/);
   assert.match(goalsSnippet, /View breakdown/);
 });
