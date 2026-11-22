@@ -1855,7 +1855,8 @@ test('Try a Change states how the extra $100 is funded and labels both forecast 
   assert.equal(await evaluate(`document.querySelector('.what-if-dollar-basis [data-dollar-basis=future]').getAttribute('aria-pressed')`), 'true');
   assert.ok(await evaluate(`(() => {
     const control = document.querySelector('.what-if-dollar-basis');
-    return control.nextElementSibling.classList.contains('what-if-forecast')
+    return control.nextElementSibling.querySelector('[data-what-if-growth]')
+      && control.nextElementSibling.nextElementSibling.classList.contains('what-if-forecast')
       && [...control.querySelectorAll('button')].every(button => button.getBoundingClientRect().height >= 44)
       && document.documentElement.scrollWidth <= innerWidth;
   })()`));
@@ -1882,6 +1883,54 @@ test('Try a Change states how the extra $100 is funded and labels both forecast 
   await evaluate("document.querySelector('[data-what-if=expenses-500]').click()");
   assert.match(await evaluate("document.getElementById('whatIfResult').textContent"), /This change frees up cash you can allocate below/);
   assert.equal(await evaluate("document.querySelector('[data-what-if-allocation=investments]').disabled"), false);
+});
+
+test('Try a Change previews existing growth presets for both plans without changing Base or cashflow', async () => {
+  await cdp.send('Emulation.setDeviceMetricsOverride', {width: 375, height: 900, deviceScaleFactor: 1, mobile: true});
+  await navigate();
+  await fixture();
+  await select('future');
+  await evaluate("FFSStage1BrowserTestHooks.showWorkspace('decision'); document.querySelector('[data-what-if=invest-100]').click()");
+  const forecast = () => evaluate(`[...document.querySelectorAll('#whatIfResult .what-if-forecast-row:not(.what-if-forecast-head)')]
+    .map(row => [...row.querySelectorAll('.stage2-comparison-value')].map(cell => cell.textContent))`);
+  const quickState = () => evaluate(`JSON.stringify({
+    plan: FFSStage1BrowserTestHooks.getPlan(),
+    quick: __dollarTest.quick(),
+    surplus: document.querySelector('#whatIfResult .decision-surplus-grid').textContent
+  })`);
+  const original = await quickState();
+  const base = await forecast();
+  assert.equal(await evaluate("document.querySelector('[data-what-if-growth][aria-pressed=true]').textContent"), 'Base');
+  assert.equal(await evaluate("document.querySelectorAll('[data-what-if-growth]').length"), 3);
+
+  for (const name of ['Lower', 'Higher']) {
+    const selector = `[data-what-if-growth="${name}"]`;
+    await evaluate(`document.querySelector(${JSON.stringify(selector)}).focus()`);
+    await key('Enter');
+    assert.ok(await evaluate(`document.activeElement.matches(${JSON.stringify(selector)})`));
+    assert.equal(await evaluate(`document.querySelector('[data-what-if-growth][aria-pressed=true]').textContent`), name);
+    const expected = await evaluate(`(() => {
+      const {result, adjustedResult} = __dollarTest.quick();
+      const api = FFSGrowthScenarios;
+      const preset = api.suggested(result.plan)[${JSON.stringify(name)}];
+      const before = api.calculate(result.plan, preset, __dollarTest.growthForecast).result;
+      const after = api.calculate(adjustedResult.plan, preset, __dollarTest.growthForecast).result;
+      const money = value => value.toLocaleString('en-AU', {style: 'currency', currency: 'AUD', maximumFractionDigits: 0});
+      return [1,5,10].map(year => {
+        const b = before.netWorthProjection[year-1].closingBalance;
+        const a = after.netWorthProjection[year-1].closingBalance;
+        return [money(b), money(a), (a >= b ? '+' : '−') + money(Math.abs(a-b))];
+      });
+    })()`);
+    assert.deepEqual(await forecast(), expected);
+    assert.notDeepEqual(expected, base);
+    assert.equal(await quickState(), original);
+  }
+  await select('today');
+  assert.equal(await evaluate("document.querySelector('[data-what-if-growth][aria-pressed=true]').textContent"), 'Higher');
+  await select('future');
+  await evaluate("document.querySelector('[data-what-if-growth=Base]').click()");
+  assert.deepEqual(await forecast(), base);
 });
 
 test('Try a Change uses household names, preserves income ownership and shows zero for return-only changes', async () => {
