@@ -213,3 +213,160 @@ test('F5 detailed combined scenario persists and reopens without applying surplu
   assert.equal(forecast(calc(app.get('buildComparisonPlan')())), forecast(calc(saved.planSnapshot)));
   assert.equal(JSON.stringify(app.getPlan()), JSON.stringify(p));
 });
+
+function weeklyInvestmentPlan(returnPct, inflationPct = 0) {
+  const p = controlledPlan(CALC);
+  p.personal.retirementTiming = { version: 1, people: [{ id: 'person1', fullRetirementAge: 65, hasSemiRetirement: false }] };
+  Object.assign(p.investing, { expectedInvestmentReturnPct: returnPct, inflationPct, annualInvestingTarget: 6000 });
+  p.expenseItems[0].amount = 16912;
+  p.liabilityItems = [{ ...mortgage('loan', 'monthly', 12), balance: 50000, repayment: 500, interestRatePct: 3 }];
+  return p;
+}
+
+function previewWeeklyInvestment(p) {
+  app.setPlan(p);
+  // A prior allocation choice must not invest the $100 a second time.
+  app.choice('invest-100', null, 'investments');
+  return app.get('resolveWhatIfScenario')();
+}
+
+const horizons = [1, 5, 10];
+const taxPaid = row => row.people.reduce((sum, person) => sum + person.incomeTax + person.medicareLevy
+  + person.medicareLevySurcharge + person.stslRepayment + person.superContributionsTax, 0);
+
+for (const [rate, expected] of [
+  [0, [5200, 26000, 52000]],
+  [2, [5252, 27331.62, 57507.93]],
+  [6.5, [5369, 30569.16, 72451.55]],
+  [8, [5408, 31726.58, 78343.33]],
+]) {
+  test(`extra $100/week compounds at ${rate}% over 1, 5 and 10 years without replacing planned investments`, () => {
+    const p = weeklyInvestmentPlan(rate);
+    const { result, adjustedResult, allocationAdjustments, selection } = previewWeeklyInvestment(p);
+    assert.equal(result.finalProjectedCashSurplus, 934 * 52);
+    assert.equal(adjustedResult.finalProjectedCashSurplus, 834 * 52);
+    assert.equal(adjustedResult.currentNetWorth, result.currentNetWorth);
+    assert.equal(allocationAdjustments.investmentContributionChange, 5200);
+    assert.equal(selection, 'unallocated');
+    assert.equal(p.investing.annualInvestingTarget, 6000);
+    assert.equal(adjustedResult.plan.investing.annualInvestingTarget, 11200);
+    assert.equal(adjustedResult.plan.investing.expectedInvestmentReturnPct, rate);
+    for (const [index, year] of horizons.entries()) {
+      const before = result.retirementProjection.years[year - 1];
+      const after = adjustedResult.retirementProjection.years[year - 1];
+      const b = before.household;
+      const a = after.household;
+      assert.equal(b.plannedAccessibleInvestmentContributionApplied, 6000);
+      assert.equal(a.plannedAccessibleInvestmentContributionApplied, 11200);
+      assert.equal(a.cashSurplusBeforeAllocation - b.cashSurplusBeforeAllocation, -5200);
+      assert.equal(a.unallocatedSurplusClosingBalance, b.unallocatedSurplusClosingBalance);
+      assert.equal(a.offsetClosingBalance, b.offsetClosingBalance);
+      assert.equal(a.totalDebt, b.totalDebt);
+      assert.equal(a.totalSuperBalance, b.totalSuperBalance);
+      assert.equal(a.accessibleInvestmentFees, 0);
+      assert.equal(taxPaid(after), taxPaid(before));
+      close(adjustedResult.investmentProjection[year - 1].closingBalance - result.investmentProjection[year - 1].closingBalance, expected[index], .05);
+      close(a.totalNetWorth - b.totalNetWorth, expected[index], .05);
+    }
+  });
+}
+
+test('reported gains reconcile to a 7% nominal return and 2.5% inflation', () => {
+  const { result, adjustedResult } = previewWeeklyInvestment(weeklyInvestmentPlan(7, 2.5));
+  const nominal = horizons.map(year => adjustedResult.netWorthProjection[year - 1].closingBalance - result.netWorthProjection[year - 1].closingBalance);
+  assert.deepEqual(nominal.map(Math.round), [5382, 30950, 74360]);
+  assert.deepEqual(nominal.map((amount, index) => Math.round(amount / 1.025 ** horizons[index])), [5251, 27356, 58090]);
+});
+
+test('retained surplus stays in net worth as cash and is excluded from the investment balance', () => {
+  const p = weeklyInvestmentPlan(0);
+  p.projectionSettings = { workingPhaseSurplusDestination: 'unallocated' };
+  const { result, adjustedResult } = previewWeeklyInvestment(p);
+  for (const year of horizons) {
+    const a = adjustedResult.retirementProjection.years[year - 1].household;
+    const b = result.retirementProjection.years[year - 1].household;
+    assert.equal(a.unallocatedSurplusClosingBalance - b.unallocatedSurplusClosingBalance, -5200 * year);
+    assert.equal(adjustedResult.investmentProjection[year - 1].closingBalance - result.investmentProjection[year - 1].closingBalance, 5200 * year);
+    assert.equal(a.totalNetWorth, b.totalNetWorth);
+  }
+});
+
+test('already-invested surplus is rerouted once with no change in total investment contributions', () => {
+  const p = weeklyInvestmentPlan(8);
+  p.projectionSettings = { workingPhaseSurplusDestination: 'accessible-investments' };
+  const { result, adjustedResult } = previewWeeklyInvestment(p);
+  for (const year of horizons) {
+    const a = adjustedResult.retirementProjection.years[year - 1].household;
+    const b = result.retirementProjection.years[year - 1].household;
+    assert.equal(a.surplusToAccessibleInvestments - b.surplusToAccessibleInvestments, -5200);
+    assert.equal(a.accessibleInvestmentContribution, b.accessibleInvestmentContribution);
+    assert.equal(a.totalNetWorth, b.totalNetWorth);
+  }
+});
+
+test('a temporary affordability cap does not erase future contributions after a loan is repaid', () => {
+  const p = weeklyInvestmentPlan(0);
+  p.expenseItems[0].amount = 66500;
+  p.liabilityItems[0].balance = 5000;
+  const { result, adjustedResult } = previewWeeklyInvestment(p);
+  const first = adjustedResult.retirementProjection.years[0].household;
+  assert.equal(first.plannedAccessibleInvestmentContributionRequested, 11200);
+  assert.ok(first.plannedAccessibleInvestmentContributionApplied < 11200);
+  assert.equal(adjustedResult.retirementProjection.years[4].household.plannedAccessibleInvestmentContributionApplied, 11200);
+  assert.equal(result.retirementProjection.years[4].household.plannedAccessibleInvestmentContributionApplied, 6000);
+});
+
+test('an expense saving in a plan with a deficit can only allocate cash above zero', () => {
+  const p = controlledPlan(CALC);
+  p.expenseItems[0].amount = 82480;
+  app.setPlan(p);
+  app.choice('expenses-500', null, 'investments');
+  const resolved = app.get('resolveWhatIfScenario')();
+  assert.equal(resolved.annualDifference, 6000);
+  assert.equal(resolved.allocatable, 1000);
+  assert.equal(resolved.adjustedResult.finalProjectedCashSurplus, 0);
+});
+
+for (const treatment of ['cash', 'reinvest']) {
+  test(`asset-specific return and taxable yield survive an extra contribution with income set to ${treatment}`, () => {
+    const p = weeklyInvestmentPlan(7);
+    p.assetItems[0].value = 0;
+    Object.assign(p.assetItems[1], { investmentReturnMode: 'totalReturn', expectedTotalReturnPct: 8,
+      expectedIncomeYieldPct: 2, incomeTreatment: treatment, owner: 'person1' });
+    const { result, adjustedResult } = previewWeeklyInvestment(p);
+    const firstBefore = result.retirementProjection.years[0];
+    const firstAfter = adjustedResult.retirementProjection.years[0];
+    const retainedRate = treatment === 'cash' ? .06 : .08;
+    close(firstAfter.household.accessibleInvestmentEarnings - firstBefore.household.accessibleInvestmentEarnings, 2600 * retainedRate, .01);
+    const nextBefore = result.retirementProjection.years[1];
+    const nextAfter = adjustedResult.retirementProjection.years[1];
+    const extraYield = (firstAfter.household.closingAccessibleInvestmentBalance - firstBefore.household.closingAccessibleInvestmentBalance) * .02;
+    close(nextAfter.household.totalPassiveTaxableIncome - nextBefore.household.totalPassiveTaxableIncome, extraYield, .01);
+    close(nextAfter.household.totalPassiveCashIncome - nextBefore.household.totalPassiveCashIncome, treatment === 'cash' ? extraYield : 0, .01);
+    close(taxPaid(nextAfter) - taxPaid(nextBefore), extraYield * .32, .02);
+  });
+}
+
+test('retirement draft fees compound against the same balance basis for both plans', () => {
+  const ui = context.FFSSemiRetirementUi;
+  const p = weeklyInvestmentPlan(8);
+  const { result, adjustedResult } = previewWeeklyInvestment(p);
+  const withFees = r => {
+    const draft = ui.buildSemiRetirementScenarioDefaults(r.plan, r).draft;
+    draft.accessibleInvestments.annualFeesRatePct = 1;
+    return ui.runSemiRetirementProjection(context.FFSSemiRetirementProjection, draft).result.years;
+  };
+  const before = withFees(result);
+  const after = withFees(adjustedResult);
+  for (const [index, year] of horizons.entries()) {
+    const a = after[year - 1].household;
+    const b = before[year - 1].household;
+    close(a.accessibleInvestmentFees - b.accessibleInvestmentFees, (a.accessibleEarningsBasis - b.accessibleEarningsBasis) * .01, .01);
+    close(a.totalNetWorth - b.totalNetWorth, [5382, 30950.48, 74360.12][index], .03);
+  }
+});
+
+test('contribution-only changes preserve an existing negative investment return', () => {
+  const { adjustedResult } = previewWeeklyInvestment(weeklyInvestmentPlan(-2));
+  assert.equal(adjustedResult.plan.investing.expectedInvestmentReturnPct, -2);
+});

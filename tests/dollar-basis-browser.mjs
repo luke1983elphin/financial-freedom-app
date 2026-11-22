@@ -1831,6 +1831,44 @@ test('Try a Change live surplus matches the dashboard and resolved allocations a
   }
 });
 
+test('Try a Change states how the extra $100 is funded and labels both forecast bases', async () => {
+  await navigate();
+  await fixture();
+  await evaluate(`(() => {
+    const p = FFSStage1BrowserTestHooks.getPlan();
+    FFSStage1BrowserTestHooks.setPlan({
+      ...p,
+      personal: {person1Name: 'Audit', person1Age: 43, fullRetirementAge: 65, targetAnnualSpending: 40000,
+        retirementTiming: {version: 1, people: [{id: 'person1', fullRetirementAge: 65, hasSemiRetirement: false}]}},
+      income: {person1HospitalCoverStatus: 'full-year'},
+      incomeItems: [{id: 'salary', type: 'salaryWages', owner: 'person1', amount: 100000, frequency: 'annually'}],
+      expenseItems: [{id: 'living', category: 'living', amount: 16912, frequency: 'annually'}],
+      liabilityItems: [{id: 'loan', name: 'Home loan', type: 'homeLoan', balance: 50000, repayment: 500, repaymentFrequency: 'monthly', interestRatePct: 3, termYears: 30}],
+      assetItems: [{id: 'cash', category: 'cash', value: 100000}, {id: 'shares', category: 'shares', value: 100000}],
+      investing: {annualInvestingTarget: 6000, expectedInvestmentReturnPct: 7, inflationPct: 2.5, wageGrowthPct: 0},
+      projectionSettings: {workingPhaseSurplusDestination: 'enjoyment'},
+    }, 'decision');
+    document.querySelector('[data-what-if=invest-100]').click();
+  })()`);
+  for (const [basis, expected] of [['today', [5251, 27356, 58090]], ['future', [5382, 30950, 74360]]]) {
+    await select(basis);
+    const summary = await evaluate(`document.getElementById('whatIfResult').textContent`);
+    assert.match(summary, /\$934\/week/);
+    assert.match(summary, /−\$100\/week/);
+    assert.match(summary, /\$834\/week/);
+    assert.match(summary, /\$100 per week goes into investments from your existing surplus/);
+    assert.match(summary, /\$834 per week remains available/);
+    assert.doesNotMatch(summary, /shortfall|What would you do with the extra money/);
+    assert.match(summary, basis === 'today' ? /today’s dollars, adjusted for inflation/ : /future dollars/);
+    assert.equal(await evaluate(`document.querySelector('[data-what-if-allocation=investments]').disabled`), true);
+    const deltas = await evaluate(`[...document.querySelectorAll('#whatIfResult .what-if-forecast-row:not(.what-if-forecast-head) b')].map(n => Number(n.textContent.replace(/[^0-9]/g, '')))`);
+    assert.deepEqual(deltas, expected);
+  }
+  await evaluate("document.querySelector('[data-what-if=expenses-500]').click()");
+  assert.match(await evaluate("document.getElementById('whatIfResult').textContent"), /This change frees up cash you can allocate below/);
+  assert.equal(await evaluate("document.querySelector('[data-what-if-allocation=investments]').disabled"), false);
+});
+
 test('Try a Change uses household names, preserves income ownership and shows zero for return-only changes', async () => {
   await navigate();
   await fixture();

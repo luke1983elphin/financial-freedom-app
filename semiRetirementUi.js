@@ -645,6 +645,7 @@
       },
       household: {
         annualLivingExpenses: nonNegative(result.annualLivingExpenses),
+        ...(plan.personal?.retirementTiming ? { annualInvestingTarget: nonNegative(plan.investing?.annualInvestingTarget) } : {}),
       },
       income: {
         person1SalaryWages: salaryForPerson(result, 1),
@@ -827,7 +828,8 @@
         openingOffsetBalance: Math.min(nonNegative(result.accessibleInvestmentAssets), nonNegative(result.offsetFiAssets ?? plan.assets?.offsetBalance)),
         annualReturnRatePct: number(plan.investing?.expectedInvestmentReturnPct, 7),
         annualFeesRatePct: 0,
-        externalAnnualAccessibleContribution: plan.personal?.retirementTiming ? nonNegative(result.actualAffordableInvestmentContribution) : 0,
+        // The engine checks affordability each year against that year's cashflow.
+        externalAnnualAccessibleContribution: plan.personal?.retirementTiming ? nonNegative(plan.investing?.annualInvestingTarget) : 0,
       },
       assumptions: {
         inflationRatePct: number(plan.investing?.inflationPct, 2.5),
@@ -903,8 +905,9 @@
     const rows = outcome.result.years;
     const completedYears = row => number(row.person1Age) - currentAge + 1;
     const investmentProjection = rows.map(row => ({ year: completedYears(row), age: number(row.person1Age) + 1,
-      openingBalance: row.household.openingAccessibleInvestmentBalance, annualContribution: row.household.accessibleInvestmentContribution,
-      growth: row.household.accessibleInvestmentEarnings, closingBalance: Math.max(0, row.household.totalAccessibleAssets - row.household.offsetClosingBalance),
+      openingBalance: row.household.ordinaryAccessibleOpeningBalance, annualContribution: row.household.accessibleInvestmentContribution,
+      growth: row.household.accessibleInvestmentEarnings,
+      closingBalance: roundCurrency(Math.max(0, row.household.closingAccessibleInvestmentBalance - row.household.offsetClosingBalance)),
       passiveIncome: row.household.totalAccessibleAssets * rate }));
     const superProjection = rows.map(row => ({ year: completedYears(row), age: number(row.person1Age) + 1,
       closingBalance: row.household.totalSuperBalance, annualContribution: row.people.reduce((total, person) => total + person.netEmployerSuperContribution + person.netAdditionalSuperContribution, 0) }));

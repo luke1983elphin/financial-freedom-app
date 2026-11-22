@@ -17,7 +17,13 @@ export function loadTryChangeApp() {
     get: name => eval(name),
     setPlan(value) { plan = CALC.clonePlan(value); },
     getPlan() { return CALC.clonePlan(plan); },
-    choice(id, custom, allocation = 'unallocated') { activeWhatIfId = id; if (custom) customWhatIf = custom; whatIfAllocation = allocation; },
+    choice(id, custom, allocation = 'unallocated') {
+      whatIfBaseSnapshot = null;
+      whatIfRestoredBaseAdjustments = null;
+      activeWhatIfId = id;
+      if (custom) customWhatIf = custom;
+      whatIfAllocation = allocation;
+    },
     comparison(value) { decisionScenarioDraft = value; }
   };`;
   vm.runInContext(read('app.js').replace('  if (window.FFS_TEST_HOOKS_ENABLED === true) {', hook + '\n  if (window.FFS_TEST_HOOKS_ENABLED === true) {'), loaded.context);

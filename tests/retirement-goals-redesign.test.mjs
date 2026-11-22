@@ -92,7 +92,7 @@ test('main Future investment, super and net worth rows equal existing retirement
  const p=fixture(),d=defaults(p);d.people[0].fullRetirementAge=60;d.people[1].fullRetirementAge=58;U.saveRetirementTiming(p,d.people,'shared');
  const original=C.calculatePlan(p),r=U.applyRetirementForecast(p,original);const expected=U.runSemiRetirementProjection(E,defaults(p)).result;
  for(const age of [59,60,70,80]){const engineRow=expected.years.find(row=>row.person1Age===age-1),i=r.investmentProjection.find(row=>row.age===age),s=r.superProjection.find(row=>row.age===age),n=r.netWorthProjection.find(row=>row.age===age);
- assert.equal(i.closingBalance,Math.max(0,engineRow.household.totalAccessibleAssets-engineRow.household.offsetClosingBalance));assert.equal(s.closingBalance,engineRow.household.totalSuperBalance);assert.equal(n.closingBalance,engineRow.household.totalNetWorth);}
+ assert.equal(i.closingBalance,Math.max(0,Math.round((engineRow.household.closingAccessibleInvestmentBalance-engineRow.household.offsetClosingBalance)*100)/100));assert.equal(s.closingBalance,engineRow.household.totalSuperBalance);assert.equal(n.closingBalance,engineRow.household.totalNetWorth);}
  const before=JSON.stringify(p);U.applyRetirementForecast(p,original);assert.equal(JSON.stringify(p),before);
 });
 test('timing changes alter forecasts and invalidate forecast cache',()=>{

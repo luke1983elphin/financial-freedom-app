@@ -33,7 +33,7 @@ test('custom inputs use dedicated responsive form and preserve original-plan sce
   assert.match(source, /class="what-if-custom-grid"/);
   assert.match(source, /class="what-if-custom-field">What would you like to change/);
   assert.match(source, /const firstResult = calculatePlan\(applyScenarioAdjustments\(basePlan, baseAdjustments\)\)/);
-  assert.match(source, /const adjustedResult = calculatePlan\(applyScenarioAdjustments\(basePlan, allocationAdjustments\)\)/);
+  assert.match(source, /calculatePlan\(applyScenarioAdjustments\(basePlan, allocationAdjustments\)\)/);
   assert.match(source, /function resolveWhatIfScenario\(/);
 });
 
@@ -48,7 +48,7 @@ test('cashflow display distinguishes pre-investment saving from available-to-all
   assert.match(source, /const annualCashflowImpact = isCashflowSaving/);
   assert.match(source, /firstResult\.cashSurplusBeforeInvesting/);
   assert.match(source, /result\.cashSurplusBeforeInvesting/);
-  assert.match(source, /const allocatable = Math\.max\(0, annualDifference\)/);
+  assert.match(source, /const allocatable = Math\.max\(0, Math\.min\(annualDifference, estimatedCashflow\(firstResult\)\)\)/);
   assert.match(source, /fmtDelta\(annualCashflowImpact \/ 52\)/);
   assert.match(source, /fmtDelta\(annualCashflowImpact \/ 12\)/);
   assert.match(source, /already absorbed by your plan's investment contributions/);

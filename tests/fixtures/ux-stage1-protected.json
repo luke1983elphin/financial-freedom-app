@@ -3,7 +3,7 @@
   "files": {
     "calculator.js": "77c04fef8a213cd06cd774d9e5eda333cda07cc4ba901b77a8e25245b313c65c",
     "semiRetirementProjection.js": "ab45687699a72d08cc33c1557e6b91bdd88eaebd1b3b8d2efe3316aaedd4cd97",
-    "semiRetirementUi.js": "f9bfa1bf57bfcce15885939e7ca8a59da6b9646b84b800a5dfd4ef0271be4758",
+    "semiRetirementUi.js": "0562808bc218c4a8fae7f26c54983e836c7991967b5708c9f872743e4426583f",
     "v2-data.js": "935fb66f828874f0ccc267d99d611a47113a85315cb983e45ff49390a84d8baa",
     "storage.js": "c85374d3b59ad306de5d3657d8ff44c12eb69c1f4d4e1b71228656228a4ff58d",
     "security.js": "19caa32b797a87c7ddbbe4c7352717ce1f7df52e7292a0de529449c24f7baa4b",
@@ -84,7 +84,7 @@
     "optionList": "a33f9d5910e02d44ff207c63d5d15b469d6986c5ed82e7d4f748f4bc7cc02c18",
     "infoButtonHtml": "c8a9683edbdc5c969540d8d19b1bf586a5a955b3c65f25aeb41100dfebb5440f",
     "addAmount": "11dbc07bb32c687ea0b0de11bc619d8d7f83565a016d9404d161cced49737832",
-    "applyScenarioAdjustments": "0b767a04f35c35c4acae1c09a51178b3f5552ed578e6e9ee45deaca58829195f",
+    "applyScenarioAdjustments": "a13992d065854750c098c00f2f43f4a88979c755be9c44552d39600e4589055d",
     "comparisonSurplusAllocationAmount": "8d1a39068c33f6bf3d2a05d49ff97a852845baa05e46380891e8ce424f5ce19e",
     "comparisonAdjustmentsWithSurplus": "c08151a926bec9ef872817222d05d4dbe279af32c20dba25a25f0b45d15adc4e",
     "activeDecisionComparison": "c51dc86017cbac9cfab77f355353a9ae2f1d44fcdb74c6b374c54cfd0e07d55f",
