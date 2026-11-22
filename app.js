@@ -16016,11 +16016,18 @@
           <div class="what-if-allocations">${choices.map(([id,label,description]) => `<button type="button" data-what-if-allocation="${id}" class="what-if-allocation ${selection === id ? "selected" : ""}" ${!canAllocate && id !== "unallocated" ? "disabled" : ""}><strong>${label}</strong><small>${description}</small></button>`).join("")}</div>
         </div>
         <div class="what-if-stage"><h4>3. What could this mean for your future?</h4>
-          <p class="field-help">${forecastDollarBasis === "today"
-            ? "Estimated net worth in today’s dollars, adjusted for inflation."
-            : "Estimated net worth in future dollars."}</p>
           ${Number(baseAdjustments.investmentContributionChange || baseAdjustments.annualInvestingTarget) > 0
             ? `<p class="field-help">${whatIfInvestmentForecastExplanation(adjustedResult)}</p>` : ""}
+          <div class="what-if-dollar-basis">
+            <p class="dollar-basis-title">Forecast values</p>
+            <div class="dollar-basis-segments" role="group" aria-label="Net worth forecast values" aria-describedby="whatIfDollarBasisDescription">
+              <button type="button" class="dollar-basis-segment" data-dollar-basis="today" aria-pressed="${forecastDollarBasis === "today"}">Today's dollars</button>
+              <button type="button" class="dollar-basis-segment" data-dollar-basis="future" aria-pressed="${forecastDollarBasis === "future"}">Future dollars</button>
+            </div>
+            <p class="dollar-basis-description" id="whatIfDollarBasisDescription">${forecastDollarBasis === "today"
+              ? "Estimated net worth in today’s dollars, adjusted for inflation."
+              : "Estimated net worth in future dollars, before adjusting for inflation."}</p>
+          </div>
           <div class="what-if-forecast"><div class="what-if-forecast-row what-if-forecast-head"><strong>Measure</strong><span>Current</span><span>Changed</span><b>Difference</b></div>
           ${[1, 5, 10].map(forecastRow).join("")}
           </div>
@@ -18824,7 +18831,19 @@
     };
     // Keep samples and saved snapshots on the current display basis. A deliberate
     // selection also updates the active personal UI preference, never plan data.
-    document.querySelectorAll('[data-dollar-basis]').forEach(control => control.addEventListener('click', () => preferences.choose(control.dataset.dollarBasis), true));
+    document.addEventListener("click", (event) => {
+      const control = event.target.closest("[data-dollar-basis]");
+      const selected = control?.dataset.dollarBasis;
+      if (!["today", "future"].includes(selected)) return;
+      preferences.choose(selected);
+      if (selected === forecastDollarBasis) return;
+      const restoreFocus = control === document.activeElement && control.closest(".what-if-dollar-basis");
+      forecastDollarBasis = selected;
+      renderOutputs();
+      if (restoreFocus) {
+        document.querySelector(`.what-if-dollar-basis [data-dollar-basis="${selected}"]`)?.focus({ preventScroll: true });
+      }
+    }, true);
   }
 
   function installFourSectionNavigation() {
@@ -19133,16 +19152,6 @@
   }
 
   function bindEvents() {
-    document.querySelectorAll("[data-dollar-basis]").forEach((control) => {
-      control.addEventListener("click", () => {
-        const selected = control.dataset.dollarBasis;
-        if (!["today", "future"].includes(selected) || selected === forecastDollarBasis) return;
-        forecastDollarBasis = selected;
-        try { localStorage.setItem(DOLLAR_BASIS_KEY, forecastDollarBasis); }
-        catch { /* Selector remains usable without persistence. */ }
-        renderOutputs();
-      });
-    });
     document.addEventListener("toggle", (event) => {
       const details = event.target;
       if (!details?.dataset?.semiDetailState) return;
