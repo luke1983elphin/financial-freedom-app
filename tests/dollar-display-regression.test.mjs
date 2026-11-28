@@ -12,7 +12,7 @@ const extract = name => {
   return source.slice(start, source.indexOf('\n  function ', start + 5));
 };
 function context(extra = {}) {
-  const ctx = { window: { FFSDollarBasis: basis, FFSSemiRetirementUi: {} },
+  const ctx = { window: { FFSDollarBasis: basis, FFSSemiRetirementUi: { superContributionSummaryEntries: () => [] } },
     forecastDollarBasis: 'today', plan: { investing: { inflationPct: 99 } },
     semiRetirementScenarioInputs: { projectionStartYear: 2040, assumptions: { inflationRatePct: 20 } },
     money: value => String(value), semiRetirementMoney: value => String(value),

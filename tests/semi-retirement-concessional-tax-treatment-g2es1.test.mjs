@@ -340,7 +340,7 @@ test("Stage G2E-S1 annual detail and info copy explain corrected tax treatment",
   );
 
   assert.match(appSource, /reduces the selected person's modelled taxable income and 15% contributions tax is applied within super/);
-  assert.match(appSource, /The projection applies its simplified concessional tax treatment; actual contribution limits and eligibility must be checked separately/);
+  assert.match(appSource, /Standard cap warnings do not confirm eligibility/);
   assert.match(detailSnippet, /Taxable income before modelled concessional contributions/);
   assert.match(detailSnippet, /Modelled concessional contribution taxable-income reduction/);
   assert.match(detailSnippet, /Net planned contribution added to super/);

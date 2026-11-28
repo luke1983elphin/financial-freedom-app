@@ -215,6 +215,59 @@
     return "semi-retirement";
   }
 
+
+  // An explicit array (including []) owns voluntary contributions. Legacy fields
+  // remain readable for backups, but must never be added a second time.
+  function contributionArrangements(person, scenario = {}, startYear = 2026) {
+    if (Array.isArray(person.superContributions)) return person.superContributions.map(item => ({ ...item }));
+    const entries = [];
+    if (number(person.existingAdditionalConcessionalContributions) > 0) entries.push({
+      id: `legacy-recurring-${person.id}`, type: "personal-deductible", frequency: "annual",
+      amount: number(person.existingAdditionalConcessionalContributions), startYear,
+      stopAge: number(person.additionalContributionsStopAge, number(person.fullRetirementAge)),
+      indexation: "none", legacyEmploymentTiming: true, origin: "legacy-recurring",
+    });
+    (scenario.plannedConcessionalContributions || []).filter(e => e.personId === person.id).forEach((e, i) => entries.push({
+      id: `legacy-${e.id || i}`, type: "personal-deductible", frequency: "one-off",
+      amount: number(e.amount ?? e.extraConcessionalContribution ?? e.contributionAmount),
+      startYear: number(e.financialYear ?? e.year ?? e.calendarYear), indexation: "none", origin: "legacy-event",
+    }));
+    return entries;
+  }
+
+  function validateContributionArrangements(person, startYear, endYear, prefix) {
+    const errors = [], ids = new Set();
+    const add = (i, field, message) => errors.push({ path: `${prefix}.superContributions.${i}.${field}`, message });
+    (person.superContributions || []).forEach((entry, i) => {
+      if (!entry.id || ids.has(entry.id)) add(i, "id", "Contribution IDs must be unique.");
+      ids.add(entry.id);
+      if (!["personal-deductible", "salary-sacrifice", "personal-after-tax"].includes(entry.type)) add(i,"type","Choose a contribution type.");
+      if (!["one-off", "annual"].includes(entry.frequency)) add(i,"frequency","Choose a frequency.");
+      if (!hasFiniteNumber(entry.amount) || number(entry.amount) <= 0) add(i,"amount","Enter a gross amount greater than $0.");
+      if (!Number.isInteger(Number(entry.startYear)) || number(entry.startYear) < startYear || number(entry.startYear) > endYear) add(i,"startYear","Choose a financial year within this projection.");
+      const startAge = number(person.currentAge) + number(entry.startYear) - startYear;
+      if (entry.frequency === "annual" && (!hasFiniteNumber(entry.stopAge) || !Number.isInteger(Number(entry.stopAge)) || number(entry.stopAge) <= startAge)) add(i,"stopAge","Stop age must be later than the age in the starting financial year. Contributions stop before this age.");
+      if (!["none", "cpi", undefined].includes(entry.indexation)) add(i,"indexation","Choose fixed nominal or CPI indexation.");
+    });
+    return errors;
+  }
+
+  function contributionsForYear(source, scenario, startYear, calendarYear, age, employment, inflation) {
+    const totals = { personalDeductible: 0, salarySacrifice: 0, afterTax: 0, recurringLegacy: 0, oneOffLegacy: 0 };
+    for (const entry of contributionArrangements(source, scenario, startYear)) {
+      const elapsed = calendarYear - number(entry.startYear);
+      if (elapsed < 0 || (entry.frequency === "one-off" && elapsed !== 0)) continue;
+      if (entry.frequency === "annual" && age >= number(entry.stopAge)) continue;
+      if (entry.legacyEmploymentTiming && (employment <= 0 || age >= discretionaryContributionStopAge(source))) continue;
+      const amount = roundCurrency(number(entry.amount) * (entry.frequency === "annual" && entry.indexation === "cpi" ? Math.pow(1 + inflation, elapsed) : 1));
+      const key = entry.type === "salary-sacrifice" ? "salarySacrifice" : entry.type === "personal-after-tax" ? "afterTax" : "personalDeductible";
+      totals[key] = roundCurrency(totals[key] + amount);
+      if (entry.origin === "legacy-recurring") totals.recurringLegacy += amount;
+      if (entry.origin === "legacy-event") totals.oneOffLegacy += amount;
+    }
+    return totals;
+  }
+
   function normalisePerson(person, index) {
     const id = String(person?.id || `person${index + 1}`);
     const currentAge = number(person?.currentAge);
@@ -248,6 +301,7 @@
           ? number(person.salaryPackagingStopAge)
           : fullRetirementAge,
       } : {}),
+      ...(Array.isArray(person.superContributions) ? { superContributions: person.superContributions.map(e => ({ ...e })) } : {}),
       existingAdditionalConcessionalContributions: number(person?.existingAdditionalConcessionalContributions),
       additionalContributionsStopAge: hasFiniteNumber(person?.additionalContributionsStopAge)
         ? number(person.additionalContributionsStopAge)
@@ -1521,9 +1575,11 @@
     const plannedConcessionalEvents = Array.isArray(input.scenario?.plannedConcessionalContributions)
       ? input.scenario.plannedConcessionalContributions
       : [];
+    (input.people || []).forEach((person, index) => errors.push(...validateContributionArrangements(person, projectionStartYear, projectionEndYear, `people.${index}`)));
     const plannedConcessionalIds = new Set();
     const plannedConcessionalPersonYears = new Set();
     plannedConcessionalEvents.forEach((rawEvent, index) => {
+      if ((input.people || []).some(p => p.id === rawEvent.personId && Array.isArray(p.superContributions))) return;
       const prefix = `scenario.plannedConcessionalContributions.${index}`;
       const event = normalisePlannedConcessionalContributionEvent(rawEvent, index);
       const amountSource = rawEvent?.amount ?? rawEvent?.extraConcessionalContribution ?? rawEvent?.contributionAmount;
@@ -1767,8 +1823,8 @@
       financialYear,
       person1TaxableIncome: p1Income,
       person2TaxableIncome: p2Income,
-      person1MLSIncomeForThreshold: p1Income,
-      person2MLSIncomeForThreshold: p2Income,
+      person1MLSIncomeForThreshold: p1Income + number(p1.modelledConcessionalContributionTaxableIncomeReduction),
+      person2MLSIncomeForThreshold: p2Income + number(p2.modelledConcessionalContributionTaxableIncomeReduction),
       person1MLSSurchargeBase: p1Income,
       person2MLSSurchargeBase: p2Income,
       person1CoverStatus: p1.hasPrivateHealthCover ? "full-year" : "no-cover",
@@ -1885,7 +1941,7 @@
 
   function refreshSuperContributionTotals(person) {
     person.netEmployerSuperContribution = roundCurrency(person.employerSuperContribution * (1 - DEFAULT_CONTRIBUTIONS_TAX_RATE));
-    person.netAdditionalSuperContribution = roundCurrency(person.additionalSuperContribution * (1 - DEFAULT_CONTRIBUTIONS_TAX_RATE));
+    person.netAdditionalSuperContribution = roundCurrency((person.additionalSuperContribution - number(person.personalAfterTaxContribution)) * (1 - DEFAULT_CONTRIBUTIONS_TAX_RATE) + number(person.personalAfterTaxContribution));
     person.superContributionsTax = roundCurrency(
       person.employerSuperContribution
       + person.additionalSuperContribution
@@ -1985,7 +2041,7 @@
       investmentReturnTiming: normalised.accessibleInvestments.components?.length
         ? "Configured holdings apply their retained return rate on the existing midpoint balance. Cash yield is estimated from opening holdings, separately from retained growth. Reinvested yield is taxable but stays in the portfolio. Contributions and withdrawals are allocated proportionally; offsets earn no investment return."
         : "Total-return method. Earnings equal opening balance return plus 50% of net annual cash movement return. Fees use the same midpoint balance. Dividends, interest and rent are not added separately.",
-      superContributionTiming: "Employer and additional concessional contributions are reduced by 15% contributions tax before being added to super. The projection does not optimise concessional caps or carry-forward amounts.",
+      superContributionTiming: normalised.people.some(person => Array.isArray(person.superContributions)) ? "Employer, salary sacrifice and personal deductible contributions incur 15% contributions tax. Personal after-tax contributions receive no deduction or standard contributions tax. Gross personal contributions are funded once from household cash and the existing withdrawal waterfall; insufficient funding is reported. Recurring arrangements stop before the selected age. Fixed nominal is the default; optional CPI starts from the arrangement commencement year. One-offs are nominal transactions. The existing midpoint growth convention applies. Standard cap warnings do not establish legal eligibility; Division 293 and excess contribution consequences are not modelled." : "Employer and additional concessional contributions are reduced by 15% contributions tax before being added to super. The projection does not optimise concessional caps or carry-forward amounts.",
       plannedExtraConcessionalContributionTreatment: "Planned extra concessional contribution events are selected by person and financial year. The financial year is mapped to the annual projection row with the same starting calendar year, so 2030-31 is applied once to calendarYear 2030. Events are paid from household cash once, reduce the selected person's modelled taxable income under the simplified concessional assumption, and use the same 15% contributions-tax treatment as other additional concessional contributions.",
       superAccessTreatment: "scenario-assumed-access-age",
       superAccessNote: "Super availability is modelled using the entered scenario access age. The engine does not independently determine whether all legal conditions of release are satisfied.",
@@ -2151,9 +2207,8 @@
         const source = normalised.people.find((item) => item.id === person.id) || person;
         const passive = passiveIncomeForPerson(passiveIncomeRows, person.id);
         const contributionStopAge = discretionaryContributionStopAge(source);
-        const recurringAdditionalSuperContribution = person.grossEmploymentIncome > 0 && person.age < contributionStopAge
-          ? roundCurrency(source.existingAdditionalConcessionalContributions)
-          : 0;
+        const arrangements = contributionsForYear(source, normalised.scenario, normalised.projectionStartYear, calendarYear, person.age, person.grossEmploymentIncome, normalised.inflationRate);
+        const recurringAdditionalSuperContribution = arrangements.recurringLegacy;
         const hasSalaryPackaging = Math.max(0, number(source.currentSalarySacrificeSuper))
           + Math.max(0, number(source.currentOtherPreTaxPackaging))
           + Math.max(0, number(source.currentPostTaxPackaging)) > 0;
@@ -2161,9 +2216,16 @@
           ? number(source.salaryPackagingStopAge)
           : source.fullRetirementAge;
         const salaryPackagingActive = hasSalaryPackaging && person.grossEmploymentIncome > 0 && person.age < salaryPackagingStopAge;
-        const salarySacrificeSuper = salaryPackagingActive
+        const baselineSalarySacrificeSuper = salaryPackagingActive
           ? roundCurrency(Math.min(person.grossEmploymentIncome, Math.max(0, number(source.currentSalarySacrificeSuper))))
           : 0;
+        const scenarioSalarySacrifice = roundCurrency(Math.min(arrangements.salarySacrifice, Math.max(0, person.grossEmploymentIncome - baselineSalarySacrificeSuper - (salaryPackagingActive ? number(source.currentOtherPreTaxPackaging) : 0))));
+        const salarySacrificeSuper = roundCurrency(baselineSalarySacrificeSuper + scenarioSalarySacrifice);
+        person.contributionEmploymentShortfall = roundCurrency(arrangements.salarySacrifice - scenarioSalarySacrifice);
+        person.personalDeductibleContribution = arrangements.personalDeductible;
+        person.personalAfterTaxContribution = arrangements.afterTax;
+        person.baselineSalarySacrificeSuper = baselineSalarySacrificeSuper;
+        person.scenarioSalarySacrificeSuper = scenarioSalarySacrifice;
         const remainingAfterSuperSacrifice = roundCurrency(Math.max(0, person.grossEmploymentIncome - salarySacrificeSuper));
         const otherPreTaxPackaging = salaryPackagingActive
           ? roundCurrency(Math.min(remainingAfterSuperSacrifice, Math.max(0, number(source.currentOtherPreTaxPackaging))))
@@ -2171,12 +2233,8 @@
         const postTaxPackaging = salaryPackagingActive
           ? roundCurrency(Math.max(0, number(source.currentPostTaxPackaging)))
           : 0;
-        const plannedExtraConcessionalContribution = plannedConcessionalContributionForYear(
-          normalised.scenario.plannedConcessionalContributions,
-          person.id,
-          calendarYear,
-        );
-        const taxReducingConcessionalContribution = roundCurrency(recurringAdditionalSuperContribution + salarySacrificeSuper + plannedExtraConcessionalContribution);
+        const plannedExtraConcessionalContribution = arrangements.oneOffLegacy;
+        const taxReducingConcessionalContribution = roundCurrency(arrangements.personalDeductible + salarySacrificeSuper);
         const taxableCapitalGain = roundCurrency(assetSalesThisYear.reduce((sum, sale) => sum + number(sale[person.id === "person2" ? "taxableCapitalGainPerson2" : "taxableCapitalGainPerson1"]), 0));
         if (taxableCapitalGain > 0) person.taxableCapitalGain = taxableCapitalGain;
         const taxableIncomeBeforeConcessional = roundCurrency(person.grossEmploymentIncome + passive.taxableIncome + taxableCapitalGain - otherPreTaxPackaging);
@@ -2193,7 +2251,7 @@
         person.modelledTaxReducingConcessionalContribution = taxReducingConcessionalContribution;
         person.modelledConcessionalContributionTaxableIncomeReduction = roundCurrency(taxableIncomeBeforeConcessional - taxableIncomeAfterConcessional);
         person.totalTaxableIncome = taxableIncomeAfterConcessional;
-        person.stslRepaymentIncome = stslRepaymentIncomeForPerson(taxableIncomeAfterConcessional, taxReducingConcessionalContribution);
+        person.stslRepaymentIncome = stslRepaymentIncomeForPerson(taxableIncomeAfterConcessional, person.modelledConcessionalContributionTaxableIncomeReduction);
         person.salarySacrificeSuper = salarySacrificeSuper;
         person.otherPreTaxPackaging = otherPreTaxPackaging;
         person.postTaxPackaging = postTaxPackaging;
@@ -2207,7 +2265,7 @@
         person.plannedExtraConcessionalContribution = plannedExtraConcessionalContribution;
         person.plannedExtraConcessionalContributionTax = roundCurrency(plannedExtraConcessionalContribution * DEFAULT_CONTRIBUTIONS_TAX_RATE);
         person.netPlannedExtraConcessionalContribution = roundCurrency(plannedExtraConcessionalContribution * (1 - DEFAULT_CONTRIBUTIONS_TAX_RATE));
-        person.additionalSuperContribution = roundCurrency(recurringAdditionalSuperContribution + salarySacrificeSuper + plannedExtraConcessionalContribution);
+        person.additionalSuperContribution = roundCurrency(arrangements.personalDeductible + salarySacrificeSuper + arrangements.afterTax);
       });
 
       const mls = calculateMls(peopleYear, normalised, financialYear);
@@ -2403,7 +2461,7 @@
       const plannedRecurringAdditionalSuperContribution = roundCurrency(peopleYear.reduce((total, person) => total + person.recurringAdditionalSuperContribution, 0));
       const salarySacrificeSuperContribution = roundCurrency(peopleYear.reduce((total, person) => total + person.salarySacrificeSuper, 0));
       const plannedExtraConcessionalContribution = roundCurrency(peopleYear.reduce((total, person) => total + person.plannedExtraConcessionalContribution, 0));
-      const plannedAdditionalSuperContribution = roundCurrency(plannedRecurringAdditionalSuperContribution + plannedExtraConcessionalContribution);
+      const plannedAdditionalSuperContribution = roundCurrency(peopleYear.reduce((sum, person) => sum + person.personalDeductibleContribution + person.personalAfterTaxContribution, 0));
       const netHouseholdCashIncome = roundCurrency(totalNetEmploymentIncome + otherIncome + netRentalCashflow);
       const householdCashRequirementBeforePlannedAccessibleContribution = roundCurrency(totalProjectedLifestyleSpending + annualDebtCashRequirement + plannedAdditionalSuperContribution);
       const requestedPlannedExternalAccessibleContribution = phase === "working"
@@ -2780,6 +2838,15 @@
             salaryPackagingStopAge: person.salaryPackagingStopAge,
             salaryPackagingActive: person.salaryPackagingActive,
           } : {}),
+          // Keep no-contribution rows byte-compatible with historical forecasts.
+          // Do not replicate five empty fields across every year and scenario.
+          ...(person.personalDeductibleContribution + person.personalAfterTaxContribution + person.salarySacrificeSuper + person.contributionEmploymentShortfall > 0 ? {
+            personalDeductibleContribution: person.personalDeductibleContribution,
+            personalAfterTaxContribution: person.personalAfterTaxContribution,
+            baselineSalarySacrificeSuper: person.baselineSalarySacrificeSuper,
+            scenarioSalarySacrificeSuper: person.scenarioSalarySacrificeSuper,
+            contributionEmploymentShortfall: person.contributionEmploymentShortfall,
+          } : {}),
           recurringAdditionalSuperContribution: person.recurringAdditionalSuperContribution,
           netRecurringAdditionalSuperContribution: person.netRecurringAdditionalSuperContribution,
           plannedExtraConcessionalContribution: person.plannedExtraConcessionalContribution,
@@ -3014,11 +3081,22 @@
       assumptions.agePension = `Indicative domestic normal rates dated 20 September 2026. Future basic pension, Pension Supplement and means-test thresholds grow annually at scenario CPI (${Math.max(0, normalised.inflationRate) * 100}%), then each year's means tests are recalculated. Deeming percentages, tapers, Energy Supplement, Work Bonus and pension age stay fixed. Annual CPI indexation is a projection assumption, not a legislative forecast. Annual opening balances include same-year downsizing and lump sums. Younger partner super assumed accumulation unless income-stream option selected. Residency and other eligibility assumed, not verified. SAPTO applies from age 67 under assumed ordinary eligibility unless excluded, including modelled reportable super and investment-loss add-backs and eligible spouse transfers. No unentered fringe benefits or other rebate-income adjustments assumed. SAPTO uses enacted tax-year formulas, not CPI indexation. Pensioner Medicare concessions remain unmodelled; after-tax funding may be understated.`;
       assumptions.limitations = assumptions.limitations.map(text => text.replace("No Age Pension, ", "No "));
     }
+    const contributionErrors = [];
+    for (const row of years) {
+      const config = CALC.supportedFinancialYearConfig(`${row.calendarYear}-${String(row.calendarYear + 1).slice(-2)}`);
+      for (const person of row.people) {
+        const concessional = person.employerSuperContribution + person.additionalSuperContribution - number(person.personalAfterTaxContribution);
+        if (concessional > config.concessionalSuperCap) warnings.push(`${row.calendarYear}: ${person.name}'s concessional contributions exceed the standard $${config.concessionalSuperCap} cap. Verify carry-forward eligibility and unused caps independently.`);
+        if (person.personalAfterTaxContribution > config.concessionalSuperCap * 4) warnings.push(`${row.calendarYear}: ${person.name}'s after-tax contributions exceed the standard $${config.concessionalSuperCap * 4} cap. Verify bring-forward eligibility and total super balance restrictions independently.`);
+        if (person.contributionEmploymentShortfall > 0) warnings.push(`${row.calendarYear}: ${person.name}'s salary sacrifice was reduced by $${person.contributionEmploymentShortfall} because eligible employment income was insufficient.`);
+      }
+      if (row.household.unmetSpending > 0 && row.people.some(p => p.personalDeductibleContribution + p.personalAfterTaxContribution > 0)) contributionErrors.push({ path: "people", message: `${row.calendarYear}: contributions and required spending cannot both be funded (shortfall $${row.household.unmetSpending}). Reduce contributions or provide accessible funding. This forecast cannot be used as a funded plan.` });
+    }
     const result = {
       years,
       summary,
       assumptions,
-      validation: { isValid: true, errors: [] },
+      validation: { isValid: contributionErrors.length === 0, errors: contributionErrors },
       warnings,
     };
     if (JSON.stringify(inputs) !== JSON.stringify(originalInputs)) {
@@ -3028,6 +3106,8 @@
   }
 
   global.FFSSemiRetirementProjection = {
+    contributionArrangements,
+    validateContributionArrangements,
     VERSION: PROJECTION_VERSION,
     featureFlags: FEATURE_FLAGS,
     projectRetirementScenario,

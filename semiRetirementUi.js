@@ -1050,9 +1050,11 @@
       if (!Number.isFinite(event.year) || event.year < startYear || event.year > endYear) add(`${prefix}.year`, "Choose a year within this projection.");
     });
     const personIds = new Set((draft.people || []).map((person, index) => String(person.id || personId(index + 1))));
+    (draft.people || []).forEach((person, index) => errors.push(...(global.FFSSemiRetirementProjection?.validateContributionArrangements(person, startYear, endYear, `people.${index}`) || [])));
     const contributionIds = new Set();
     const contributionPersonYears = new Set();
     normalisePlannedConcessionalContributions(draft.scenario?.plannedConcessionalContributions).forEach((event, index) => {
+      if ((draft.people || []).some(p => p.id === event.personId && Array.isArray(p.superContributions))) return;
       const prefix = `scenario.plannedConcessionalContributions.${index}`;
       if (contributionIds.has(event.id)) add(`${prefix}.id`, "Planned concessional contribution events need unique IDs.");
       contributionIds.add(event.id);
@@ -1111,6 +1113,16 @@
       }
     });
     return errors;
+  }
+
+  function migrateSuperContributions(draft) {
+    (draft.people || []).forEach(person => {
+      if (!Array.isArray(person.superContributions)) {
+        const entries = global.FFSSemiRetirementProjection.contributionArrangements(person, draft.scenario, draft.projectionStartYear);
+        if (entries.length) person.superContributions = entries;
+      }
+    });
+    return draft;
   }
 
   function scenarioDraftToProjectionInputs(draft = {}) {
@@ -1202,6 +1214,7 @@
             currentPostTaxPackaging: nonNegative(person.currentPostTaxPackaging),
             salaryPackagingStopAge: number(person.salaryPackagingStopAge, fullRetirementAge),
           } : {}),
+          ...(Array.isArray(person.superContributions) ? { superContributions: clone(person.superContributions) } : {}),
           existingAdditionalConcessionalContributions: nonNegative(person.existingAdditionalConcessionalContributions),
           additionalContributionsStopAge: number(person.additionalContributionsStopAge, fullRetirementAge),
           stslOpeningBalance: nonNegative(person.stslOpeningBalance),
@@ -2548,6 +2561,8 @@
     normaliseOneOffIncomeEvents,
     oneOffIncomeEventId,
     normalisePlannedConcessionalContributions,
+    superContributionSummaryEntries: (draft = {}) => (draft.people || []).flatMap(person => global.FFSSemiRetirementProjection.contributionArrangements(person, draft.scenario, draft.projectionStartYear).map(entry => ({...entry, personId:person.id, financialYear:entry.startYear}))),
+    migrateSuperContributions,
     plannedConcessionalContributionEventId,
     normaliseDownsizeHomeEvent,
     downsizeAllocation,

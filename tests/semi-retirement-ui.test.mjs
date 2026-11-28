@@ -1280,7 +1280,7 @@ test("Stage F2 scenario workspace renders one main page title", () => {
 });
 
 test("Stage F3 selected conceptual info buttons are wired into scenario fields", () => {
-  ["semiSuperAccessAge", "semiAdditionalSuperContribution", "semiRetirementLifestyleSpending", "fullRetirementLifestyleSpending", "semiOneOffLifestyleAmount", "semiOneOffLifestyleYear", "semiSurplusDestination", "semiAccessibleInvestments"].forEach((key) => {
+  ["semiSuperAccessAge", "superArrangementType", "semiRetirementLifestyleSpending", "fullRetirementLifestyleSpending", "semiOneOffLifestyleAmount", "semiOneOffLifestyleYear", "semiSurplusDestination", "semiAccessibleInvestments"].forEach((key) => {
     assert.ok(appSource.includes(`infoKey: "${key}"`), `Missing info button ${key}`);
     assert.ok(appSource.includes(`${key}: {`), `Missing info copy ${key}`);
   });
@@ -1997,7 +1997,7 @@ test("Stage G2F Retirement Plan source uses the simplified input labels and calc
 });
 
 test("Stage G2F planned big expenses are collapsed but remain editable", () => {
-  const snippet = sourceBetween(appSource, "function semiRetirementOneOffLifestyleEventsHtml", "function semiRetirementPlannedConcessionalContributionsHtml");
+  const snippet = sourceBetween(appSource, "function semiRetirementOneOffLifestyleEventsHtml", "function semiRetirementContributionsHtml");
   assert.match(snippet, /Planned big expenses/);
   assert.match(snippet, /<details class="semi-retirement-one-off-row"/);
   assert.match(snippet, /path: `\$\{prefix\}\.description`/);

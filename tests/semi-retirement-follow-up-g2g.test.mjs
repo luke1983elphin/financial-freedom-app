@@ -411,7 +411,7 @@ test("Stage G2G app preserves advanced contribution accordion state across contr
   const appSource = readFileSync(new URL("../app.js", import.meta.url), "utf8");
   assert.match(appSource, /semiRetirementDetailsState/);
   assert.match(appSource, /data-semi-detail-state="advancedAssumptions"/);
-  assert.match(appSource, /data-semi-detail-state="plannedConcessional"/);
-  assert.match(appSource, /markSemiRetirementDetailsOpen\("advancedAssumptions", "plannedConcessional"\)/);
+  assert.match(appSource, /data-super-contribution-id/);
+  assert.match(appSource, /markSemiRetirementDetailsOpen\(`person:/);
   assert.match(appSource, /document\.addEventListener\("toggle"/);
 });
