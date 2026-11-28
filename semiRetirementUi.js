@@ -51,7 +51,17 @@
       description: String(event.description || event.name || "").trim(),
       amountTodayDollars: roundCurrency(nonNegative(event.amountTodayDollars ?? event.amount ?? event.todayDollarAmount)),
       year: Math.round(number(event.year ?? event.calendarYear)),
+      ...(event.frequency && event.frequency !== "one-off" ? {
+        frequency: String(event.frequency), endYear: number(event.endYear),
+        ...(event.frequency === "custom" ? { intervalYears: number(event.intervalYears) } : {}),
+      } : {}),
     }));
+  }
+
+  function expenseTimingLabel(event = {}) {
+    if (!event.frequency || event.frequency === "one-off") return String(event.year || "Choose a year");
+    const interval = ({ annual: 1, "every-2-years": 2, "every-3-years": 3, "every-5-years": 5, "every-10-years": 10 })[event.frequency] ?? number(event.intervalYears);
+    return `${interval === 1 ? "annually" : `every ${interval} years`}, ${event.year || "Choose a year"}–${event.endYear || "Choose a final year"}`;
   }
 
   function normaliseOneOffIncomeEvents(events = []) {
@@ -1039,6 +1049,7 @@
       if (!event.description) add(`${prefix}.description`, "Add a short description, such as Holiday, New car or Renovation.");
       if (event.amountTodayDollars <= 0) add(`${prefix}.amountTodayDollars`, "Enter an amount greater than $0.");
       if (!Number.isFinite(event.year) || event.year < startYear || event.year > endYear) add(`${prefix}.year`, "Choose a year within this projection.");
+      errors.push(...(global.FFSSemiRetirementProjection?.validateExpenseRecurrence?.(event, startYear, endYear, prefix) || []));
     });
     const incomeEventIds = new Set();
     normaliseOneOffIncomeEvents(draft.scenario?.oneOffIncomeEvents).forEach((event, index) => {
@@ -2043,7 +2054,7 @@
           label: "Planned big expenses",
           value: `${oneOffEvents.length} planned event${oneOffEvents.length === 1 ? "" : "s"}`,
           type: "plain",
-          note: oneOffEvents.map((event) => `${event.description || "One-off expense"} - ${roundCurrency(event.amountTodayDollars).toLocaleString(undefined, { style: "currency", currency: "AUD", maximumFractionDigits: 0 })} today - ${event.year}`).join("; "),
+          note: oneOffEvents.map((event) => `${event.description || "One-off expense"} - ${roundCurrency(event.amountTodayDollars).toLocaleString(undefined, { style: "currency", currency: "AUD", maximumFractionDigits: 0 })} today - ${expenseTimingLabel(event)}`).join("; "),
         },
       ]
       : [];
@@ -2557,6 +2568,7 @@
     buildScenarioAdjustmentDisplayState,
     resetScenarioAdjustmentsToBaseline,
     normaliseOneOffLifestyleEvents,
+    expenseTimingLabel,
     oneOffEventId,
     normaliseOneOffIncomeEvents,
     oneOffIncomeEventId,

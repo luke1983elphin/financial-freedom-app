@@ -6,6 +6,7 @@ import { mkdtemp, readFile, rm, mkdir, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { extractPdfText } from './helpers/browser-executable.mjs';
 import { fileURLToPath } from "node:url";
 import { spawn, execFileSync } from "node:child_process";
 
@@ -2169,4 +2170,61 @@ for(const width of [1920,1366,768,390]) test('super editor fits actual retiremen
  await mkdir(pathModuleForSuper(),{recursive:true});await writeFile(path.join(pathModuleForSuper(),'layout-'+width+'.png'),Buffer.from((await cdp.send('Page.captureScreenshot',{format:'png'})).data,'base64'));
  await evaluate("document.querySelector('[data-super-contribution-id]').open=false");
  await fits();
+});
+
+for(const width of [1366,768,390]) test('planned expense and income editing is uninterrupted at '+width+'px',async()=>{
+ await cdp.send('Emulation.setDeviceMetricsOverride',{width,height:1100,deviceScaleFactor:1,mobile:width<500});
+ await navigate();await fixture();await evaluate("FFSStage1BrowserTestHooks.showWorkspace('semiretirement');document.querySelector('[data-semi-action=calculate]').click()");
+ for(const [kind,collection,description,amount]of [['lifestyle','oneOffLifestyleEvents','Overseas holiday','10000'],['income','oneOffIncomeEvents','Family assistance','50000']]){
+  await evaluate(`(()=>{const b=document.querySelector('[data-semi-action="add-one-off-${kind}-event"]');let n=b;while(n){if(n.tagName==='DETAILS')n.open=true;n=n.parentElement;}return new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));})()`);
+  await evaluate(`document.querySelector('[data-semi-action="add-one-off-${kind}-event"]').click()`);
+  const selector=kind==='lifestyle'?'[data-one-off-event-id]':'[data-one-off-income-id]';
+  await waitFor(()=>evaluate(`document.querySelector('${selector}')?.open&&document.activeElement.dataset.semiInput==='scenario.${collection}.0.description'`));
+  assert.equal(await evaluate(`document.querySelectorAll('${selector} .field-error').length`),0,'new blank card has no premature validation');
+  const runs=await evaluate('window.__retirementRuns');
+  await evaluate(`window.__eventDescription=document.querySelector('[data-semi-input="scenario.${collection}.0.description"]');window.__eventDescription.focus({preventScroll:true});window.__eventDescription.scrollIntoView({block:'center',behavior:'instant'});window.__eventScroll=scrollY;`);
+  for(const char of description){await cdp.send('Input.insertText',{text:char});await evaluate("__eventDescription.dispatchEvent(new Event('change',{bubbles:true}))");assert.ok(await evaluate('document.activeElement===__eventDescription&&__eventDescription.isConnected'),'each character retains the same description node and focus');}
+  assert.equal(await evaluate('__eventDescription.value'),description);assert.equal(await evaluate('__eventDescription.selectionStart'),description.length);
+  await evaluate('__eventDescription.setSelectionRange(0,0)');await cdp.send('Input.insertText',{text:'Planned '});
+  assert.equal(await evaluate('__eventDescription.selectionStart'),8,'mid-description insertion retains the caret');
+  await evaluate(`window.__eventAmount=document.querySelector('[data-semi-input="scenario.${collection}.0.amountTodayDollars"]');__eventAmount.focus({preventScroll:true});__eventAmount.value='';__eventAmount.dispatchEvent(new Event('input',{bubbles:true}));__eventAmount.scrollIntoView({block:'center',behavior:'instant'});window.__eventScroll=scrollY;`);
+  for(const char of amount){await cdp.send('Input.insertText',{text:char});await evaluate("__eventAmount.dispatchEvent(new Event('change',{bubbles:true}))");assert.ok(await evaluate('document.activeElement===__eventAmount&&__eventAmount.isConnected&&Math.abs(scrollY-__eventScroll)<2'),'each digit retains input, focus and scroll');}
+  assert.equal(await evaluate('__eventAmount.value'),amount);assert.equal(await evaluate('window.__retirementRuns'),runs,'typing does not recalculate forecasts');
+  assert.ok(await evaluate(`document.querySelector('${selector}').open`));
+  assert.ok(await evaluate("!document.querySelector('[data-semi-results-dashboard]')||document.querySelector('[data-semi-results-dashboard]').hidden"),'obsolete forecast is hidden');
+ }
+ const edit=async(field,value)=>evaluate(`(()=>{const n=document.querySelector('[data-semi-input="scenario.oneOffLifestyleEvents.0.${field}"]');n.focus({preventScroll:true});n.value=${JSON.stringify(String(value))};n.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+ await evaluate(`window.__expenseDescriptionNode=document.querySelector('[data-semi-input="scenario.oneOffLifestyleEvents.0.description"]');window.__expenseAmountNode=document.querySelector('[data-semi-input="scenario.oneOffLifestyleEvents.0.amountTodayDollars"]');`);
+ await edit('frequency','custom');assert.equal(await evaluate('document.activeElement.dataset.semiInput'),'scenario.oneOffLifestyleEvents.0.frequency');
+ assert.ok(await evaluate(`document.querySelector('[data-semi-input="scenario.oneOffLifestyleEvents.0.description"]')===__expenseDescriptionNode&&document.querySelector('[data-semi-input="scenario.oneOffLifestyleEvents.0.amountTodayDollars"]')===__expenseAmountNode`),'frequency changes retain existing text and amount input nodes');
+ await edit('intervalYears',4);
+ const year=await evaluate('__stage2Test.retirementDraft().projectionStartYear');await edit('year',year+1);await edit('endYear',year+9);
+ assert.ok(await evaluate(`document.querySelector('[data-semi-input="scenario.oneOffLifestyleEvents.0.endYear"]').selectedOptions[0].textContent.includes('age')`));
+ await edit('frequency','one-off');assert.equal(await evaluate(`Boolean(document.querySelector('[data-semi-input="scenario.oneOffLifestyleEvents.0.endYear"]'))`),false);
+ await edit('frequency','every-2-years');await edit('endYear',year+5);
+ assert.equal(await evaluate(`Boolean(document.querySelector('[data-semi-input="scenario.oneOffLifestyleEvents.0.intervalYears"]'))`),false);
+ await evaluate("document.querySelector('[data-semi-action=calculate]').click()");
+ const result=await evaluate('__dollarTest.retirement().result');assert.ok(result?.validation.isValid,JSON.stringify(result?.validation));assert.equal(result.summary.totalOneOffLifestyleSpendingTodayDollars,30000);
+ const before=await evaluate('JSON.stringify(__dollarTest.retirement().result)');await select('today');await select('future');assert.equal(await evaluate('JSON.stringify(__dollarTest.retirement().result)'),before);
+ assert.ok(await evaluate(`(()=>{const c=document.querySelector('[data-one-off-event-id]'),r=c.getBoundingClientRect();return [...c.querySelectorAll('input,select,label,.field-help,.field-error')].filter(n=>n.getClientRects().length).every(n=>{const b=n.getBoundingClientRect();return b.left>=r.left-1&&b.right<=r.right+1&&n.scrollWidth<=n.clientWidth+1;});})()`),'fields fit their actual expense card');
+ assert.ok(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'));
+ await evaluate("(()=>{const c=document.querySelector('[data-one-off-event-id]');let n=c;while(n){if(n.tagName==='DETAILS')n.open=true;n=n.parentElement;}scrollTo({top:c.getBoundingClientRect().top+scrollY-70,behavior:'instant'});return new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));})()");
+ await mkdir(path.join(root,'test-results/recurring-expenses'),{recursive:true});await writeFile(path.join(root,'test-results/recurring-expenses','editor-'+width+'.png'),Buffer.from((await cdp.send('Page.captureScreenshot',{format:'png'})).data,'base64'));
+});
+
+test('recurring expense schedules survive saved scenarios, backups and comparison PDF reports',async()=>{
+ await navigate();await fixture();await evaluate("FFSStage1BrowserTestHooks.showWorkspace('semiretirement');document.querySelector('[data-semi-action=calculate]').click()");
+ const year=await evaluate('__stage2Test.retirementDraft().projectionStartYear');
+ const entries=[{id:'holiday',description:'Overseas holiday',amountTodayDollars:10000,year:year+1,frequency:'every-2-years',endYear:year+5}];
+ await evaluate(`__dollarTest.configureRetirement({'scenario.oneOffLifestyleEvents':${JSON.stringify(entries)}})`);
+ const expected=await evaluate('JSON.stringify(__dollarTest.retirement().result)');
+ await evaluate("document.querySelector('[data-save-stage-g-scenario=retirement]').click();document.getElementById('stageGScenarioName').value='Recurring holiday regression';document.querySelector('[data-scenario-save-action=save]').click();FFSStage1BrowserTestHooks.closeDurabilityDialog()");
+ const backup=await evaluate('__dollarTest.backup()');const imported=await evaluate(`__dollarTest.validateBackup(${JSON.stringify(backup)})`);
+ const snapshot=imported.scenarios.find(s=>s.name==='Recurring holiday regression');assert.deepEqual(snapshot.scenarioInputSnapshot.scenario.oneOffLifestyleEvents,entries);
+ await evaluate(`__dollarTest.openRetirementSnapshot(${JSON.stringify(snapshot)})`);assert.equal(await evaluate('JSON.stringify(__dollarTest.retirement().result)'),expected);
+ await evaluate("document.querySelector('[data-semi-action=compare]').click();document.querySelector('[data-semi-action=export-comparison-pdf]').click()");
+ assert.match(await evaluate('document.querySelector(".semi-retirement-comparison-print-report").textContent'),/every 2 years/);
+ const pdf=await cdp.send('Page.printToPDF',{printBackground:true,preferCSSPageSize:true});await mkdir(path.join(root,'test-results/recurring-expenses'),{recursive:true});const output=path.join(root,'test-results/recurring-expenses','comparison.pdf');await writeFile(output,Buffer.from(pdf.data,'base64'));
+ const text=extractPdfText(output);assert.match(text,/Overseas holiday/);assert.match(text,/every 2 years/);
+ await evaluate('delete document.body.dataset.printMode');
 });

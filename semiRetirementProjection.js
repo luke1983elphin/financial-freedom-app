@@ -709,7 +709,33 @@
       description: String(item.description || item.name || "").trim(),
       amountTodayDollars: roundCurrency(Math.max(0, number(item.amountTodayDollars ?? item.amount ?? item.todayDollarAmount))),
       year: Math.round(number(item.year ?? item.calendarYear)),
+      ...normaliseExpenseRecurrence(item),
     };
+  }
+
+  function normaliseExpenseRecurrence(item = {}) {
+    // Absence remains the legacy one-off shape, including in old backups.
+    if (!item.frequency || item.frequency === "one-off") return {};
+    return {
+      frequency: String(item.frequency),
+      endYear: number(item.endYear),
+      ...(item.frequency === "custom" ? { intervalYears: number(item.intervalYears) } : {}),
+    };
+  }
+
+  function expenseIntervalYears(event = {}) {
+    if (!event.frequency || event.frequency === "one-off") return null;
+    return ({ annual: 1, "every-2-years": 2, "every-3-years": 3, "every-5-years": 5, "every-10-years": 10 })[event.frequency]
+      ?? (event.frequency === "custom" ? number(event.intervalYears) : NaN);
+  }
+
+  function validateExpenseRecurrence(event, startYear, endYear, prefix) {
+    const interval = expenseIntervalYears(event);
+    if (interval === null) return [];
+    const errors = [];
+    if (!Number.isInteger(interval) || interval < 1) errors.push({ path: `${prefix}.${event.frequency === "custom" ? "intervalYears" : "frequency"}`, message: "Choose a frequency with a whole-number interval of at least 1 year." });
+    if (!Number.isInteger(event.endYear) || event.endYear < event.year || event.endYear < startYear || (endYear !== null && event.endYear > endYear)) errors.push({ path: `${prefix}.endYear`, message: "Choose a final year at or after the starting year, within this projection." });
+    return errors;
   }
 
   function normaliseOneOffIncomeEvent(item = {}, index = 0) {
@@ -744,12 +770,16 @@
 
   function oneOffLifestyleEventsForYear(events = [], calendarYear, inflationRate, yearIndex) {
     const matchingEvents = events
-      .filter((event) => event.year === calendarYear)
+      .filter((event) => {
+        const interval = expenseIntervalYears(event);
+        return interval === null ? event.year === calendarYear
+          : calendarYear >= event.year && calendarYear <= event.endYear && (calendarYear - event.year) % interval === 0;
+      })
       .map((event) => ({
         id: event.id,
         description: event.description,
         amountTodayDollars: event.amountTodayDollars,
-        year: event.year,
+        year: calendarYear,
         projectedAmount: todayDollarAmount(event.amountTodayDollars, inflationRate, yearIndex),
       }));
     const total = roundCurrency(matchingEvents.reduce((sum, event) => sum + event.projectedAmount, 0));
@@ -1613,6 +1643,7 @@
       if (!Number.isFinite(event.year) || event.year < projectionStartYear || (projectionEndYear !== null && event.year > projectionEndYear)) {
         addValidation(errors, `${prefix}.year`, "Choose a year within this projection.");
       }
+      errors.push(...validateExpenseRecurrence(event, projectionStartYear, projectionEndYear, prefix));
     });
     const oneOffIncomeEvents = Array.isArray(input.scenario?.oneOffIncomeEvents)
       ? input.scenario.oneOffIncomeEvents.map(normaliseOneOffIncomeEvent)
@@ -2049,7 +2080,7 @@
       workingPhaseSurplusTreatment: `Working-phase cash surplus after normal cash needs and planned accessible investment contributions uses the selected one-destination rule: ${normalised.scenario.workingPhaseSurplusDestination}. Legacy scenarios default to accessible investments to preserve prior projection behaviour.`,
       additionalSuperContributionTreatment: "Person-specific voluntary/additional super contributions cease at the person's own semi-retirement age by default. Employer super continues while that person still has employment income.",
       semiRetirementSurplusTreatment: `Retirement-phase annual surplus uses the selected one-destination rule: ${normalised.scenario.surplusDestination}. The default is extra lifestyle/enjoyment.`,
-      oneOffLifestyleSpendingTreatment: "scenario.oneOffLifestyleEvents stores larger expenses that occur in selected projection years. Amounts are entered in today's dollars, inflated to the event year using the scenario inflation rate, added to that year's lifestyle requirement only, and funded through the same household cash, accessible-investment and eligible-super waterfall as other spending.",
+      oneOffLifestyleSpendingTreatment: normalised.scenario.oneOffLifestyleEvents.some(event => expenseIntervalYears(event) !== null) ? "Planned big expenses use today's dollars for every occurrence. Recurring expenses apply from the starting year at their selected whole-year interval, through the inclusive final year. Each occurrence is inflated from projection year zero and funded once through the existing household cash, accessible investments and eligible super waterfall." : "scenario.oneOffLifestyleEvents stores larger expenses that occur in selected projection years. Amounts are entered in today's dollars, inflated to the event year using the scenario inflation rate, added to that year's lifestyle requirement only, and funded through the same household cash, accessible-investment and eligible-super waterfall as other spending.",
       oneOffIncomeTreatment: "scenario.oneOffIncomeEvents stores lump-sum cash receipts that occur once in selected projection years. Amounts are entered in today's dollars, inflated to the event year using the scenario inflation rate, added directly to accessible investments, and are not treated as taxable income by default.",
       downsizeHomeTreatment: normalised.scenario.downsizeHomeEvent.enabled
         ? "scenario.downsizeHomeEvent is a scenario-only downsizing transaction. Sale and replacement-home values are entered in today's dollars, grown with the principal-residence capital-growth assumption, transaction costs and linked principal-residence debt are applied in the event year, the old home is replaced, and released cash is allocated to accessible investments and/or person-specific downsizer super contributions."
@@ -3106,6 +3137,9 @@
   }
 
   global.FFSSemiRetirementProjection = {
+    normaliseExpenseRecurrence,
+    expenseIntervalYears,
+    validateExpenseRecurrence,
     contributionArrangements,
     validateContributionArrangements,
     VERSION: PROJECTION_VERSION,
