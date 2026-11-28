@@ -2122,7 +2122,7 @@ test('recurring contribution editor retains focus, expansion and final financial
  await cdp.send('Emulation.setDeviceMetricsOverride',{width:390,height:1000,deviceScaleFactor:1,mobile:true});
  await navigate();await fixture();await evaluate("FFSStage1BrowserTestHooks.showWorkspace('semiretirement')");
  await evaluate("(()=>{let n=document.querySelector('[data-semi-action=add-super-contribution]');while(n){if(n.tagName==='DETAILS')n.open=true;n=n.parentElement;}})();document.querySelector('[data-semi-action=add-super-contribution]').click()");
- async function field(name,value){await evaluate(`(()=>{const n=document.querySelector('[data-semi-input="people.0.superContributions.0.${name}"]');n.focus();n.value=${JSON.stringify(String(value))};n.dispatchEvent(new Event('change',{bubbles:true}));})()`);}
+ async function field(name,value){await evaluate(`(()=>{const n=document.querySelector('[data-semi-input="people.0.superContributions.0.${name}"]');n.focus();if(n.type==='checkbox')n.checked=${JSON.stringify(value==='cpi')};else n.value=${JSON.stringify(String(value))};n.dispatchEvent(new Event('change',{bubbles:true}));})()`);}
  await field('amount',5000);await field('type','salary-sacrifice');await field('frequency','annual');
  assert.equal(await evaluate('document.activeElement.dataset.semiInput'),'people.0.superContributions.0.frequency');
  assert.ok(await evaluate('document.querySelector("[data-super-contribution-id]").open'));
@@ -2130,10 +2130,43 @@ test('recurring contribution editor retains focus, expansion and final financial
  const age=await evaluate('__stage2Test.retirementDraft().people[0].currentAge');
  await field('startYear',year+2);await field('stopAge',age+5);
  assert.match(await evaluate('document.querySelector("[data-contribution-final-year]").textContent'),new RegExp(String(year+4)));
- await evaluate("document.querySelector('[data-super-contribution-id] details').open=true");await field('indexation','cpi');
+ await field('indexation','cpi');
+ assert.equal(await evaluate('__stage2Test.retirementDraft().people[0].superContributions[0].indexation'),'cpi');
  assert.ok(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'));
  await evaluate("(()=>{const n=document.querySelector('[data-super-contribution-id]');scrollTo({top:n.getBoundingClientRect().top+scrollY-70,behavior:'instant'});return new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));})()");
  await mkdir(pathModuleForSuper(),{recursive:true});await writeFile(path.join(pathModuleForSuper(),'super-editor-390.png'),Buffer.from((await cdp.send('Page.captureScreenshot',{format:'png'})).data,'base64'));
  await evaluate("document.querySelector('[data-semi-action=calculate]').click()");
  assert.equal(await evaluate('__dollarTest.retirement().result.years[2].people[0].scenarioSalarySacrificeSuper'),5000);
+});
+
+for(const width of [1920,1366,768,390]) test('super editor fits actual retirement assumption panels at '+width+'px',async()=>{
+ await cdp.send('Emulation.setDeviceMetricsOverride',{width,height:1050,deviceScaleFactor:1,mobile:width<500});
+ await navigate();await fixture();
+ await evaluate(`(()=>{const p=FFSStage1BrowserTestHooks.getPlan();p.personal.retirementTiming={version:1,mode:'individual',people:[{id:'person1',fullRetirementAge:65,hasSemiRetirement:false},{id:'person2',fullRetirementAge:65,hasSemiRetirement:false}]};FFSStage1BrowserTestHooks.setPlan(p,'semiretirement');__dollarTest.configureRetirement({'people.0.superContributions':[]});FFSStage1BrowserTestHooks.closeDurabilityDialog();let n=document.querySelector('[data-semi-action=add-super-contribution]');while(n){if(n.tagName==='DETAILS')n.open=true;n=n.parentElement;}document.querySelector('[data-semi-action=add-super-contribution]').click();})()`);
+ assert.equal(await evaluate('document.querySelectorAll("[data-super-contribution-id] .field-error,.semi-retirement-validation").length'),0,'adding a blank arrangement does not show premature validation');
+ const containment=()=>evaluate(`(()=>{const card=document.querySelector('[data-super-contribution-id]'),panel=card.closest('.semi-retirement-person-card'),editor=card.closest('.super-contribution-editor'),fields=card.querySelector('.super-contribution-fields'),rect=card.getBoundingClientRect(),p=panel.getBoundingClientRect();return {panel:p.width,editor:editor.clientWidth,columns:getComputedStyle(fields).gridTemplateColumns.split(' ').length,cardWithinPanel:rect.left>=p.left&&rect.right<=p.right+1,overflow:[...card.querySelectorAll('input,select,label,.field-error,.field-help,summary,button')].filter(n=>n.getClientRects().length).filter(n=>{const r=n.getBoundingClientRect();return r.left<rect.left-1||r.right>rect.right+1||n.scrollWidth>n.clientWidth+1}).map(n=>({tag:n.tagName,text:n.textContent.slice(0,60),width:n.getBoundingClientRect().width})),page:document.documentElement.scrollWidth>innerWidth+1,overflowRule:getComputedStyle(card).overflowX};})()`);
+ async function fits(){const g=await containment();assert.ok(g.cardWithinPanel,JSON.stringify(g));assert.deepEqual(g.overflow,[],JSON.stringify(g));assert.equal(g.page,false);assert.notEqual(g.overflowRule,'hidden');if(g.editor<448)assert.equal(g.columns,1,JSON.stringify(g));return g;}
+ await fits();
+ assert.deepEqual(await evaluate(`[...document.querySelector('[data-semi-input="people.0.superContributions.0.type"]').options].map(o=>o.textContent)`),['Personal deductible','Salary sacrifice','Personal after-tax']);
+ assert.equal(await evaluate(`Boolean(document.querySelector('[data-semi-input="people.0.superContributions.0.stopAge"]'))`),false,'one-off shows no recurring timing');
+ await evaluate(`(()=>{const n=document.querySelector('[data-semi-input="people.0.superContributions.0.amount"]');window.__layoutAmount=n;n.focus({preventScroll:true});n.scrollIntoView({block:'center',behavior:'instant'});window.__layoutScroll=scrollY;n.value='20000';n.dispatchEvent(new Event('input',{bubbles:true}));n.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+ assert.ok(await evaluate('document.activeElement===__layoutAmount&&__layoutAmount.isConnected&&Math.abs(scrollY-__layoutScroll)<2'),'amount edit retains node, focus and scroll');
+ await evaluate(`(()=>{const n=document.querySelector('[data-semi-input="people.0.superContributions.0.frequency"]');n.focus({preventScroll:true});n.value='annual';n.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+ assert.equal(await evaluate('document.activeElement.dataset.semiInput'),'people.0.superContributions.0.frequency');
+ assert.ok(await evaluate('document.querySelector("[data-super-contribution-id]").open'));
+ await evaluate(`(()=>{const n=document.querySelector('[data-super-indexation]');n.checked=true;n.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+ assert.equal(await evaluate('__stage2Test.retirementDraft().people[0].superContributions[0].indexation'),'cpi');
+ await fits();
+ assert.ok(await evaluate(`(()=>{const c=document.querySelector('[data-super-contribution-id]'),f=c.querySelector('.super-contribution-fields').getBoundingClientRect();return ['type','startYear'].every(k=>{const r=c.querySelector('[data-semi-input$=".'+k+'"]').getBoundingClientRect();return Math.abs(r.width-f.width)<2;});})()`),'type and financial year span the card');
+ assert.ok(await evaluate(`(()=>{const c=document.querySelector('[data-super-contribution-id]'),f=c.querySelector('.super-contribution-fields').getBoundingClientRect(),b=c.querySelector('[data-semi-action="remove-super-contribution"]').getBoundingClientRect();return Math.abs(f.right-b.right)<2&&b.width<f.width-8;})()`),'Remove stays compact at bottom right');
+ await evaluate("document.querySelector('[data-semi-action=calculate]').click()");
+ assert.ok(await evaluate('__dollarTest.retirement().result?.validation.isValid'),'valid contribution still produces the existing forecast');
+ await fits();
+ await evaluate(`(()=>{const n=document.querySelector('[data-semi-input="people.0.superContributions.0.amount"]');n.value='0';n.dispatchEvent(new Event('change',{bubbles:true}));document.querySelector('[data-semi-action=calculate]').click();})()`);
+ assert.ok(await evaluate('document.querySelector("[data-super-contribution-id] .field-error")?.textContent.length>0'),'explicit calculation still validates');
+ await fits();
+ await evaluate(`(()=>{const c=document.querySelector('[data-super-contribution-id]');let n=c;while(n){if(n.tagName==='DETAILS')n.open=true;n=n.parentElement;}scrollTo({top:c.getBoundingClientRect().top+scrollY-70,behavior:'instant'});return new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));})()`);
+ await mkdir(pathModuleForSuper(),{recursive:true});await writeFile(path.join(pathModuleForSuper(),'layout-'+width+'.png'),Buffer.from((await cdp.send('Page.captureScreenshot',{format:'png'})).data,'base64'));
+ await evaluate("document.querySelector('[data-super-contribution-id]').open=false");
+ await fits();
 });
