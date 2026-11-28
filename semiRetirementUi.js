@@ -168,6 +168,39 @@
     return Math.round((number(value) + Number.EPSILON) * 100) / 100;
   }
 
+  function superContributionBreakdown(person = {}) {
+    const employer = nonNegative(person.employerSuperContribution);
+    const salary = nonNegative(person.salarySacrificeSuper ?? (number(person.baselineSalarySacrificeSuper) + number(person.scenarioSalarySacrificeSuper)));
+    const afterTax = nonNegative(person.personalAfterTaxContribution);
+    const surplus = nonNegative(person.surplusAdditionalSuperContribution);
+    const additional = finiteNumberOrNull(person.additionalSuperContribution) !== null
+      ? nonNegative(person.additionalSuperContribution)
+      : salary + afterTax + surplus + nonNegative(person.personalDeductibleContribution ?? (number(person.recurringAdditionalSuperContribution) + number(person.plannedExtraConcessionalContribution)));
+    // Modern totals already include migrated recurring/one-off amounts. Infer
+    // the old deductible category only when the modern field is absent.
+    const deductible = finiteNumberOrNull(person.personalDeductibleContribution) !== null
+      ? nonNegative(person.personalDeductibleContribution)
+      : Math.max(0, additional - salary - afterTax - surplus);
+    const other = Math.max(0, additional - salary - afterTax - deductible);
+    const downsizer = nonNegative(person.downsizerSuperContribution);
+    const gross = roundCurrency(employer + additional + downsizer);
+    const tax = nonNegative(person.superContributionsTax);
+    return [
+      { key: "employer", label: "Employer super contributions", amount: employer },
+      { key: "salary", label: "Salary sacrifice contributions", amount: salary },
+      { key: "deductible", label: "Personal deductible contributions", amount: deductible },
+      { key: "afterTax", label: "Personal after-tax contributions", amount: afterTax },
+      // Preserve these distinct existing pathways without claiming a personal
+      // deduction for surplus allocations or classifying downsizer eligibility.
+      { key: "other", label: "Other concessional super allocations", amount: other },
+      { key: "downsizer", label: "Downsizer contributions", amount: downsizer },
+    ].filter(row => row.amount > 0).concat([
+      { key: "gross", label: "Total gross super contributions", amount: gross },
+      { key: "tax", label: "Contributions tax", amount: tax },
+      { key: "net", label: "Net super contributions", amount: roundCurrency(gross - tax) },
+    ]);
+  }
+
   function roundRatio(value) {
     return Math.round((number(value) + Number.EPSILON) * 10000) / 10000;
   }
@@ -2568,6 +2601,7 @@
     buildScenarioAdjustmentDisplayState,
     resetScenarioAdjustmentsToBaseline,
     normaliseOneOffLifestyleEvents,
+    superContributionBreakdown,
     expenseTimingLabel,
     oneOffEventId,
     normaliseOneOffIncomeEvents,

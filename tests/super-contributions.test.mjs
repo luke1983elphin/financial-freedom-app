@@ -211,3 +211,60 @@ test('baseline salary packaging and scenario sacrifice combine once for SG, MLS 
  assert.equal(p.stslRepaymentIncome,120000);
  assert.equal(p.medicareLevySurcharge,1050);
 });
+
+// Independently calculate tax for these incomes (all exceed LITO thresholds
+// and stay within the $45k-$135k bracket), rather than reusing tax helpers.
+for(const type of ['personal-deductible','salary-sacrifice','personal-after-tax'])for(const startYear of [2026,2029])test(`both people: $18000 fixed nominal ${type}, start ${startYear}`,()=>{
+ const people=[person({id:'person1',currentAge:43,currentGrossEmploymentIncome:125000,stslOpeningBalance:2000000,hasPrivateHealthCover:false}),person({id:'person2',currentAge:45,currentGrossEmploymentIncome:105000,stslOpeningBalance:2000000,hasPrivateHealthCover:false})];
+ const overrides={inflationRate:.025,household:{currentLifestyleSpending:60000,semiRetirementLifestyleSpending:60000,fullRetirementLifestyleSpending:60000},accessibleInvestments:{openingBalance:2000000,externalAnnualAccessibleContribution:0}};
+ const base=runProjection(baseInput({...overrides,people}));
+ const revised=runProjection(baseInput({...overrides,people:people.map(p=>({...p,superContributions:[entry({type,frequency:'annual',startYear,stopAge:58,indexation:'none',amount:18000})]}))}));
+ const credits=[0,0];
+ for(let i=0;i<revised.years.length;i++){
+  const row=revised.years[i],original=base.years[i];let expectedCashChange=0,expectedPersonalFunding=0;
+  row.people.forEach((p,index)=>{
+   const before=original.people[index],income=people[index].currentGrossEmploymentIncome;
+   const applicable=row.calendarYear>=startYear&&p.age<58;
+   const amount=applicable?18000:0,concessional=type!=='personal-after-tax',deduction=concessional?amount:0;
+   assert.equal(p.totalTaxableIncome,before.totalTaxableIncome-deduction,`${p.id} deduction in ${row.calendarYear}`);
+   if(p.employmentPhase==='working'){
+    const taxable=income-deduction,firstRate=row.calendarYear===2026?.15:.14;
+    const tax=Math.round(((45000-18200)*firstRate+(taxable-45000)*.3)*100)/100;
+    assert.equal(p.incomeTax,tax);assert.equal(p.medicareLevy,taxable*.02);
+    assert.equal(p.stslRepaymentIncome,income,'reportable contributions added back for STSL');
+    assert.equal(p.stslRepayment,Math.round((income-69528)*.15*100)/100);
+    assert.equal(p.medicareLevySurcharge,taxable*.01,'family tier uses original $230000 reportable income, not reduced taxable income');
+    assert.equal(p.employerSuperContribution,income*.12,'SG base remains original employment income');
+   }
+   assert.equal(p.additionalSuperContribution,amount);
+   assert.equal(Math.round((p.superContributionsTax-before.superContributionsTax)*100)/100,concessional?amount*.15:0);
+   assert.equal(p.netAdditionalSuperContribution,concessional?amount*.85:amount);
+   credits[index]+=concessional?amount*.85:amount;
+   assert.equal(Math.round((p.closingSuperBalance-before.closingSuperBalance)*100)/100,credits[index]);
+   const personalFunding=type==='salary-sacrifice'?0:amount;
+   expectedPersonalFunding+=personalFunding;
+   expectedCashChange+=before.incomeTax-p.incomeTax+before.medicareLevy-p.medicareLevy+before.medicareLevySurcharge-p.medicareLevySurcharge-(type==='salary-sacrifice'?amount:0)-personalFunding;
+  });
+  assert.equal(row.household.plannedAdditionalConcessionalContributionsPaidFromCash,expectedPersonalFunding);
+  assert.equal(Math.round((row.household.cashSurplusOrShortfall-original.household.cashSurplusOrShortfall)*100)/100,expectedCashChange,'tax benefit and gross funding reach available cash once');
+ }
+ const age50=revised.years.find(r=>r.people[0].age===50).people[0];
+ assert.equal(age50.additionalSuperContribution,18000);
+ assert.equal(Math.round(18000/1.025**7),15143,'reported $15143 is the today-dollar display of $18000 at seven years and 2.5% CPI');
+});
+
+test('shared reporting categories include legacy amounts once and hide unused categories',()=>{
+ const {FFSSemiRetirementUi:ui}=loadRuntime();
+ const old={employerSuperContribution:12000,additionalSuperContribution:20000,recurringAdditionalSuperContribution:15000,plannedExtraConcessionalContribution:5000,superContributionsTax:4800};
+ const modern={...old,personalDeductibleContribution:20000};
+ const oldRows=JSON.parse(JSON.stringify(ui.superContributionBreakdown(old))),rows=JSON.parse(JSON.stringify(ui.superContributionBreakdown(modern)));
+ assert.deepEqual(rows,oldRows);
+ assert.deepEqual(rows.map(r=>r.label),['Employer super contributions','Personal deductible contributions','Total gross super contributions','Contributions tax','Net super contributions']);
+ assert.deepEqual(rows.map(r=>r.amount),[12000,20000,32000,4800,27200]);
+});
+test('special existing allocations reconcile without being presented as personal deductions',()=>{
+ const {FFSSemiRetirementUi:ui}=loadRuntime();
+ const rows=ui.superContributionBreakdown({employerSuperContribution:12000,additionalSuperContribution:15000,salarySacrificeSuper:2000,personalDeductibleContribution:5000,personalAfterTaxContribution:3000,surplusAdditionalSuperContribution:5000,downsizerSuperContribution:10000,superContributionsTax:3600});
+ const amount=key=>rows.find(r=>r.key===key)?.amount;
+ assert.equal(amount('deductible'),5000);assert.equal(amount('other'),5000);assert.equal(amount('downsizer'),10000);assert.equal(amount('gross'),37000);assert.equal(amount('net'),33400);
+});

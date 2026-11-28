@@ -414,7 +414,8 @@ test("Stage G2E-S annual detail output includes extra concessional contribution 
     appSource.indexOf("function renderSemiRetirementAnnualDetailHtml"),
     appSource.indexOf("function renderSemiRetirementAnnualProjectionHtml"),
   );
-  assert.match(detailSnippet, /planned extra concessional contribution/);
-  assert.match(detailSnippet, /Total planned extra concessional contribution/);
-  assert.match(detailSnippet, /Combined household closing super balance/);
+  assert.match(detailSnippet, /semiRetirementSuperContributionRows\(person/);
+  assert.match(detailSnippet, /semiRetirementHouseholdSuperRows/);
+  assert.match(detailSnippet, /semiRetirementNominalSuperHtml/);
+  assert.doesNotMatch(detailSnippet, /Existing recurring extra super|Planned extra concessional contribution|Net planned contribution added to super/);
 });

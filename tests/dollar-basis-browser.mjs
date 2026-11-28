@@ -2081,7 +2081,7 @@ for (const width of [1366,768,390]) test('unified super contributions edit and r
  assert.ok(await evaluate("!document.querySelector('[data-semi-results-dashboard]') || document.querySelector('[data-semi-results-dashboard]').hidden"),'stale forecast hidden immediately');
  await evaluate(`(()=>{const n=document.querySelector('[data-semi-input="${path}"]');n.value='20000';n.dispatchEvent(new Event('input',{bubbles:true}));n.dispatchEvent(new Event('change',{bubbles:true}));document.querySelector('[data-semi-action=calculate]').click();})()`);
  assert.equal(await evaluate('__dollarTest.retirement().result.years[0].people[0].personalDeductibleContribution'),20000);
- assert.ok(await evaluate("document.querySelector('#semiRetirementScenarioRoot').textContent.includes('actual nominal gross transactions')"));
+ assert.ok(await evaluate("document.querySelector('#semiRetirementScenarioRoot').textContent.includes('Actual nominal contributions')"));
  assert.ok(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'));
  const output=pathModuleForSuper();
  await mkdir(output,{recursive:true});
@@ -2227,4 +2227,45 @@ test('recurring expense schedules survive saved scenarios, backups and compariso
  const pdf=await cdp.send('Page.printToPDF',{printBackground:true,preferCSSPageSize:true});await mkdir(path.join(root,'test-results/recurring-expenses'),{recursive:true});const output=path.join(root,'test-results/recurring-expenses','comparison.pdf');await writeFile(output,Buffer.from(pdf.data,'base64'));
  const text=extractPdfText(output);assert.match(text,/Overseas holiday/);assert.match(text,/every 2 years/);
  await evaluate('delete document.body.dataset.printMode');
+});
+
+for(const width of [1366,390])test('annual super breakdown reconciles $18000 nominal for both people at '+width+'px',async()=>{
+ await cdp.send('Emulation.setDeviceMetricsOverride',{width,height:1100,deviceScaleFactor:1,mobile:width<500});
+ await navigate();await fixture();
+ await evaluate("(()=>{const p=FFSStage1BrowserTestHooks.getPlan();p.personal.person1Age=43;p.personal.person2Age=43;FFSStage1BrowserTestHooks.setPlan(p,'semiretirement');document.querySelector('[data-semi-action=calculate]').click();})()");
+ const year=await evaluate('__dollarTest.retirement().inputs.projectionStartYear');
+ const config={'assumptions.inflationRatePct':2.5,'scenario.agePension.enabled':false,'accessibleInvestments.openingBalance':2000000};
+ for(let i=0;i<2;i++){
+  config[`people.${i}.currentGrossEmploymentIncome`]=i===0?125000:105000;
+  config[`people.${i}.annualIncomeGrowthRatePct`]=0;config[`people.${i}.fullRetirementAge`]=65;config[`people.${i}.hasSemiRetirement`]=false;
+  config[`people.${i}.superContributions`]=[{id:'deductible-'+i,type:'personal-deductible',amount:18000,frequency:'annual',startYear:year,stopAge:58,indexation:'none'}];
+ }
+ await evaluate(`__dollarTest.configureRetirement(${JSON.stringify(config)})`);
+ const before=await evaluate('JSON.stringify(__dollarTest.retirement().result)');const inputs=await evaluate('JSON.stringify(__stage2Test.retirementDraft().people.map(p=>p.superContributions))');
+ async function read(){return evaluate(`(()=>{
+   const host=innerWidth<760?document.querySelector('[data-semi-detail-state="maf-year-${year+7}"]'):[...document.querySelectorAll('.semi-retirement-annual-table tbody tr')].find(n=>n.firstElementChild.textContent.trim()==='${year+7}');
+   const detail=host.querySelector('.semi-retirement-annual-detail');
+   const pairs=(root,nominal)=>Object.fromEntries([...root.querySelectorAll('div')].filter(n=>n.firstElementChild?.tagName==='SPAN'&&n.lastElementChild?.tagName==='STRONG'&&(nominal||!n.closest('[data-super-nominal]'))).map(n=>[n.firstElementChild.textContent,n.lastElementChild.textContent]));
+   return [...detail.querySelectorAll(':scope > section')].slice(0,2).map(section=>({display:pairs(section,false),nominal:pairs(section.querySelector('[data-super-nominal]'),true),text:section.textContent}));
+ })()`);}
+ for(const basis of ['today','future']){
+  await select(basis);const people=await read();assert.equal(people.length,2);
+  for(const p of people){assert.equal(amount(p.display['Personal deductible contributions']),basis==='today'?15143:18000);assert.equal(amount(p.nominal['Personal deductible contributions']),18000);
+   assert.ok(!('Salary sacrifice contributions' in p.display)&&!('Personal after-tax contributions' in p.display));
+   assert.doesNotMatch(p.text,/Existing recurring extra super|Planned extra concessional contribution|Planned contribution tax|Net planned contribution added to super|Total additional super contribution/);
+   assert.equal(amount(p.nominal['Total gross super contributions'])-amount(p.nominal['Contributions tax']),amount(p.nominal['Net super contributions']));
+  }
+  assert.equal(await evaluate('JSON.stringify(__dollarTest.retirement().result)'),before);assert.equal(await evaluate('JSON.stringify(__stage2Test.retirementDraft().people.map(p=>p.superContributions))'),inputs);
+ }
+ await select('today');await evaluate(`(()=>{const h=innerWidth<760?document.querySelector('[data-semi-detail-state="maf-year-${year+7}"]'):[...document.querySelectorAll('.semi-retirement-annual-table tbody tr')].find(n=>n.firstElementChild.textContent.trim()==='${year+7}');for(const d of h.querySelectorAll('details'))d.open=true;let n=h;while(n){if(n.tagName==='DETAILS')n.open=true;n=n.parentElement;}scrollTo({top:h.getBoundingClientRect().top+scrollY-70,behavior:'instant'});return new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));})()`);
+ assert.ok(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'));
+ await mkdir(path.join(root,'test-results/super-breakdown'),{recursive:true});await writeFile(path.join(root,'test-results/super-breakdown','annual-'+width+'.png'),Buffer.from((await cdp.send('Page.captureScreenshot',{format:'png'})).data,'base64'));
+ if(width===1366){
+  await evaluate("document.querySelector('[data-semi-action=compare]').click();const n=document.querySelector('[data-semi-report-detail]');n.value='full';n.dispatchEvent(new Event('change',{bubbles:true}));document.querySelector('[data-semi-action=export-comparison-pdf]').click()");
+  const report=await evaluate('document.querySelector(".semi-retirement-comparison-print-report").textContent');
+  assert.match(report,/Total gross super contributions/);assert.match(report,/Net super contributions/);assert.doesNotMatch(report,/Existing recurring extra super|Net planned contribution added to super/);
+  const pdf=await cdp.send('Page.printToPDF',{printBackground:true,preferCSSPageSize:true});const file=path.join(root,'test-results/super-breakdown','comparison.pdf');await writeFile(file,Buffer.from(pdf.data,'base64'));const text=extractPdfText(file);
+  assert.match(text,/personal deductible/i);assert.match(text,/18,000/);assert.match(text,/Total gross super contributions/);assert.match(text,/Net super contributions/);
+  await evaluate('delete document.body.dataset.printMode');
+ }
 });

@@ -36,6 +36,18 @@
   min-width: 0;
 }
 
+[data-super-nominal] > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 6px 12px;
+  margin-block: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+[data-super-nominal] > div > span { min-width: 0; overflow-wrap: anywhere; }
+[data-super-nominal] > div > strong { text-align: right; }
+
 .semi-retirement-field .field-input[readonly] {
   background: #f8fafc;
   color: #334155;

@@ -10070,7 +10070,7 @@
       { key: "firstShortfall", label: "First projected funding shortfall", value: (summary) => summary.firstShortfallLabel, delta: (base, item) => base.firstShortfallYear && item.firstShortfallYear ? semiRetirementComparisonDelta(base.firstShortfallYear, item.firstShortfallYear, "year") : (base.firstShortfallLabel === item.firstShortfallLabel ? "No change" : "Status differs") },
       { key: "projectionEndNetWorth", label: "Projection-end net worth", value: (summary) => semiRetirementMoney(summary.projectedEndNetWorth), delta: (base, item) => semiRetirementComparisonDelta(base.projectedEndNetWorth, item.projectedEndNetWorth) },
       { key: "oneOffLifestyle", label: "Planned big expenses", value: (summary) => summary.oneOffLifestyleEventCount ? `${summary.oneOffLifestyleEventCount} event${summary.oneOffLifestyleEventCount === 1 ? "" : "s"} - ${semiRetirementMoney(summary.oneOffLifestyleSpendingToday)} today` : "None", delta: (base, item) => semiRetirementComparisonDelta(base.oneOffLifestyleSpendingToday, item.oneOffLifestyleSpendingToday) },
-      { key: "concessional", label: "Extra concessional contributions", value: (summary) => summary.plannedConcessionalEventCount ? `${semiRetirementMoney(summary.plannedConcessionalTotal)} across ${summary.plannedConcessionalEventCount} year${summary.plannedConcessionalEventCount === 1 ? "" : "s"}` : "None", delta: (base, item) => semiRetirementComparisonDelta(base.plannedConcessionalTotal, item.plannedConcessionalTotal) },
+      { key: "concessional", label: "Additional super contributions", value: (summary) => summary.plannedConcessionalEventCount ? `${summary.plannedConcessionalEventCount} arrangement${summary.plannedConcessionalEventCount === 1 ? "" : "s"} — ${semiRetirementMoney(summary.plannedConcessionalTotal)} gross entered amounts` : "None", delta: (base, item) => semiRetirementComparisonDelta(base.plannedConcessionalTotal, item.plannedConcessionalTotal) },
     ];
   }
 
@@ -10160,11 +10160,8 @@
         ...((fullRow.people || []).flatMap((person) => {
           const name = person.name || person.id;
           return [
-            semiRetirementBreakdownRow(`${name} employer super`, semiRetirementMoney(person.employerSuperContribution)),
-            Number(person.additionalSuperContribution || 0) > 0 ? semiRetirementBreakdownRow(`${name} additional super`, semiRetirementMoney(person.additionalSuperContribution)) : "",
-            Number(person.plannedExtraConcessionalContribution || 0) > 0 ? semiRetirementBreakdownRow(`${name} planned extra concessional contribution`, semiRetirementMoney(person.plannedExtraConcessionalContribution), "Uses the existing planned contribution event treatment.") : "",
-            Number(person.plannedExtraConcessionalContributionTax || 0) > 0 ? semiRetirementBreakdownRow(`${name} planned contribution tax`, semiRetirementMoney(person.plannedExtraConcessionalContributionTax)) : "",
-            Number(person.superWithdrawal || 0) > 0 ? semiRetirementBreakdownRow(`${name} super withdrawal`, semiRetirementMoney(person.superWithdrawal)) : "",
+            ...window.FFSSemiRetirementUi.superContributionBreakdown(person).map(row => semiRetirementBreakdownRow(`${name} ${row.label}`, semiRetirementMoney(row.amount))),
+            semiRetirementBreakdownRow(`${name} actual nominal contributions`, window.FFSSemiRetirementUi.superContributionBreakdown(person).map(row => `${row.label}: ${money(row.amount)}`).join("; ")),
             semiRetirementBreakdownRow(`${name} closing super`, semiRetirementMoney(person.closingSuperBalance)),
           ];
         })),
@@ -10243,7 +10240,7 @@
     if (key === "concessional") {
       return concessionalEvents.length
         ? concessionalEvents.map((event) => semiRetirementBreakdownRow(semiRetirementConcessionalContributionSummary(event, scenario.draft), semiRetirementMoney(event.amount), "Contribution-cap compliance is not implied."))
-        : [semiRetirementBreakdownRow("Extra concessional contributions", "None")];
+        : [semiRetirementBreakdownRow("Additional super contributions", "None")];
     }
     return [semiRetirementBreakdownRow("Detail", "Not available from the current projection output")];
   }
@@ -10935,6 +10932,23 @@
     `).join("");
   }
 
+  function semiRetirementSuperContributionRows(person, format) {
+    return window.FFSSemiRetirementUi.superContributionBreakdown(person).map(row => ({label:row.label, value:format(row.amount)}));
+  }
+
+  function semiRetirementHouseholdSuperRows(people, format) {
+    const rows = people.flatMap(person => window.FFSSemiRetirementUi.superContributionBreakdown(person));
+    return ["gross", "tax", "net"].map(key => ({label:rows.find(row => row.key === key)?.label || key,
+      value:format(rows.filter(row => row.key === key).reduce((sum, row) => sum + row.amount, 0))}));
+  }
+
+  function semiRetirementNominalSuperHtml(person) {
+    return `<details class="mt-3" data-super-nominal><summary>Actual nominal contributions (financial year dollars)</summary>
+      ${semiRetirementDetailRows(semiRetirementSuperContributionRows(person, money))}
+      <p class="field-help">These are the actual financial-year amounts. Changing the display basis does not change contributions or tax deductions.</p>
+    </details>`;
+  }
+
   function renderSemiRetirementAnnualDetailHtml(row) {
     const household = row.household || {};
     const annualDebtSections = (row.liabilities || [])
@@ -11067,46 +11081,10 @@
       ["Property equity", semiRetirementMoney(household.totalPropertyEquity)],
       ["Projected net worth", semiRetirementMoney(household.totalNetWorth)],
     ].map(([label, value]) => ({ label, value }));
-    const superContributionRows = row.people.flatMap((person) => {
-      const name = person.name || person.id;
-      return [
-        { label: `${name} employer super`, value: semiRetirementMoney(person.employerSuperContribution) },
-        { label: `${name} salary sacrifice`, value: semiRetirementMoney(person.salarySacrificeSuper || 0) },
-        { label: `${name} personal deductible`, value: semiRetirementMoney(person.personalDeductibleContribution || 0) },
-        { label: `${name} personal after-tax`, value: semiRetirementMoney(person.personalAfterTaxContribution || 0) },
-        { label: `${name} net contributions credited`, value: semiRetirementMoney(Number(person.netEmployerSuperContribution || 0) + Number(person.netAdditionalSuperContribution || 0)) },
-        { label: `${name} actual nominal gross transactions`, value: `Employer ${money(person.employerSuperContribution)} · salary sacrifice ${money(person.salarySacrificeSuper || 0)} · personal deductible ${money(person.personalDeductibleContribution || 0)} · after-tax ${money(person.personalAfterTaxContribution || 0)}` },
-        Number(person.recurringAdditionalSuperContribution || 0) > 0
-          ? { label: `${name} existing recurring extra super`, value: semiRetirementMoney(person.recurringAdditionalSuperContribution) }
-          : null,
-        Number(person.plannedExtraConcessionalContribution || 0) > 0
-          ? { label: `${name} planned extra concessional contribution`, value: semiRetirementMoney(person.plannedExtraConcessionalContribution) }
-          : null,
-        Number(person.plannedExtraConcessionalContribution || 0) > 0
-          ? { label: `${name} planned contribution tax`, value: semiRetirementMoney(person.plannedExtraConcessionalContributionTax) }
-          : null,
-        Number(person.plannedExtraConcessionalContribution || 0) > 0
-          ? { label: `${name} net planned contribution added to super`, value: semiRetirementMoney(person.netPlannedExtraConcessionalContribution) }
-          : null,
-        Number(person.surplusAdditionalSuperContribution || 0) > 0
-          ? { label: `${name} surplus directed to super`, value: semiRetirementMoney(person.surplusAdditionalSuperContribution) }
-          : null,
-        { label: `${name} total modelled super contributions`, value: semiRetirementMoney(person.totalModelledSuperContributions ?? (Number(person.employerSuperContribution || 0) + Number(person.additionalSuperContribution || 0))) },
-        Number(person.superContributionsTax || 0) > 0
-          ? { label: `${name} contributions tax`, value: semiRetirementMoney(person.superContributionsTax) }
-          : null,
-        Number(person.superWithdrawal || 0) > 0
-          ? { label: `${name} super withdrawal`, value: semiRetirementMoney(person.superWithdrawal) }
-          : null,
-        { label: `${name} closing super balance`, value: semiRetirementMoney(person.closingSuperBalance) },
-      ].filter(Boolean);
-    });
-    superContributionRows.push(
-      { label: "Total planned extra concessional contribution", value: semiRetirementMoney(household.plannedExtraConcessionalContributionsPaidFromCash) },
-      { label: "Combined household closing super balance", value: semiRetirementMoney(household.totalSuperBalance) },
-    );
+    const superContributionRows = semiRetirementHouseholdSuperRows(row.people, semiRetirementMoney);
     return `
       <div class="semi-retirement-annual-detail">
+        <p class="field-help" data-contribution-dollar-basis>Nominal financial-year dollars. Expand Actual nominal contributions to reconcile entered amounts.</p>
         ${row.people.map((person) => `
           <section>
             <h5>${escapeHtml(person.name || person.id)}</h5>
@@ -11127,19 +11105,13 @@
               { label: "STSL repayment income", value: semiRetirementMoney(person.stslRepaymentIncome ?? person.totalTaxableIncome) },
               { label: "STSL", value: semiRetirementMoney(person.stslRepayment) },
               { label: "Net cash income", value: semiRetirementMoney(person.netIncome ?? person.netEmploymentIncome) },
-              { label: "Employer super", value: semiRetirementMoney(person.employerSuperContribution) },
-              { label: "Existing recurring extra super", value: semiRetirementMoney(person.recurringAdditionalSuperContribution) },
-              { label: "Planned extra concessional contribution", value: semiRetirementMoney(person.plannedExtraConcessionalContribution) },
-              { label: "Planned contribution tax", value: semiRetirementMoney(person.plannedExtraConcessionalContributionTax) },
-              { label: "Net planned contribution added to super", value: semiRetirementMoney(person.netPlannedExtraConcessionalContribution) },
-              { label: "Total additional super contribution", value: semiRetirementMoney(person.additionalSuperContribution) },
-              { label: "Total modelled super contributions", value: semiRetirementMoney(person.totalModelledSuperContributions ?? (Number(person.employerSuperContribution || 0) + Number(person.additionalSuperContribution || 0))) },
-              { label: "Contributions tax", value: semiRetirementMoney(person.superContributionsTax) },
+              ...semiRetirementSuperContributionRows(person, semiRetirementMoney),
               { label: "Opening super", value: semiRetirementMoney(person.openingSuperBalance) },
               { label: "Super earnings", value: semiRetirementMoney(person.superInvestmentEarnings) },
               { label: "Super withdrawal", value: semiRetirementMoney(person.superWithdrawal) },
               { label: "Closing super", value: semiRetirementMoney(person.closingSuperBalance) },
             ])}
+            ${semiRetirementNominalSuperHtml(person)}
           </section>
         `).join("")}
         <section>
@@ -11149,7 +11121,7 @@
           ${row.warnings?.length ? `<div class="semi-retirement-row-warning"><strong>Notes</strong><ul>${row.warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}</ul></div>` : ""}
         </section>
         <section>
-          <h5>Super contributions</h5>
+          <h5>Household super contributions</h5>
           ${semiRetirementDetailRows(superContributionRows)}
         </section>
         <section>
@@ -18042,11 +18014,8 @@
         ...((fullRow.people || []).flatMap((person) => {
           const name = person.name || person.id;
           return [
-            semiRetirementBreakdownRow(`${name} employer super`, atRetirement(person.employerSuperContribution)),
-            Number(person.additionalSuperContribution || 0) > 0 ? semiRetirementBreakdownRow(`${name} additional super`, atRetirement(person.additionalSuperContribution)) : "",
-            Number(person.plannedExtraConcessionalContribution || 0) > 0 ? semiRetirementBreakdownRow(`${name} planned extra concessional contribution`, atRetirement(person.plannedExtraConcessionalContribution), "Uses the existing planned contribution event treatment.") : "",
-            Number(person.plannedExtraConcessionalContributionTax || 0) > 0 ? semiRetirementBreakdownRow(`${name} planned contribution tax`, atRetirement(person.plannedExtraConcessionalContributionTax)) : "",
-            Number(person.superWithdrawal || 0) > 0 ? semiRetirementBreakdownRow(`${name} super withdrawal`, atRetirement(person.superWithdrawal)) : "",
+            ...window.FFSSemiRetirementUi.superContributionBreakdown(person).map(row => semiRetirementBreakdownRow(`${name} ${row.label}`, atRetirement(row.amount))),
+            semiRetirementBreakdownRow(`${name} actual nominal contributions`, window.FFSSemiRetirementUi.superContributionBreakdown(person).map(row => `${row.label}: ${money(row.amount)}`).join("; ")),
             semiRetirementBreakdownRow(`${name} closing super`, atRetirement(person.closingSuperBalance)),
           ];
         })),
@@ -18125,7 +18094,7 @@
     if (key === "concessional") {
       return concessionalEvents.length
         ? concessionalEvents.map((event) => semiRetirementBreakdownRow(semiRetirementConcessionalContributionSummary(event, scenario.draft), semiRetirementMoney(event.amount), "Contribution-cap compliance is not implied."))
-        : [semiRetirementBreakdownRow("Extra concessional contributions", "None")];
+        : [semiRetirementBreakdownRow("Additional super contributions", "None")];
     }
     return [semiRetirementBreakdownRow("Detail", "Not available from the current projection output")];
   }
@@ -18298,46 +18267,10 @@
       ["Property equity", yearMoney(household.totalPropertyEquity)],
       ["Projected net worth", yearMoney(household.totalNetWorth)],
     ].map(([label, value]) => ({ label, value }));
-    const superContributionRows = row.people.flatMap((person) => {
-      const name = person.name || person.id;
-      return [
-        { label: `${name} employer super`, value: yearMoney(person.employerSuperContribution) },
-        { label: `${name} salary sacrifice`, value: yearMoney(person.salarySacrificeSuper || 0) },
-        { label: `${name} personal deductible`, value: yearMoney(person.personalDeductibleContribution || 0) },
-        { label: `${name} personal after-tax`, value: yearMoney(person.personalAfterTaxContribution || 0) },
-        { label: `${name} net contributions credited`, value: yearMoney(Number(person.netEmployerSuperContribution || 0) + Number(person.netAdditionalSuperContribution || 0)) },
-        { label: `${name} actual nominal gross transactions`, value: `Employer ${money(person.employerSuperContribution)} · salary sacrifice ${money(person.salarySacrificeSuper || 0)} · personal deductible ${money(person.personalDeductibleContribution || 0)} · after-tax ${money(person.personalAfterTaxContribution || 0)}` },
-        Number(person.recurringAdditionalSuperContribution || 0) > 0
-          ? { label: `${name} existing recurring extra super`, value: yearMoney(person.recurringAdditionalSuperContribution) }
-          : null,
-        Number(person.plannedExtraConcessionalContribution || 0) > 0
-          ? { label: `${name} planned extra concessional contribution`, value: yearMoney(person.plannedExtraConcessionalContribution) }
-          : null,
-        Number(person.plannedExtraConcessionalContribution || 0) > 0
-          ? { label: `${name} planned contribution tax`, value: yearMoney(person.plannedExtraConcessionalContributionTax) }
-          : null,
-        Number(person.plannedExtraConcessionalContribution || 0) > 0
-          ? { label: `${name} net planned contribution added to super`, value: yearMoney(person.netPlannedExtraConcessionalContribution) }
-          : null,
-        Number(person.surplusAdditionalSuperContribution || 0) > 0
-          ? { label: `${name} surplus directed to super`, value: yearMoney(person.surplusAdditionalSuperContribution) }
-          : null,
-        { label: `${name} total modelled super contributions`, value: yearMoney(person.totalModelledSuperContributions ?? (Number(person.employerSuperContribution || 0) + Number(person.additionalSuperContribution || 0))) },
-        Number(person.superContributionsTax || 0) > 0
-          ? { label: `${name} contributions tax`, value: yearMoney(person.superContributionsTax) }
-          : null,
-        Number(person.superWithdrawal || 0) > 0
-          ? { label: `${name} super withdrawal`, value: yearMoney(person.superWithdrawal) }
-          : null,
-        { label: `${name} closing super balance`, value: yearMoney(person.closingSuperBalance) },
-      ].filter(Boolean);
-    });
-    superContributionRows.push(
-      { label: "Total planned extra concessional contribution", value: yearMoney(household.plannedExtraConcessionalContributionsPaidFromCash) },
-      { label: "Combined household closing super balance", value: yearMoney(household.totalSuperBalance) },
-    );
+    const superContributionRows = semiRetirementHouseholdSuperRows(row.people, yearMoney);
     return `
       <div class="semi-retirement-annual-detail">
+        <p class="field-help" data-contribution-dollar-basis>Today’s dollars — inflation-adjusted display. Expand Actual nominal contributions to reconcile entered amounts.</p>
         ${row.people.map((person) => `
           <section>
             <h5>${escapeHtml(person.name || person.id)}</h5>
@@ -18358,19 +18291,13 @@
               { label: "STSL repayment income", value: yearMoney(person.stslRepaymentIncome ?? person.totalTaxableIncome) },
               { label: "STSL", value: yearMoney(person.stslRepayment) },
               { label: "Net cash income", value: yearMoney(person.netIncome ?? person.netEmploymentIncome) },
-              { label: "Employer super", value: yearMoney(person.employerSuperContribution) },
-              { label: "Existing recurring extra super", value: yearMoney(person.recurringAdditionalSuperContribution) },
-              { label: "Planned extra concessional contribution", value: yearMoney(person.plannedExtraConcessionalContribution) },
-              { label: "Planned contribution tax", value: yearMoney(person.plannedExtraConcessionalContributionTax) },
-              { label: "Net planned contribution added to super", value: yearMoney(person.netPlannedExtraConcessionalContribution) },
-              { label: "Total additional super contribution", value: yearMoney(person.additionalSuperContribution) },
-              { label: "Total modelled super contributions", value: yearMoney(person.totalModelledSuperContributions ?? (Number(person.employerSuperContribution || 0) + Number(person.additionalSuperContribution || 0))) },
-              { label: "Contributions tax", value: yearMoney(person.superContributionsTax) },
+              ...semiRetirementSuperContributionRows(person, yearMoney),
               { label: "Opening super", value: yearMoney(person.openingSuperBalance) },
               { label: "Super earnings", value: yearMoney(person.superInvestmentEarnings) },
               { label: "Super withdrawal", value: yearMoney(person.superWithdrawal) },
               { label: "Closing super", value: yearMoney(person.closingSuperBalance) },
             ])}
+            ${semiRetirementNominalSuperHtml(person)}
           </section>
         `).join("")}
         <section>
@@ -18380,7 +18307,7 @@
           ${row.warnings?.length ? `<div class="semi-retirement-row-warning"><strong>Notes</strong><ul>${row.warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}</ul></div>` : ""}
         </section>
         <section>
-          <h5>Super contributions</h5>
+          <h5>Household super contributions</h5>
           ${semiRetirementDetailRows(superContributionRows)}
         </section>
         <section>
