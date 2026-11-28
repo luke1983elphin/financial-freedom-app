@@ -8795,12 +8795,12 @@
       const refresh = sourceChanged && semiRetirementScenarioDraft && !options.force;
       const previousDefaults = semiRetirementScenarioInitialDraft;
       semiRetirementScenarioDraft = refresh
-        ? window.FFSSemiRetirementUi.refreshPlanLinkedDraft(semiRetirementScenarioDraft, previousDefaults, defaults.draft)
+        ? window.FFSGrowthScenarios.refreshRetirementDraft(semiRetirementScenarioDraft, previousDefaults, defaults.draft)
         : cloneScenarioDraft(defaults.draft);
       if (refresh) {
         semiRetirementComparisonScenarios.forEach(scenario => {
           if (scenario.source === "saved") return;
-          scenario.draft = window.FFSSemiRetirementUi.refreshPlanLinkedDraft(scenario.draft, previousDefaults, defaults.draft);
+          scenario.draft = window.FFSGrowthScenarios.refreshRetirementDraft(scenario.draft, previousDefaults, defaults.draft);
           runSemiRetirementComparisonForScenario(scenario);
         });
         syncLegacySemiRetirementComparisonState(activeSemiRetirementComparisonScenario());
@@ -11382,6 +11382,19 @@
     `;
   }
 
+  function retirementGrowthSet(draft = semiRetirementScenarioDraft) {
+    return window.FFSGrowthScenarios.retirementSet(draft, semiRetirementScenarioInitialDraft,
+      String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:"));
+  }
+
+  function retirementGrowthAssumptionsHtml(draft) {
+    const set = retirementGrowthSet(draft);
+    return `<p class="field-help">Growth scenario: <strong>${escapeHtml(set.label)}</strong>${set.custom ? " · retained independently of Base" : " · follows saved plan rates"}</p>
+      <dl class="retirement-growth-values">${set.fields.map(field=>`<div><dt>${escapeHtml(field.label)}</dt><dd>${escapeHtml(String(field.value ?? 0))}%</dd></div>`).join("")}</dl>
+      <a href="#assumptions" data-retirement-growth-open>Review or edit in Growth Scenarios</a>
+      <p class="field-help">Individual property growth overrides still apply. Home growth does not make home equity available for spending.</p>`;
+  }
+
   function renderSemiRetirementScenario(result) {
     const container = document.getElementById("semiRetirementScenarioRoot");
     if (!container) return;
@@ -11442,14 +11455,8 @@
             ${semiRetirementInput({ label: "Planned annual investing", path: "accessibleInvestments.externalAnnualAccessibleContribution", step: "1000", infoKey: "semiPlannedAccessibleInvestmentContribution", help: "Amount you plan to add to investments each year while fully working, in addition to super." })}
           </div>
           <details class="semi-retirement-input-details mt-4" data-semi-detail-state="advancedAssumptions"${semiRetirementDetailsOpenAttr("advancedAssumptions")}>
-            <summary>Advanced assumptions</summary>
-            <div class="input-grid mt-4">
-              ${semiRetirementInput({ label: "Investment return (%)", path: "accessibleInvestments.annualReturnRatePct", step: "0.1" })}
-              ${semiRetirementInput({ label: "Inflation (%)", path: "assumptions.inflationRatePct", step: "0.1" })}
-              ${semiRetirementInput({ label: "Principal residence growth (%)", path: "assumptions.principalResidenceCapitalGrowthRatePct", step: "0.1", help: "Scenario-only assumption used for the family home. It does not make home equity available for spending." })}
-              ${semiRetirementInput({ label: "Investment property growth (%)", path: "assumptions.investmentPropertyCapitalGrowthRatePct", step: "0.1", help: "Scenario-only assumption used for rental and investment properties unless a property-specific rate has been entered." })}
-            </div>
-
+            <summary>Growth assumptions</summary>
+            ${retirementGrowthAssumptionsHtml(draft)}
           </details>
           ${semiRetirementDownsizeHomeEventHtml(draft)}
           <details class="semi-retirement-input-details mt-4" data-semi-detail-state="agePension"${semiRetirementDetailsOpenAttr("agePension")}>
@@ -11467,7 +11474,7 @@
             <p class="field-help">If selected, no pension is included. Rent Assistance, transitional rates, illness-separated couples and Work Bonus bank balances are not modelled. <a href="https://www.servicesaustralia.gov.au/age-pension" target="_blank" rel="noopener noreferrer">Check eligibility with Services Australia</a>.</p>
             </details>
           </details>
-          <p class="field-help mt-3">For global assumptions used elsewhere in the app, update the main Financial Plan assumptions. These assumptions apply only to this scenario and do not change your main Financial Plan.</p>
+          <p class="field-help mt-3">Manage economic assumptions in Growth Scenarios. Individual property settings and saved retirement assumptions are retained.</p>
         </section>
         <section class="semi-retirement-input-section">
           <div class="card-subheading">
@@ -11484,6 +11491,7 @@
           <button class="btn btn-primary" type="button" data-semi-action="calculate">Calculate Retirement Plan</button>
           <button class="btn" type="button" data-semi-action="reset">${String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:") ? "Return to my retirement plan" : "Reset scenario adjustments"}</button>
         </div>
+        <p class="field-help retirement-growth-reference">Growth scenario: <strong>${escapeHtml(retirementGrowthSet(draft).label)}</strong> · <a href="#assumptions" data-retirement-growth-open>Review in Growth Scenarios</a></p>
         ${renderSemiRetirementScenarioResultHtml()}
       </section>
     `;
@@ -19024,7 +19032,7 @@
     field = config => {
       const assumption = api.resolve(plan).find(item => config.path === `investing.${item.key}`);
       if (!assumption) return originalField(config);
-      return `<div class="fa-existing-setting"><span class="field-label">${escapeHtml(config.label)}</span><strong>${escapeHtml(String(assumption.effective))}%</strong><button type="button" class="btn" data-assumptions-open="${escapeHtml(assumption.key)}">Edit in Assumptions</button></div>`;
+      return `<div class="fa-existing-setting"><span class="field-label">${escapeHtml(config.label)}</span><strong>${escapeHtml(String(assumption.effective))}%</strong><button type="button" class="btn" data-assumptions-open="${escapeHtml(assumption.key)}">Edit in Growth Scenarios</button></div>`;
     };
     const originalSetView = setView;
     setView = view => {
@@ -19041,7 +19049,7 @@
       getPlan: () => plan,
       getIdentity: () => `${activePlanId}:${isDemoActive()}:${plan.meta?.samplePlanId || ""}`,
       isDemo: () => isDemoActive(),
-      onRetirement: () => showWorkspace("semiretirement"),
+      onRetirement: () => returnToRetirement(),
       onSave: candidate => {
         SECURITY?.assertSafeData(candidate);
         const validation = PLAN_SCHEMA.validate(PLAN_SCHEMA.migrate(candidate).plan);
@@ -19067,8 +19075,62 @@
       getIdentity: () => `${activePlanId}:${isDemoActive()}:${plan.meta?.samplePlanId || ""}`,
       forecast: candidate => calculatePlan(candidate),
       getBasis: () => forecastDollarBasis,
-      onRetirement: () => showWorkspace("semiretirement"),
+      onRetirement: () => returnToRetirement(),
       isDemo: () => isDemoActive(),
+    });
+    let retirementReturn = null;
+    const context = document.createElement("section");
+    context.className = "card retirement-growth-context";
+    context.hidden = true;
+    document.getElementById("forecastAssumptionsWorkspace").before(context);
+    function returnToRetirement() {
+      showWorkspace("semiretirement", {scroll:!retirementReturn});
+      if (retirementReturn) {
+        window.scrollTo({top:retirementReturn.y,left:retirementReturn.x,behavior:"instant"});
+        document.querySelector(retirementReturn.selector)?.focus({preventScroll:true});
+      }
+      context.hidden = true;
+      retirementReturn = null;
+    }
+    function showRetirementContext() {
+      const set = retirementGrowthSet();
+      const identity = `${activePlanId}:${isDemoActive()}:${semiRetirementScenarioSourceKey.startsWith("saved-scenario:") ? semiRetirementScenarioSourceKey : "live"}`;
+      context.hidden = false;
+      context.innerHTML = `<h3 tabindex="-1">${escapeHtml(set.label)}</h3>
+        <p class="field-help">${set.custom ? "These retirement rates are retained separately. Applying edits updates the open retirement draft only; saved snapshots and Base remain unchanged." : "This retirement forecast follows Base. Edit and save Base assumptions below to update applicable forecasts."}</p>
+        ${set.custom ? `<form data-retirement-growth-form><div class="fa-grid">${set.fields.map((field,i)=>`<label for="retirement-growth-${i}">${escapeHtml(field.label)} (%)<input id="retirement-growth-${i}" class="field-input" type="number" step="any" required data-retirement-growth-path="${field.path}" value="${field.value}"></label>`).join("")}</div><p role="alert" data-retirement-growth-error></p><button class="btn btn-primary" type="submit">Apply to retirement draft</button></form>` : ""}
+        <button class="btn mt-3" type="button" data-retirement-growth-return>Return to Retirement Planning</button>`;
+      context.querySelector('[data-retirement-growth-return]').addEventListener("click",returnToRetirement);
+      context.querySelector("form")?.addEventListener("submit", event => {
+        event.preventDefault();
+        if (identity !== `${activePlanId}:${isDemoActive()}:${semiRetirementScenarioSourceKey.startsWith("saved-scenario:") ? semiRetirementScenarioSourceKey : "live"}`) {
+          context.querySelector('[data-retirement-growth-error]').textContent = "The open retirement plan changed. Return to Retirement Planning and reopen its growth assumptions.";
+          return;
+        }
+        const candidate = cloneScenarioDraft(semiRetirementScenarioDraft);
+        for (const input of context.querySelectorAll("input")) window.FFSSemiRetirementUi.setDraftPath(candidate,input.dataset.retirementGrowthPath,Number(input.value));
+        const paths = window.FFSGrowthScenarios.retirementFields.map(field=>field.path);
+        const errors = window.FFSSemiRetirementUi.validateSemiRetirementScenarioDraft(candidate).filter(error=>paths.includes(error.path));
+        if (errors.length) {context.querySelector('[data-retirement-growth-error]').textContent=errors.map(error=>error.message).join(" ");return;}
+        semiRetirementScenarioDraft = candidate;
+        semiRetirementScenarioDirty = true;
+        semiRetirementScenarioResult = null;
+        semiRetirementScenarioInputs = null;
+        semiRetirementScenarioResultDraft = null;
+        renderSemiRetirementScenario(calculatePlan(plan));
+        returnToRetirement();
+      });
+      context.querySelector("h3").focus({preventScroll:true});
+      context.scrollIntoView({block:"start",behavior:"instant"});
+    }
+    document.addEventListener("click", event => {
+      const link = event.target.closest("[data-retirement-growth-open]");
+      if (!link) return;
+      event.preventDefault();
+      captureSemiRetirementDetailsState();
+      retirementReturn = {x:window.scrollX,y:window.scrollY,selector:link.closest("[data-semi-detail-state]") ? '[data-semi-detail-state="advancedAssumptions"] [data-retirement-growth-open]' : '.retirement-growth-reference [data-retirement-growth-open]'};
+      showWorkspace("assumptions", {scroll:false});
+      showRetirementContext();
     });
     document.addEventListener("click", event => {
       const trigger = event.target.closest("[data-assumptions-open]");

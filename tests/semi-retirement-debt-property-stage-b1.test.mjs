@@ -267,8 +267,8 @@ test("Stage B1 invalid property-growth input preserves validation state instead 
 });
 
 test("Stage B1 user-facing UI labels include property growth assumptions and no property sale implication", () => {
-  assert.match(appSource, /Principal residence growth \(%\)/);
-  assert.match(appSource, /Investment property growth \(%\)/);
+  assert.match(readFileSync(new URL("../growth-scenarios.js", import.meta.url), "utf8"), /Principal residence growth/);
+  assert.match(readFileSync(new URL("../growth-scenarios.js", import.meta.url), "utf8"), /Investment property growth/);
   assert.match(appSource, /Capital growth assumption/);
   assert.match(appSource, /Property equity contributes to projected net worth but is not treated as available retirement spending/);
 });

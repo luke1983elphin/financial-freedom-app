@@ -10832,3 +10832,13 @@ body[data-freedom-stage] #appWorkspace { scroll-margin-top: calc(var(--app-heade
   flex: 0 1 auto;
 }
 body[data-freedom-sample="true"] .dashboard-update-plan { display: none; }
+
+/* Rates fit the retirement panel independently of viewport width. */
+.retirement-growth-values {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,15rem),1fr));gap:.75rem 1.25rem;margin:1rem 0;}
+.retirement-growth-values > div {display:flex;justify-content:space-between;align-items:baseline;gap:1rem;min-width:0;}
+.retirement-growth-values dt {overflow-wrap:anywhere;}
+.retirement-growth-values dd {margin:0;font-weight:700;white-space:nowrap;}
+.retirement-growth-context {margin-top:1rem;scroll-margin-top:1rem;}
+.retirement-growth-context input,.retirement-growth-context label {min-width:0;max-width:100%;}
+
+@media (max-width:760px) { [data-semi-retirement-scenario] > .retirement-growth-reference {order:-5;margin:0;} }

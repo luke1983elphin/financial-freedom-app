@@ -22,11 +22,11 @@
     function render(message = "") {
       container.replaceChildren();
       const shell = make("section", "card forecast-assumptions-workspace");
-      const heading = make("h2", "", "Forecast assumptions"); heading.tabIndex = -1;
+      const heading = make("h2", "", "Growth Scenarios"); heading.tabIndex = -1;
       const header = make("header", "fa-header");
       const introduction = make("div", "fa-heading");
-      introduction.append(make("p", "fa-eyebrow", "Plan Assumptions"));
-      introduction.append(heading, make("p", "fa-intro", "Review the growth and inflation assumptions behind your forecasts. Edit here, then save to update your plan."));
+      introduction.append(make("p", "fa-eyebrow", "Base growth scenario"));
+      introduction.append(heading, make("p", "fa-intro", "Base provides the saved growth and inflation rates for your plan. Edit and save here to update forecasts using Base. Custom retirement sets and saved snapshots stay independent."));
       header.append(introduction);
       // Reattach the same comparison DOM across editor renders so its session,
       // input handlers and focus-return target stay intact.
@@ -102,7 +102,7 @@
       });
       propertyGroup.append(make("p", "field-help", "These are the existing plan property assumptions. Saved retirement scenarios may have their own rates. Rental cash income follows inflation in the retirement model; property capital growth does not change that rental-income rule."));
       details.append(propertyGroup);
-      const retirement=make("div","fa-notice"); retirement.append(make("h3","","Retirement-specific assumptions"),make("p","","Saved retirement scenarios keep their own assumptions and are not overwritten here. Plan-linked forecasts use your updated plan. Review separate fees, return rates, spending and access ages in Retirement Planning."));
+      const retirement=make("div","fa-notice"); retirement.append(make("h3","","Retirement-specific assumptions"),make("p","","Saved retirement scenarios keep their own assumptions and are not overwritten here. Plan-linked forecasts use your updated plan. Review fees, spending and access ages in Retirement Planning. Retained custom growth sets can be reviewed here from the retirement Growth assumptions link."));
       const link=make("button","btn","Open Retirement Planning");link.type="button";link.addEventListener("click",onRetirement);retirement.append(link);details.append(retirement);
       form.append(essential,details);
       const scope = make("section", "fa-scope");
