@@ -407,6 +407,10 @@
       title: "Modelled super access age",
       body: "The age this scenario assumes super becomes available. Actual access depends on superannuation preservation and conditions-of-release rules.",
     },
+    superArrangementType: {
+      title: "Contribution types",
+      body: "Personal deductible: funded from cash with an assumed eligible tax deduction. Salary sacrifice: funded from pre-tax employment income, without reducing the employer SG base. Personal after-tax: funded from cash with no deduction or standard contributions tax. Concessional contributions incur 15% contributions tax. Eligibility must be independently verified.",
+    },
     semiAdditionalSuperContribution: {
       title: "Existing recurring additional super contribution",
       body: "A recurring voluntary concessional contribution above employer super. In this scenario, planned recurring contributions reduce the person's modelled taxable income, receive the 15% contributions-tax treatment inside super, and stop when that person semi-retires unless surplus is later directed to super.",
@@ -8801,6 +8805,7 @@
       const age = Number(plan.personal?.[`${key}Age`]);
       if (Number.isFinite(age) && age > 0) person.currentAge = age;
     });
+    window.FFSSemiRetirementUi.migrateSuperContributions(semiRetirementScenarioDraft);
     return semiRetirementScenarioDraft;
   }
 
@@ -8895,6 +8900,9 @@
   function markSemiRetirementDetailsOpen(...keys) {
     keys.forEach((key) => {
       if (key) semiRetirementDetailsState[key] = true;
+      document.querySelectorAll("[data-semi-detail-state]").forEach(details => {
+        if (details.dataset.semiDetailState === key) details.open = true;
+      });
     });
   }
 
@@ -8946,7 +8954,8 @@
     const person = (draft?.people || []).find((candidate) => String(candidate.id) === String(event.personId));
     const personNameLabel = person?.name || event.personId || "Person";
     const yearLabel = window.FFSSemiRetirementUi?.financialYearLabel?.(event.financialYear) || String(event.financialYear || "financial year");
-    return `${personNameLabel} extra concessional super - ${money(event.amount)} - ${yearLabel}`;
+    const type = { "personal-deductible": "personal deductible", "salary-sacrifice": "salary sacrifice", "personal-after-tax": "personal after-tax" }[event.type] || "extra concessional super";
+    return `${personNameLabel} ${type} - ${money(event.amount)}${event.frequency === "annual" ? ` annually, before age ${event.stopAge}${event.indexation === "cpi" ? " (CPI indexed)" : " (fixed nominal)"}` : ""} - ${yearLabel}`;
   }
 
   function semiRetirementDownsizeHomeSummary(draft = semiRetirementScenarioDraft) {
@@ -9070,50 +9079,77 @@
     `;
   }
 
-  function semiRetirementPlannedConcessionalContributionsHtml(draft = semiRetirementScenarioDraft) {
-    const events = window.FFSSemiRetirementUi?.normalisePlannedConcessionalContributions?.(draft?.scenario?.plannedConcessionalContributions) || [];
-    const peopleOptions = semiRetirementPersonOptions(draft);
-    const hasSinglePerson = peopleOptions.length <= 1;
-    const buttonText = events.length ? "+ Add another financial year" : "+ Add concessional contribution";
-    return `
-      <details class="semi-retirement-input-details semi-retirement-concessional-details mt-4" data-semi-detail-state="plannedConcessional"${semiRetirementDetailsOpenAttr("plannedConcessional")}>
-        <summary>Advanced super contributions</summary>
-        <section class="semi-retirement-one-off-section semi-retirement-concessional-section" data-planned-concessional-contributions>
-          <div class="semi-retirement-one-off-heading">
-            <div>
-              <span class="field-label field-label-with-info"><span>Planned extra concessional contributions</span>${infoButtonHtml("semiAdvancedConcessionalContributions", "Planned extra concessional contributions")}</span>
-              <p class="field-help">Add extra concessional super contributions for selected financial years to see how they may affect your retirement projection.</p>
-            </div>
-            <button class="btn btn-small" type="button" data-semi-action="add-planned-concessional-contribution">${escapeHtml(buttonText)}</button>
+  function semiRetirementContributionsHtml(person, index, draft) {
+    const entries = person.superContributions || [];
+    const key = `contributions:${person.id}`;
+    const types = [["personal-deductible", "Personal deductible (concessional)"], ["salary-sacrifice", "Salary sacrifice (concessional)"], ["personal-after-tax", "Personal after-tax (non-concessional)"]];
+    const range = window.FFSSemiRetirementUi.projectionYearRange(draft);
+    const years = Array.from({length: range.endYear - range.startYear + 1}, (_, i) => {
+      const year = range.startYear + i;
+      return [String(year), `${window.FFSSemiRetirementUi.financialYearLabel(year)} · age ${Number(person.currentAge) + i}`];
+    });
+    return `<details class="semi-retirement-input-details mt-4" data-semi-detail-state="${key}"${semiRetirementDetailsOpenAttr(key)}>
+      <summary>Additional super contributions${entries.length ? ` (${entries.length})` : ""}</summary>
+      <p class="field-help">Gross nominal amounts. My Plan salary sacrifice is included separately; these arrangements add to it.</p>
+      ${entries.map((entry, i) => {
+        const prefix = `people.${index}.superContributions.${i}`;
+        const entryKey = `contribution:${entry.id}`;
+        const finalYear = Number(draft.projectionStartYear) + Number(entry.stopAge) - Number(person.currentAge) - 1;
+        const summary = `${money(entry.amount)} ${types.find(t => t[0] === entry.type)?.[1] || "Choose type"} · ${entry.frequency === "annual" ? `${window.FFSSemiRetirementUi.financialYearLabel(entry.startYear)} to ${window.FFSSemiRetirementUi.financialYearLabel(finalYear)} (before age ${entry.stopAge})` : window.FFSSemiRetirementUi.financialYearLabel(entry.startYear)}`;
+        return `<details class="semi-retirement-one-off-row mt-3" data-super-contribution-id="${escapeHtml(entry.id)}" data-semi-detail-state="${entryKey}"${semiRetirementDetailsOpenAttr(entryKey)}>
+          <summary class="semi-retirement-one-off-summary"><strong>${escapeHtml(summary)}</strong><span>Edit</span></summary>
+          <div class="semi-retirement-one-off-fields">
+            ${semiRetirementInput({label:"Contribution type", path:`${prefix}.type`, type:"select", options:types, infoKey: "superArrangementType"})}
+            ${semiRetirementInput({label:"Gross amount (nominal dollars)", path:`${prefix}.amount`, step:"1000"})}
+            ${semiRetirementInput({label:"Frequency", path:`${prefix}.frequency`, type:"select", options:[["one-off","One-off"],["annual","Annually"]]})}
+            ${semiRetirementInput({label:entry.frequency === "annual" ? "Starting financial year" : "Financial year", path:`${prefix}.startYear`, type:"select", options:years})}
+            ${entry.frequency === "annual" ? `${semiRetirementInput({label:"Stop before age", path:`${prefix}.stopAge`, step:"1"})}<p class="field-help" data-contribution-final-year>Final contribution: ${escapeHtml(window.FFSSemiRetirementUi.financialYearLabel(finalYear))}. No contribution at age ${escapeHtml(entry.stopAge)}.</p>
+              <details data-semi-detail-state="indexation:${escapeHtml(entry.id)}"${semiRetirementDetailsOpenAttr(`indexation:${entry.id}`)}><summary>Advanced options</summary>${semiRetirementInput({label:"Annual amount", path:`${prefix}.indexation`, type:"select", options:[["none","Fixed nominal amount"],["cpi","Increase with CPI from starting year"]]})}</details>` : ""}
+            ${entry.legacyEmploymentTiming ? '<p class="field-help">Migrated arrangement: also stops when employment ends or semi-retirement begins, preserving previous timing.</p>' : ""}
+            <button class="btn btn-small" type="button" data-semi-action="remove-super-contribution" data-person-index="${index}" data-contribution-id="${escapeHtml(entry.id)}">Remove</button>
           </div>
-          ${events.length ? `
-            <div class="semi-retirement-one-off-list">
-              ${events.map((event, index) => {
-                const prefix = `scenario.plannedConcessionalContributions.${index}`;
-                return `
-                  <article class="semi-retirement-one-off-row semi-retirement-concessional-row" data-planned-concessional-id="${escapeHtml(event.id)}">
-                    <div class="semi-retirement-one-off-summary">
-                      <strong>${escapeHtml(semiRetirementConcessionalContributionSummary(event, draft))}</strong>
-                      <span>Contribution limits may apply.</span>
-                    </div>
-                    <div class="semi-retirement-one-off-fields semi-retirement-concessional-fields ${hasSinglePerson ? "is-single-person" : ""}">
-                      ${hasSinglePerson ? "" : semiRetirementInput({ label: "Person", path: `${prefix}.personId`, type: "select", options: peopleOptions, infoKey: "semiExtraConcessionalContributionPerson" })}
-                      ${semiRetirementInput({ label: "Financial year", path: `${prefix}.financialYear`, type: "select", options: semiRetirementConcessionalYearOptions(draft, event.personId), infoKey: "semiExtraConcessionalContributionYear" })}
-                      ${semiRetirementInput({ label: "Extra concessional contribution", path: `${prefix}.amount`, step: "1000", infoKey: "semiExtraConcessionalContributionAmount", help: "Enter the additional concessional contribution you want to model for this financial year. The projection applies its simplified concessional tax treatment; actual contribution limits and eligibility must be checked separately." })}
-                      <button class="btn btn-small" type="button" data-semi-action="remove-planned-concessional-contribution" data-contribution-id="${escapeHtml(event.id)}" aria-label="Remove ${escapeHtml(semiRetirementConcessionalContributionSummary(event, draft))}">Remove</button>
-                    </div>
-                  </article>
-                `;
-              }).join("")}
-            </div>
-          ` : `
-            <p class="semi-retirement-one-off-empty">No planned extra concessional contribution events added.</p>
-          `}
-          <p class="field-help">Contribution limits apply. Employer contributions and other concessional contributions may reduce the amount available under the annual cap. Unused carry-forward amounts may also be available in some circumstances. This projection does not verify your actual available cap.</p>
-          <p class="field-help">Money contributed to super may not be accessible until the assumed super access age used in this scenario. Additional super tax can apply in some circumstances and is not fully modelled here.</p>
-        </section>
-      </details>
-    `;
+        </details>`;
+      }).join("")}
+      <button class="btn btn-small mt-3" type="button" data-semi-action="add-super-contribution" data-person-index="${index}">+ Add contribution</button>
+      <p class="field-help">Standard cap warnings do not confirm eligibility. Verify unused caps, carry-forward/bring-forward rules and total super balance restrictions. Division 293 and excess contribution taxes are not modelled.</p>
+    </details>`;
+  }
+
+  function changeSuperContribution(index, removeId) {
+    captureSemiRetirementDetailsState();
+    const draft = ensureSemiRetirementScenarioDraft(calculatePlan(plan));
+    const person = draft.people[index];
+    if (!person) return;
+    person.superContributions ||= [];
+    if (removeId) person.superContributions = person.superContributions.filter(e => e.id !== removeId);
+    else {
+      const id = window.FFSSemiRetirementUi.plannedConcessionalContributionEventId();
+      person.superContributions.push({id, type:"personal-deductible", amount:0, frequency:"one-off", startYear:Number(draft.projectionStartYear), stopAge:Math.max(Number(person.currentAge)+1,Number(person.fullRetirementAge)), indexation:"none"});
+      markSemiRetirementDetailsOpen(`person:${person.id}`, `contributions:${person.id}`, `contribution:${id}`);
+    }
+    clearSemiRetirementAdjustmentState(); clearSemiRetirementComparisonState();
+    semiRetirementScenarioResult = null; semiRetirementScenarioInputs = null; semiRetirementScenarioResultDraft = null;
+    semiRetirementScenarioDirty = true;
+    renderSemiRetirementScenario(calculatePlan(plan));
+    if (!removeId) document.querySelector(`[data-semi-input="people.${index}.superContributions.${person.superContributions.length - 1}.amount"]`)?.focus({preventScroll:true});
+  }
+
+  function refreshSuperContributionEditor(target) {
+    const card = target.closest("[data-super-contribution-id]");
+    if (!card) return;
+    captureSemiRetirementDetailsState();
+    const index = Number(target.dataset.semiInput.split(".")[1]);
+    const template = document.createElement("template");
+    template.innerHTML = semiRetirementContributionsHtml(semiRetirementScenarioDraft.people[index], index, semiRetirementScenarioDraft);
+    const next = [...template.content.querySelectorAll("[data-super-contribution-id]")].find(el => el.dataset.superContributionId === card.dataset.superContributionId);
+    card.querySelector("summary").innerHTML = next.querySelector("summary").innerHTML;
+    const finalTiming = card.querySelector('[data-contribution-final-year]');
+    if (finalTiming) finalTiming.textContent = next.querySelector('[data-contribution-final-year]')?.textContent || '';
+    if (target.dataset.semiInput.endsWith(".frequency")) {
+      const path = target.dataset.semiInput;
+      card.replaceWith(next);
+      document.querySelector(`[data-semi-input="${path}"]`)?.focus({preventScroll:true});
+    }
   }
 
   function semiRetirementDownsizeHomeEventHtml(draft = semiRetirementScenarioDraft) {
@@ -9191,16 +9227,15 @@
           ${hasSemi ? semiRetirementInput({ label: "Employment income after semi-retiring", path: `${prefix}.semiRetirementGrossIncome`, step: "1000", help: "Gross income you expect to earn from work each year after semi-retiring." }) : ""}
           ${!person.alreadyRetired ? semiRetirementInput({ label: Number(person.currentAge) >= 60 ? "When do you expect to stop working? (age)" : "Stop working completely at age", path: `${prefix}.fullRetirementAge`, step: "1" }) : ""}
         </div>
-        <details class="semi-retirement-input-details mt-4">
+        <details class="semi-retirement-input-details mt-4" data-semi-detail-state="person:${person.id}"${semiRetirementDetailsOpenAttr(`person:${person.id}`)}>
           <summary>More assumptions</summary>
           <div class="input-grid mt-4">
             ${semiRetirementInput({ label: "Modelled super access age", path: `${prefix}.superAccessAge`, step: "1", infoKey: "semiSuperAccessAge", help: "This is a modelling assumption, not a legal determination." })}
             ${semiRetirementInput({ label: "Current super balance", path: `${prefix}.openingSuperBalance`, step: "1000" })}
             ${semiRetirementInput({ label: "Employer super rate (%)", path: `${prefix}.employerSuperRatePct`, step: "0.1", help: "Pre-filled from the selected financial year where available." })}
-            ${semiRetirementInput({ label: "Current additional super contribution", path: `${prefix}.existingAdditionalConcessionalContributions`, step: "1000", infoKey: "semiAdditionalSuperContribution", help: "Temporary scenario contribution amount." })}
-            ${semiRetirementInput({ label: "Continue additional contributions until age", path: `${prefix}.additionalContributionsStopAge`, step: "1" })}
             ${semiRetirementInput({ label: "STSL opening balance", path: `${prefix}.stslOpeningBalance`, step: "1000" })}
           </div>
+          ${semiRetirementContributionsHtml(person, index, semiRetirementScenarioDraft)}
         </details>
       </article>
     `;
@@ -9739,7 +9774,7 @@
     const firstShortfall = viewModel.longevity?.firstUnfundedSpending || null;
     const debtAtRetirement = fullRetirementHousehold.totalDebt ?? viewModel.debtProperty?.netWorthDistinction?.totalDebt;
     const oneOffEvents = window.FFSSemiRetirementUi?.normaliseOneOffLifestyleEvents?.(viewModel?.draft?.scenario?.oneOffLifestyleEvents) || [];
-    const plannedConcessionalEvents = window.FFSSemiRetirementUi?.normalisePlannedConcessionalContributions?.(viewModel?.draft?.scenario?.plannedConcessionalContributions) || [];
+    const plannedConcessionalEvents = window.FFSSemiRetirementUi.superContributionSummaryEntries(viewModel?.draft);
     return {
       fullYear: Number.isFinite(fullYear) ? fullYear : null,
       fullAges,
@@ -10067,7 +10102,7 @@
     const firstShortfall = viewModel.longevity?.firstUnfundedSpending || {};
     const debtCards = viewModel.debtProperty?.debtCards || [];
     const oneOffEvents = window.FFSSemiRetirementUi?.normaliseOneOffLifestyleEvents?.(scenario.draft?.scenario?.oneOffLifestyleEvents) || [];
-    const concessionalEvents = window.FFSSemiRetirementUi?.normalisePlannedConcessionalContributions?.(scenario.draft?.scenario?.plannedConcessionalContributions) || [];
+    const concessionalEvents = window.FFSSemiRetirementUi.superContributionSummaryEntries(scenario.draft);
     if (key === "fullRetirement") {
       return [
         semiRetirementBreakdownRow("Household milestone", comparisonHouseholdMilestone(scenario), "Ages are at the start of the projection year; financial balances are closing-year values."),
@@ -11008,6 +11043,11 @@
       const name = person.name || person.id;
       return [
         { label: `${name} employer super`, value: semiRetirementMoney(person.employerSuperContribution) },
+        { label: `${name} salary sacrifice`, value: semiRetirementMoney(person.salarySacrificeSuper || 0) },
+        { label: `${name} personal deductible`, value: semiRetirementMoney(person.personalDeductibleContribution || 0) },
+        { label: `${name} personal after-tax`, value: semiRetirementMoney(person.personalAfterTaxContribution || 0) },
+        { label: `${name} net contributions credited`, value: semiRetirementMoney(Number(person.netEmployerSuperContribution || 0) + Number(person.netAdditionalSuperContribution || 0)) },
+        { label: `${name} actual nominal gross transactions`, value: `Employer ${money(person.employerSuperContribution)} · salary sacrifice ${money(person.salarySacrificeSuper || 0)} · personal deductible ${money(person.personalDeductibleContribution || 0)} · after-tax ${money(person.personalAfterTaxContribution || 0)}` },
         Number(person.recurringAdditionalSuperContribution || 0) > 0
           ? { label: `${name} existing recurring extra super`, value: semiRetirementMoney(person.recurringAdditionalSuperContribution) }
           : null,
@@ -11407,7 +11447,7 @@
               ${semiRetirementInput({ label: "Principal residence growth (%)", path: "assumptions.principalResidenceCapitalGrowthRatePct", step: "0.1", help: "Scenario-only assumption used for the family home. It does not make home equity available for spending." })}
               ${semiRetirementInput({ label: "Investment property growth (%)", path: "assumptions.investmentPropertyCapitalGrowthRatePct", step: "0.1", help: "Scenario-only assumption used for rental and investment properties unless a property-specific rate has been entered." })}
             </div>
-            ${semiRetirementPlannedConcessionalContributionsHtml(draft)}
+
           </details>
           ${semiRetirementDownsizeHomeEventHtml(draft)}
           <details class="semi-retirement-input-details mt-4" data-semi-detail-state="agePension"${semiRetirementDetailsOpenAttr("agePension")}>
@@ -11558,8 +11598,21 @@
 
   function updateSemiRetirementDraftFromInput(target) {
     if (!window.FFSSemiRetirementUi || !target?.dataset?.semiInput) return;
-    ensureSemiRetirementScenarioDraft(calculatePlan(plan));
+    // Rendering establishes the draft. Typing must not rebuild the plan forecast
+    // or replace a live scenario before its edited value has been committed.
+    if (!semiRetirementScenarioDraft) ensureSemiRetirementScenarioDraft(calculatePlan(plan));
     const path = target.dataset.semiInput;
+    const oldResults = document.querySelector("[data-semi-results-dashboard]");
+    if (oldResults) {
+      oldResults.hidden = true;
+      if (!document.querySelector('[data-retirement-stale]')) {
+        const notice = document.createElement('p');
+        notice.dataset.retirementStale = 'true'; notice.className = 'field-help';
+        notice.setAttribute('role', 'status');
+        notice.textContent = 'Inputs changed. Calculate the Retirement Plan to update the forecast.';
+        oldResults.before(notice);
+      }
+    }
     const type = target.dataset.semiType || "number";
     const value = type === "checkbox" ? target.checked : type === "boolean"
       ? target.value === "true"
@@ -17834,7 +17887,7 @@
     const firstShortfall = viewModel.longevity?.firstUnfundedSpending || null;
     const debtAtRetirement = fullRetirementHousehold.totalDebt ?? viewModel.debtProperty?.netWorthDistinction?.totalDebt;
     const oneOffEvents = window.FFSSemiRetirementUi?.normaliseOneOffLifestyleEvents?.(viewModel?.draft?.scenario?.oneOffLifestyleEvents) || [];
-    const plannedConcessionalEvents = window.FFSSemiRetirementUi?.normalisePlannedConcessionalContributions?.(viewModel?.draft?.scenario?.plannedConcessionalContributions) || [];
+    const plannedConcessionalEvents = window.FFSSemiRetirementUi.superContributionSummaryEntries(viewModel?.draft);
     return {
       fullYear: Number.isFinite(fullYear) ? fullYear : null,
       fullAges,
@@ -17898,7 +17951,7 @@
     const firstShortfall = viewModel.longevity?.firstUnfundedSpending || {};
     const debtCards = viewModel.debtProperty?.debtCards || [];
     const oneOffEvents = window.FFSSemiRetirementUi?.normaliseOneOffLifestyleEvents?.(scenario.draft?.scenario?.oneOffLifestyleEvents) || [];
-    const concessionalEvents = window.FFSSemiRetirementUi?.normalisePlannedConcessionalContributions?.(scenario.draft?.scenario?.plannedConcessionalContributions) || [];
+    const concessionalEvents = window.FFSSemiRetirementUi.superContributionSummaryEntries(scenario.draft);
     if (key === "fullRetirement") {
       return [
         semiRetirementBreakdownRow("Household milestone", comparisonHouseholdMilestone(scenario), "Ages are at the start of the projection year; financial balances are closing-year values."),
@@ -18188,6 +18241,11 @@
       const name = person.name || person.id;
       return [
         { label: `${name} employer super`, value: yearMoney(person.employerSuperContribution) },
+        { label: `${name} salary sacrifice`, value: yearMoney(person.salarySacrificeSuper || 0) },
+        { label: `${name} personal deductible`, value: yearMoney(person.personalDeductibleContribution || 0) },
+        { label: `${name} personal after-tax`, value: yearMoney(person.personalAfterTaxContribution || 0) },
+        { label: `${name} net contributions credited`, value: yearMoney(Number(person.netEmployerSuperContribution || 0) + Number(person.netAdditionalSuperContribution || 0)) },
+        { label: `${name} actual nominal gross transactions`, value: `Employer ${money(person.employerSuperContribution)} · salary sacrifice ${money(person.salarySacrificeSuper || 0)} · personal deductible ${money(person.personalDeductibleContribution || 0)} · after-tax ${money(person.personalAfterTaxContribution || 0)}` },
         Number(person.recurringAdditionalSuperContribution || 0) > 0
           ? { label: `${name} existing recurring extra super`, value: yearMoney(person.recurringAdditionalSuperContribution) }
           : null,
@@ -19504,6 +19562,7 @@
         const wasShared = target.dataset.retirementWasShared === "true" || retirementCoupleMode() === "shared";
         delete target.dataset.retirementWasShared;
         updateSemiRetirementDraftFromInput(target);
+        if (target.closest("[data-super-contribution-id]")) { refreshSuperContributionEditor(target); return; }
         if (target.closest("[data-one-off-income-id]")) {
           refreshSemiRetirementIncomeEditor(target);
           return;
@@ -19843,6 +19902,8 @@
         if (semiAction.dataset.semiAction === "add-one-off-income-event") addSemiRetirementOneOffIncomeEvent();
         if (semiAction.dataset.semiAction === "add-personal-asset-sale") addSemiRetirementOneOffIncomeEvent(true);
         if (semiAction.dataset.semiAction === "remove-one-off-income-event") removeSemiRetirementOneOffIncomeEvent(semiAction.dataset.eventId);
+        if (semiAction.dataset.semiAction === "add-super-contribution") changeSuperContribution(Number(semiAction.dataset.personIndex));
+        if (semiAction.dataset.semiAction === "remove-super-contribution") changeSuperContribution(Number(semiAction.dataset.personIndex), semiAction.dataset.contributionId);
         if (semiAction.dataset.semiAction === "add-planned-concessional-contribution") addSemiRetirementPlannedConcessionalContribution();
         if (semiAction.dataset.semiAction === "remove-planned-concessional-contribution") removeSemiRetirementPlannedConcessionalContribution(semiAction.dataset.contributionId);
         if (semiAction.dataset.semiAction === "manage-one-off-lifestyle-events") focusSemiRetirementOneOffLifestyleEvents();

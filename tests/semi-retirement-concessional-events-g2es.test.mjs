@@ -384,10 +384,10 @@ test("Stage G2E-S annual details reconcile person and household super balances",
 
 test("Stage G2E-S UI source includes advanced section, info wording and saved-scenario summaries", () => {
   const appSource = readFileSync(new URL("../app.js", import.meta.url), "utf8");
-  assert.match(appSource, /Advanced super contributions/);
+  assert.match(appSource, /Additional super contributions/);
   assert.match(appSource, /Planned extra concessional contributions/);
   assert.match(appSource, /Financial Freedom assumes planned extra concessional contributions receive concessional tax treatment/);
-  assert.match(appSource, /Money contributed to super may not be accessible until the assumed super access age/);
+  assert.match(appSource, /Standard cap warnings do not confirm eligibility/);
   assert.match(appSource, /planned extra concessional contribution events are included in this comparison/);
   assert.match(appSource, /No planned big expenses or planned extra concessional contribution events are included/);
   assert.match(appSource, /Added: \$\{contributionSummary/);

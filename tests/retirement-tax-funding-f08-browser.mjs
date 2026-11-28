@@ -1,3 +1,4 @@
+import {browserExecutable,extractPdfText} from './helpers/browser-executable.mjs';
 // Focused F08 browser acceptance. Uses existing CSP and test-only closure access;
 // financial functions are served unchanged from the working branch.
 import { createServer } from 'node:http';
@@ -42,7 +43,7 @@ class CDP{constructor(url){this.ws=new WebSocket(url);this.id=0;this.pending=new
 try{
  await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve);});
  profile=await mkdtemp(path.join(tmpdir(),'ffa-stage2-'));
- chrome=spawn('/usr/bin/chromium',['--headless=new','--no-sandbox','--disable-gpu','--disable-extensions','--no-first-run','--remote-debugging-port=0',`--user-data-dir=${profile}`,'about:blank'],{stdio:'ignore'});
+ chrome=spawn(browserExecutable(),['--headless=new','--no-sandbox','--disable-gpu','--disable-extensions','--no-first-run','--remote-debugging-port=0',`--user-data-dir=${profile}`,'about:blank'],{stdio:'ignore',windowsHide:true});
  const portFile=path.join(profile,'DevToolsActivePort');const contents=await wait(async()=>existsSync(portFile)?readFile(portFile,'utf8'):null);
  const pages=await fetch(`http://127.0.0.1:${contents.split('\n')[0]}/json/list`).then(r=>r.json());cdp=new CDP(pages.find(x=>x.type==='page').webSocketDebuggerUrl);await cdp.start();
  await cdp.send('Page.enable');await cdp.send('Runtime.enable');await cdp.send('Page.addScriptToEvaluateOnNewDocument',{source:'window.FFS_STAGE1_BROWSER_TESTS_ENABLED=true;window.print=()=>{};'});
@@ -81,8 +82,8 @@ try{
  assert.ok(today.text.includes('2,078,091'),'Report discounts corrected year-one closing wealth once');
  await cdp.eval("document.body.dataset.printMode='financial-report'");
  const pdf=await cdp.send('Page.printToPDF',{printBackground:true,preferCSSPageSize:true});
- const pdfPath=path.join('/tmp','ffa-f08-corrected-report.pdf');await writeFile(pdfPath,Buffer.from(pdf.data,'base64'));
- const pdfText=execFileSync('pdftotext',['-layout',pdfPath,'-'],{encoding:'utf8'});assert.ok(pdfText.includes('2,078,091'));
+ const pdfPath=path.join(tmpdir(),'ffa-f08-corrected-report.pdf');await writeFile(pdfPath,Buffer.from(pdf.data,'base64'));
+ const pdfText=extractPdfText(pdfPath);assert.ok(pdfText.includes('2,078,091'));
  await cdp.eval("delete document.body.dataset.printMode;document.querySelector('[data-dollar-basis=\"future\"]').click()");
  const insolvent=structuredClone(draft);insolvent.accessibleInvestments.openingBalance=0;delete insolvent.accessibleInvestments.components;
  insolvent.passiveIncome=[{id:'noncash',name:'Taxable noncash distribution',type:'dividends',owner:'person1',annualCashIncome:0,annualTaxableIncome:60000}];
