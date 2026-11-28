@@ -279,6 +279,24 @@
   display: flex;
   justify-content: end;
 }
+
+/* Planned expense/income cards use their available section width. */
+.retirement-event-editor { container: retirement-events / inline-size; min-inline-size: 0; }
+.retirement-event-editor .semi-retirement-one-off-row { max-inline-size: 100%; min-inline-size: 0; box-sizing: border-box; }
+.retirement-event-editor.semi-retirement-one-off-section .semi-retirement-one-off-row .semi-retirement-one-off-fields {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+.retirement-event-editor .semi-retirement-one-off-fields > *,
+.retirement-event-editor .field-label,
+.retirement-event-editor .field-label > span { min-inline-size: 0; max-inline-size: 100%; overflow-wrap: anywhere; }
+.retirement-event-editor .field-input { inline-size: 100%; min-inline-size: 0; max-inline-size: 100%; box-sizing: border-box; }
+.retirement-event-editor :is(.field-error,.field-help,.semi-retirement-one-off-summary) { overflow-wrap: anywhere; white-space: normal; }
+.retirement-event-editor .semi-retirement-one-off-summary { display: block; line-height: 1.5; }
+.retirement-event-editor .semi-retirement-one-off-summary > span { display: block; margin-block-start: 4px; }
+@container retirement-events (min-width: 32rem) {
+  .retirement-event-editor.semi-retirement-one-off-section .semi-retirement-one-off-row .semi-retirement-one-off-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 .super-contribution-editor .super-contribution-actions .btn {
   width: auto;
   inline-size: fit-content;

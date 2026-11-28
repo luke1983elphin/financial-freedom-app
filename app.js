@@ -679,6 +679,7 @@
   // Presentation only: give a new blank card time to be edited before the
   // renderer requests automatic validation. Explicit Calculate still validates.
   const untouchedSuperContributionIds = new Set();
+  const untouchedRetirementEventIds = new Set();
   let semiRetirementScenarioDirty = false;
   let semiRetirementAdjustmentBaseline = null;
   let semiRetirementAdjustmentPending = false;
@@ -8936,7 +8937,8 @@
   function semiRetirementOneOffEventSummary(event, draft = semiRetirementScenarioDraft) {
     const description = event.description || "One-off expense";
     const ageLabel = window.FFSSemiRetirementUi?.eventAgeLabel?.(draft, event.year) || "";
-    return `${description} - ${money(event.amountTodayDollars)} - ${event.year}${ageLabel ? ` - ${ageLabel}` : ""}`;
+    const timing = window.FFSSemiRetirementUi.expenseTimingLabel(event);
+    return `${description} - ${money(event.amountTodayDollars)} - ${timing}${ageLabel ? ` - ${ageLabel}` : ""}`;
   }
 
   function semiRetirementOneOffIncomeSummary(event, draft = semiRetirementScenarioDraft) {
@@ -9000,7 +9002,7 @@
     const events = window.FFSSemiRetirementUi?.normaliseOneOffLifestyleEvents?.(draft?.scenario?.oneOffLifestyleEvents) || [];
     const yearOptions = semiRetirementOneOffYearOptions(draft);
     return `
-      <section class="semi-retirement-one-off-section" data-one-off-lifestyle-spending>
+      <section class="semi-retirement-one-off-section retirement-event-editor" data-one-off-lifestyle-spending>
         <div class="semi-retirement-one-off-heading">
           <div>
             <span class="field-label field-label-with-info"><span>Planned big expenses</span>${infoButtonHtml("semiOneOffLifestyleSpending", "Planned big expenses")}</span>
@@ -9014,17 +9016,21 @@
             ${events.map((event, index) => {
               const prefix = `scenario.oneOffLifestyleEvents.${index}`;
               const ageLabel = window.FFSSemiRetirementUi?.eventAgeLabel?.(draft, event.year) || "";
-              const timingSummary = `${money(event.amountTodayDollars)} - ${event.year || "Choose a year"}${ageLabel ? ` - ${ageLabel}` : ""}`;
+              const recurring = Boolean(event.frequency && event.frequency !== "one-off");
+              const timingSummary = `${money(event.amountTodayDollars)} ${window.FFSSemiRetirementUi.expenseTimingLabel(event)}${!recurring && ageLabel ? ` - ${ageLabel}` : ""}`;
               return `
-                <details class="semi-retirement-one-off-row" data-one-off-event-id="${escapeHtml(event.id)}">
+                <details class="semi-retirement-one-off-row" data-one-off-event-id="${escapeHtml(event.id)}" data-semi-detail-state="expense:${escapeHtml(event.id)}"${semiRetirementDetailsOpenAttr(`expense:${event.id}`)}>
                   <summary class="semi-retirement-one-off-summary">
-                    <strong>${escapeHtml(event.description || `One-off expense ${index + 1}`)}</strong>
+                    <strong>${escapeHtml(event.description || `Planned expense ${index + 1}`)}</strong>
                     <span>${escapeHtml(timingSummary)}</span>
                   </summary>
                   <div class="semi-retirement-one-off-fields">
                     ${semiRetirementInput({ label: "Description", path: `${prefix}.description`, type: "text", help: "Example: travel, vehicle, renovation or family support." })}
                     ${semiRetirementInput({ label: "Amount in today's dollars", path: `${prefix}.amountTodayDollars`, step: "1000", infoKey: "semiOneOffLifestyleAmount" })}
-                    ${semiRetirementInput({ label: "Year", path: `${prefix}.year`, type: "select", options: yearOptions, infoKey: "semiOneOffLifestyleYear" })}
+                    ${semiRetirementInput({ label: "Frequency", path: `${prefix}.frequency`, type: "select", options: [["one-off", "One-off (default)"], ["annual", "Annually"], ["every-2-years", "Every 2 years"], ["every-3-years", "Every 3 years"], ["every-5-years", "Every 5 years"], ["every-10-years", "Every 10 years"], ["custom", "Custom interval in years"]] })}
+                    ${event.frequency === "custom" ? semiRetirementInput({ label: "Interval (years)", path: `${prefix}.intervalYears`, step: "1" }) : ""}
+                    ${semiRetirementInput({ label: recurring ? "Starting year" : "Year", path: `${prefix}.year`, type: "select", options: yearOptions, infoKey: "semiOneOffLifestyleYear" })}
+                    ${recurring ? semiRetirementInput({ label: "Final year (inclusive)", path: `${prefix}.endYear`, type: "select", options: yearOptions }) : ""}
                     <button class="btn btn-small" type="button" data-semi-action="remove-one-off-lifestyle-event" data-event-id="${escapeHtml(event.id)}">Remove</button>
                   </div>
                 </details>
@@ -9043,7 +9049,7 @@
     const yearOptions = semiRetirementOneOffYearOptions(draft);
     const saleableAssets = (draft?.assets || []).filter(window.FFSSemiRetirementProjection.isSaleableAsset);
     return `
-      <section class="semi-retirement-one-off-section semi-retirement-one-off-income-section" data-one-off-income>
+      <section class="semi-retirement-one-off-section semi-retirement-one-off-income-section retirement-event-editor" data-one-off-income>
         <div class="semi-retirement-one-off-heading">
           <div>
             <span class="field-label field-label-with-info"><span>One-off income</span>${infoButtonHtml("semiOneOffIncome", "One-off income")}</span>
@@ -10063,7 +10069,7 @@
       { key: "debtAtRetirement", label: "Debt at full retirement", value: (summary) => semiRetirementMoney(summary.debtAtRetirement), delta: (base, item) => semiRetirementComparisonDelta(base.debtAtRetirement, item.debtAtRetirement) },
       { key: "firstShortfall", label: "First projected funding shortfall", value: (summary) => summary.firstShortfallLabel, delta: (base, item) => base.firstShortfallYear && item.firstShortfallYear ? semiRetirementComparisonDelta(base.firstShortfallYear, item.firstShortfallYear, "year") : (base.firstShortfallLabel === item.firstShortfallLabel ? "No change" : "Status differs") },
       { key: "projectionEndNetWorth", label: "Projection-end net worth", value: (summary) => semiRetirementMoney(summary.projectedEndNetWorth), delta: (base, item) => semiRetirementComparisonDelta(base.projectedEndNetWorth, item.projectedEndNetWorth) },
-      { key: "oneOffLifestyle", label: "One-off lifestyle spending", value: (summary) => summary.oneOffLifestyleEventCount ? `${summary.oneOffLifestyleEventCount} event${summary.oneOffLifestyleEventCount === 1 ? "" : "s"} - ${semiRetirementMoney(summary.oneOffLifestyleSpendingToday)} today` : "None", delta: (base, item) => semiRetirementComparisonDelta(base.oneOffLifestyleSpendingToday, item.oneOffLifestyleSpendingToday) },
+      { key: "oneOffLifestyle", label: "Planned big expenses", value: (summary) => summary.oneOffLifestyleEventCount ? `${summary.oneOffLifestyleEventCount} event${summary.oneOffLifestyleEventCount === 1 ? "" : "s"} - ${semiRetirementMoney(summary.oneOffLifestyleSpendingToday)} today` : "None", delta: (base, item) => semiRetirementComparisonDelta(base.oneOffLifestyleSpendingToday, item.oneOffLifestyleSpendingToday) },
       { key: "concessional", label: "Extra concessional contributions", value: (summary) => summary.plannedConcessionalEventCount ? `${semiRetirementMoney(summary.plannedConcessionalTotal)} across ${summary.plannedConcessionalEventCount} year${summary.plannedConcessionalEventCount === 1 ? "" : "s"}` : "None", delta: (base, item) => semiRetirementComparisonDelta(base.plannedConcessionalTotal, item.plannedConcessionalTotal) },
     ];
   }
@@ -10231,7 +10237,7 @@
     }
     if (key === "oneOffLifestyle") {
       return oneOffEvents.length
-        ? oneOffEvents.map((event) => semiRetirementBreakdownRow(event.description || "One-off lifestyle spending", `${event.year || "Year not set"} - ${semiRetirementMoney(event.amountTodayDollars)} today's dollars`, "Projected in the selected year by the existing retirement engine."))
+        ? oneOffEvents.map((event) => semiRetirementBreakdownRow(event.description || "One-off lifestyle spending", `${window.FFSSemiRetirementUi.expenseTimingLabel(event)} - ${semiRetirementMoney(event.amountTodayDollars)} today's dollars`, "Applied in each scheduled year using the existing inflation and funding methodology."))
         : [semiRetirementBreakdownRow("One-off lifestyle spending", "None")];
     }
     if (key === "concessional") {
@@ -11415,7 +11421,8 @@
     captureSemiRetirementDetailsState();
     const draft = ensureSemiRetirementScenarioDraft(result);
     if (plan.personal?.retirementTiming && !String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:") && !semiRetirementScenarioResult && !semiRetirementScenarioErrors.length
-      && !(draft.people || []).some(person => (person.superContributions || []).some(entry => untouchedSuperContributionIds.has(entry.id)))) ensureSemiRetirementBaseResult();
+      && !(draft.people || []).some(person => (person.superContributions || []).some(entry => untouchedSuperContributionIds.has(entry.id)))
+      && ![...(draft.scenario?.oneOffLifestyleEvents || []), ...(draft.scenario?.oneOffIncomeEvents || [])].some(entry => untouchedRetirementEventIds.has(entry.id))) ensureSemiRetirementBaseResult();
     container.classList.remove("hidden");
     container.innerHTML = `
       <section class="semi-retirement-scenario card" data-semi-retirement-scenario>
@@ -11560,19 +11567,38 @@
   function refreshSemiRetirementIncomeEditor(target) {
     // Retain the focused control to keep the mobile keyboard, native selection
     // and unfinished number/text input alive.
-    const section = target.closest("[data-one-off-income]");
+    const section = target.closest("[data-one-off-income], [data-one-off-lifestyle-spending]");
     if (!section) return;
     const scroll = { x: window.scrollX, y: window.scrollY };
+    const validation = document.querySelector("#semiRetirementScenarioRoot .semi-retirement-validation");
+    if (validation) validation.outerHTML = semiRetirementErrorSummaryHtml();
+    const expense = section.hasAttribute("data-one-off-lifestyle-spending");
+    const rowSelector = expense ? "[data-one-off-event-id]" : "[data-one-off-income-id]";
+    const entryId = row => expense ? row.dataset.oneOffEventId : row.dataset.oneOffIncomeId;
+    const structural = /\.(assetSaleId|taxTreatment|frequency)$/.test(target.dataset.semiInput);
+    if (!structural) {
+      // Updating summary text leaves the active input, native number editing,
+      // caret and partially entered description untouched on every keystroke.
+      const row = target.closest(rowSelector);
+      const entry = (semiRetirementScenarioDraft.scenario?.[expense ? "oneOffLifestyleEvents" : "oneOffIncomeEvents"] || []).find(item => item.id === entryId(row));
+      if (!entry) return;
+      if (Number(entry.amountTodayDollars) > 0 && (!expense || String(entry.description || "").trim())) untouchedRetirementEventIds.delete(entry.id);
+      if (!entry.assetSaleId) row.querySelector("summary strong").textContent = entry.description || (expense ? "Planned expense" : "One-off income");
+      const age = window.FFSSemiRetirementUi.eventAgeLabel(semiRetirementScenarioDraft, entry.year);
+      row.querySelector("summary span").textContent = `${money(entry.amountTodayDollars)} - ${expense ? window.FFSSemiRetirementUi.expenseTimingLabel(entry) : entry.year}${age ? ` - ${age}` : ""}`;
+      target.closest("label")?.querySelectorAll(".field-error").forEach(node => node.remove());
+      window.scrollTo({left:scroll.x, top:scroll.y, behavior:"instant"});
+      return;
+    }
     captureSemiRetirementDetailsState();
     const template = document.createElement("template");
-    template.innerHTML = semiRetirementOneOffIncomeEventsHtml();
+    template.innerHTML = expense ? semiRetirementOneOffLifestyleEventsHtml() : semiRetirementOneOffIncomeEventsHtml();
     const heading = section.querySelector(".semi-retirement-one-off-heading");
     const nextHeading = template.content.querySelector(".semi-retirement-one-off-heading");
     if (heading.innerHTML !== nextHeading.innerHTML) heading.innerHTML = nextHeading.innerHTML;
-    const structural = /\.(assetSaleId|taxTreatment)$/.test(target.dataset.semiInput);
-    for (const row of section.querySelectorAll("[data-one-off-income-id]")) {
-      const fresh = [...template.content.querySelectorAll("[data-one-off-income-id]")]
-        .find(node => node.dataset.oneOffIncomeId === row.dataset.oneOffIncomeId);
+    for (const row of section.querySelectorAll(rowSelector)) {
+      const fresh = [...template.content.querySelectorAll(rowSelector)]
+        .find(node => entryId(node) === entryId(row));
       if (!fresh) continue;
       row.querySelector("summary").innerHTML = fresh.querySelector("summary").innerHTML;
       const fields = row.querySelector(".semi-retirement-one-off-fields");
@@ -11585,7 +11611,7 @@
         if (!oldLabel) return label;
         const input = oldLabel.querySelector("[data-semi-input]");
         // Refresh dependent defaults/options without replacing any input node.
-        if (structural && input !== target) {
+        if (!expense && structural && input !== target) {
           if (input.tagName === "SELECT") input.innerHTML = nextInput.innerHTML;
           input.value = nextInput.value;
         }
@@ -11608,8 +11634,7 @@
       });
     }
     // The draft is now dirty; remove stale results without rebuilding the editor.
-    const result = document.querySelector("#semiRetirementScenarioRoot .semi-retirement-scenario > .semi-retirement-result-card");
-    if (result) result.outerHTML = renderSemiRetirementScenarioResultHtml();
+    // updateSemiRetirementDraftFromInput already hides the obsolete forecast.
     // Flush summary wrapping and dependent-field layout before restoring scroll.
     section.getBoundingClientRect();
     const restoreScroll = () => window.scrollTo({ left: scroll.x, top: scroll.y, behavior: "instant" });
@@ -11643,6 +11668,12 @@
         ? target.value
         : Number(target.value);
     window.FFSSemiRetirementUi.setDraftPath(semiRetirementScenarioDraft, path, Number.isFinite(value) || type !== "number" ? value : 0);
+    if (/^scenario\.oneOffLifestyleEvents\.\d+\.frequency$/.test(path) && value !== "one-off") {
+      const entry = window.FFSSemiRetirementUi.getDraftPath(semiRetirementScenarioDraft, path.replace(/\.frequency$/, ""));
+      const range = window.FFSSemiRetirementUi.projectionYearRange(semiRetirementScenarioDraft);
+      entry.endYear ??= Math.min(Number(entry.year) + 10, range.endYear);
+      if (value === "custom") entry.intervalYears ??= 2;
+    }
     if (/^scenario\.oneOffIncomeEvents\.\d+\.assetSaleId$/.test(path) && value) {
       const event = window.FFSSemiRetirementUi.getDraftPath(semiRetirementScenarioDraft, path.replace(/\.assetSaleId$/, ""));
       Object.assign(event, { saleProceedsBasis: "gross", sellingCostPct: 0, taxTreatment: "" });
@@ -11963,6 +11994,8 @@
       amountTodayDollars: 0,
       year,
     });
+    untouchedRetirementEventIds.add(events[nextIndex].id);
+    markSemiRetirementDetailsOpen(`expense:${events[nextIndex].id}`);
     window.FFSSemiRetirementUi.setDraftPath(semiRetirementScenarioDraft, "scenario.oneOffLifestyleEvents", events);
     clearSemiRetirementAdjustmentState();
     clearSemiRetirementComparisonState();
@@ -11980,6 +12013,7 @@
   }
 
   function removeSemiRetirementOneOffLifestyleEvent(eventId) {
+    untouchedRetirementEventIds.delete(eventId);
     if (!window.FFSSemiRetirementUi || !eventId) return;
     ensureSemiRetirementScenarioDraft(calculatePlan(plan));
     const events = window.FFSSemiRetirementUi
@@ -12018,6 +12052,7 @@
       year,
     });
     markSemiRetirementDetailsOpen(`income:${events[nextIndex].id}`);
+    untouchedRetirementEventIds.add(events[nextIndex].id);
     window.FFSSemiRetirementUi.setDraftPath(semiRetirementScenarioDraft, "scenario.oneOffIncomeEvents", events);
     clearSemiRetirementAdjustmentState();
     clearSemiRetirementComparisonState();
@@ -12035,6 +12070,7 @@
   }
 
   function removeSemiRetirementOneOffIncomeEvent(eventId) {
+    untouchedRetirementEventIds.delete(eventId);
     if (!window.FFSSemiRetirementUi || !eventId) return;
     ensureSemiRetirementScenarioDraft(calculatePlan(plan));
     const events = window.FFSSemiRetirementUi
@@ -12294,6 +12330,7 @@
 
   function calculateSemiRetirementScenario() {
     untouchedSuperContributionIds.clear();
+    untouchedRetirementEventIds.clear();
     if (!window.FFSSemiRetirementUi || !window.FFSSemiRetirementProjection) {
       semiRetirementScenarioErrors = [{ path: "engine", message: "Semi-retirement projection engine is not available." }];
       renderSemiRetirementScenario(calculatePlan(plan));
@@ -18082,7 +18119,7 @@
     }
     if (key === "oneOffLifestyle") {
       return oneOffEvents.length
-        ? oneOffEvents.map((event) => semiRetirementBreakdownRow(event.description || "One-off lifestyle spending", `${event.year || "Year not set"} - ${semiRetirementMoney(event.amountTodayDollars)} today's dollars`, "Projected in the selected year by the existing retirement engine."))
+        ? oneOffEvents.map((event) => semiRetirementBreakdownRow(event.description || "One-off lifestyle spending", `${window.FFSSemiRetirementUi.expenseTimingLabel(event)} - ${semiRetirementMoney(event.amountTodayDollars)} today's dollars`, "Applied in each scheduled year using the existing inflation and funding methodology."))
         : [semiRetirementBreakdownRow("One-off lifestyle spending", "None")];
     }
     if (key === "concessional") {
@@ -19236,6 +19273,7 @@
         if (target.tagName === "SELECT") return;
         target.dataset.retirementWasShared ??= String(retirementCoupleMode() === "shared");
         updateSemiRetirementDraftFromInput(target);
+        if (target.closest("[data-one-off-event-id], [data-one-off-income-id]")) refreshSemiRetirementIncomeEditor(target);
         return;
       }
       if (target.dataset.dashboardFutureAge !== undefined) {
@@ -19587,7 +19625,7 @@
         delete target.dataset.retirementWasShared;
         updateSemiRetirementDraftFromInput(target);
         if (target.closest("[data-super-contribution-id]")) { refreshSuperContributionEditor(target); return; }
-        if (target.closest("[data-one-off-income-id]")) {
+        if (target.closest("[data-one-off-income-id], [data-one-off-event-id]")) {
           refreshSemiRetirementIncomeEditor(target);
           return;
         }
