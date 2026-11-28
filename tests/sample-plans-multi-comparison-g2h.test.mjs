@@ -176,7 +176,7 @@ test("Stage G2H comparison breakdowns include requested outcome detail sections"
     "Total debt",
     "Projected net worth",
     "One-off lifestyle spending",
-    "Extra concessional contributions",
+    "Additional super contributions",
     "First unmet spending",
   ].forEach((label) => assert.match(snippet, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))));
 });

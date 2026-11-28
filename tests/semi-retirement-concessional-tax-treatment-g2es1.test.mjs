@@ -343,7 +343,7 @@ test("Stage G2E-S1 annual detail and info copy explain corrected tax treatment",
   assert.match(appSource, /Standard cap warnings do not confirm eligibility/);
   assert.match(detailSnippet, /Taxable income before modelled concessional contributions/);
   assert.match(detailSnippet, /Modelled concessional contribution taxable-income reduction/);
-  assert.match(detailSnippet, /Net planned contribution added to super/);
+  assert.match(detailSnippet, /semiRetirementSuperContributionRows\(person/);
   assert.doesNotMatch(appSource, /You will receive a tax deduction/);
   assert.doesNotMatch(appSource, /Available cap:/);
 });

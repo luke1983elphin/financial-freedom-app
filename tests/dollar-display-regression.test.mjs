@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import '../dollar-basis.js';
+import '../semiRetirementUi.js';
 
 const source = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const basis = globalThis.FFSDollarBasis;
@@ -12,7 +13,7 @@ const extract = name => {
   return source.slice(start, source.indexOf('\n  function ', start + 5));
 };
 function context(extra = {}) {
-  const ctx = { window: { FFSDollarBasis: basis, FFSSemiRetirementUi: { superContributionSummaryEntries: () => [] } },
+  const ctx = { window: { FFSDollarBasis: basis, FFSSemiRetirementUi: { superContributionSummaryEntries: () => [], superContributionBreakdown: globalThis.FFSSemiRetirementUi.superContributionBreakdown } },
     forecastDollarBasis: 'today', plan: { investing: { inflationPct: 99 } },
     semiRetirementScenarioInputs: { projectionStartYear: 2040, assumptions: { inflationRatePct: 20 } },
     money: value => String(value), semiRetirementMoney: value => String(value),
@@ -71,7 +72,7 @@ test('comparison totals, super components, debt and end net worth reconcile with
   const scenario = { viewModel: view, inputs, summary };
   const rows = key => Object.fromEntries(ctx.semiRetirementComparisonBreakdownRowsDollarBasis(key, scenario).map(r => [r.label, r.value]));
   close(rows('superAtRetirement')['A closing super'], 500);
-  close(rows('superAtRetirement')['A employer super'], 100);
+  close(rows('superAtRetirement')['A Employer super contributions'], 100);
   close(rows('debtAtRetirement').Loan, 100);
   const end = rows('projectionEndNetWorth');
   close(Number(end['Accessible investments']) + Number(end.Super) - Number(end['Less remaining debt']), Number(end['Projected net worth']));
