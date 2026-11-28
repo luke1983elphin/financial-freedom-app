@@ -202,6 +202,98 @@
   min-width: 0;
 }
 
+/* Super cards live inside individual assumptions, often beside a forecast.
+   Their columns depend on the panel's content box, never the viewport. */
+.semi-retirement-person-card,
+.semi-retirement-person-card > .semi-retirement-input-details {
+  min-inline-size: 0;
+}
+.super-contribution-editor {
+  container: super-contributions / inline-size;
+  box-sizing: border-box;
+  inline-size: 100%;
+  max-inline-size: 100%;
+  min-inline-size: 0;
+  padding: 12px 8px;
+}
+.super-contribution-card {
+  box-sizing: border-box;
+  max-inline-size: 100%;
+  min-inline-size: 0;
+  padding: 10px;
+}
+.super-contribution-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  min-inline-size: 0;
+}
+.super-contribution-fields > *,
+.super-contribution-fields .semi-retirement-field,
+.super-contribution-fields .field-label,
+.super-contribution-fields .field-label > span {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+.super-contribution-fields .field-input {
+  box-sizing: border-box;
+  inline-size: 100%;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+.super-contribution-fields :is(.field-label, .field-help, .field-error),
+.super-contribution-editor > summary,
+.super-contribution-card > summary strong {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.super-contribution-card > summary strong {
+  flex: 1 1 100%;
+  min-inline-size: 0;
+  line-height: 1.5;
+}
+.super-contribution-card[open] > summary > span { display: none; }
+.super-contribution-note {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  margin-block: 10px 0;
+}
+.super-contribution-indexation {
+  display: flex;
+  align-items: start;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.super-contribution-indexation input {
+  flex: 0 0 auto;
+  inline-size: 18px;
+  block-size: 18px;
+  margin-block-start: 1px;
+}
+.super-contribution-actions {
+  display: flex;
+  justify-content: end;
+}
+.super-contribution-editor .super-contribution-actions .btn {
+  width: auto;
+  inline-size: fit-content;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  flex: 0 1 auto;
+  padding-inline: 12px;
+}
+@container super-contributions (min-width: 28rem) {
+  .super-contribution-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .super-contribution-wide,
+  .super-contribution-fields [data-contribution-final-year] { grid-column: 1 / -1; }
+  .super-contribution-frequency .field-input { max-inline-size: 12rem; }
+}
+
 .semi-retirement-concessional-fields {
   grid-template-columns: minmax(150px, 0.8fr) minmax(230px, 1.2fr) minmax(190px, 0.9fr) auto;
 }

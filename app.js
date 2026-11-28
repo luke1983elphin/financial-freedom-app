@@ -409,7 +409,19 @@
     },
     superArrangementType: {
       title: "Contribution types",
-      body: "Personal deductible: funded from cash with an assumed eligible tax deduction. Salary sacrifice: funded from pre-tax employment income, without reducing the employer SG base. Personal after-tax: funded from cash with no deduction or standard contributions tax. Concessional contributions incur 15% contributions tax. Eligibility must be independently verified.",
+      body: "Personal deductible and salary sacrifice are concessional contributions, generally subject to 15% contributions tax. Personal deductible assumes an eligible tax deduction; salary sacrifice uses pre-tax employment income without reducing the employer SG base. Personal after-tax is non-concessional: no deduction or standard contributions tax. Eligibility must be independently verified.",
+    },
+    superArrangementBasis: {
+      title: "Contribution amounts",
+      body: "Enter the gross nominal amount paid into super. My Plan salary sacrifice is included separately; these arrangements add to it. Annual amounts stay fixed unless CPI indexation is selected, starting from the first contribution year.",
+    },
+    superArrangementCaps: {
+      title: "Contribution eligibility and caps",
+      body: "Standard cap warnings do not confirm eligibility. Independently verify unused caps, carry-forward and bring-forward rules, and total super balance restrictions. Division 293 and excess contribution taxes are not modelled.",
+    },
+    superArrangementLegacy: {
+      title: "Migrated contribution timing",
+      body: "This migrated arrangement also stops when employment ends or semi-retirement begins, preserving its previous timing.",
     },
     semiAdditionalSuperContribution: {
       title: "Existing recurring additional super contribution",
@@ -664,6 +676,9 @@
   let semiRetirementScenarioInputs = null;
   let semiRetirementScenarioResultDraft = null;
   let semiRetirementScenarioErrors = [];
+  // Presentation only: give a new blank card time to be edited before the
+  // renderer requests automatic validation. Explicit Calculate still validates.
+  const untouchedSuperContributionIds = new Set();
   let semiRetirementScenarioDirty = false;
   let semiRetirementAdjustmentBaseline = null;
   let semiRetirementAdjustmentPending = false;
@@ -9082,36 +9097,36 @@
   function semiRetirementContributionsHtml(person, index, draft) {
     const entries = person.superContributions || [];
     const key = `contributions:${person.id}`;
-    const types = [["personal-deductible", "Personal deductible (concessional)"], ["salary-sacrifice", "Salary sacrifice (concessional)"], ["personal-after-tax", "Personal after-tax (non-concessional)"]];
+    const types = [["personal-deductible", "Personal deductible"], ["salary-sacrifice", "Salary sacrifice"], ["personal-after-tax", "Personal after-tax"]];
     const range = window.FFSSemiRetirementUi.projectionYearRange(draft);
     const years = Array.from({length: range.endYear - range.startYear + 1}, (_, i) => {
       const year = range.startYear + i;
       return [String(year), `${window.FFSSemiRetirementUi.financialYearLabel(year)} · age ${Number(person.currentAge) + i}`];
     });
-    return `<details class="semi-retirement-input-details mt-4" data-semi-detail-state="${key}"${semiRetirementDetailsOpenAttr(key)}>
+    return `<details class="semi-retirement-input-details super-contribution-editor mt-4" data-semi-detail-state="${key}"${semiRetirementDetailsOpenAttr(key)}>
       <summary>Additional super contributions${entries.length ? ` (${entries.length})` : ""}</summary>
-      <p class="field-help">Gross nominal amounts. My Plan salary sacrifice is included separately; these arrangements add to it.</p>
+      <p class="field-help super-contribution-note">Gross nominal amounts. ${infoButtonHtml("superArrangementBasis", "Contribution amounts")}</p>
       ${entries.map((entry, i) => {
         const prefix = `people.${index}.superContributions.${i}`;
         const entryKey = `contribution:${entry.id}`;
         const finalYear = Number(draft.projectionStartYear) + Number(entry.stopAge) - Number(person.currentAge) - 1;
         const summary = `${money(entry.amount)} ${types.find(t => t[0] === entry.type)?.[1] || "Choose type"} · ${entry.frequency === "annual" ? `${window.FFSSemiRetirementUi.financialYearLabel(entry.startYear)} to ${window.FFSSemiRetirementUi.financialYearLabel(finalYear)} (before age ${entry.stopAge})` : window.FFSSemiRetirementUi.financialYearLabel(entry.startYear)}`;
-        return `<details class="semi-retirement-one-off-row mt-3" data-super-contribution-id="${escapeHtml(entry.id)}" data-semi-detail-state="${entryKey}"${semiRetirementDetailsOpenAttr(entryKey)}>
+        return `<details class="semi-retirement-one-off-row super-contribution-card mt-3" data-super-contribution-id="${escapeHtml(entry.id)}" data-semi-detail-state="${entryKey}"${semiRetirementDetailsOpenAttr(entryKey)}>
           <summary class="semi-retirement-one-off-summary"><strong>${escapeHtml(summary)}</strong><span>Edit</span></summary>
-          <div class="semi-retirement-one-off-fields">
-            ${semiRetirementInput({label:"Contribution type", path:`${prefix}.type`, type:"select", options:types, infoKey: "superArrangementType"})}
-            ${semiRetirementInput({label:"Gross amount (nominal dollars)", path:`${prefix}.amount`, step:"1000"})}
-            ${semiRetirementInput({label:"Frequency", path:`${prefix}.frequency`, type:"select", options:[["one-off","One-off"],["annual","Annually"]]})}
-            ${semiRetirementInput({label:entry.frequency === "annual" ? "Starting financial year" : "Financial year", path:`${prefix}.startYear`, type:"select", options:years})}
+          <div class="super-contribution-fields">
+            <div class="super-contribution-wide">${semiRetirementInput({label:"Contribution type", path:`${prefix}.type`, type:"select", options:types, infoKey: "superArrangementType"})}</div>
+            ${semiRetirementInput({label:"Gross amount ($)", path:`${prefix}.amount`, step:"1000"})}
+            <div class="super-contribution-frequency">${semiRetirementInput({label:"Frequency", path:`${prefix}.frequency`, type:"select", options:[["one-off","One-off"],["annual","Annually"]]})}</div>
+            <div class="super-contribution-wide">${semiRetirementInput({label:entry.frequency === "annual" ? "Starting financial year" : "Financial year", path:`${prefix}.startYear`, type:"select", options:years})}</div>
             ${entry.frequency === "annual" ? `${semiRetirementInput({label:"Stop before age", path:`${prefix}.stopAge`, step:"1"})}<p class="field-help" data-contribution-final-year>Final contribution: ${escapeHtml(window.FFSSemiRetirementUi.financialYearLabel(finalYear))}. No contribution at age ${escapeHtml(entry.stopAge)}.</p>
-              <details data-semi-detail-state="indexation:${escapeHtml(entry.id)}"${semiRetirementDetailsOpenAttr(`indexation:${entry.id}`)}><summary>Advanced options</summary>${semiRetirementInput({label:"Annual amount", path:`${prefix}.indexation`, type:"select", options:[["none","Fixed nominal amount"],["cpi","Increase with CPI from starting year"]]})}</details>` : ""}
-            ${entry.legacyEmploymentTiming ? '<p class="field-help">Migrated arrangement: also stops when employment ends or semi-retirement begins, preserving previous timing.</p>' : ""}
-            <button class="btn btn-small" type="button" data-semi-action="remove-super-contribution" data-person-index="${index}" data-contribution-id="${escapeHtml(entry.id)}">Remove</button>
+              <label class="super-contribution-indexation super-contribution-wide"><input type="checkbox" data-semi-input="${prefix}.indexation" data-semi-type="select" data-super-indexation value="cpi"${entry.indexation === "cpi" ? " checked" : ""}> <span>Increase annually with CPI</span></label>` : ""}
+            ${entry.legacyEmploymentTiming ? `<p class="field-help super-contribution-note super-contribution-wide">Previous timing retained. ${infoButtonHtml("superArrangementLegacy", "Migrated contribution timing")}</p>` : ""}
+            <div class="super-contribution-actions super-contribution-wide"><button class="btn btn-small" type="button" data-semi-action="remove-super-contribution" data-person-index="${index}" data-contribution-id="${escapeHtml(entry.id)}">Remove</button></div>
           </div>
         </details>`;
       }).join("")}
       <button class="btn btn-small mt-3" type="button" data-semi-action="add-super-contribution" data-person-index="${index}">+ Add contribution</button>
-      <p class="field-help">Standard cap warnings do not confirm eligibility. Verify unused caps, carry-forward/bring-forward rules and total super balance restrictions. Division 293 and excess contribution taxes are not modelled.</p>
+      <p class="field-help super-contribution-note">Check eligibility and caps. ${infoButtonHtml("superArrangementCaps", "Contribution eligibility and caps")}</p>
     </details>`;
   }
 
@@ -9121,9 +9136,13 @@
     const person = draft.people[index];
     if (!person) return;
     person.superContributions ||= [];
-    if (removeId) person.superContributions = person.superContributions.filter(e => e.id !== removeId);
+    if (removeId) {
+      untouchedSuperContributionIds.delete(removeId);
+      person.superContributions = person.superContributions.filter(e => e.id !== removeId);
+    }
     else {
       const id = window.FFSSemiRetirementUi.plannedConcessionalContributionEventId();
+      untouchedSuperContributionIds.add(id);
       person.superContributions.push({id, type:"personal-deductible", amount:0, frequency:"one-off", startYear:Number(draft.projectionStartYear), stopAge:Math.max(Number(person.currentAge)+1,Number(person.fullRetirementAge)), indexation:"none"});
       markSemiRetirementDetailsOpen(`person:${person.id}`, `contributions:${person.id}`, `contribution:${id}`);
     }
@@ -9137,6 +9156,7 @@
   function refreshSuperContributionEditor(target) {
     const card = target.closest("[data-super-contribution-id]");
     if (!card) return;
+    if (target.dataset.semiInput.endsWith(".amount")) untouchedSuperContributionIds.delete(card.dataset.superContributionId);
     captureSemiRetirementDetailsState();
     const index = Number(target.dataset.semiInput.split(".")[1]);
     const template = document.createElement("template");
@@ -9147,8 +9167,10 @@
     if (finalTiming) finalTiming.textContent = next.querySelector('[data-contribution-final-year]')?.textContent || '';
     if (target.dataset.semiInput.endsWith(".frequency")) {
       const path = target.dataset.semiInput;
+      const scroll = { x: window.scrollX, y: window.scrollY };
       card.replaceWith(next);
       document.querySelector(`[data-semi-input="${path}"]`)?.focus({preventScroll:true});
+      window.scrollTo({left:scroll.x, top:scroll.y, behavior:"instant"});
     }
   }
 
@@ -11392,7 +11414,8 @@
     }
     captureSemiRetirementDetailsState();
     const draft = ensureSemiRetirementScenarioDraft(result);
-    if (plan.personal?.retirementTiming && !String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:") && !semiRetirementScenarioResult && !semiRetirementScenarioErrors.length) ensureSemiRetirementBaseResult();
+    if (plan.personal?.retirementTiming && !String(semiRetirementScenarioSourceKey).startsWith("saved-scenario:") && !semiRetirementScenarioResult && !semiRetirementScenarioErrors.length
+      && !(draft.people || []).some(person => (person.superContributions || []).some(entry => untouchedSuperContributionIds.has(entry.id)))) ensureSemiRetirementBaseResult();
     container.classList.remove("hidden");
     container.innerHTML = `
       <section class="semi-retirement-scenario card" data-semi-retirement-scenario>
@@ -11614,7 +11637,7 @@
       }
     }
     const type = target.dataset.semiType || "number";
-    const value = type === "checkbox" ? target.checked : type === "boolean"
+    const value = target.dataset.superIndexation !== undefined ? (target.checked ? "cpi" : "none") : type === "checkbox" ? target.checked : type === "boolean"
       ? target.value === "true"
       : type === "text" || type === "select"
         ? target.value
@@ -12270,6 +12293,7 @@
   }
 
   function calculateSemiRetirementScenario() {
+    untouchedSuperContributionIds.clear();
     if (!window.FFSSemiRetirementUi || !window.FFSSemiRetirementProjection) {
       semiRetirementScenarioErrors = [{ path: "engine", message: "Semi-retirement projection engine is not available." }];
       renderSemiRetirementScenario(calculatePlan(plan));

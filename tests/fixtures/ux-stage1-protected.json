@@ -507,9 +507,9 @@
     "renderSemiRetirementWarningsHtml": "c4220c2d3d0bae77514b15f72adba882efa97cfc2653d74500dafca69fcd0234",
     "renderSemiRetirementDisclosureHtml": "d6927c28c17cc857625d1a706aeee1e4ecb87b0216c7b217bbbcdf4213ad9cae",
     "renderSemiRetirementScenarioResultHtml": "34744b9c9ed500dd9a4e27b33dad251838f73585c5e2f9bb0a2ed8b689073679",
-    "renderSemiRetirementScenario": "a606b1e412f4885523f205f287a03d13652ba04d172fb402d5e484384eec6440",
+    "renderSemiRetirementScenario": "319b9283e688c300caf3aee49005f6d7da6604a7677fbea0ce56460a1c4c706d",
     "renderDecision": "c13f358159319421141ccb3912124c99479248c416f87ce3ae399f3c86132182",
-    "updateSemiRetirementDraftFromInput": "ef3a41f7638e1e8ed3945a37eab0f74d5c3aacc5b3cef1d19bf643952ca88a98",
+    "updateSemiRetirementDraftFromInput": "314d00eaa4f762358acfa2efbcdf67c52cd287a827126da0deae4ff0c2472e8f",
     "clearSemiRetirementComparisonState": "38ed00bfd0d60453849ed6b8f5f3b729d7392fd357d627cd6f493f1ec0f4aa0a",
     "runSemiRetirementComparisonForScenario": "39559a3bfe6062d0cb73fc6a1793014f7b97cce2fa171f3a3c5113a1cc103285",
     "requestSemiRetirementComparisonReplacement": "0f787ba029935adc4010ae1a1d6daddfbbec5286baf0abc3a4550d753eb51b1c",
@@ -545,7 +545,7 @@
     "updateSemiRetirementAdjustmentFromInput": "ac1f252497fcd1c095c4d8fc738575b5d70ae27c2044e5381209b2312a0d1e85",
     "nudgeSemiRetirementAdjustment": "6a79f765754580b55f5dd6009f50b20069aff56913f98989b33aa3b52d8f949e",
     "resetSemiRetirementAdjustments": "9ad97ed463713dd8fe7bbaee85e1f4d1c96aac6e82fb565b05c44b71939f30b6",
-    "calculateSemiRetirementScenario": "ef4635abed8ad3137bd0ceb4ed9402e8b14799d32ed9c0ee04f1c02dea2e0e95",
+    "calculateSemiRetirementScenario": "77ae57654f7107686a928e744809e2acba5df332e612a6ae6fb75312dd9e49ed",
     "resetSemiRetirementScenario": "a4d375314814b724144030db9d72882053bac404328ed8638026524eb85b7b81",
     "plannerDateIso": "e7ec69c63bd7a69f0842bd3fe2882f90c5e795f7f5e499f49b1eda76ad7936d6",
     "nextMondayIso": "65059911c70b2183cd3d2a2830dabf56c7875f6440e7a5081f448922bffbc554",
@@ -1396,5 +1396,6 @@
     "previous": "327177b602c9f9298c8392486373e4effa2d525d61aebfeac8ab3efb8a7af6cc",
     "current": "f9bfa1bf57bfcce15885939e7ca8a59da6b9646b84b800a5dfd4ef0271be4758"
   },
-  "superContributionsReview": "Per-person contribution model and editor; exact historical numerical fixtures retained. New contribution and browser regressions verify the intentional model changes."
+  "superContributionsReview": "Per-person contribution model and editor; exact historical numerical fixtures retained. New contribution and browser regressions verify the intentional model changes.",
+  "superContributionPresentationReview": "Container-responsive editor, compact controls, and deferred automatic validation of untouched new cards only. Calculation, migration, persistence and reporting files unchanged."
 }
