@@ -5,12 +5,12 @@ import vm from 'node:vm';
 const source=readFileSync(new URL('../app.js',import.meta.url),'utf8');
 const clone=x=>JSON.parse(JSON.stringify(x));
 const c={console};c.globalThis=c;
-for(const file of ['calculator.js','semiRetirementProjection.js','semiRetirementUi.js','dollar-basis.js']) vm.runInNewContext(readFileSync(new URL('../'+file,import.meta.url),'utf8'),c);
+for(const file of ['calculator.js','semiRetirementProjection.js','semiRetirementUi.js','dollar-basis.js','growth-scenarios.js']) vm.runInNewContext(readFileSync(new URL('../'+file,import.meta.url),'utf8'),c);
 const C=c.FFSCalculator,U=c.FFSSemiRetirementUi,E=c.FFSSemiRetirementProjection;
 function plan(){const p=C.emptyPlan();Object.assign(p.personal,{person1Name:'Alex',person1Age:43,fullRetirementAge:65});p.assetItems=[{id:'property',name:'259 Bakers Beach Road',category:'otherProperty',value:300000,capitalGrowthRatePct:0,owner:'joint'}];return p;}
 function defaults(p){return U.buildSemiRetirementScenarioDefaults(p,C.calculatePlan(p),{newScenario:true});}
 function extract(name){const a=source.indexOf('  function '+name+'(');assert.ok(a>=0,name);return source.slice(a,source.indexOf('\n  function ',a+5));}
-function state(p){const base=defaults(p);const ctx={window:{FFSSemiRetirementUi:U,FFSSemiRetirementProjection:E},plan:p,
+function state(p){const base=defaults(p);const ctx={window:{FFSSemiRetirementUi:U,FFSSemiRetirementProjection:E,FFSGrowthScenarios:c.FFSGrowthScenarios},plan:p,
   semiRetirementScenarioDraft:clone(base.draft),semiRetirementScenarioInitialDraft:clone(base.draft),semiRetirementScenarioSourceKey:base.sourceKey,
   semiRetirementScenarioDirty:true,semiRetirementScenarioResult:{stale:true},semiRetirementScenarioInputs:{stale:true},semiRetirementScenarioResultDraft:{stale:true},
   semiRetirementComparisonScenarios:[],semiRetirementActiveComparisonId:'',cloneScenarioDraft:clone,clearSemiRetirementAdjustmentState(){}};

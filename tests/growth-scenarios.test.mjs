@@ -444,3 +444,52 @@ test('Issue 98: matching Base preserves existing Other property override represe
     assert.equal(r.ok,true);assert.equal(JSON.stringify(r.plan),before,key);assert.equal(JSON.stringify(r.result),normal,key);
   }
 });
+
+
+test('retirement growth sets distinguish Base, custom and saved snapshots without mutation',()=>{
+  const plan=fixture(true), defaults=U.buildSemiRetirementScenarioDefaults(plan,forecast(plan)).draft;
+  const original=JSON.stringify(defaults);
+  assert.equal(G.retirementSet(defaults,defaults).label,'Base');
+  const custom=structuredClone(defaults);custom.assumptions.inflationRatePct=1.25;
+  assert.equal(G.retirementSet(custom,defaults).label,'Custom retirement assumptions');
+  assert.equal(G.retirementSet(defaults,defaults,true).label,'Saved retirement assumptions');
+  assert.equal(G.retirementSet(custom,defaults,true).fields.find(f=>f.path==='assumptions.inflationRatePct').value,1.25);
+  assert.equal(JSON.stringify(defaults),original);
+});
+
+test('Base refresh flows into retirement and semi-retirement while retaining custom rates and edits',()=>{
+  const plan=fixture(true), before=U.buildSemiRetirementScenarioDefaults(plan,forecast(plan)).draft;
+  const edited=structuredClone(before);
+  edited.household.fullRetirementLifestyleSpending=54321;
+  edited.assumptions.inflationRatePct=1.5;
+  edited.people[0].hasSemiRetirement=true;edited.people[0].semiRetirementAge=55;
+  plan.investing.expectedInvestmentReturnPct=9;
+  plan.investing.inflationPct=4;
+  const current=U.buildSemiRetirementScenarioDefaults(plan,forecast(plan)).draft;
+  const linked=G.refreshRetirementDraft(before,before,current);
+  assert.equal(linked.accessibleInvestments.annualReturnRatePct,9);
+  assert.equal(linked.assumptions.inflationRatePct,4);
+  const custom=G.refreshRetirementDraft(edited,before,current);
+  assert.equal(custom.assumptions.inflationRatePct,1.5);
+  assert.equal(custom.accessibleInvestments.annualReturnRatePct,9);
+  assert.equal(custom.household.fullRetirementLifestyleSpending,54321);
+  assert.equal(custom.people[0].semiRetirementAge,55);
+  assert.equal(G.retirementSet(custom,current).label,'Custom retirement assumptions');
+});
+
+test('central Base updates retain individual property overrides and change applicable retirement forecasts',()=>{
+  const plan=fixture(true), original=forecast(plan), saved=U.buildSemiRetirementScenarioDefaults(plan,original).draft;
+  const baseline=A.draft(plan), input=structuredClone(baseline);
+  input.values.expectedInvestmentReturnPct=9;input.values.inflationPct=3;
+  input.values.investmentPropertyGrowthRatePct=7;
+  const applied=A.apply(plan,input,baseline);assert.equal(applied.ok,true);
+  assert.equal(applied.plan.assetItems.find(a=>a.id==='rental').propertyGrowthRatePct,3);
+  const changed=forecast(applied.plan);
+  assert.notEqual(changed.netWorthProjection.at(-1).closingBalance,original.netWorthProjection.at(-1).closingBalance);
+  const snapshot=JSON.stringify(saved);
+  const result1=U.runSemiRetirementProjection(c.FFSSemiRetirementProjection,saved);
+  forecast(applied.plan);
+  const result2=U.runSemiRetirementProjection(c.FFSSemiRetirementProjection,saved);
+  assert.equal(JSON.stringify(saved),snapshot);
+  assert.deepEqual(plain(result2),plain(result1));
+});

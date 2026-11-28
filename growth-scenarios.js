@@ -156,6 +156,27 @@
       };
     }
   }
+  // Existing snapshot paths; no schema migration or replacement of saved rates.
+  const retirementFields = Object.freeze([
+    {path:"accessibleInvestments.annualReturnRatePct", label:"Investment return"},
+    {path:"assumptions.inflationRatePct", label:"Inflation"},
+    {path:"assumptions.principalResidenceCapitalGrowthRatePct", label:"Principal residence growth"},
+    {path:"assumptions.investmentPropertyCapitalGrowthRatePct", label:"Investment property growth"},
+  ]);
+  const readRetirement = (draft, field) => field.path.split(".").reduce((v,k)=>v?.[k], draft);
+  function retirementSet(draft, defaults, saved = false) {
+    const custom = retirementFields.some(field => readRetirement(draft, field) !== readRetirement(defaults, field));
+    return {label: saved ? "Saved retirement assumptions" : custom ? "Custom retirement assumptions" : "Base",
+      custom: saved || custom, fields: retirementFields.map(field=>({...field,value:readRetirement(draft,field)}))};
+  }
+  function refreshRetirementDraft(draft, previous, current) {
+    const next = root.FFSSemiRetirementUi.refreshPlanLinkedDraft(draft, previous, current);
+    for (const field of retirementFields) {
+      const value = readRetirement(draft, field), before = readRetirement(previous, field);
+      if (value !== undefined && value !== before) root.FFSSemiRetirementUi.setDraftPath(next, field.path, value);
+    }
+    return next;
+  }
   function display(row, inflation, basis) {
     return Object.fromEntries(
       Object.entries(row).map(([key, value]) => [
@@ -173,6 +194,9 @@
   }
   root.FFSGrowthScenarios = Object.freeze({
     fields,
+    retirementFields,
+    retirementSet,
+    refreshRetirementDraft,
     savedValues,
     suggested,
     overlay,

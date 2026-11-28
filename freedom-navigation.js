@@ -20,8 +20,8 @@
     const home=document.getElementById('homeView'),workspace=document.getElementById('appWorkspace');
     const futureView=document.querySelector('[data-view-panel="semiretirement"]');
     const growth=document.querySelector('.growth-workspace');
-    // The editor rebuilds its header. Resolve the live header when restoring
-    // this same comparison node rather than keeping an anchor in old markup.
+    const assumptionsView=document.querySelector('[data-view-panel="assumptions"]');
+    const assumptionsEditor=document.getElementById('forecastAssumptionsWorkspace');
     const controls=document.createElement('div');controls.className='freedom-future-controls';controls.setAttribute('role','group');controls.setAttribute('aria-label','Explore your future');
     for(const [value,label] of [['retirement','Retirement & lifestyle'],['growth','Growth scenarios']]){
       const button=document.createElement('button');button.type='button';button.className='btn';button.dataset.freedomFuture=value;button.textContent=label;controls.append(button);
@@ -74,7 +74,11 @@
       controls.querySelectorAll('button').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.freedomFuture===future)));
       const showGrowth=mode==='workspace'&&context.view==='semiretirement'&&future==='growth';
       host.hidden=!showGrowth;
-      if(showGrowth){if(growth.parentElement!==host)host.append(growth);}else {const header=document.querySelector('#forecastAssumptionsWorkspace .fa-header');if(header&&growth.parentElement!==header)header.append(growth);}
+      // Both entry points share the same editor and comparison session.
+      const destination=showGrowth?host:assumptionsView;
+      const retirementContext=document.querySelector('.retirement-growth-context');
+      if(retirementContext&&retirementContext.parentElement!==destination)destination.append(retirementContext);
+      if(assumptionsEditor.parentElement!==destination)destination.append(assumptionsEditor);
       neutralise();
     }
     function onView(view){mode='workspace';sync();record(view);}

@@ -183,6 +183,7 @@ before(async () => {
           growthForecast: candidate => calculatePlan(candidate),
           backup: () => buildCompletePlanBackupPayload(),
           validateBackup: value => validateImportedPlanPayload(value),
+          retirementDraft: () => structuredClone(semiRetirementScenarioDraft),
           retirementSaveContext: () => buildRetirementScenarioSaveContext(),
           openRetirementSnapshot: value => loadRetirementScenarioSnapshot(value),
           savedScenarios: () => loadScenarios(),
@@ -2268,4 +2269,71 @@ for(const width of [1366,390])test('annual super breakdown reconciles $18000 nom
   assert.match(text,/personal deductible/i);assert.match(text,/18,000/);assert.match(text,/Total gross super contributions/);assert.match(text,/Net super contributions/);
   await evaluate('delete document.body.dataset.printMode');
  }
+});
+
+
+for (const width of [1366,768,390]) test(`central retirement Growth assumptions preserve editing state at ${width}px`,async()=>{
+  await navigate();await assumptionsFixture();
+  await cdp.send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<500});
+  await evaluate(`(()=>{const p=FFSStage1BrowserTestHooks.getPlan();p.personal.retirementTiming={people:[{id:'person1',fullRetirementAge:65,hasSemiRetirement:false},{id:'person2',fullRetirementAge:65,hasSemiRetirement:false}]};FFSStage1BrowserTestHooks.setPlan(p,'semiretirement');FFSStage1BrowserTestHooks.closeDurabilityDialog();document.querySelector('[data-semi-detail-state="advancedAssumptions"]').open=true;})()`);
+  assert.equal(await evaluate('document.querySelectorAll("[data-semi-detail-state=advancedAssumptions] input").length'),0);
+  assert.equal(await evaluate('document.querySelector(".retirement-growth-reference strong").textContent'),'Base');
+  await evaluate(`(()=>{const input=document.querySelector('[data-semi-input="household.fullRetirementLifestyleSpending"]');input.value='54321';input.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('[data-semi-detail-state="advancedAssumptions"]').scrollIntoView({block:'center',behavior:'instant'});})()`);
+  const before=await evaluate('JSON.stringify(__dollarTest.retirementDraft())');
+  const scroll=await evaluate('scrollY');
+  await evaluate('document.querySelector("[data-semi-detail-state=advancedAssumptions] [data-retirement-growth-open]").click()');
+  assert.equal(await evaluate('document.body.dataset.activeView'),'assumptions');
+  assert.match(await evaluate('document.querySelector(".retirement-growth-context").textContent'),/follows Base/);
+  await evaluate('document.querySelector("[data-retirement-growth-return]").click()');
+  assert.equal(await evaluate('JSON.stringify(__dollarTest.retirementDraft())'),before);
+  assert.equal(await evaluate('document.querySelector("[data-semi-detail-state=advancedAssumptions]").open'),true);
+  assert.ok(Math.abs(await evaluate('scrollY')-scroll)<3);
+  await evaluate('document.querySelector("[data-semi-detail-state=advancedAssumptions] [data-retirement-growth-open]").click()');
+  await assumptionEdit('expectedInvestmentReturnPct',9);await assumptionEdit('inflationPct',3);
+  await assumptionButton('Save assumptions');
+  await waitFor(()=>evaluate("document.querySelector('.forecast-assumptions-status').textContent.includes('Assumptions saved')"));
+  await evaluate('document.querySelector("[data-retirement-growth-return]").click()');
+  assert.equal(await evaluate('__dollarTest.retirementDraft().household.fullRetirementLifestyleSpending'),54321);
+  assert.equal(await evaluate('__dollarTest.retirementDraft().accessibleInvestments.annualReturnRatePct'),9);
+  assert.equal(await evaluate('__dollarTest.retirementDraft().assumptions.inflationRatePct'),3);
+  assert.equal(await evaluate('document.querySelector(".retirement-growth-reference strong").textContent'),'Base');
+  await evaluate('document.querySelector("[data-semi-action=calculate]").click()');
+  assert.equal(await evaluate('__dollarTest.retirement().inputs.inflationRate'),.03);
+  assert.ok(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'));
+  assert.ok(await evaluate(`[...document.querySelectorAll('.retirement-growth-values > div')].every(n=>{const r=n.getBoundingClientRect(),p=n.closest('details').getBoundingClientRect();return r.left>=p.left&&r.right<=p.right+1})`));
+  assert.ok(await evaluate(`document.querySelector('.retirement-growth-reference').getBoundingClientRect().top<=document.querySelector('[data-semi-results-dashboard]').getBoundingClientRect().top`));
+  await evaluate(`(()=>{const node=document.querySelector('[data-semi-detail-state="advancedAssumptions"]');for(let p=node;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;node.scrollIntoView({block:'center',behavior:'instant'});})()`);
+  await mobileScreenshot('growth-assumptions-'+width+'.png');
+  await evaluate(`document.querySelector('[data-freedom-future="growth"]').click()`);
+  assert.ok(await evaluate(`document.querySelector('#freedomGrowthHost #forecastAssumptionsWorkspace [data-assumption="inflationPct"]').getBoundingClientRect().width>0`));
+  assert.equal(await evaluate(`document.querySelectorAll('#forecastAssumptionsWorkspace').length`),1);
+  assert.ok(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'));
+  await evaluate(`document.querySelector('#forecastAssumptionsWorkspace').scrollIntoView({block:'start',behavior:'instant'})`);
+  await mobileScreenshot('growth-scenarios-central-'+width+'.png');
+});
+
+test('custom and saved retirement growth sets stay independent of Base in the central workspace',async()=>{
+  await navigate();await assumptionsFixture();
+  await evaluate(`(()=>{FFSStage1BrowserTestHooks.showWorkspace('semiretirement');document.querySelector('[data-semi-action=calculate]').click();__dollarTest.configureRetirement({'accessibleInvestments.annualReturnRatePct':4.25,'assumptions.inflationRatePct':1.75});})()`);
+  assert.equal(await evaluate('document.querySelector(".retirement-growth-reference strong").textContent'),'Custom retirement assumptions');
+  await evaluate('document.querySelector(".retirement-growth-reference [data-retirement-growth-open]").click()');
+  assert.equal(await evaluate(`document.querySelector('[data-retirement-growth-path="assumptions.inflationRatePct"]').value`),'1.75');
+  await assumptionEdit('inflationPct',4);await assumptionButton('Save assumptions');
+  await waitFor(()=>evaluate("document.querySelector('.forecast-assumptions-status').textContent.includes('Assumptions saved')"));
+  await evaluate('document.querySelector("[data-retirement-growth-return]").click()');
+  assert.equal(await evaluate('__dollarTest.retirementDraft().assumptions.inflationRatePct'),1.75);
+  await evaluate(`document.querySelector('[data-semi-action=calculate]').click();window.__growthSaved={...__dollarTest.retirementSaveContext(),id:'growth-retained'};__dollarTest.openRetirementSnapshot(__growthSaved);`);
+  const snapshot=await evaluate('JSON.stringify(__growthSaved)');
+  const original=await evaluate('JSON.stringify(__dollarTest.retirementDraft())');
+  assert.equal(await evaluate('document.querySelector(".retirement-growth-reference strong").textContent'),'Saved retirement assumptions');
+  await evaluate('document.querySelector(".retirement-growth-reference [data-retirement-growth-open]").click()');
+  await assumptionEdit('inflationPct',5);await assumptionButton('Save assumptions');
+  await waitFor(()=>evaluate("document.querySelector('.forecast-assumptions-status').textContent.includes('Assumptions saved')"));
+  await evaluate('document.querySelector("[data-retirement-growth-return]").click()');
+  assert.equal(await evaluate('JSON.stringify(__dollarTest.retirementDraft())'),original);
+  await evaluate('document.querySelector(".retirement-growth-reference [data-retirement-growth-open]").click()');
+  await evaluate(`(()=>{document.querySelector('[data-retirement-growth-path="assumptions.inflationRatePct"]').value='2';document.querySelector('[data-retirement-growth-form]').requestSubmit();})()`);
+  assert.equal(await evaluate('__dollarTest.retirementDraft().assumptions.inflationRatePct'),2);
+  assert.equal(await evaluate('JSON.stringify(__growthSaved)'),snapshot);
+  assert.equal(await evaluate('FFSStage1BrowserTestHooks.getPlan().investing.inflationPct'),5);
 });

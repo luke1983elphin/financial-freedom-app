@@ -411,7 +411,7 @@
     "renderEngagementFullJourney": "88cab29028d8e316b34a3f1376c8068a5e6336555af5c6b2b636f08bf1ef205a",
     "semiRetirementUiEnabled": "33e8ebfbc3268731e1d9ddab5cefeabe89931dd9e7c82d01c6a452898c5fe79f",
     "cloneScenarioDraft": "b516474d2beb187434fcb98710ce7dc6a008baf92e7b7b4fa3e50976ba52efec",
-    "ensureSemiRetirementScenarioDraft": "600859a64349f840d5b962c86c759e4d3604531d143719073f95f98b6570608e",
+    "ensureSemiRetirementScenarioDraft": "86d6a1340d860d9233f17fdb1e3786bfcd32171c41b5c518e8f6da89c9540f57",
     "semiRetirementValue": "e37ee4682b3f1a1ceb93006645141e2d07efa838023806872e95a493421fe8f2",
     "semiRetirementComparisonValue": "9c627bee2cea433f00d9954f6abae6672748a6b79c9bd440f533706a9048ee9e",
     "semiRetirementError": "06d6ea11c52c25b6571f44aaedd4e1f0bdbf30beb38c0246d8e259a680463386",
@@ -507,7 +507,7 @@
     "renderSemiRetirementWarningsHtml": "c4220c2d3d0bae77514b15f72adba882efa97cfc2653d74500dafca69fcd0234",
     "renderSemiRetirementDisclosureHtml": "d6927c28c17cc857625d1a706aeee1e4ecb87b0216c7b217bbbcdf4213ad9cae",
     "renderSemiRetirementScenarioResultHtml": "34744b9c9ed500dd9a4e27b33dad251838f73585c5e2f9bb0a2ed8b689073679",
-    "renderSemiRetirementScenario": "38936cfa250b7177029fb843db283a0babcdc7c4cb84b8556619f89ebe6e6054",
+    "renderSemiRetirementScenario": "a0f8bfee5da818eeccad188585ba41ff083cfb82f0a6f360a66226e6740bbbdd",
     "renderDecision": "c13f358159319421141ccb3912124c99479248c416f87ce3ae399f3c86132182",
     "updateSemiRetirementDraftFromInput": "ac609c39f19ad0556186ff8781f9f5c2ec9d5c61b40db2d75bdff51e3954cc70",
     "clearSemiRetirementComparisonState": "38ed00bfd0d60453849ed6b8f5f3b729d7392fd357d627cd6f493f1ec0f4aa0a",
@@ -1399,5 +1399,6 @@
   "superContributionsReview": "Per-person contribution model and editor; exact historical numerical fixtures retained. New contribution and browser regressions verify the intentional model changes.",
   "superContributionPresentationReview": "Container-responsive editor, compact controls, and deferred automatic validation of untouched new cards only. Calculation, migration, persistence and reporting files unchanged.",
   "recurringExpenseReview": "Recurring expense selection reuses existing inflation and funding; legacy one-off normalization and numerical fixtures remain exact. Expense/income editors retain active nodes on input and change events; saved schedules and report timing are covered by regressions.",
-  "superContributionBreakdownReview": "Reporting-only classification shared by annual forecasts and comparisons/PDFs. Removes duplicate legacy categories and exposes actual nominal amounts. Calculation engine, inputs, migration and financial methodology unchanged; independent two-person $18000 nominal regressions verify the existing calculations."
+  "superContributionBreakdownReview": "Reporting-only classification shared by annual forecasts and comparisons/PDFs. Removes duplicate legacy categories and exposes actual nominal amounts. Calculation engine, inputs, migration and financial methodology unchanged; independent two-person $18000 nominal regressions verify the existing calculations.",
+  "retirementGrowthAssumptionsReview": "Read-only retirement growth presentation and shared Growth Scenarios editor. Two application hashes updated for presentation and preservation of custom growth rates during Base refresh. Calculation engines, saved snapshot schema, property overrides and exact historical parity fixtures remain unchanged."
 }

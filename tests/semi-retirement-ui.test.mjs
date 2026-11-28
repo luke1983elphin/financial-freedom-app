@@ -2005,17 +2005,16 @@ test("Stage G2F planned big expenses are collapsed but remain editable", () => {
   assert.doesNotMatch(snippet, /<article class="semi-retirement-one-off-row"/);
 });
 
-test("Stage G2F advanced assumptions are behind a collapsed disclosure", () => {
+test("Growth assumptions remain read-only behind the existing collapsed disclosure", () => {
   const snippet = sourceBetween(appSource, "function renderSemiRetirementScenario(result)", "function renderDecision(result)");
   const openingBalanceIndex = snippet.indexOf("Investments available before super");
   const plannedInvestingIndex = snippet.indexOf("Planned annual investing");
-  const advancedIndex = snippet.indexOf("<summary>Advanced assumptions</summary>");
-  const returnIndex = snippet.indexOf("Investment return (%)");
-  const inflationIndex = snippet.indexOf("Inflation (%)");
+  const advancedIndex = snippet.indexOf("<summary>Growth assumptions</summary>");
+  const growthIndex = snippet.indexOf("retirementGrowthAssumptionsHtml(draft)");
   assert.ok(openingBalanceIndex >= 0 && plannedInvestingIndex > openingBalanceIndex);
   assert.ok(advancedIndex > plannedInvestingIndex);
-  assert.ok(returnIndex > advancedIndex);
-  assert.ok(inflationIndex > advancedIndex);
+  assert.ok(growthIndex > advancedIndex);
+  assert.doesNotMatch(snippet, /path: "assumptions\.inflationRatePct"/);
   assert.doesNotMatch(snippet, /<details class="semi-retirement-input-details mt-4" open>/);
 });
 
